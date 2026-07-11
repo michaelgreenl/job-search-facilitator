@@ -1,0 +1,49 @@
+{
+  "name": "job-search-facilitator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A monorepo for the Job Search Facilitator application",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "workspaces": [
+    "packages/*",
+    "packages/app/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --parallel --filter client --filter server run dev",
+    "dev:client": "pnpm --filter client run dev",
+    "dev:server": "pnpm --filter server run dev",
+    "dev:db": "docker compose -f packages/app/server/docker-compose.yml up -d --wait postgres",
+    "dev:db:status": "docker compose -f packages/app/server/docker-compose.yml ps",
+    "dev:db:logs": "docker compose -f packages/app/server/docker-compose.yml logs -f postgres",
+    "dev:db:reset": "pnpm run dev:db && pnpm --filter @job-search-facilitator/core run db:reset",
+    "dev:db:stop": "docker compose -f packages/app/server/docker-compose.yml down",
+    "dev:db:clean": "docker compose -f packages/app/server/docker-compose.yml down -v",
+    "prisma:generate": "pnpm --filter @job-search-facilitator/core run generate",
+    "test": "pnpm run test:unit && pnpm run test:e2e",
+    "test:unit": "pnpm --filter client run test:unit && pnpm --filter server run test",
+    "test:e2e": "pnpm --filter client run test:e2e",
+    "build": "pnpm --filter client run build && pnpm --filter server run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm run prisma:generate && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test:unit && pnpm run build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.2",
+    "@typescript-eslint/eslint-plugin": "^8.52.0",
+    "@typescript-eslint/parser": "^8.52.0",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.0.0",
+    "husky": "^9.1.7",
+    "prettier": "3.8.4",
+    "typescript": "~6.0.0"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.0.0"
+  }
+}
