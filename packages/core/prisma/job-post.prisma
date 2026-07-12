@@ -1,0 +1,38 @@
+enum ApplicationStatus {
+  NOT_APPLIED       @map("not-applied")
+  AWAITING_RESPONSE @map("awaiting-response")
+  INTERVIEWING      @map("interviewing")
+  REJECTED          @map("rejected")
+  HIRED             @map("hired")
+}
+
+enum PostStatus {
+  UNKNOWN @map("unknown")
+  ACTIVE  @map("active")
+  CLOSED  @map("closed")
+}
+
+enum UserLabel {
+  P1
+  P2
+  QUICK_APP @map("quick-app")
+}
+
+model JobPost {
+  id                String            @id @default(uuid()) @db.Uuid
+  sourceKey         String            @unique
+  roleTitle         String
+  company           String
+  location          String?
+  compensation      String?
+  postSource        String
+  applicationUrl    String
+  postStatus        PostStatus        @default(UNKNOWN)
+  applicationStatus ApplicationStatus @default(NOT_APPLIED)
+  userRank          Int?
+  userLabel         UserLabel?
+  archivedAt        DateTime?         @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+  results           JobSearchResult[]
+}

@@ -7,3 +7,12 @@ describe('GET /health', () => {
         await request(app).get('/health').expect(200, { status: 'healthy' })
     })
 })
+
+describe('API routes', () => {
+    it.each(['/api/job-posts/invalid-id', '/api/job-search-reports/invalid-date'])(
+        'mounts %s',
+        async (path) => {
+            await request(app).get(path).expect(400, { error: 'Invalid request' })
+        },
+    )
+})
