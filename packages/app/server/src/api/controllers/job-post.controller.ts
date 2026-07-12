@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import { BAD_REQUEST, NOT_FOUND } from '@job-search-facilitator/utils'
 import type { JobPostRepository } from '../../db/repositories/job-post.repository.ts'
 import { jobPostIdParamsSchema, updateJobPostInputSchema } from '../schemas/job-post.schema.ts'
 
@@ -14,14 +15,14 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         const params = jobPostIdParamsSchema.safeParse(request.params)
 
         if (!params.success) {
-            response.status(400).json(invalidRequest)
+            response.status(BAD_REQUEST).json(invalidRequest)
             return
         }
 
         const post = await repository.findById(params.data.id)
 
         if (post === null) {
-            response.status(404).json(jobPostNotFound)
+            response.status(NOT_FOUND).json(jobPostNotFound)
             return
         }
 
@@ -33,14 +34,14 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         const input = updateJobPostInputSchema.safeParse(request.body)
 
         if (!params.success || !input.success) {
-            response.status(400).json(invalidRequest)
+            response.status(BAD_REQUEST).json(invalidRequest)
             return
         }
 
         const post = await repository.update(params.data.id, input.data)
 
         if (post === null) {
-            response.status(404).json(jobPostNotFound)
+            response.status(NOT_FOUND).json(jobPostNotFound)
             return
         }
 

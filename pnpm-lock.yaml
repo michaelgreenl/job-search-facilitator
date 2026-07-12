@@ -84,6 +84,9 @@ importers:
       '@job-search-facilitator/core':
         specifier: workspace:*
         version: link:../../core
+      '@job-search-facilitator/utils':
+        specifier: workspace:*
+        version: link:../../utils
       '@prisma/adapter-pg':
         specifier: ^7.8.0
         version: 7.8.0
