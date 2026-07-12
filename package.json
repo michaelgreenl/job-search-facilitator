@@ -20,7 +20,7 @@
         "test": "pnpm --filter server run test",
         "build": "pnpm run prisma:generate && pnpm --filter client run build && pnpm --filter server run build",
         "typecheck": "pnpm run prisma:generate && pnpm -r run typecheck",
-        "lint": "eslint \"packages/**/*.{ts,vue}\" --max-warnings=0 && pnpm --filter client run lint:style",
+        "lint": "oxlint && eslint \"packages/**/*.{ts,vue}\" --max-warnings=0 && pnpm --filter client run lint:style",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "quality": "pnpm run format:check && pnpm run lint && pnpm run typecheck",
@@ -30,12 +30,16 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/node": "^24.13.2",
+        "@typescript/native": "npm:typescript@^7.0.2",
         "@vue/eslint-config-typescript": "^14.8.0",
         "eslint": "^10.5.0",
         "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-oxlint": "^1.73.0",
         "eslint-plugin-vue": "~10.9.2",
         "husky": "^9.1.7",
+        "oxlint": "^1.73.0",
+        "oxlint-tsgolint": "^0.24.0",
         "prettier": "3.8.4",
-        "typescript": "~6.0.0"
+        "typescript": "~6.0.3"
     }
 }
