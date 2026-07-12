@@ -1,11 +1,11 @@
 {
-  "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "vite.config.ts"],
-  "compilerOptions": {
-    "noEmit": true,
-    "noUncheckedIndexedAccess": true,
-    "paths": {
-      "@/*": ["./src/*"]
+    "extends": "@vue/tsconfig/tsconfig.dom.json",
+    "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "vite.config.ts"],
+    "compilerOptions": {
+        "noEmit": true,
+        "noUncheckedIndexedAccess": true,
+        "paths": {
+            "@/*": ["./src/*"]
+        }
     }
-  }
 }

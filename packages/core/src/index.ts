@@ -1,3 +1,3 @@
 export interface HealthResponse {
-  status: 'healthy'
+    status: 'healthy'
 }

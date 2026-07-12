@@ -1,30 +1,30 @@
 {
-  "name": "server",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsup",
-    "start": "node dist/server.js",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@job-search-facilitator/core": "workspace:*",
-    "@prisma/adapter-pg": "^7.8.0",
-    "cors": "^2.8.5",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "helmet": "^8.1.0"
-  },
-  "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/supertest": "^6.0.3",
-    "supertest": "^7.2.2",
-    "tsup": "^8.5.1",
-    "tsx": "^4.23.0",
-    "vitest": "^4.1.9"
-  }
+    "name": "server",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "tsx watch src/server.ts",
+        "build": "tsup",
+        "start": "node dist/server.js",
+        "test": "vitest run",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@job-search-facilitator/core": "workspace:*",
+        "@prisma/adapter-pg": "^7.8.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.3.1",
+        "express": "^5.2.1",
+        "helmet": "^8.1.0"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/supertest": "^6.0.3",
+        "supertest": "^7.2.2",
+        "tsup": "^8.5.1",
+        "tsx": "^4.23.0",
+        "vitest": "^4.1.9"
+    }
 }
