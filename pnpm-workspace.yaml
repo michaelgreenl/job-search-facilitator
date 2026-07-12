@@ -1,9 +1,9 @@
 packages:
-  - 'packages/*'
-  - 'packages/app/*'
+    - 'packages/*'
+    - 'packages/app/*'
 
 allowBuilds:
-  '@parcel/watcher': true
-  '@prisma/engines': true
-  esbuild: true
-  prisma: true
+    '@parcel/watcher': true
+    '@prisma/engines': true
+    esbuild: true
+    prisma: true

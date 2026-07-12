@@ -1,7 +1,7 @@
 module.exports = {
-  extends: ['stylelint-config-standard-scss'],
-  overrides: [{ files: ['**/*.vue'], customSyntax: 'postcss-html' }],
-  rules: {
-    'scss/at-mixin-pattern': null,
-  },
+    extends: ['stylelint-config-standard-scss'],
+    overrides: [{ files: ['**/*.vue'], customSyntax: 'postcss-html' }],
+    rules: {
+        'scss/at-mixin-pattern': null,
+    },
 }

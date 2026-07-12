@@ -11,5 +11,5 @@ app.use(cors({ origin: env.CLIENT_ORIGIN }))
 app.use(express.json())
 
 app.get('/health', (_request, response) => {
-  response.json({ status: 'healthy' } satisfies HealthResponse)
+    response.json({ status: 'healthy' } satisfies HealthResponse)
 })

@@ -1,11 +1,11 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/server.ts'],
-  format: ['esm'],
-  target: 'node22',
-  platform: 'node',
-  clean: true,
-  external: [/^@prisma\//],
-  noExternal: ['@job-search-facilitator/core'],
+    entry: ['src/server.ts'],
+    format: ['esm'],
+    target: 'node22',
+    platform: 'node',
+    clean: true,
+    external: [/^@prisma\//],
+    noExternal: ['@job-search-facilitator/core'],
 })
