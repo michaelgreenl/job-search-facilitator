@@ -1,5 +1,3 @@
-<script setup lang="ts"></script>
-
 <template>
   <h1 class="app-title">Job Search Facilitator</h1>
 </template>
@@ -12,6 +10,5 @@
   font-family: $font-family-sans;
   color: $color-blue-600;
   border-radius: $radius-md;
-  box-shadow: $shadow-sm;
 }
 </style>
