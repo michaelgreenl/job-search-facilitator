@@ -19,8 +19,23 @@ jobs:
         name: Static checks, tests, and builds
         runs-on: ubuntu-24.04
         timeout-minutes: 20
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_DB: job_search_facilitator_test
+                    POSTGRES_USER: job_search
+                    POSTGRES_PASSWORD: local_dev_password
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U job_search -d job_search_facilitator_test"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
         env:
             HUSKY: 0
+            TEST_DATABASE_URL: postgresql://job_search:local_dev_password@localhost:5432/job_search_facilitator_test
         steps:
             - name: Checkout
               uses: actions/checkout@v6
@@ -43,3 +58,6 @@ jobs:
 
             - name: Run checks
               run: pnpm run check
+
+            - name: Run integration tests
+              run: pnpm run test:integration
