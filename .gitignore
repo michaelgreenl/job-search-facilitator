@@ -4,9 +4,13 @@ dist/
 coverage/
 *.tsbuildinfo
 *.log
+.eslintcache
 .env
 .env.*
 !.env.example
 .DS_Store
+.idea/
+.vscode/
 pnpm-debug.log*
+*.timestamp-*-*.mjs
 packages/core/src/generated/prisma/

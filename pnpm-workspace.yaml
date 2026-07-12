@@ -5,10 +5,5 @@ packages:
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/engines': true
-  cypress: true
   esbuild: true
   prisma: true
-
-overrides:
-  'stylelint-config-recommended-vue>stylelint-config-recommended': 17.0.0
-  'stylelint-config-standard-vue>stylelint-config-standard': 39.0.1

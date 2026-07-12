@@ -10,5 +10,3 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-// Add application models here, or split them into additional files in this directory.

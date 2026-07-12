@@ -3,4 +3,3 @@ dist
 coverage
 packages/core/src/generated/prisma
 pnpm-lock.yaml
-packages/app/client/public

@@ -16,11 +16,7 @@
     "db:reset": "prisma db push --force-reset",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "pretypecheck": "pnpm run generate",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write src prisma prisma.config.ts",
-    "format:check": "prettier --check src prisma prisma.config.ts",
-    "lint": "eslint src prisma.config.ts --max-warnings=0"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^7.8.0"

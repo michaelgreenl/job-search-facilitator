@@ -82,11 +82,13 @@ $breakpoints: (
 @function lighten-color($color, $percentage) {
   $amount: $percentage;
   $remaining: 100% - $amount;
+
   @return string.unquote('color-mix(in srgb, #{$color} #{$remaining}, white #{$amount})');
 }
 
 @function darken-color($color, $percentage) {
   $amount: $percentage;
   $remaining: 100% - $amount;
+
   @return string.unquote('color-mix(in srgb, #{$color} #{$remaining}, black #{$amount})');
 }

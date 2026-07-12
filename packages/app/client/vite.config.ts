@@ -1,12 +1,9 @@
 import { fileURLToPath, URL } from 'node:url'
-
-import { defineConfig, type UserConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import vueDevTools from 'vite-plugin-vue-devtools'
+import { defineConfig } from 'vite'
 
-// https://vite.dev/config/
-export const viteConfig = {
-  plugins: [vue(), vueDevTools()],
+export default defineConfig({
+  plugins: [vue()],
   css: {
     preprocessorOptions: {
       scss: {
@@ -22,6 +19,4 @@ export const viteConfig = {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-} satisfies UserConfig
-
-export default defineConfig(viteConfig)
+})
