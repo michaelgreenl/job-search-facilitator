@@ -41,6 +41,8 @@ const createResultInput = (overrides: ResultOverrides = {}): JobSearchResultInpu
         agentRank = 1,
         agentLabel = 'target',
         fitRationale = 'Strong TypeScript experience',
+        applicationFlow = 'Direct company application',
+        keyLegitimacySignals = 'Listed on the company careers page',
         recommendedResume = 'frontend',
         recommendedAction = 'Apply today',
         legitimacyNotes = null,
@@ -51,6 +53,8 @@ const createResultInput = (overrides: ResultOverrides = {}): JobSearchResultInpu
         agentRank,
         agentLabel,
         fitRationale,
+        applicationFlow,
+        keyLegitimacySignals,
         recommendedResume,
         recommendedAction,
         legitimacyNotes,
@@ -116,6 +120,10 @@ describe('search report repository', () => {
         expect(replacement.report.id).toBe(initial.report.id)
         expect(replacement.report.summary).toBe(replacementInput.summary)
         expect(replacement.report.results).toHaveLength(1)
+        expect(replacement.report.results[0]).toMatchObject({
+            applicationFlow: replacementInput.results[0]?.applicationFlow,
+            keyLegitimacySignals: replacementInput.results[0]?.keyLegitimacySignals,
+        })
         expect(replacement.report.results[0]?.post.sourceKey).toBe('example-source:second')
         expect(reportCount).toBe(1)
         expect(resultCount).toBe(1)

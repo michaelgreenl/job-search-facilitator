@@ -20,16 +20,18 @@ model JobSearchReport {
 }
 
 model JobSearchResult {
-  reportId          String          @db.Uuid
-  postId            String          @db.Uuid
-  agentRank         Int
-  agentLabel        AgentLabel
-  fitRationale      String
-  recommendedResume ResumeType
-  recommendedAction String
-  legitimacyNotes   String?
-  report            JobSearchReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  post              JobPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reportId             String          @db.Uuid
+  postId               String          @db.Uuid
+  agentRank            Int
+  agentLabel           AgentLabel
+  fitRationale         String
+  applicationFlow      String
+  keyLegitimacySignals String
+  recommendedResume    ResumeType
+  recommendedAction    String
+  legitimacyNotes      String?
+  report               JobSearchReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  post                 JobPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([reportId, postId])
   @@unique([reportId, agentRank])

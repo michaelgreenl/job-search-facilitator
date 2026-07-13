@@ -22,6 +22,8 @@ export interface JobSearchResult {
     agentRank: number
     agentLabel: AgentLabel
     fitRationale: string
+    applicationFlow: string
+    keyLegitimacySignals: string
     recommendedResume: ResumeType
     recommendedAction: string
     legitimacyNotes: string | null
@@ -32,6 +34,8 @@ export interface JobSearchResultInput {
     agentRank: number
     agentLabel: AgentLabel
     fitRationale: string
+    applicationFlow: string
+    keyLegitimacySignals: string
     recommendedResume: ResumeType
     recommendedAction: string
     legitimacyNotes: string | null

@@ -22,6 +22,8 @@ export const jobSearchResultInputSchema = z.strictObject({
     agentRank: z.number().int().positive(),
     agentLabel: z.enum(AGENT_LABELS),
     fitRationale: nonBlankString,
+    applicationFlow: nonBlankString,
+    keyLegitimacySignals: nonBlankString,
     recommendedResume: z.enum(RESUME_TYPES),
     recommendedAction: nonBlankString,
     legitimacyNotes: nonBlankString.nullable(),

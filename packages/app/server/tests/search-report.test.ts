@@ -44,6 +44,8 @@ const existingReport: JobSearchReport = {
             agentRank: 1,
             agentLabel: 'target',
             fitRationale: 'Strong TypeScript experience',
+            applicationFlow: 'Direct company application',
+            keyLegitimacySignals: 'Listed on the company careers page',
             recommendedResume: 'frontend',
             recommendedAction: 'Apply today',
             legitimacyNotes: null,
@@ -58,6 +60,8 @@ const input: UpsertJobSearchReportInput = {
         agentRank: result.agentRank,
         agentLabel: result.agentLabel,
         fitRationale: result.fitRationale,
+        applicationFlow: result.applicationFlow,
+        keyLegitimacySignals: result.keyLegitimacySignals,
         recommendedResume: result.recommendedResume,
         recommendedAction: result.recommendedAction,
         legitimacyNotes: result.legitimacyNotes,
@@ -89,6 +93,8 @@ const toReport = (
         agentRank: result.agentRank,
         agentLabel: result.agentLabel,
         fitRationale: result.fitRationale,
+        applicationFlow: result.applicationFlow,
+        keyLegitimacySignals: result.keyLegitimacySignals,
         recommendedResume: result.recommendedResume,
         recommendedAction: result.recommendedAction,
         legitimacyNotes: result.legitimacyNotes,
@@ -186,6 +192,8 @@ describe('job search report routes', () => {
                 results: [
                     {
                         ...result,
+                        applicationFlow: ' ',
+                        keyLegitimacySignals: ' ',
                         legitimacyNotes: ' ',
                         post: {
                             ...result.post,

@@ -6,6 +6,8 @@ interface SearchResultSeed {
     agentRank: number
     agentLabel: AgentLabel
     fitRationale: string
+    applicationFlow: string
+    keyLegitimacySignals: string
     recommendedResume: ResumeType
     recommendedAction: string
     legitimacyNotes: string | null
@@ -71,6 +73,11 @@ const buildResults = (postIndexes: readonly number[], reportVersion: 1 | 2): Sea
                 reportVersion === 1
                     ? `${post.roleTitle}: ${evaluationFocus}.`
                     : `${evaluationFocus}; refreshed listing details remain promising.`,
+            applicationFlow:
+                post.postSource === 'Example Careers'
+                    ? 'Direct company application.'
+                    : 'External job-board application.',
+            keyLegitimacySignals: 'Named company, specific role, and public application URL.',
             recommendedResume:
                 reportVersion === 2 && postIndex % 5 === 0 ? ResumeType.GENERAL : recommendedResume,
             recommendedAction: quickApplication
@@ -116,6 +123,8 @@ const toResultCreate = (
         agentRank: result.agentRank,
         agentLabel: result.agentLabel,
         fitRationale: result.fitRationale,
+        applicationFlow: result.applicationFlow,
+        keyLegitimacySignals: result.keyLegitimacySignals,
         recommendedResume: result.recommendedResume,
         recommendedAction: result.recommendedAction,
         legitimacyNotes: result.legitimacyNotes,
