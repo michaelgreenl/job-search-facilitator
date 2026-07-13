@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import AppHeader from '@/components/app/AppHeader.vue'
-import JobTargetWorkspace from '@/components/job-targets/JobTargetWorkspace.vue'
+import WorkspaceDraft from '@/components/layout/WorkspaceDraft.vue'
 </script>
 
 <template>
-    <a class="skip-link" href="#workspace">Skip to workspace</a>
+    <div class="ambient-backdrop" aria-hidden="true"></div>
 
-    <main class="app">
+    <a class="skip-link" href="#workspace">Skip to layout</a>
+
+    <div class="app-shell">
         <AppHeader />
-        <JobTargetWorkspace />
-    </main>
+
+        <main id="workspace" class="workspace" tabindex="-1">
+            <WorkspaceDraft />
+        </main>
+    </div>
 </template>
