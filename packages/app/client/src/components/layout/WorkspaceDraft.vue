@@ -1,12 +1,10 @@
 <template>
     <section class="layout-draft" aria-labelledby="layout-title">
-        <header class="layout-intro">
-            <p class="eyebrow">Codex-powered · local-first</p>
-            <h1 id="layout-title">A calmer place to run your job search.</h1>
-            <p class="layout-summary">
-                Let automation handle the repetitive work while your data, context, and decisions
-                stay close.
-            </p>
+        <header class="dashboard-heading">
+            <div>
+                <p class="eyebrow">Local workspace</p>
+                <h1 id="layout-title">Dashboard</h1>
+            </div>
         </header>
 
         <section class="layout-overview glass-frame" aria-label="Overview frame">
