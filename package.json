@@ -10,6 +10,7 @@
         "dev": "pnpm --parallel --filter client --filter server run dev",
         "dev:client": "pnpm --filter client run dev",
         "dev:server": "pnpm --filter server run dev",
+        "dev:stack": "docker compose -f packages/app/server/docker-compose.yml up -d --build --wait",
         "dev:db": "docker compose -f packages/app/server/docker-compose.yml up -d --wait postgres",
         "dev:db:seed": "pnpm run dev:db && pnpm run prisma:generate && pnpm --filter @job-search-facilitator/core run db:deploy && pnpm --filter @job-search-facilitator/core run db:seed",
         "dev:db:status": "docker compose -f packages/app/server/docker-compose.yml ps",
