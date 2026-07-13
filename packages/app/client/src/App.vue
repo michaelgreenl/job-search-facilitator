@@ -1,14 +1,13 @@
-<template>
-    <h1 class="app-title">Job Search Facilitator</h1>
-</template>
+<script setup lang="ts">
+import AppHeader from '@/components/app/AppHeader.vue'
+import JobTargetWorkspace from '@/components/job-targets/JobTargetWorkspace.vue'
+</script>
 
-<style lang="scss" scoped>
-.app-title {
-    width: fit-content;
-    padding: $space-4;
-    margin: $space-6 auto;
-    font-family: $font-family-sans;
-    color: $color-blue-600;
-    border-radius: $radius-md;
-}
-</style>
+<template>
+    <a class="skip-link" href="#workspace">Skip to workspace</a>
+
+    <main class="app">
+        <AppHeader />
+        <JobTargetWorkspace />
+    </main>
+</template>
