@@ -1,0 +1,229 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    min-width: 0;
+    min-height: 100%;
+    margin: 0;
+}
+
+body {
+    min-height: 100dvh;
+    font-family: $font-family-sans;
+    line-height: 1.5;
+}
+
+h1,
+p {
+    margin: 0;
+}
+
+.app-shell {
+    width: 100%;
+    min-height: 100dvh;
+    padding: $space-4;
+}
+
+.skip-link {
+    position: fixed;
+    inset-block-start: $space-3;
+    inset-inline-start: $space-3;
+    z-index: 20;
+    padding: $space-2 $space-3;
+    transform: translateY(calc(-100% - $space-4));
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.app-header,
+.workspace {
+    width: min(100%, 76rem);
+    margin-inline: auto;
+}
+
+.app-header {
+    display: flex;
+    min-height: 4.5rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+}
+
+.brand {
+    display: inline-flex;
+    gap: $space-3;
+    align-items: center;
+    min-width: 0;
+}
+
+.brand-mark {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+}
+
+.brand-copy {
+    display: grid;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.brand-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.header-signal {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.workspace {
+    padding-block: clamp($space-5, 4vw, $space-7);
+}
+
+.layout-draft {
+    display: grid;
+    gap: $space-4;
+}
+
+.dashboard-heading {
+    display: grid;
+    min-height: 5rem;
+    align-items: end;
+    padding: $space-2 0;
+}
+
+.dashboard-heading > div {
+    display: grid;
+    gap: $space-1;
+}
+
+.layout-overview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: 7.5rem;
+    overflow: hidden;
+}
+
+.placeholder-cluster {
+    display: grid;
+    align-content: center;
+    gap: $space-3;
+    padding: $space-5;
+}
+
+.layout-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
+    gap: $space-4;
+    min-width: 0;
+}
+
+.layout-primary,
+.layout-secondary {
+    min-height: 29rem;
+    padding: $space-5;
+}
+
+.layout-primary {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: $space-6;
+}
+
+.layout-secondary {
+    display: grid;
+    align-content: start;
+    gap: $space-3;
+}
+
+.placeholder-line,
+.placeholder-chip,
+.placeholder-rows > span,
+.placeholder-feature {
+    display: block;
+}
+
+.placeholder-line {
+    height: 0.5rem;
+}
+
+.placeholder-line-short {
+    width: 34%;
+}
+
+.placeholder-line-medium {
+    width: 58%;
+}
+
+.placeholder-line-long {
+    width: 82%;
+}
+
+.placeholder-heading {
+    display: flex;
+    gap: $space-3;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.placeholder-chip {
+    width: 3.5rem;
+    height: 1.375rem;
+    flex: 0 0 auto;
+}
+
+.placeholder-rows {
+    display: grid;
+    gap: $space-3;
+}
+
+.placeholder-rows > span {
+    min-height: 4.75rem;
+}
+
+.placeholder-feature {
+    aspect-ratio: 1.65;
+    margin-block-end: $space-3;
+}
+
+@media (width <= 53rem) {
+    .layout-panels {
+        grid-template-columns: 1fr;
+    }
+
+    .layout-primary,
+    .layout-secondary {
+        min-height: 24rem;
+    }
+}
+
+@media (width <= 42rem) {
+    .app-shell {
+        padding: $space-3;
+    }
+
+    .layout-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .placeholder-cluster {
+        min-height: 6rem;
+    }
+}
+
+@media (width <= 30rem) {
+    .brand-copy small {
+        display: none;
+    }
+}
