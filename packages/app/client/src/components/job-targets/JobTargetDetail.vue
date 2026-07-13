@@ -11,12 +11,12 @@
                 <div>
                     <p class="eyebrow">Candid Health</p>
                     <h2 id="job-detail-title">Software Engineer</h2>
-                    <p>San Francisco, New York City, or Denver</p>
+                    <p class="detail-location">San Francisco, New York City, or Denver</p>
                 </div>
             </div>
 
             <div class="detail-status">
-                <span class="pill pill--targeted">Targeted</span>
+                <span class="pill pill-targeted">Targeted</span>
                 <span>Run 2026-07-03</span>
             </div>
         </div>
@@ -99,8 +99,8 @@
             </label>
 
             <div class="detail-action-buttons">
-                <button class="button button--primary" type="button">Open job post</button>
-                <button class="button button--secondary" type="button">Copy brief</button>
+                <button class="button button-primary" type="button">Open job post</button>
+                <button class="button button-secondary" type="button">Copy brief</button>
             </div>
         </div>
     </article>

@@ -12,7 +12,7 @@
         </div>
 
         <div class="header-controls">
-            <div class="workspace-status workspace-status--live" role="status">
+            <div class="workspace-status workspace-status-live" role="status">
                 <span class="workspace-status-indicator" aria-hidden="true"></span>
                 <span class="workspace-status-copy">
                     <strong>Database live</strong>
@@ -20,7 +20,7 @@
                 </span>
             </div>
 
-            <button class="button button--ghost" type="button">Source data</button>
+            <button class="button button-ghost" type="button">Source data</button>
         </div>
     </header>
 </template>

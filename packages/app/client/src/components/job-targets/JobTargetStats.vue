@@ -1,6 +1,6 @@
 <template>
     <section class="stats glass-surface" aria-label="Run briefing">
-        <div class="metric metric--lead">
+        <div class="metric metric-lead">
             <span class="metric-index" aria-hidden="true">01</span>
             <span class="metric-label">Review queue</span>
             <strong class="metric-value">13</strong>

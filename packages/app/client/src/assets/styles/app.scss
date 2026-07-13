@@ -10,11 +10,50 @@ body,
     margin: 0;
 }
 
+html {
+    color-scheme: dark;
+    background: $color-night;
+}
+
 body {
+    position: relative;
     min-height: 100dvh;
+    color: $color-ink;
     font-family: $font-family-sans;
     font-size: 0.875rem;
     line-height: 1.45;
+    background: $color-night;
+    text-rendering: optimizelegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    content: '';
+    background:
+        linear-gradient(rgb(255 255 255 / 3.5%) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(255 255 255 / 3.5%) 1px, transparent 1px),
+        radial-gradient(60rem 40rem at 22% 28%, rgb(255 255 255 / 7%), transparent 60%),
+        radial-gradient(50rem 35rem at 78% 14%, rgb(189 137 240 / 12%), transparent 55%),
+        radial-gradient(36rem 28rem at 70% 76%, rgb(180 220 210 / 5%), transparent 60%),
+        radial-gradient(44rem 34rem at 18% 86%, rgb(133 107 158 / 10%), transparent 58%),
+        $color-night-deep;
+    background-size:
+        2rem 2rem,
+        2rem 2rem,
+        auto,
+        auto,
+        auto,
+        auto,
+        auto;
+}
+
+#app {
+    position: relative;
+    z-index: 1;
 }
 
 button,
@@ -27,11 +66,48 @@ button {
     cursor: pointer;
 }
 
+button:focus-visible,
+a:focus-visible,
+[tabindex='-1']:focus-visible {
+    outline: 2px solid $color-signal-light;
+    outline-offset: 3px;
+}
+
 h1,
 h2,
 h3,
 p {
     margin: 0;
+}
+
+h1,
+h2,
+h3 {
+    font-family: $font-family-editorial;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+}
+
+h1 {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+h2 {
+    font-size: 1.25rem;
+    line-height: 1.15;
+}
+
+h3 {
+    font-family: $font-family-sans;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+}
+
+::selection {
+    color: $color-night-deep;
+    background: $color-signal-light;
 }
 
 .skip-link {
@@ -40,6 +116,11 @@ p {
     inset-inline-start: $space-3;
     z-index: 20;
     padding: $space-2 $space-3;
+    color: $color-night-deep;
+    font-weight: 700;
+    text-decoration: none;
+    background: $color-signal-light;
+    border-radius: $radius-sm;
     transform: translateY(calc(-100% - $space-4));
 }
 
@@ -55,11 +136,27 @@ p {
 }
 
 .app-header {
+    position: sticky;
+    inset-block-start: $space-3;
+    z-index: 10;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: $space-4;
     align-items: center;
+    width: calc(100% - ($space-6 * 2));
     padding: $space-5 clamp($space-4, 2vw, $space-8);
+    margin: $space-3 auto 0;
+}
+
+.glass-surface {
+    background-color: color-mix(in srgb, $color-dossier 60%, transparent);
+    border: 0;
+    border-radius: $radius-xl;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, lighten-color($color-dossier, 46%) 30%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, darken-color($color-dossier, 12%) 22%, transparent),
+        0 18px 36px 4px rgb(0 0 0 / 30%);
+    backdrop-filter: blur(15px) saturate(130%);
 }
 
 .brand-block,
@@ -82,7 +179,18 @@ p {
     width: 2.625rem;
     height: 2.625rem;
     flex: 0 0 auto;
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     place-items: center;
+    background-color: color-mix(in srgb, $color-signal-deep 60%, transparent);
+    border-radius: $radius-sm;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, $color-signal-light 32%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, $color-signal 38%, transparent),
+        0 5px 14px rgb(0 0 0 / 22%);
 }
 
 .brand-copy,
@@ -100,6 +208,11 @@ p {
     min-width: 0;
 }
 
+.brand-summary {
+    color: $color-ink-muted;
+    font-size: 0.75rem;
+}
+
 .header-controls {
     gap: $space-3;
 }
@@ -112,10 +225,26 @@ p {
     width: 0.5rem;
     height: 0.5rem;
     flex: 0 0 auto;
+    background: $color-positive;
+    border-radius: $radius-full;
+    box-shadow: 0 0 0 4px color-mix(in srgb, $color-positive 13%, transparent);
 }
 
 .workspace-status-copy {
     gap: 0.125rem;
+}
+
+.workspace-status-copy strong {
+    color: $color-ink-secondary;
+    font-size: 0.6875rem;
+    font-weight: 650;
+}
+
+.workspace-status-copy small {
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.5625rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .button {
@@ -124,6 +253,49 @@ p {
     align-items: center;
     justify-content: center;
     padding-inline: $space-4;
+    color: $color-ink;
+    font-size: 0.75rem;
+    font-weight: 650;
+    background: color-mix(in srgb, $color-dossier-raised 48%, transparent);
+    border: 1px solid color-mix(in srgb, $color-ink 12%, transparent);
+    border-radius: $radius-sm;
+    transition:
+        color 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease,
+        transform 100ms ease;
+}
+
+.button:hover {
+    background-color: color-mix(in srgb, $color-dossier-raised 84%, transparent);
+    border-color: color-mix(in srgb, $color-signal-light 38%, transparent);
+}
+
+.button:active {
+    transform: translateY(1px);
+}
+
+.button-ghost {
+    color: $color-ink-secondary;
+    background: transparent;
+    border-color: transparent;
+}
+
+.button-primary {
+    color: $color-night-deep;
+    background: $color-signal-light;
+    border-color: $color-signal-light;
+}
+
+.button-primary:hover {
+    color: $color-night-deep;
+    background: color-mix(in srgb, $color-signal-light 88%, white);
+    border-color: color-mix(in srgb, $color-signal-light 88%, white);
+}
+
+.button-secondary {
+    color: $color-ink;
+    background: color-mix(in srgb, $color-dossier-raised 70%, transparent);
 }
 
 .workspace {
@@ -142,6 +314,7 @@ p {
     grid-template-columns: minmax(12rem, 1.35fr) repeat(5, minmax(7.375rem, 1fr));
     gap: 1px;
     overflow: hidden;
+    background: color-mix(in srgb, $color-ink 10%, transparent);
 }
 
 .metric {
@@ -151,12 +324,57 @@ p {
     align-content: end;
     gap: 0.125rem;
     padding: $space-4;
+    background: color-mix(in srgb, $color-night 60%, transparent);
+}
+
+.metric-lead {
+    background: color-mix(in srgb, $color-signal-deep 36%, $color-night 64%);
 }
 
 .metric-index {
     position: absolute;
     inset-block-start: $space-3;
     inset-inline-end: $space-4;
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.5625rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+}
+
+.metric-label,
+.control-label,
+.eyebrow,
+dt {
+    color: $color-ink-muted;
+    font-size: 0.625rem;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    font-family: $font-family-mono;
+    font-size: 1.5625rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.metric-lead .metric-index,
+.metric-lead .metric-value {
+    color: $color-signal-light;
+}
+
+.metric-lead .metric-value {
+    font-family: $font-family-editorial;
+    font-size: 2.375rem;
+}
+
+.metric-detail {
+    color: $color-ink-muted;
+    font-size: 0.625rem;
 }
 
 .queue-progress {
@@ -165,18 +383,29 @@ p {
     height: 0.125rem;
     margin-block-start: $space-2;
     overflow: hidden;
+    background: color-mix(in srgb, $color-night-deep 78%, transparent);
 }
 
 .queue-progress-value {
     display: block;
     width: 35%;
     height: 100%;
+    background: $color-signal-light;
 }
 
 .filters {
     display: grid;
     gap: $space-4;
     padding: $space-4;
+}
+
+.filters,
+.target-list,
+.job-detail {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, lighten-color($color-dossier, 46%) 25%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, darken-color($color-dossier, 12%) 25%, transparent),
+        0 14px 30px 2px rgb(0 0 0 / 24%);
 }
 
 .filter-bar-head,
@@ -190,6 +419,12 @@ p {
 .section-heading {
     gap: 0.125rem;
     min-width: 0;
+}
+
+.section-heading strong {
+    color: $color-ink-muted;
+    font-size: 0.75rem;
+    font-weight: 550;
 }
 
 .filter-actions {
@@ -223,18 +458,60 @@ p {
     align-items: center;
     min-width: 0;
     padding-inline: $space-3 $space-2;
+    color: $color-ink-muted;
+    background: color-mix(in srgb, $color-night-deep 78%, transparent);
+    border: 1px solid color-mix(in srgb, $color-ink 11%, transparent);
+    border-radius: $radius-sm;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        box-shadow 140ms ease;
+}
+
+.search-field:hover,
+.search-field:focus-within {
+    background: color-mix(in srgb, $color-night-deep 90%, transparent);
+    border-color: color-mix(in srgb, $color-signal-light 42%, transparent);
+}
+
+.search-field:focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, $color-signal 18%, transparent);
 }
 
 .search-field-icon {
+    position: relative;
     width: 0.75rem;
     height: 0.75rem;
     flex: 0 0 auto;
+    border: 1.5px solid currentcolor;
+    border-radius: $radius-full;
+}
+
+.search-field-icon::after {
+    position: absolute;
+    right: -0.25rem;
+    bottom: -0.125rem;
+    width: 0.3125rem;
+    height: 1.5px;
+    content: '';
+    background: currentcolor;
+    transform: rotate(45deg);
 }
 
 .search-field input {
     width: 100%;
     min-width: 0;
+    color: $color-ink;
+    background: transparent;
     border: 0;
+}
+
+.search-field input::placeholder {
+    color: $color-ink-muted;
+}
+
+.search-field input:focus {
+    outline: 0;
 }
 
 .search-field kbd {
@@ -242,7 +519,12 @@ p {
     width: 1.25rem;
     height: 1.25rem;
     flex: 0 0 auto;
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.625rem;
     place-items: center;
+    border: 1px solid color-mix(in srgb, $color-ink 12%, transparent);
+    border-radius: $radius-xs;
 }
 
 .select-control {
@@ -251,11 +533,44 @@ p {
     min-width: 0;
 }
 
+.select-control::after {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0.875rem;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    pointer-events: none;
+    content: '';
+    border-inline-end: 1.5px solid $color-ink-muted;
+    border-block-end: 1.5px solid $color-ink-muted;
+    transform: translateY(-65%) rotate(45deg);
+}
+
 select {
     width: 100%;
     height: 2.625rem;
     padding-inline: $space-3 2.25rem;
+    color: $color-ink;
     appearance: none;
+    background: color-mix(in srgb, $color-night-deep 78%, transparent);
+    border: 1px solid color-mix(in srgb, $color-ink 11%, transparent);
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        box-shadow 140ms ease;
+}
+
+select:hover,
+select:focus-visible {
+    background: color-mix(in srgb, $color-night-deep 90%, transparent);
+    border-color: color-mix(in srgb, $color-signal-light 42%, transparent);
+}
+
+select:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, $color-signal 18%, transparent);
+    outline: 0;
 }
 
 .content-grid {
@@ -275,6 +590,8 @@ select {
 .target-list-head {
     min-height: 4.25rem;
     padding: $space-3 $space-4;
+    background: color-mix(in srgb, $color-dossier 56%, transparent);
+    border-block-end: 1px solid color-mix(in srgb, $color-ink 10%, transparent);
 }
 
 .target-list-rows {
@@ -290,14 +607,62 @@ select {
     width: 100%;
     min-height: 4.75rem;
     padding: 0.8125rem $space-4;
+    color: inherit;
     text-align: start;
+    background: transparent;
+    border: 0;
+    border-block-end: 1px solid color-mix(in srgb, $color-ink 7%, transparent);
+    transition:
+        color 140ms ease,
+        background-color 140ms ease;
+}
+
+.target-row::before {
+    position: absolute;
+    inset-block: $space-2;
+    inset-inline-start: 0;
+    width: 0.1875rem;
+    content: '';
+    background: $color-signal-light;
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform 160ms ease;
+}
+
+.target-row:last-child {
+    border-block-end: 0;
+}
+
+.target-row:hover {
+    background: color-mix(in srgb, $color-dossier-raised 38%, transparent);
+}
+
+.target-row-selected {
+    background: color-mix(in srgb, $color-signal 15%, transparent);
+}
+
+.target-row-selected::before {
+    transform: scaleY(1);
 }
 
 .rank {
     display: grid;
     width: 2.125rem;
     height: 2.125rem;
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
     place-items: center;
+    background: color-mix(in srgb, $color-night-deep 65%, transparent);
+    border: 1px solid color-mix(in srgb, $color-ink 8%, transparent);
+    border-radius: $radius-xs;
+}
+
+.target-row-selected .rank {
+    color: $color-night-deep;
+    background: $color-signal-light;
+    border-color: $color-signal-light;
 }
 
 .target-main,
@@ -316,8 +681,25 @@ select {
     white-space: nowrap;
 }
 
+.target-main strong {
+    color: $color-ink;
+    font-family: $font-family-editorial;
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+}
+
+.target-main > span {
+    color: $color-ink-muted;
+    font-size: 0.6875rem;
+}
+
 .target-meta {
     justify-items: end;
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.5625rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .pill,
@@ -326,7 +708,41 @@ select {
     min-height: 1.3125rem;
     align-items: center;
     padding-inline: 0.4375rem;
+    color: $color-ink-secondary;
+    font-family: $font-family-sans;
+    font-size: 0.5625rem;
+    font-weight: 750;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
     white-space: nowrap;
+    background: color-mix(in srgb, $color-ink-muted 10%, transparent);
+    border: 1px solid color-mix(in srgb, $color-ink-muted 28%, transparent);
+    border-radius: $radius-xs;
+}
+
+.pill-targeted,
+.review-pill-p1 {
+    color: $color-signal-light;
+    background: color-mix(in srgb, $color-signal 14%, transparent);
+    border-color: color-mix(in srgb, $color-signal-light 35%, transparent);
+}
+
+.pill-fast {
+    color: $color-positive;
+    background: color-mix(in srgb, $color-positive 10%, transparent);
+    border-color: color-mix(in srgb, $color-positive 30%, transparent);
+}
+
+.review-pill-p2 {
+    color: $color-caution;
+    background: color-mix(in srgb, $color-caution 10%, transparent);
+    border-color: color-mix(in srgb, $color-caution 30%, transparent);
+}
+
+.review-pill-archived {
+    color: $color-ink-muted;
+    background: color-mix(in srgb, $color-ink-muted 8%, transparent);
+    border-color: color-mix(in srgb, $color-ink-muted 22%, transparent);
 }
 
 .job-detail {
@@ -341,6 +757,7 @@ select {
     align-items: flex-start;
     justify-content: space-between;
     padding: clamp($space-5, 2.2vw, $space-8);
+    border-block-end: 1px solid color-mix(in srgb, $color-ink 10%, transparent);
 }
 
 .detail-case {
@@ -354,7 +771,30 @@ select {
     width: 2.75rem;
     height: 3.25rem;
     flex: 0 0 auto;
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
     place-items: center;
+    background: color-mix(in srgb, $color-signal 14%, transparent);
+    border: 1px solid color-mix(in srgb, $color-signal-light 35%, transparent);
+    border-radius: $radius-xs;
+}
+
+.eyebrow {
+    margin-block-end: 0.125rem;
+}
+
+.detail-head h2 {
+    max-width: 24ch;
+    margin-block-end: $space-1;
+    font-size: clamp(1.5625rem, 2vw, 1.9375rem);
+    line-height: 1.05;
+}
+
+.detail-location {
+    color: $color-ink-muted;
+    font-size: 0.75rem;
 }
 
 .detail-status {
@@ -364,21 +804,33 @@ select {
     justify-items: end;
 }
 
+.detail-status > span:last-child {
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.5625rem;
+}
+
 .detail-facts {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1px;
     margin: 0;
+    background: color-mix(in srgb, $color-ink 10%, transparent);
+    border-block-end: 1px solid color-mix(in srgb, $color-ink 10%, transparent);
 }
 
 .detail-facts div {
     min-width: 0;
     min-height: 5.375rem;
     padding: $space-4;
+    background: color-mix(in srgb, $color-night 60%, transparent);
 }
 
 .detail-facts dd {
     margin: $space-2 0 0;
+    color: $color-ink-secondary;
+    font-size: 0.75rem;
+    line-height: 1.35;
 }
 
 .evidence-ledger {
@@ -390,16 +842,45 @@ select {
     gap: $space-4;
     align-items: stretch;
     padding: $space-5 clamp($space-5, 2.2vw, $space-8);
+    border-block-end: 1px solid color-mix(in srgb, $color-ink 7%, transparent);
+}
+
+.text-block:last-child {
+    border-block-end: 0;
 }
 
 .evidence-marker {
+    position: relative;
+    display: grid;
     width: 1.875rem;
     flex: 0 0 1.875rem;
+    align-content: start;
+    justify-items: center;
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    font-size: 0.5625rem;
+    letter-spacing: 0.06em;
+}
+
+.evidence-marker::after {
+    width: 1px;
+    height: 100%;
+    min-height: 2.125rem;
+    margin-block-start: $space-3;
+    content: '';
+    background: color-mix(in srgb, $color-ink 11%, transparent);
 }
 
 .evidence-copy {
     gap: $space-2;
     min-width: 0;
+}
+
+.evidence-copy p {
+    max-width: 76ch;
+    color: $color-ink-secondary;
+    font-size: 0.8125rem;
+    line-height: 1.62;
 }
 
 .detail-actions {
@@ -410,6 +891,9 @@ select {
     gap: $space-3;
     align-items: end;
     padding: $space-4 clamp($space-5, 2.2vw, $space-8);
+    background: color-mix(in srgb, $color-dossier 76%, transparent);
+    border-block-start: 1px solid color-mix(in srgb, $color-ink 15%, transparent);
+    backdrop-filter: blur(18px) saturate(130%);
 }
 
 .label-action {
@@ -417,9 +901,24 @@ select {
     min-width: 0;
 }
 
+.label-action small {
+    color: $color-ink-muted;
+    font-size: 0.5625rem;
+}
+
 .detail-action-buttons {
     gap: $space-2;
     justify-content: flex-end;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+    .glass-surface {
+        background-color: color-mix(in srgb, $color-dossier 94%, transparent);
+    }
+
+    .detail-actions {
+        background: color-mix(in srgb, $color-dossier 96%, transparent);
+    }
 }
 
 @media (width <= 73.75rem) {
@@ -520,6 +1019,8 @@ select {
 @media (width <= 38.75rem) {
     .app-header {
         grid-template-columns: 1fr;
+        width: calc(100% - ($space-4 * 2));
+        margin-block-start: $space-2;
     }
 
     .header-controls {
@@ -568,6 +1069,10 @@ select {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .metric-index {
+        display: none;
+    }
+
     .filter-bar-head {
         align-items: flex-start;
         flex-direction: column;
@@ -590,5 +1095,50 @@ select {
     .text-block,
     .detail-actions {
         padding-inline: $space-4;
+    }
+}
+
+@media (prefers-contrast: more) {
+    .glass-surface,
+    .search-field,
+    select,
+    .button {
+        border: 1px solid color-mix(in srgb, $color-ink 34%, transparent);
+    }
+
+    .brand-summary,
+    .workspace-status-copy small,
+    .section-heading strong,
+    .target-main > span,
+    .evidence-copy p,
+    .detail-facts dd {
+        color: $color-ink;
+    }
+}
+
+@media (forced-colors: active) {
+    .glass-surface,
+    .brand-mark,
+    .rank,
+    .case-rank,
+    .pill,
+    .review-pill,
+    .button,
+    .search-field,
+    select {
+        border: 1px solid ButtonText;
+    }
+
+    .target-row-selected::before {
+        background: Highlight;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
     }
 }

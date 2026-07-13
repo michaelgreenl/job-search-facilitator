@@ -8,15 +8,15 @@
         </div>
 
         <div class="target-list-rows">
-            <button class="target-row target-row--selected" type="button" aria-current="true">
+            <button class="target-row target-row-selected" type="button" aria-current="true">
                 <span class="rank">01</span>
                 <span class="target-main">
                     <strong>Software Engineer</strong>
                     <span>Candid Health</span>
                 </span>
                 <span class="target-meta">
-                    <span class="pill pill--targeted">Targeted</span>
-                    <span class="review-pill review-pill--unreviewed">Unreviewed</span>
+                    <span class="pill pill-targeted">Targeted</span>
+                    <span class="review-pill review-pill-unreviewed">Unreviewed</span>
                     <span>2026-07-03</span>
                 </span>
             </button>
@@ -28,8 +28,8 @@
                     <span>DataGlance, Inc.</span>
                 </span>
                 <span class="target-meta">
-                    <span class="pill pill--fast">Fast apply</span>
-                    <span class="review-pill review-pill--p1">P1</span>
+                    <span class="pill pill-fast">Fast apply</span>
+                    <span class="review-pill review-pill-p1">P1</span>
                     <span>2026-07-03</span>
                 </span>
             </button>
@@ -41,8 +41,8 @@
                     <span>Oneleet</span>
                 </span>
                 <span class="target-meta">
-                    <span class="pill pill--fast">Fast apply</span>
-                    <span class="review-pill review-pill--p2">P2</span>
+                    <span class="pill pill-fast">Fast apply</span>
+                    <span class="review-pill review-pill-p2">P2</span>
                     <span>2026-07-03</span>
                 </span>
             </button>
@@ -54,8 +54,8 @@
                     <span>Lockheed Martin</span>
                 </span>
                 <span class="target-meta">
-                    <span class="pill pill--targeted">Targeted</span>
-                    <span class="review-pill review-pill--unreviewed">Unreviewed</span>
+                    <span class="pill pill-targeted">Targeted</span>
+                    <span class="review-pill review-pill-unreviewed">Unreviewed</span>
                     <span>2026-07-03</span>
                 </span>
             </button>
@@ -67,8 +67,8 @@
                     <span>Coris</span>
                 </span>
                 <span class="target-meta">
-                    <span class="pill pill--fast">Fast apply</span>
-                    <span class="review-pill review-pill--archived">Archived</span>
+                    <span class="pill pill-fast">Fast apply</span>
+                    <span class="review-pill review-pill-archived">Archived</span>
                     <span>2026-07-03</span>
                 </span>
             </button>

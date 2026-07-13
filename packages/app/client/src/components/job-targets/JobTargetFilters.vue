@@ -7,10 +7,10 @@
             </div>
 
             <div class="filter-actions">
-                <button class="button button--ghost mobile-filter-toggle" type="button">
+                <button class="button button-ghost mobile-filter-toggle" type="button">
                     Filters
                 </button>
-                <button class="button button--ghost" type="reset">Reset filters</button>
+                <button class="button button-ghost" type="reset">Reset filters</button>
             </div>
         </div>
 

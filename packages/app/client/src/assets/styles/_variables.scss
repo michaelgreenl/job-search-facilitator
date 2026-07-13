@@ -12,8 +12,24 @@ $color-green-600: #2b8a3e;
 $color-amber-500: #f59f00;
 $color-red-600: #c92a2a;
 
+// Dark workspace palette
+$color-night: #16131d;
+$color-night-deep: #100b17;
+$color-dossier: #302b38;
+$color-dossier-raised: #3a3344;
+$color-signal: #856b9e;
+$color-signal-light: #c4b2d7;
+$color-signal-deep: #4d3d5c;
+$color-ink: #ded8e6;
+$color-ink-secondary: #b7b0c1;
+$color-ink-muted: #81798b;
+$color-positive: #8dc7a4;
+$color-caution: #d4bb78;
+
 // Typography
-$font-family-sans: helvetica, arial, sans-serif;
+$font-family-sans: avenir, 'Segoe UI', system-ui, sans-serif;
+$font-family-editorial: 'Iowan Old Style', palatino, georgia, serif;
+$font-family-mono: 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
 
 // Spacing
 $space-0: 0;
