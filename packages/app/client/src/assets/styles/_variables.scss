@@ -12,8 +12,18 @@ $color-green-600: #2b8a3e;
 $color-amber-500: #f59f00;
 $color-red-600: #c92a2a;
 
+// Dark workspace palette
+$color-night: #0a0710;
+$color-night-deep: #060409;
+$color-signal: #ad7bf9;
+$color-signal-light: #ddc7ff;
+$color-ink: #f5f1fb;
+$color-ink-secondary: #c5bdcf;
+$color-ink-muted: #8f859c;
+
 // Typography
-$font-family-sans: helvetica, arial, sans-serif;
+$font-family-sans: avenir, 'Segoe UI', system-ui, sans-serif;
+$font-family-mono: 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
 
 // Spacing
 $space-0: 0;
