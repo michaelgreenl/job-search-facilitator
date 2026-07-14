@@ -14,7 +14,8 @@ import { RouterLink } from 'vue-router'
 
         <div class="nav-links">
             <RouterLink class="link" to="/">Review</RouterLink>
-            <RouterLink class="link" to="/analytics">Analytics</RouterLink>
+            <RouterLink class="link" to="/apply">Apply</RouterLink>
+            <RouterLink class="link" to="/results">Results</RouterLink>
         </div>
     </header>
 </template>

@@ -7,11 +7,17 @@ export const navigationRoutes = {
         component: () => import('@/views/ReviewView.vue'),
         meta: { title: 'Review' },
     },
-    analytics: {
-        path: '/analytics',
-        name: 'Analytics',
-        component: () => import('@/views/AnalyticsView.vue'),
-        meta: { title: 'Analytics' },
+    apply: {
+        path: '/apply',
+        name: 'Apply',
+        component: () => import('@/views/ApplyView.vue'),
+        meta: { title: 'Apply' },
+    },
+    results: {
+        path: '/results',
+        name: 'Results',
+        component: () => import('@/views/ResultsView.vue'),
+        meta: { title: 'Results' },
     },
 }
 
