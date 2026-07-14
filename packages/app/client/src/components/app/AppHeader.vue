@@ -110,13 +110,13 @@ import { RouterLink } from 'vue-router'
         0 0 24px rgb(173 123 249 / 42%);
 }
 
-@media (width <= 42rem) {
+@include bp-max('sm') {
     .app-header {
         inset-block-start: $space-3;
     }
 }
 
-@media (width <= 30rem) {
+@include bp-max('xs') {
     .brand-copy small {
         display: none;
     }

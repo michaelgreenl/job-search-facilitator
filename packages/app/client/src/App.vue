@@ -69,7 +69,7 @@ import AppHeader from '@/components/app/AppHeader.vue'
     padding-block: clamp($space-5, 4vw, $space-7);
 }
 
-@media (width <= 42rem) {
+@include bp-max('sm') {
     .app-shell {
         padding: $space-3;
     }
