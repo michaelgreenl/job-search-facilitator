@@ -38,39 +38,11 @@ import AppHeader from '@/components/app/AppHeader.vue'
     z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    width: 100%;
+    gap: $space-4;
     min-height: 100dvh;
     padding: $space-4;
-}
 
-.skip-link {
-    position: fixed;
-    inset-block-start: $space-3;
-    inset-inline-start: $space-3;
-    z-index: 20;
-    padding: $space-2 $space-3;
-    color: $color-night-deep;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    text-decoration: none;
-    background: $color-signal-light;
-    border-radius: $radius-sm;
-    transform: translateY(calc(-100% - $space-4));
-}
-
-.skip-link:focus {
-    transform: translateY(0);
-}
-
-.workspace {
-    width: min(100%, 76rem);
-    margin-inline: auto;
-    padding-block: clamp($space-5, 4vw, $space-7);
-}
-
-@media (width <= 42rem) {
-    .app-shell {
+    @include bp-max('sm') {
         padding: $space-3;
     }
 }

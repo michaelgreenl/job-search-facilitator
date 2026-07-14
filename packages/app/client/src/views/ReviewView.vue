@@ -1,69 +1,144 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { usePostStore } from '@/stores/post.store'
+import type { JobSearchReport, JobSearchResult } from '@job-search-facilitator/core'
+import { onMounted, shallowRef } from 'vue'
 import { useReportStore } from '@/stores/report.store'
+import JobPostCard from '@/components/job-post/JobPostCard.vue'
+import JobPostViewer from '@/components/job-post/JobPostViewer.vue'
 import SearchReportCard from '@/components/search-report/SearchReportCard.vue'
 
-const postStore = usePostStore()
-const reportStore = useReportStore()
+type ActivePanel = 'reports' | 'posts' | 'viewer'
 
-onMounted(async () => {
-    await Promise.allSettled([reportStore.fetchReports(), postStore.fetchPosts()])
-    console.log(reportStore.reports)
+const reportStore = useReportStore()
+const activePanel = shallowRef<ActivePanel>('reports')
+const selectedReport = shallowRef<JobSearchReport | null>(null)
+const selectedResult = shallowRef<JobSearchResult | null>(null)
+
+function selectReport(report: JobSearchReport) {
+    selectedReport.value = report
+    selectedResult.value = report.results[0] ?? null
+    activePanel.value = 'posts'
+}
+
+function selectResult(result: JobSearchResult) {
+    selectedResult.value = result
+    activePanel.value = 'viewer'
+}
+
+function showReports() {
+    activePanel.value = 'reports'
+}
+
+function showPosts() {
+    activePanel.value = 'posts'
+}
+
+onMounted(() => {
+    void reportStore
+        .fetchReports()
+        .then(() => {
+            selectedReport.value = reportStore.reports[0] ?? null
+            selectedResult.value = selectedReport.value?.results[0] ?? null
+        })
+        .catch(() => undefined)
 })
 </script>
 
 <template>
-    <section class="layout-draft" aria-labelledby="layout-title">
+    <section class="layout-draft" aria-label="Job search review">
         <!-- TODO: search-report statistics while the search-report list is active (e.g. "Last Run", "Report Count", keep it simple) -->
-        <section class="layout-overview glass-frame" aria-label="Overview frame">
-            <div class="placeholder-cluster" aria-hidden="true">
-                <span class="placeholder-line placeholder-line-short"></span>
-                <span class="placeholder-line placeholder-line-long"></span>
-            </div>
-            <div class="placeholder-cluster" aria-hidden="true">
-                <span class="placeholder-line placeholder-line-short"></span>
-                <span class="placeholder-line placeholder-line-medium"></span>
-            </div>
-            <div class="placeholder-cluster" aria-hidden="true">
-                <span class="placeholder-line placeholder-line-short"></span>
-                <span class="placeholder-line placeholder-line-long"></span>
-            </div>
-        </section>
 
         <div class="layout-panels">
-            <section class="layout-primary glass-frame" aria-label="Primary workspace frame">
-                <!-- TODO: header for the search-report card list or job-post card list -->
-                <div class="placeholder-heading" aria-hidden="true">
-                    <span class="placeholder-line placeholder-line-medium"></span>
-                    <span class="placeholder-chip"></span>
-                </div>
+            <section
+                class="layout-panel glass-frame"
+                :class="{ 'is-active': activePanel === 'reports' }"
+                aria-label="Search reports"
+            >
+                <header class="panel-heading">
+                    <div class="panel-title">
+                        <span class="eyebrow">Job Search reports</span>
+                        <h2 class="panel-heading-title">Select report to review</h2>
+                    </div>
 
-                <div class="placeholder-rows" aria-hidden="true">
-                    <!-- TODO: see todo comment in component -->
-                    <SearchReportCard
-                        v-for="report in reportStore.reports"
-                        :key="report.reportDate"
-                        :report="report"
-                    />
-                </div>
+                    <span class="item-count">{{ reportStore.reports.length }} reports</span>
+                </header>
 
-                <div class="placeholder-rows" aria-hidden="true">
-                    <!-- TODO: see todo comment in component -->
-                    <SearchReportCard
-                        v-for="report in reportStore.reports"
-                        :key="report.reportDate"
-                        :report="report"
-                    />
-                </div>
+                <p v-if="reportStore.loading" class="list-message">Loading search reports…</p>
+                <p v-else-if="reportStore.error" class="list-message">
+                    {{ reportStore.error }}
+                </p>
+                <ul v-else-if="reportStore.reports.length" class="card-list">
+                    <li v-for="report in reportStore.reports" :key="report.id">
+                        <SearchReportCard
+                            :report="report"
+                            :selected="selectedReport?.id === report.id"
+                            @select="selectReport(report)"
+                        />
+                    </li>
+                </ul>
+                <p v-else class="list-message">No search reports found.</p>
             </section>
 
-            <!-- TODO: move to job-post-viewer -->
-            <aside class="layout-secondary glass-frame" aria-label="Secondary workspace frame">
-                <div class="placeholder-feature" aria-hidden="true"></div>
-                <span class="placeholder-line placeholder-line-long" aria-hidden="true"></span>
-                <span class="placeholder-line placeholder-line-medium" aria-hidden="true"></span>
-                <span class="placeholder-line placeholder-line-short" aria-hidden="true"></span>
+            <section
+                class="layout-panel glass-frame"
+                :class="{
+                    'is-active': activePanel === 'posts',
+                    'is-adjacent': activePanel === 'reports' || activePanel === 'viewer',
+                }"
+                aria-label="Job posts"
+            >
+                <header class="panel-heading">
+                    <div class="panel-title">
+                        <button
+                            v-if="activePanel !== 'reports'"
+                            class="back-button"
+                            type="button"
+                            aria-label="Back to search reports"
+                            @click="showReports"
+                        >
+                            ←
+                        </button>
+                        <span class="eyebrow">Job posts</span>
+                        <h2 class="panel-heading-title">
+                            {{ selectedReport?.reportDate ?? 'Select a search report' }}
+                        </h2>
+                    </div>
+
+                    <span class="item-count">{{ selectedReport?.results.length ?? 0 }} posts</span>
+                </header>
+
+                <ul v-if="selectedReport?.results.length" class="card-list">
+                    <li v-for="result in selectedReport.results" :key="result.post.id">
+                        <JobPostCard
+                            :result="result"
+                            :selected="selectedResult?.post.id === result.post.id"
+                            @select="selectResult(result)"
+                        />
+                    </li>
+                </ul>
+                <p v-else class="list-message">
+                    {{
+                        selectedReport ? 'This report has no job posts.' : 'Select a search report.'
+                    }}
+                </p>
+            </section>
+
+            <aside
+                v-if="selectedResult"
+                class="job-post-view layout-panel glass-frame"
+                :class="{
+                    'is-active': activePanel === 'viewer',
+                    'is-adjacent': activePanel === 'posts',
+                }"
+            >
+                <button
+                    class="back-button back-button-viewer"
+                    type="button"
+                    aria-label="Back to job posts"
+                    @click="showPosts"
+                >
+                    ←
+                </button>
+                <JobPostViewer :result="selectedResult" />
             </aside>
         </div>
     </section>
@@ -71,8 +146,11 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .layout-draft {
-    gap: $space-4;
-    width: 100%;
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 84rem);
+    margin: 0 auto;
+    flex: 1;
 }
 
 .eyebrow {
@@ -84,163 +162,109 @@ onMounted(async () => {
     text-transform: uppercase;
 }
 
-.dashboard-heading h1 {
-    font-size: clamp(1.75rem, 3vw, 2.25rem);
+.panel-heading-title {
+    margin: 0;
+    font-size: 1.75rem;
     font-weight: 600;
     letter-spacing: -0.035em;
     line-height: 1.1;
-}
-
-.layout-overview,
-.layout-primary,
-.layout-secondary {
-    border-radius: $radius-lg;
-}
-
-.layout-overview {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    min-height: 7.5rem;
-    padding: 1px;
-    overflow: hidden;
-}
-
-.placeholder-cluster {
-    display: grid;
-    align-content: center;
-    gap: $space-3;
-    padding: $space-5;
-    background: rgb(7 4 11 / 18%);
-    border-inline-end: 1px solid rgb(221 199 255 / 9%);
-}
-
-.placeholder-cluster:last-child {
-    border-inline-end: 0;
+    text-wrap: balance;
 }
 
 .layout-panels {
+    display: flex;
+    flex: 1;
     gap: $space-4;
     min-width: 0;
 }
 
-.layout-primary,
-.layout-secondary {
-    min-height: 29rem;
-    padding: $space-5;
+.layout-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    gap: $space-4;
+    min-height: 24rem;
+    padding: $space-5 $space-5 0;
+    border-radius: $radius-lg;
+
+    &.is-active {
+        display: flex;
+    }
+
+    @include bp-md-tablet {
+        min-height: 38rem;
+
+        &.is-adjacent {
+            display: flex;
+            min-width: 20rem;
+        }
+    }
+
+    &.job-post-view {
+        flex: 2;
+    }
 }
 
-.layout-primary {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    gap: $space-6;
-}
-
-.layout-secondary {
-    // display: grid;
-    // align-content: start;
-    // gap: $space-3;
-}
-
-.placeholder-line,
-.placeholder-chip,
-.placeholder-rows > span,
-.placeholder-feature {
-    display: block;
-    background: rgb(245 241 251 / 8%);
-    border: 1px solid rgb(245 241 251 / 5%);
-}
-
-.placeholder-line {
-    height: 0.5rem;
-    border-radius: $radius-full;
-}
-
-.placeholder-line-short {
-    width: 34%;
-}
-
-.placeholder-line-medium {
-    width: 58%;
-}
-
-.placeholder-line-long {
-    width: 82%;
-}
-
-.placeholder-heading {
+.panel-heading {
     display: flex;
-    gap: $space-3;
-    align-items: center;
+    gap: $space-4;
+    align-items: end;
     justify-content: space-between;
 }
 
-.placeholder-chip {
-    width: 3.5rem;
-    height: 1.375rem;
+.panel-title {
+    display: grid;
+    gap: $space-1;
+}
+
+.back-button {
+    width: fit-content;
+    padding: 0;
+    color: $color-ink-muted;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+    }
+
+    &-viewer {
+        @include bp-md-tablet {
+            display: none;
+        }
+    }
+}
+
+.item-count {
     flex: 0 0 auto;
+    padding: $space-1 $space-3;
+    color: $color-ink-secondary;
+    font-size: 0.75rem;
+    background: rgb(245 241 251 / 6%);
+    border: 1px solid rgb(245 241 251 / 10%);
     border-radius: $radius-full;
 }
 
-.placeholder-rows {
-    display: grid;
+.card-list {
+    display: flex;
+    flex: 1 0 0;
+    flex-direction: column;
     gap: $space-3;
+    margin: 0;
+    padding: 0 0 $space-5;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
 }
 
-.placeholder-rows > span {
-    min-height: 4.75rem;
-    border-radius: $radius-md;
+.card-list li {
+    min-width: 0;
 }
 
-.placeholder-rows > span:first-child {
-    background: rgb(173 123 249 / 8%);
-    border-color: rgb(173 123 249 / 17%);
-}
-
-.placeholder-feature {
-    aspect-ratio: 1.65;
-    margin-block-end: $space-3;
-    background: linear-gradient(145deg, rgb(255 255 255 / 7%), rgb(173 123 249 / 7%));
-    border-radius: $radius-md;
-}
-
-@media (width <= 53rem) {
-    .layout-panels {
-        grid-template-columns: 1fr;
-    }
-
-    .layout-primary,
-    .layout-secondary {
-        min-height: 24rem;
-    }
-
-    .layout-secondary {
-        min-height: 20rem;
-    }
-}
-
-@media (width <= 42rem) {
-    .layout-overview {
-        grid-template-columns: 1fr;
-    }
-
-    .placeholder-cluster {
-        min-height: 6rem;
-        border-inline-end: 0;
-        border-block-end: 1px solid rgb(221 199 255 / 9%);
-    }
-
-    .placeholder-cluster:last-child {
-        border-block-end: 0;
-    }
-}
-
-@media (forced-colors: active) {
-    .placeholder-line,
-    .placeholder-chip,
-    .placeholder-rows > span,
-    .placeholder-feature {
-        border: 1px solid ButtonText;
-    }
+.list-message {
+    color: $color-ink-muted;
 }
 </style>
