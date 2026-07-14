@@ -24,7 +24,7 @@ import { RouterLink } from 'vue-router'
     inset-block-start: $space-4;
     z-index: 10;
     display: flex;
-    width: min(100%, 76rem);
+    width: min(100%, 84rem);
     min-height: 4.5rem;
     align-items: center;
     justify-content: space-between;

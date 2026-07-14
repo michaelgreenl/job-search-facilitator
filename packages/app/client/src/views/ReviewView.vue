@@ -71,8 +71,11 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .layout-draft {
+    display: flex;
+    flex-direction: column;
     gap: $space-4;
-    width: 100%;
+    width: min(100%, 84rem);
+    margin: 0 auto;
 }
 
 .eyebrow {
@@ -120,6 +123,8 @@ onMounted(async () => {
 }
 
 .layout-panels {
+    display: flex;
+    flex-direction: column;
     gap: $space-4;
     min-width: 0;
 }
