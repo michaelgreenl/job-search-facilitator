@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { RouterLink } from 'vue-router'
+</script>
+
 <template>
     <header class="app-header glass-frame">
         <a class="brand" href="/" aria-label="Job Search Facilitator home">
@@ -8,13 +12,15 @@
             </span>
         </a>
 
-        <span class="header-signal" aria-hidden="true"></span>
+        <div class="nav-links">
+            <RouterLink class="link" to="/">Review</RouterLink>
+            <RouterLink class="link" to="/analytics">Analytics</RouterLink>
+        </div>
     </header>
 </template>
 
 <style scoped lang="scss">
 .app-header {
-    position: sticky;
     inset-block-start: $space-4;
     z-index: 10;
     display: flex;
@@ -69,6 +75,28 @@
 .brand-copy small {
     color: $color-ink-muted;
     font-size: 0.6875rem;
+}
+
+.nav-links {
+    display: flex;
+    gap: $space-5;
+    align-items: center;
+    padding-right: $space-3;
+}
+
+.link {
+    color: $color-ink-muted;
+    text-decoration: none;
+}
+
+.link:hover,
+.link:focus-visible {
+    color: $color-ink;
+}
+
+.link:active,
+.link.router-link-exact-active {
+    color: $color-signal-light;
 }
 
 .header-signal {

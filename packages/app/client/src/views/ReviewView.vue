@@ -2,24 +2,20 @@
 import { onMounted } from 'vue'
 import { usePostStore } from '@/stores/post.store'
 import { useReportStore } from '@/stores/report.store'
+import SearchReportCard from '@/components/search-report/SearchReportCard.vue'
 
 const postStore = usePostStore()
 const reportStore = useReportStore()
 
-onMounted(() => {
-    void Promise.allSettled([reportStore.fetchReports(), postStore.fetchPosts()])
+onMounted(async () => {
+    await Promise.allSettled([reportStore.fetchReports(), postStore.fetchPosts()])
+    console.log(reportStore.reports)
 })
 </script>
 
 <template>
     <section class="layout-draft" aria-labelledby="layout-title">
-        <header class="dashboard-heading">
-            <div>
-                <p class="eyebrow">Local workspace</p>
-                <h1 id="layout-title">Dashboard</h1>
-            </div>
-        </header>
-
+        <!-- TODO: search-report statistics while the search-report list is active (e.g. "Last Run", "Report Count", keep it simple) -->
         <section class="layout-overview glass-frame" aria-label="Overview frame">
             <div class="placeholder-cluster" aria-hidden="true">
                 <span class="placeholder-line placeholder-line-short"></span>
@@ -37,19 +33,32 @@ onMounted(() => {
 
         <div class="layout-panels">
             <section class="layout-primary glass-frame" aria-label="Primary workspace frame">
+                <!-- TODO: header for the search-report card list or job-post card list -->
                 <div class="placeholder-heading" aria-hidden="true">
                     <span class="placeholder-line placeholder-line-medium"></span>
                     <span class="placeholder-chip"></span>
                 </div>
 
                 <div class="placeholder-rows" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                    <!-- TODO: see todo comment in component -->
+                    <SearchReportCard
+                        v-for="report in reportStore.reports"
+                        :key="report.reportDate"
+                        :report="report"
+                    />
+                </div>
+
+                <div class="placeholder-rows" aria-hidden="true">
+                    <!-- TODO: see todo comment in component -->
+                    <SearchReportCard
+                        v-for="report in reportStore.reports"
+                        :key="report.reportDate"
+                        :report="report"
+                    />
                 </div>
             </section>
 
+            <!-- TODO: move to job-post-viewer -->
             <aside class="layout-secondary glass-frame" aria-label="Secondary workspace frame">
                 <div class="placeholder-feature" aria-hidden="true"></div>
                 <span class="placeholder-line placeholder-line-long" aria-hidden="true"></span>
@@ -62,20 +71,8 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .layout-draft {
-    display: grid;
     gap: $space-4;
-}
-
-.dashboard-heading {
-    display: grid;
-    min-height: 5rem;
-    align-items: end;
-    padding: $space-2 0;
-}
-
-.dashboard-heading > div {
-    display: grid;
-    gap: $space-1;
+    width: 100%;
 }
 
 .eyebrow {
@@ -123,8 +120,6 @@ onMounted(() => {
 }
 
 .layout-panels {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
     gap: $space-4;
     min-width: 0;
 }
@@ -142,9 +137,9 @@ onMounted(() => {
 }
 
 .layout-secondary {
-    display: grid;
-    align-content: start;
-    gap: $space-3;
+    // display: grid;
+    // align-content: start;
+    // gap: $space-3;
 }
 
 .placeholder-line,

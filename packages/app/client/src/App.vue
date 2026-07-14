@@ -1,19 +1,17 @@
 <script setup lang="ts">
+import { RouterView } from 'vue-router'
 import AppHeader from '@/components/app/AppHeader.vue'
-import WorkspaceDraft from '@/components/layout/WorkspaceDraft.vue'
 </script>
 
 <template>
     <div class="ambient-backdrop" aria-hidden="true"></div>
 
-    <a class="skip-link" href="#workspace">Skip to layout</a>
-
     <div class="app-shell">
         <AppHeader />
 
-        <main id="workspace" class="workspace" tabindex="-1">
-            <WorkspaceDraft />
-        </main>
+        <RouterView v-slot="{ Component }">
+            <component :is="Component" />
+        </RouterView>
     </div>
 </template>
 
@@ -38,6 +36,9 @@ import WorkspaceDraft from '@/components/layout/WorkspaceDraft.vue'
 .app-shell {
     position: relative;
     z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     width: 100%;
     min-height: 100dvh;
     padding: $space-4;
