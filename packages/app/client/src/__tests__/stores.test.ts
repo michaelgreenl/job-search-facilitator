@@ -1,8 +1,8 @@
 import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { usePostStore } from './post.store'
-import { useReportStore } from './report.store'
+import { usePostStore } from '../stores/post.store'
+import { useReportStore } from '../stores/report.store'
 
 const post: JobPost = {
     id: 'post-1',
