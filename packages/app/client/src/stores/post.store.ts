@@ -1,68 +1,89 @@
 import type { JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
-import { getJobPost, getJobPosts, patchJobPost } from '@/api'
+import { ref, shallowRef } from 'vue'
+import { request } from '@/api'
 import { useReportStore } from '@/stores/report.store'
 
-export const usePostStore = defineStore('posts', {
-    state: () => ({
-        posts: [] as JobPost[],
-        loading: false,
-        error: null as string | null,
-    }),
-    actions: {
-        async fetchPosts() {
-            this.loading = true
-            this.error = null
+const getJobPosts = () => request<JobPost[]>('/job-posts')
 
-            try {
-                this.posts = await getJobPosts()
-            } catch (error) {
-                this.error = error instanceof Error ? error.message : 'Request failed'
-                throw error
-            } finally {
-                this.loading = false
-            }
-        },
-        async fetchPost(id: string) {
-            this.loading = true
-            this.error = null
+const getJobPost = (id: string) => request<JobPost>(`/job-posts/${encodeURIComponent(id)}`)
 
-            try {
-                const post = await getJobPost(id)
-                this.savePost(post)
-                return post
-            } catch (error) {
-                this.error = error instanceof Error ? error.message : 'Request failed'
-                throw error
-            } finally {
-                this.loading = false
-            }
-        },
-        async updatePost(id: string, input: UpdateJobPostInput) {
-            this.loading = true
-            this.error = null
+const patchJobPost = (id: string, input: UpdateJobPostInput) =>
+    request<JobPost>(`/job-posts/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+    })
 
-            try {
-                const post = await patchJobPost(id, input)
-                this.savePost(post)
-                return post
-            } catch (error) {
-                this.error = error instanceof Error ? error.message : 'Request failed'
-                throw error
-            } finally {
-                this.loading = false
-            }
-        },
-        savePost(post: JobPost) {
-            const index = this.posts.findIndex(({ id }) => id === post.id)
+export const usePostStore = defineStore('posts', () => {
+    const posts = ref<JobPost[]>([])
+    const loading = shallowRef(false)
+    const error = shallowRef<string | null>(null)
 
-            if (index === -1) {
-                this.posts.push(post)
-            } else {
-                this.posts[index] = post
-            }
+    async function fetchPosts() {
+        loading.value = true
+        error.value = null
 
-            useReportStore().replacePost(post)
-        },
-    },
+        try {
+            posts.value = await getJobPosts()
+        } catch (requestError) {
+            error.value = requestError instanceof Error ? requestError.message : 'Request failed'
+            throw requestError
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function fetchPost(id: string) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const post = await getJobPost(id)
+            savePost(post)
+            return post
+        } catch (requestError) {
+            error.value = requestError instanceof Error ? requestError.message : 'Request failed'
+            throw requestError
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function updatePost(id: string, input: UpdateJobPostInput) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const post = await patchJobPost(id, input)
+            savePost(post)
+            return post
+        } catch (requestError) {
+            error.value = requestError instanceof Error ? requestError.message : 'Request failed'
+            throw requestError
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function savePost(post: JobPost) {
+        const index = posts.value.findIndex(({ id }) => id === post.id)
+
+        if (index === -1) {
+            posts.value.push(post)
+        } else {
+            posts.value[index] = post
+        }
+
+        useReportStore().replacePost(post)
+    }
+
+    return {
+        posts,
+        loading,
+        error,
+        fetchPosts,
+        fetchPost,
+        updatePost,
+    }
 })

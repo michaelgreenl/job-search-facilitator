@@ -1,57 +1,71 @@
 import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
-import { getJobSearchReport, getJobSearchReports } from '@/api'
+import { ref, shallowRef } from 'vue'
+import { request } from '@/api'
 
-export const useReportStore = defineStore('reports', {
-    state: () => ({
-        reports: [] as JobSearchReport[],
-        loading: false,
-        error: null as string | null,
-    }),
-    actions: {
-        async fetchReports() {
-            this.loading = true
-            this.error = null
+const getJobSearchReports = () => request<JobSearchReport[]>('/job-search-reports')
 
-            try {
-                this.reports = await getJobSearchReports()
-            } catch (error) {
-                this.error = error instanceof Error ? error.message : 'Request failed'
-                throw error
-            } finally {
-                this.loading = false
+const getJobSearchReport = (reportDate: string) =>
+    request<JobSearchReport>(`/job-search-reports/${encodeURIComponent(reportDate)}`)
+
+export const useReportStore = defineStore('reports', () => {
+    const reports = ref<JobSearchReport[]>([])
+    const loading = shallowRef(false)
+    const error = shallowRef<string | null>(null)
+
+    async function fetchReports() {
+        loading.value = true
+        error.value = null
+
+        try {
+            reports.value = await getJobSearchReports()
+        } catch (requestError) {
+            error.value = requestError instanceof Error ? requestError.message : 'Request failed'
+            throw requestError
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function fetchReport(reportDate: string) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const report = await getJobSearchReport(reportDate)
+            const index = reports.value.findIndex(({ id }) => id === report.id)
+
+            if (index === -1) {
+                reports.value.push(report)
+            } else {
+                reports.value[index] = report
             }
-        },
-        async fetchReport(reportDate: string) {
-            this.loading = true
-            this.error = null
 
-            try {
-                const report = await getJobSearchReport(reportDate)
-                const index = this.reports.findIndex(({ id }) => id === report.id)
+            return report
+        } catch (requestError) {
+            error.value = requestError instanceof Error ? requestError.message : 'Request failed'
+            throw requestError
+        } finally {
+            loading.value = false
+        }
+    }
 
-                if (index === -1) {
-                    this.reports.push(report)
-                } else {
-                    this.reports[index] = report
-                }
+    function replacePost(post: JobPost) {
+        for (const report of reports.value) {
+            const result = report.results.find(({ post: current }) => current.id === post.id)
 
-                return report
-            } catch (error) {
-                this.error = error instanceof Error ? error.message : 'Request failed'
-                throw error
-            } finally {
-                this.loading = false
+            if (result !== undefined) {
+                result.post = post
             }
-        },
-        replacePost(post: JobPost) {
-            for (const report of this.reports) {
-                const result = report.results.find(({ post: current }) => current.id === post.id)
+        }
+    }
 
-                if (result !== undefined) {
-                    result.post = post
-                }
-            }
-        },
-    },
+    return {
+        reports,
+        loading,
+        error,
+        fetchReports,
+        fetchReport,
+        replacePost,
+    }
 })
