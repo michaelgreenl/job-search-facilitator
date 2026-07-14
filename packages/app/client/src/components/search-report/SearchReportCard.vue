@@ -41,17 +41,17 @@ const emit = defineEmits<{
     background: rgb(245 241 251 / 5%);
     border: 1px solid rgb(245 241 251 / 9%);
     border-radius: $radius-md;
-}
 
-.report-card:hover,
-.report-card:focus-visible {
-    background: rgb(173 123 249 / 9%);
-    border-color: rgb(173 123 249 / 28%);
-}
+    &:hover,
+    &:focus-visible {
+        background: rgb(173 123 249 / 9%);
+        border-color: rgb(173 123 249 / 28%);
+    }
 
-.report-card-selected {
-    background: rgb(173 123 249 / 12%);
-    border-color: $color-signal;
+    &-selected {
+        background: rgb(173 123 249 / 12%);
+        border-color: $color-signal;
+    }
 }
 
 .component-label {

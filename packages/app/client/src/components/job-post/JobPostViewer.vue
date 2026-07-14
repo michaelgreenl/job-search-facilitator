@@ -26,7 +26,6 @@ defineProps<{
 <style scoped lang="scss">
 .post-viewer {
     display: grid;
-    align-content: start;
     gap: $space-5;
 }
 

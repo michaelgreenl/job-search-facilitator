@@ -20,7 +20,7 @@ const emit = defineEmits<{
         @click="emit('select')"
     >
         <span class="component-label">Job post card · Rank {{ result.agentRank }}</span>
-        <strong>{{ result.post.roleTitle }}</strong>
+        <strong class="post-role">{{ result.post.roleTitle }}</strong>
         <span class="post-company">{{ result.post.company }}</span>
         <span class="post-meta">
             {{ result.post.location ?? 'Location not listed' }} · {{ result.post.postSource }}
@@ -41,17 +41,17 @@ const emit = defineEmits<{
     background: rgb(245 241 251 / 5%);
     border: 1px solid rgb(245 241 251 / 9%);
     border-radius: $radius-md;
-}
 
-.post-card:hover,
-.post-card:focus-visible {
-    background: rgb(173 123 249 / 9%);
-    border-color: rgb(173 123 249 / 28%);
-}
+    &:hover,
+    &:focus-visible {
+        background: rgb(173 123 249 / 9%);
+        border-color: rgb(173 123 249 / 28%);
+    }
 
-.post-card-selected {
-    background: rgb(173 123 249 / 12%);
-    border-color: $color-signal !important;
+    &-selected {
+        background: rgb(173 123 249 / 12%);
+        border-color: $color-signal !important;
+    }
 }
 
 .component-label {
@@ -61,6 +61,10 @@ const emit = defineEmits<{
     font-size: 0.6875rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.post-role {
+    text-wrap: balance;
 }
 
 .post-company {

@@ -46,20 +46,6 @@ onMounted(() => {
 <template>
     <section class="layout-draft" aria-label="Job search review">
         <!-- TODO: search-report statistics while the search-report list is active (e.g. "Last Run", "Report Count", keep it simple) -->
-        <!-- <section class="layout-overview glass-frame" aria-label="Overview frame"> -->
-        <!--     <div class="placeholder-cluster" aria-hidden="true"> -->
-        <!--         <span class="placeholder-line placeholder-line-short"></span> -->
-        <!--         <span class="placeholder-line placeholder-line-long"></span> -->
-        <!--     </div> -->
-        <!--     <div class="placeholder-cluster" aria-hidden="true"> -->
-        <!--         <span class="placeholder-line placeholder-line-short"></span> -->
-        <!--         <span class="placeholder-line placeholder-line-medium"></span> -->
-        <!--     </div> -->
-        <!--     <div class="placeholder-cluster" aria-hidden="true"> -->
-        <!--         <span class="placeholder-line placeholder-line-short"></span> -->
-        <!--         <span class="placeholder-line placeholder-line-long"></span> -->
-        <!--     </div> -->
-        <!-- </section> -->
 
         <div class="layout-panels">
             <section
@@ -138,14 +124,14 @@ onMounted(() => {
 
             <aside
                 v-if="selectedResult"
-                class="layout-panel layout-viewer glass-frame"
+                class="job-post-view layout-panel glass-frame"
                 :class="{
                     'is-active': activePanel === 'viewer',
                     'is-adjacent': activePanel === 'posts',
                 }"
             >
                 <button
-                    class="back-button viewer-back-button"
+                    class="back-button back-button-viewer"
                     type="button"
                     aria-label="Back to job posts"
                     @click="showPosts"
@@ -162,7 +148,6 @@ onMounted(() => {
 .layout-draft {
     display: flex;
     flex-direction: column;
-    gap: $space-4;
     width: min(100%, 84rem);
     margin: 0 auto;
     flex: 1;
@@ -186,60 +171,38 @@ onMounted(() => {
     text-wrap: balance;
 }
 
-.layout-overview,
-.layout-panel {
-    border-radius: $radius-lg;
-}
-
-.layout-overview {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    min-height: 7.5rem;
-    padding: 1px;
-    overflow: hidden;
-}
-
-.placeholder-cluster {
-    display: grid;
-    align-content: center;
-    gap: $space-3;
-    padding: $space-5;
-    background: rgb(7 4 11 / 18%);
-    border-inline-end: 1px solid rgb(221 199 255 / 9%);
-}
-
-.placeholder-cluster:last-child {
-    border-inline-end: 0;
-}
-
 .layout-panels {
-    // display: grid;
-    // grid-template-columns: minmax(0, 1fr);
     display: flex;
     flex: 1;
-    // flex-direction: column;
     gap: $space-4;
     min-width: 0;
 }
 
 .layout-panel {
     display: none;
-    grid-template-rows: auto minmax(0, 1fr);
+    flex: 1;
+    flex-direction: column;
     gap: $space-4;
     min-height: 24rem;
     padding: $space-5 $space-5 0;
-    flex: 1 0 0;
-}
+    border-radius: $radius-lg;
 
-.layout-panel.is-active {
-    display: flex;
-    flex-direction: column;
-}
+    &.is-active {
+        display: flex;
+    }
 
-.layout-viewer {
-    align-content: start;
-    grid-template-rows: auto 1fr;
+    @include bp-md-tablet {
+        min-height: 38rem;
+
+        &.is-adjacent {
+            display: flex;
+            min-width: 20rem;
+        }
+    }
+
+    &.job-post-view {
+        flex: 2;
+    }
 }
 
 .panel-heading {
@@ -262,15 +225,17 @@ onMounted(() => {
     cursor: pointer;
     background: transparent;
     border: 0;
-}
 
-.back-button:hover,
-.back-button:focus-visible {
-    color: $color-signal-light;
-}
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+    }
 
-.viewer-back-button {
-    justify-self: start;
+    &-viewer {
+        @include bp-md-tablet {
+            display: none;
+        }
+    }
 }
 
 .item-count {
@@ -284,12 +249,12 @@ onMounted(() => {
 }
 
 .card-list {
-    flex: 1 0 0;
     display: flex;
+    flex: 1 0 0;
     flex-direction: column;
     gap: $space-3;
     margin: 0;
-    padding: 0 0 1.5rem;
+    padding: 0 0 $space-5;
     overflow-y: auto;
     overscroll-behavior: contain;
     list-style: none;
@@ -300,68 +265,6 @@ onMounted(() => {
 }
 
 .list-message {
-    align-self: start;
     color: $color-ink-muted;
-}
-
-.placeholder-line {
-    display: block;
-    height: 0.5rem;
-    background: rgb(245 241 251 / 8%);
-    border: 1px solid rgb(245 241 251 / 5%);
-    border-radius: $radius-full;
-}
-
-.placeholder-line-short {
-    width: 34%;
-}
-
-.placeholder-line-medium {
-    width: 58%;
-}
-
-.placeholder-line-long {
-    width: 82%;
-}
-
-@include bp-md-tablet {
-    .layout-panels {
-        grid-template-columns: minmax(18rem, 0.8fr) minmax(0, 1.4fr);
-    }
-
-    .layout-panel {
-        min-height: 38rem;
-    }
-
-    .layout-panel.is-adjacent {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .viewer-back-button {
-        display: none;
-    }
-}
-
-@include bp-max('sm') {
-    .layout-overview {
-        grid-template-columns: 1fr;
-    }
-
-    .placeholder-cluster {
-        min-height: 6rem;
-        border-inline-end: 0;
-        border-block-end: 1px solid rgb(221 199 255 / 9%);
-    }
-
-    .placeholder-cluster:last-child {
-        border-block-end: 0;
-    }
-}
-
-@media (forced-colors: active) {
-    .placeholder-line {
-        border: 1px solid ButtonText;
-    }
 }
 </style>
