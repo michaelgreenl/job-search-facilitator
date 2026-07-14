@@ -1,3 +1,16 @@
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { usePostStore } from '@/stores/post.store'
+import { useReportStore } from '@/stores/report.store'
+
+const postStore = usePostStore()
+const reportStore = useReportStore()
+
+onMounted(() => {
+    void Promise.allSettled([reportStore.fetchReports(), postStore.fetchPosts()])
+})
+</script>
+
 <template>
     <section class="layout-draft" aria-labelledby="layout-title">
         <header class="dashboard-heading">
