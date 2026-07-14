@@ -8,9 +8,9 @@ Read `docs/job-search-user-info.md` before searching. Use only that exact file f
 
 ## Search objective
 
-Search for real software developer or engineer postings that match the user information. Prefer a smaller number of high-signal opportunities over broad coverage of low-signal listings.
+Search for real software developer or engineer postings that match the user information. Prefer high-signal opportunities, but do not stop after finding a convenient number of results or skip required source coverage.
 
-Search direct company career pages, reputable ATS platforms, regional sources, and job boards. Prefer company career pages, Greenhouse, Lever, Ashby, Workday, Wellfound, Built In, Y Combinator Jobs, local or regional company career pages, and current Hacker News Who is Hiring threads. LinkedIn and Indeed may be used as discovery sources, but neither is mandatory or receives special treatment.
+Search direct company career pages, reputable ATS platforms, regional sources, and job boards. Prefer company career pages, Greenhouse, Lever, Ashby, Workday, Wellfound, Built In, Y Combinator Jobs, local or regional company career pages, and current Hacker News Who is Hiring threads. LinkedIn Jobs and Indeed are required discovery sources on every run, but postings found there still require the same direct employer or ATS validation as other discoveries.
 
 Treat broad job boards as discovery surfaces, not proof that a role is worth including. Deduplicate postings across sources and prefer a direct company or ATS application URL when available.
 
@@ -41,6 +41,26 @@ Watch for fake postings, repost farms, staffing spam, resume-harvesting funnels,
 
 ## Search and validation process
 
+### Required source coverage
+
+Complete all of these search slices before freezing the result set:
+
+1. LinkedIn Jobs.
+2. Indeed.
+3. Multiple relevant direct company career pages and ATS platforms.
+4. Startup sources across Wellfound, Y Combinator Jobs, and current Hacker News Who is Hiring threads.
+5. Regional sources across Workday, Built In, and local company career pages.
+
+Use computer-use browser interaction as the primary search method for LinkedIn Jobs and Indeed. Passively use an existing authenticated browser session when one is already available, but do not sign in or change accounts. Run a mix of broad and targeted searches, varying role, stack, location or remote, and experience-level terms and filters across queries. Continue through results until additional query combinations and result pages repeatedly produce only stale, duplicate, or irrelevant postings. Raw HTTP requests, generic web search, cached snippets, or aggregator summaries may supplement those searches, but do not count as completing either slice. A single query or result page is not sufficient coverage.
+
+LinkedIn and Indeed are discovery surfaces only. Do not create an account, save a job, apply, message anyone, modify a profile, follow a company, enable an alert, or accept a policy. Prefer the direct company or ATS application URL for every accepted posting.
+
+Use computer-use as a recovery path when a promising company or ATS page returns only a JavaScript shell, incomplete text, or an otherwise unreadable application flow. A role is sufficiently identified when its company and title match a canonical employer or ATS posting or an official company listing. Missing compensation, location details, downstream questions, consent details, or an ambiguous live status after recovery are not automatic rejection reasons; record them as unknown and use `postStatus: unknown` when appropriate. Exclude a role when its identity or legitimate application path cannot be confirmed, it is confirmed closed, or a gate prevents viewing a real posting without unusually broad account or data consent. A normal account requirement after the complete posting is visible is application friction, not automatic rejection.
+
+For each slice, record the query or filter variants attempted, access method, result pages or result sets reviewed, candidates found, candidates validated, rejection counts, stopping reason, and unresolved blockers. Finding one or more validated postings is not a stopping condition. For slices 3–5, attempt every named source family and multiple relevant company or ATS targets, use materially different searches, and continue with the remaining sources after a site-specific blocker until the available alternatives repeatedly yield no new plausible candidates. A whole slice is completed with blockers only when all of its relevant alternatives have been attempted or blocked.
+
+A LinkedIn or Indeed slice is completed with a blocker if an actual computer-use navigation reaches an authentication or verification gate and no existing authenticated session or other read-only result view is safely available. An unattempted, aborted, or tool-skipped slice is incomplete. Do not freeze the canonical result set or replace the API snapshot after an incomplete slice.
+
 Use an orchestrator-led sub-agent loop rather than a single-agent pass. The orchestrator owns the daily candidate set, deduplication, final filtering, ranking, Markdown report, and API snapshot.
 
 For each job source or search slice, use a search and validation pair:
@@ -48,7 +68,7 @@ For each job source or search slice, use a search and validation pair:
 1. A search agent finds candidate postings for its assigned source, location or remote slice, or role family.
 2. A validator agent reviews each candidate's application path, account requirements, visible policies, legitimacy signals, and fit.
 
-The pair loops until its slice has produced validated postings or has been exhausted. The orchestrator accepts a posting only after validator approval.
+The pair loops until its slice is exhausted or completed with blockers under the rules above. Producing validated postings is not a stopping condition. The validator approves a posting when its identity, fit, legitimacy, and real application path have sufficient evidence. Missing downstream questions or policy details must be recorded as unknown rather than used to withhold approval.
 
 For each promising posting, identify the application flow and whether it uses a direct company application, Greenhouse, Lever, Workday, Ashby, Wellfound, LinkedIn, Indeed, ZipRecruiter, Dice, Built In, Welcome to the Jungle, or another ATS or board. Record whether an account is required and note visible policies or consents such as a privacy policy, terms of use, candidate privacy notice, EEO or self-identification notice, background-check consent, SMS consent, talent-community consent, AI or automated-decision notice, arbitration waiver, or data-sharing consent. Flag flows that appear unusually data-harvesting-oriented before showing a real application.
 
@@ -56,7 +76,7 @@ For each promising posting, identify the application flow and whether it uses a 
 
 Do not apply to jobs, create accounts, modify profiles, save jobs to user accounts, send messages, contact recruiters, follow companies, enable alerts, accept new policies, or submit forms.
 
-A public posting or application page may be inspected only when reachable without taking one of those actions. Stop at account, policy, or application gates. Record the visible requirements and continue using information already available.
+A posting or application page may be inspected when it is public or already visible in an existing authenticated session without taking an account action. Search results, job details, and outbound employer or ATS links may be opened. An `Apply`-labelled control may be opened only when it is visibly a plain outbound employer or ATS link that cannot start an in-platform application or change account state. Do not activate Easy Apply, Continue, resume, or other controls that could start an application draft, prefill applicant data, or change account state. Stop at account, policy, or application gates, record the visible requirements, and continue using information already available.
 
 ## Canonical result set
 
@@ -76,6 +96,8 @@ Include a concise summary with counts for:
 - Rejected as senior or low-fit.
 - Rejected as likely fake or data-harvesting.
 - Rejected because of excessive account or policy friction.
+
+Include a concise `Source Coverage` table listing each required slice, query or filter variants, access method, result pages or sets reviewed, found, validated, and rejected counts, stopping reason, and blockers. Explicitly state whether computer-use was completed for LinkedIn and Indeed. Do not add profile-saving or saved-job counts.
 
 Include a `Ranked Targets` section with a ranked table containing:
 
