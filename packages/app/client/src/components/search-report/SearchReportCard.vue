@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { JobSearchReport } from '@job-search-facilitator/core'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
     report: JobSearchReport
     selected: boolean
 }>()
@@ -9,6 +10,13 @@ defineProps<{
 const emit = defineEmits<{
     select: []
 }>()
+
+const reportTime = computed(() =>
+    new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+    }).format(new Date(props.report.createdAt)),
+)
 </script>
 
 <template>
@@ -20,7 +28,7 @@ const emit = defineEmits<{
         @click="emit('select')"
     >
         <span class="report-card-heading">
-            <strong>{{ report.reportDate }}</strong>
+            <strong>{{ report.reportDate }} · {{ reportTime }}</strong>
             <span class="report-count">{{ report.results.length }} posts</span>
         </span>
         <span class="report-summary">{{ report.summary }}</span>

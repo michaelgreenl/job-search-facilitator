@@ -81,8 +81,9 @@ afterAll(async () => {
 })
 
 describe('search report repository', () => {
-    it('replaces one dated report without duplicating the report', async () => {
+    it('replaces one report run without duplicating the report', async () => {
         const reportDate = '2026-07-12'
+        const reportId = '11111111-1111-4111-8111-111111111111'
         const initialInput = createReportInput({
             summary: 'Two initial matches',
             results: [
@@ -108,8 +109,12 @@ describe('search report repository', () => {
             ],
         })
 
-        const initial = await searchReportRepository.upsertByDate(reportDate, initialInput)
-        const replacement = await searchReportRepository.upsertByDate(reportDate, replacementInput)
+        const initial = await searchReportRepository.upsertById(reportId, reportDate, initialInput)
+        const replacement = await searchReportRepository.upsertById(
+            reportId,
+            reportDate,
+            replacementInput,
+        )
         const [reportCount, resultCount] = await Promise.all([
             prisma.jobSearchReport.count(),
             prisma.jobSearchResult.count(),
@@ -129,10 +134,33 @@ describe('search report repository', () => {
         expect(resultCount).toBe(1)
     })
 
+    it('creates separate reports for runs on the same date', async () => {
+        const reportDate = '2026-07-12'
+        const first = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            reportDate,
+            createReportInput({ summary: 'First run' }),
+        )
+        const second = await searchReportRepository.upsertById(
+            '22222222-2222-4222-8222-222222222222',
+            reportDate,
+            createReportInput({ summary: 'Second run' }),
+        )
+        const reports = await searchReportRepository.findMany()
+
+        expect(first.created).toBe(true)
+        expect(second.created).toBe(true)
+        expect(reports).toHaveLength(2)
+        expect(reports.map(({ id }) => id)).toEqual(
+            expect.arrayContaining([first.report.id, second.report.id]),
+        )
+    })
+
     it('shares canonical posts while preserving user state during listing refreshes', async () => {
         const sourceKey = 'example-source:shared'
         const archivedAt = '2026-07-12T12:00:00.000Z'
-        const first = await searchReportRepository.upsertByDate(
+        const first = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
             '2026-07-12',
             createReportInput({
                 results: [createResultInput({ post: { sourceKey } })],
@@ -148,7 +176,8 @@ describe('search report repository', () => {
             archivedAt,
         })
 
-        const second = await searchReportRepository.upsertByDate(
+        const second = await searchReportRepository.upsertById(
+            '22222222-2222-4222-8222-222222222222',
             '2026-07-13',
             createReportInput({
                 results: [
@@ -197,7 +226,9 @@ describe('search report repository', () => {
 
     it('rolls back a failed replacement after deleting prior joins', async () => {
         const reportDate = '2026-07-12'
-        const initial = await searchReportRepository.upsertByDate(
+        const reportId = '11111111-1111-4111-8111-111111111111'
+        const initial = await searchReportRepository.upsertById(
+            reportId,
             reportDate,
             createReportInput({
                 summary: 'Stable snapshot',
@@ -229,10 +260,10 @@ describe('search report repository', () => {
         })
 
         await expect(
-            searchReportRepository.upsertByDate(reportDate, invalidReplacement),
+            searchReportRepository.upsertById(reportId, reportDate, invalidReplacement),
         ).rejects.toThrow()
 
-        const savedReport = await searchReportRepository.findByDate(reportDate)
+        const savedReport = await searchReportRepository.findById(reportId)
         const [reportCount, resultCount, postCount] = await Promise.all([
             prisma.jobSearchReport.count(),
             prisma.jobSearchResult.count(),

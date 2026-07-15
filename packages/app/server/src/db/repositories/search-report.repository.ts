@@ -71,8 +71,9 @@ export interface SearchReportUpsertResult {
 
 export interface SearchReportRepository {
     findMany(): Promise<JobSearchReport[]>
-    findByDate(reportDate: string): Promise<JobSearchReport | null>
-    upsertByDate(
+    findById(reportId: string): Promise<JobSearchReport | null>
+    upsertById(
+        reportId: string,
         reportDate: string,
         input: UpsertJobSearchReportInput,
     ): Promise<SearchReportUpsertResult>
@@ -82,30 +83,30 @@ export const searchReportRepository: SearchReportRepository = {
     async findMany() {
         const reports = await prisma.jobSearchReport.findMany({
             include: reportInclude,
-            orderBy: [{ reportDate: 'desc' }, { id: 'asc' }],
+            orderBy: [{ reportDate: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
         })
 
         return reports.map(toJobSearchReport)
     },
 
-    async findByDate(reportDate) {
+    async findById(reportId) {
         const report = await prisma.jobSearchReport.findUnique({
-            where: { reportDate: toReportDate(reportDate) },
+            where: { id: reportId },
             include: reportInclude,
         })
 
         return report === null ? null : toJobSearchReport(report)
     },
 
-    async upsertByDate(reportDate, input) {
+    async upsertById(reportId, reportDate, input) {
         return prisma.$transaction(async (transaction) => {
             const date = toReportDate(reportDate)
             const insertedReport = await transaction.jobSearchReport.createMany({
-                data: { reportDate: date, summary: input.summary },
+                data: { id: reportId, reportDate: date, summary: input.summary },
                 skipDuplicates: true,
             })
             const report = await transaction.jobSearchReport.update({
-                where: { reportDate: date },
+                where: { id: reportId },
                 data: { summary: input.summary },
                 select: { id: true },
             })

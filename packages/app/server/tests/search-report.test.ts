@@ -79,11 +79,12 @@ const input: UpsertJobSearchReportInput = {
 }
 
 const toReport = (
+    id: string,
     date: string,
     reportInput: UpsertJobSearchReportInput,
     previous?: JobSearchReport,
 ): JobSearchReport => ({
-    id: previous?.id ?? existingReport.id,
+    id,
     reportDate: date,
     summary: reportInput.summary,
     createdAt: previous?.createdAt ?? existingReport.createdAt,
@@ -106,26 +107,27 @@ const toReport = (
 })
 
 const createFakeRepository = (initialReports: JobSearchReport[]) => {
-    const reports = new Map(initialReports.map((report) => [report.reportDate, report]))
-    const upsertByDate = vi.fn(
+    const reports = new Map(initialReports.map((report) => [report.id, report]))
+    const upsertById = vi.fn(
         async (
+            reportId: string,
             date: string,
             reportInput: UpsertJobSearchReportInput,
         ): Promise<SearchReportUpsertResult> => {
-            const previous = reports.get(date)
-            const report = toReport(date, reportInput, previous)
-            reports.set(date, report)
+            const previous = reports.get(reportId)
+            const report = toReport(reportId, date, reportInput, previous)
+            reports.set(reportId, report)
 
             return { report, created: previous === undefined }
         },
     )
     const repository: SearchReportRepository = {
         findMany: async () => [...reports.values()],
-        findByDate: async (date) => reports.get(date) ?? null,
-        upsertByDate,
+        findById: async (id) => reports.get(id) ?? null,
+        upsertById,
     }
 
-    return { repository, upsertByDate }
+    return { repository, upsertById }
 }
 
 const createTestApp = (repository: SearchReportRepository) => {
@@ -144,31 +146,43 @@ describe('job search report routes', () => {
             .expect(200, [existingReport])
     })
 
+    it('gets a job search report by id', async () => {
+        const { repository } = createFakeRepository([existingReport])
+
+        await request(createTestApp(repository))
+            .get(`/job-search-reports/${existingReport.id}`)
+            .expect(200, existingReport)
+    })
+
     it('forwards a valid dated snapshot and returns 201 when it is created', async () => {
-        const { repository, upsertByDate } = createFakeRepository([])
+        const { repository, upsertById } = createFakeRepository([])
 
         const response = await request(createTestApp(repository))
-            .put(`/job-search-reports/${reportDate}`)
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send(input)
             .expect(201)
 
-        expect(upsertByDate).toHaveBeenCalledExactlyOnceWith(reportDate, input)
+        expect(upsertById).toHaveBeenCalledExactlyOnceWith(existingReport.id, reportDate, input)
         expect(response.body).toEqual(existingReport)
     })
 
     it('accepts an empty replacement snapshot and returns 200 for an existing report', async () => {
-        const { repository, upsertByDate } = createFakeRepository([existingReport])
+        const { repository, upsertById } = createFakeRepository([existingReport])
         const replacement: UpsertJobSearchReportInput = {
             summary: 'No matching roles today',
             results: [],
         }
 
         const response = await request(createTestApp(repository))
-            .put(`/job-search-reports/${reportDate}`)
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send(replacement)
             .expect(200)
 
-        expect(upsertByDate).toHaveBeenCalledExactlyOnceWith(reportDate, replacement)
+        expect(upsertById).toHaveBeenCalledExactlyOnceWith(
+            existingReport.id,
+            reportDate,
+            replacement,
+        )
         expect(response.body).toEqual({
             ...existingReport,
             summary: replacement.summary,
@@ -177,16 +191,16 @@ describe('job search report routes', () => {
     })
 
     it('rejects whitespace-only required and optional text without writing', async () => {
-        const { repository, upsertByDate } = createFakeRepository([])
+        const { repository, upsertById } = createFakeRepository([])
         const result = input.results[0]
 
         await request(createTestApp(repository))
-            .put(`/job-search-reports/${reportDate}`)
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send({ ...input, summary: '   ' })
             .expect(400, { error: 'Invalid request' })
 
         await request(createTestApp(repository))
-            .put(`/job-search-reports/${reportDate}`)
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send({
                 ...input,
                 results: [
@@ -205,14 +219,16 @@ describe('job search report routes', () => {
             })
             .expect(400, { error: 'Invalid request' })
 
-        expect(upsertByDate).not.toHaveBeenCalled()
+        expect(upsertById).not.toHaveBeenCalled()
     })
 
     it.each([
-        ['an invalid date', '2026-02-30', input],
+        ['an invalid date', '2026-02-30', existingReport.id, input],
+        ['an invalid report id', reportDate, 'invalid-id', input],
         [
             'a user-owned post field',
             reportDate,
+            existingReport.id,
             {
                 ...input,
                 results: [
@@ -229,6 +245,7 @@ describe('job search report routes', () => {
         [
             'duplicate agent ranks',
             reportDate,
+            existingReport.id,
             {
                 ...input,
                 results: [
@@ -246,6 +263,7 @@ describe('job search report routes', () => {
         [
             'duplicate post source keys',
             reportDate,
+            existingReport.id,
             {
                 ...input,
                 results: [
@@ -257,22 +275,22 @@ describe('job search report routes', () => {
                 ],
             },
         ],
-    ])('rejects %s without writing', async (_description, date, invalidInput) => {
-        const { repository, upsertByDate } = createFakeRepository([])
+    ])('rejects %s without writing', async (_description, date, reportId, invalidInput) => {
+        const { repository, upsertById } = createFakeRepository([])
 
         await request(createTestApp(repository))
-            .put(`/job-search-reports/${date}`)
+            .put(`/job-search-reports/${date}/${reportId}`)
             .send(invalidInput)
             .expect(400, { error: 'Invalid request' })
 
-        expect(upsertByDate).not.toHaveBeenCalled()
+        expect(upsertById).not.toHaveBeenCalled()
     })
 
-    it('returns 404 for a missing valid report date', async () => {
+    it('returns 404 for a missing valid report id', async () => {
         const { repository } = createFakeRepository([])
 
         await request(createTestApp(repository))
-            .get(`/job-search-reports/${reportDate}`)
+            .get('/job-search-reports/33333333-3333-4333-8333-333333333333')
             .expect(404, { error: 'Job search report not found' })
     })
 })
