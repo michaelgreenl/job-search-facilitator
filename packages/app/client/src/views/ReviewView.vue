@@ -44,8 +44,6 @@ watch(filteredResults, (results) => {
         return
     }
 
-    selectedResult.value = results[0] ?? null
-
     if (selectedResult.value === null && activePanel.value === 'viewer') {
         activePanel.value = 'posts'
     }
@@ -54,7 +52,6 @@ watch(filteredResults, (results) => {
 function selectReport(report: JobSearchReport) {
     selectedReport.value = report
     postFilter.value = 'all'
-    selectedResult.value = report.results[0] ?? null
     labelError.value = null
 }
 
@@ -66,6 +63,7 @@ function selectResult(result: JobSearchResult) {
 
 function showReports() {
     activePanel.value = 'reports'
+    selectedResult.value = null
 }
 
 function showPosts() {
@@ -96,7 +94,6 @@ onMounted(() => {
         .fetchReports()
         .then(() => {
             selectedReport.value = reportStore.reports[0] ?? null
-            selectedResult.value = selectedReport.value?.results[0] ?? null
         })
         .catch(() => undefined)
 })
