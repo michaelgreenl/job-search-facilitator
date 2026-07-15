@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
 import { computed, onMounted, shallowRef, watch } from 'vue'
+import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
 import JobPostCard from '@/components/job-post/JobPostCard.vue'
@@ -9,6 +10,8 @@ import SearchReportCard from '@/components/search-report/SearchReportCard.vue'
 
 type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
+
+const bp = useBreakpoints()
 
 const reportStore = useReportStore()
 const postStore = usePostStore()
@@ -53,7 +56,10 @@ function selectReport(report: JobSearchReport) {
     selectedReport.value = report
     postFilter.value = 'all'
     labelError.value = null
-    // FIXME: *If on mobile* set the activePanel to posts
+
+    if (!bp.isLaptop.value) {
+        activePanel.value = 'posts'
+    }
 }
 
 function selectResult(result: JobSearchResult) {
