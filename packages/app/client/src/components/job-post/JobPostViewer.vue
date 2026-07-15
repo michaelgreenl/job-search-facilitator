@@ -125,11 +125,11 @@ function updateLabel() {
 
 .open-post-button {
     padding: $space-2 $space-3;
-    color: $color-night-deep;
+    color: $color-ink;
     font-weight: 650;
     text-decoration: none;
-    background: $color-signal-light;
-    border-radius: $radius-sm;
+    background: #af8de2;
+    border-radius: $radius-md;
 
     &:hover,
     &:focus-visible {

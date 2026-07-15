@@ -335,12 +335,12 @@ onMounted(() => {
 
 .item-count {
     flex: 0 0 auto;
-    padding: $space-1 $space-3;
+    padding: 0.625rem $space-3;
     color: $color-ink-secondary;
     font-size: 0.75rem;
     background: rgb(245 241 251 / 6%);
     border: 1px solid rgb(245 241 251 / 10%);
-    border-radius: $radius-full;
+    border-radius: $radius-md;
 }
 
 .panel-controls {
