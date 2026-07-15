@@ -53,6 +53,7 @@ function selectReport(report: JobSearchReport) {
     selectedReport.value = report
     postFilter.value = 'all'
     labelError.value = null
+    // FIXME: *If on mobile* set the activePanel to posts
 }
 
 function selectResult(result: JobSearchResult) {
@@ -151,6 +152,7 @@ onMounted(() => {
                         >
                             ←
                         </button>
+
                         <span class="eyebrow">Job posts</span>
                         <h2 class="panel-heading-title">
                             {{ selectedReport?.reportDate ?? 'Select a search report' }}
@@ -158,7 +160,12 @@ onMounted(() => {
                     </div>
 
                     <div class="panel-controls">
-                        <span class="item-count">{{ filteredResults.length }} posts</span>
+                        <span class="item-count"
+                            >{{ filteredResults.length }}/{{
+                                selectedReport?.results.length
+                            }}
+                            posts</span
+                        >
                         <label class="post-filter">
                             <span>Filter</span>
                             <select
@@ -332,7 +339,8 @@ onMounted(() => {
     flex-wrap: wrap;
     gap: $space-2;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .post-filter {
