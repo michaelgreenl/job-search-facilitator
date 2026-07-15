@@ -25,13 +25,19 @@ const emit = defineEmits<{
         <div class="post-card-header">
             <span class="component-label">{{ result.post.company }}</span>
             <span v-if="result.post.userLabel !== null" class="user-label">
-                {{ result.post.userLabel }}
+                <template v-if="result.post.userLabel === 'forgo'"> forgone </template>
+                <template v-else>
+                    {{ result.post.userLabel }}
+                </template>
             </span>
         </div>
         <strong class="post-role">{{ result.post.roleTitle }}</strong>
         <span class="post-company">{{ result.post.location }}</span>
-        <span class="post-meta">
-            {{ result.post.postSource ?? 'Location not listed' }} · {{ result.post.compensation }}
+        <span class="post-meta" v-if="result.post.postSource">
+            · Source - {{ result.post.postSource }}
+        </span>
+        <span class="post-meta" v-if="result.post.compensation">
+            · Compensation - {{ result.post.compensation }}
         </span>
     </button>
 </template>
@@ -94,6 +100,13 @@ const emit = defineEmits<{
     background: rgb(173 123 249 / 12%);
     border: 1px solid rgb(173 123 249 / 24%);
     border-radius: $radius-full;
+}
+
+.post-company,
+.post-meta {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .post-company {

@@ -30,13 +30,29 @@ function updateLabel() {
             <div class="post-labels">
                 <span class="component-label">{{ result.post.company }}</span>
 
-                <div v-if="result.post.userLabel !== null" class="user-label">
-                    {{ result.post.userLabel }}
+                <div
+                    v-if="result.post.userLabel !== null"
+                    class="user-label"
+                    :class="{ 'user-label-forgo': result.post.userLabel === 'forgo' }"
+                >
+                    <template v-if="result.post.userLabel === 'forgo'"> forgone </template>
+                    <template v-else>
+                        {{ result.post.userLabel }}
+                    </template>
                 </div>
             </div>
 
             <h2 id="selected-post-title" class="post-title">{{ result.post.roleTitle }}</h2>
             <p class="post-company">{{ result.post.location }}</p>
+        </div>
+
+        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
+
+        <div class="placeholder-content">
+            <strong>Selected post: {{ result.post.id }}</strong>
+            <p class="placeholder-copy">
+                Detailed job information and review controls will appear in this panel.
+            </p>
         </div>
 
         <div class="post-actions">
@@ -69,15 +85,6 @@ function updateLabel() {
                     </select>
                 </span>
             </label>
-        </div>
-
-        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
-
-        <div class="placeholder-content">
-            <strong>Selected post: {{ result.post.id }}</strong>
-            <p class="placeholder-copy">
-                Detailed job information and review controls will appear in this panel.
-            </p>
         </div>
     </section>
 </template>
@@ -165,6 +172,11 @@ function updateLabel() {
     &:hover,
     &:focus-visible {
         --remove-label-opacity: 1;
+    }
+
+    &-forgo {
+        filter: grayscale(1);
+        opacity: 0.55;
     }
 }
 

@@ -28,7 +28,10 @@ const reportTime = computed(() =>
         @click="emit('select')"
     >
         <span class="report-card-heading">
-            <strong>{{ report.reportDate }} · {{ reportTime }}</strong>
+            <span>
+                <strong>{{ report.reportDate }} </strong>
+                <small>&nbsp;&nbsp;· {{ reportTime }}</small>
+            </span>
             <span class="report-count">{{ report.results.length }} posts</span>
         </span>
         <span class="report-summary">{{ report.summary }}</span>
