@@ -39,15 +39,6 @@ function updateLabel() {
             <p class="post-company">{{ result.post.location }}</p>
         </div>
 
-        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
-
-        <div class="placeholder-content">
-            <strong>Selected post: {{ result.post.id }}</strong>
-            <p class="placeholder-copy">
-                Detailed job information and review controls will appear in this panel.
-            </p>
-        </div>
-
         <div class="post-actions">
             <a
                 class="open-post-button"
@@ -60,29 +51,43 @@ function updateLabel() {
             </a>
 
             <label class="label-picker">
-                <select
-                    v-model="selectedLabel"
-                    class="label-picker-select"
-                    :disabled="labelUpdating"
-                    @change="updateLabel"
-                >
-                    <option disabled value="">
-                        {{ result.post.userLabel === null ? 'Add label' : 'Change label' }}
-                    </option>
-                    <option v-for="label in USER_LABELS" :key="label" :value="label">
-                        {{ label }}
-                    </option>
-                    <option :value="null">clear label</option>
-                </select>
+                <span class="select-field">
+                    <select
+                        v-model="selectedLabel"
+                        class="select-control label-picker-select"
+                        aria-label="Job post label"
+                        :disabled="labelUpdating"
+                        @change="updateLabel"
+                    >
+                        <option disabled value="">
+                            {{ result.post.userLabel === null ? 'Add label' : 'Change label' }}
+                        </option>
+                        <option v-for="label in USER_LABELS" :key="label" :value="label">
+                            {{ label }}
+                        </option>
+                        <option :value="null">clear label</option>
+                    </select>
+                </span>
             </label>
+        </div>
+
+        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
+
+        <div class="placeholder-content">
+            <strong>Selected post: {{ result.post.id }}</strong>
+            <p class="placeholder-copy">
+                Detailed job information and review controls will appear in this panel.
+            </p>
         </div>
     </section>
 </template>
 
 <style scoped lang="scss">
 .post-viewer {
-    display: grid;
-    gap: $space-5;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
 }
 
 .component-label {
@@ -140,17 +145,7 @@ function updateLabel() {
     font-size: 0.8125rem;
 
     &-select {
-        padding: $space-2 $space-3;
-        color: $color-ink;
-        font: inherit;
-        background: $color-night;
-        border: 1px solid rgb(245 241 251 / 16%);
-        border-radius: $radius-sm;
-
-        &:disabled {
-            cursor: wait;
-            opacity: 0.5;
-        }
+        min-width: 8rem;
     }
 }
 
@@ -171,16 +166,6 @@ function updateLabel() {
     &:focus-visible {
         --remove-label-opacity: 1;
     }
-
-    // &:disabled {
-    //     cursor: wait;
-    //     opacity: 0.5;
-    // }
-
-    // &::after {
-    //     content: '×';
-    //     opacity: var(--remove-label-opacity, 0);
-    // }
 }
 
 .label-error {
@@ -194,6 +179,7 @@ function updateLabel() {
 }
 
 .placeholder-content {
+    flex: 1;
     display: grid;
     gap: $space-3;
     min-height: 12rem;
