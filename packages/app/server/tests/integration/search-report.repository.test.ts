@@ -144,7 +144,7 @@ describe('search report repository', () => {
         await jobPostRepository.update(postId!, {
             applicationStatus: 'interviewing',
             userRank: 1,
-            userLabel: 'P1',
+            userLabel: 'forgo',
             archivedAt,
         })
 
@@ -187,7 +187,7 @@ describe('search report repository', () => {
             postStatus: 'closed',
             applicationStatus: 'interviewing',
             userRank: 1,
-            userLabel: 'P1',
+            userLabel: 'forgo',
             archivedAt,
         })
         expect(postCount).toBe(1)

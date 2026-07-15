@@ -8,7 +8,7 @@ export const APPLICATION_STATUSES = [
 
 export const POST_STATUSES = ['unknown', 'active', 'closed'] as const
 
-export const USER_LABELS = ['P1', 'P2', 'quick-app'] as const
+export const USER_LABELS = ['P1', 'P2', 'quick-app', 'forgo'] as const
 
 export type IsoDateTime = string
 
