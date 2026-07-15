@@ -1,26 +1,67 @@
 <script setup lang="ts">
-import type { JobSearchReport, JobSearchResult } from '@job-search-facilitator/core'
-import { onMounted, shallowRef } from 'vue'
+import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
+import { computed, onMounted, shallowRef, watch } from 'vue'
 import { useReportStore } from '@/stores/report.store'
+import { usePostStore } from '@/stores/post.store'
 import JobPostCard from '@/components/job-post/JobPostCard.vue'
 import JobPostViewer from '@/components/job-post/JobPostViewer.vue'
 import SearchReportCard from '@/components/search-report/SearchReportCard.vue'
 
 type ActivePanel = 'reports' | 'posts' | 'viewer'
+type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 
 const reportStore = useReportStore()
+const postStore = usePostStore()
 const activePanel = shallowRef<ActivePanel>('reports')
+const postFilter = shallowRef<PostFilter>('all')
 const selectedReport = shallowRef<JobSearchReport | null>(null)
 const selectedResult = shallowRef<JobSearchResult | null>(null)
+const labelUpdating = shallowRef(false)
+const labelError = shallowRef<string | null>(null)
+
+const filteredResults = computed(() => {
+    const results = selectedReport.value?.results ?? []
+
+    if (postFilter.value === 'labeled') {
+        return results.filter(({ post }) => post.userLabel !== null && post.userLabel !== 'forgo')
+    }
+
+    if (postFilter.value === 'unreviewed') {
+        return results.filter(({ post }) => post.userLabel === null)
+    }
+
+    if (postFilter.value === 'forgone') {
+        return results.filter(({ post }) => post.userLabel === 'forgo')
+    }
+
+    return results
+})
+
+watch(filteredResults, (results) => {
+    const selectedPostId = selectedResult.value?.post.id
+
+    if (selectedPostId !== undefined && results.some(({ post }) => post.id === selectedPostId)) {
+        return
+    }
+
+    selectedResult.value = results[0] ?? null
+
+    if (selectedResult.value === null && activePanel.value === 'viewer') {
+        activePanel.value = 'posts'
+    }
+})
 
 function selectReport(report: JobSearchReport) {
     selectedReport.value = report
+    postFilter.value = 'all'
     selectedResult.value = report.results[0] ?? null
+    labelError.value = null
     activePanel.value = 'posts'
 }
 
 function selectResult(result: JobSearchResult) {
     selectedResult.value = result
+    labelError.value = null
     activePanel.value = 'viewer'
 }
 
@@ -30,6 +71,25 @@ function showReports() {
 
 function showPosts() {
     activePanel.value = 'posts'
+}
+
+async function updateUserLabel(userLabel: UserLabel | null) {
+    const postId = selectedResult.value?.post.id
+
+    if (postId === undefined || labelUpdating.value) {
+        return
+    }
+
+    labelUpdating.value = true
+    labelError.value = null
+
+    try {
+        await postStore.updatePost(postId, { userLabel })
+    } catch (error) {
+        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+    } finally {
+        labelUpdating.value = false
+    }
 }
 
 onMounted(() => {
@@ -103,11 +163,26 @@ onMounted(() => {
                         </h2>
                     </div>
 
-                    <span class="item-count">{{ selectedReport?.results.length ?? 0 }} posts</span>
+                    <div class="panel-controls">
+                        <span class="item-count">{{ filteredResults.length }} posts</span>
+                        <label class="post-filter">
+                            <span>Filter</span>
+                            <select
+                                v-model="postFilter"
+                                class="post-filter-select"
+                                :disabled="selectedReport === null"
+                            >
+                                <option value="all">All</option>
+                                <option value="labeled">Labeled</option>
+                                <option value="unreviewed">Unreviewed</option>
+                                <option value="forgone">Forgone</option>
+                            </select>
+                        </label>
+                    </div>
                 </header>
 
-                <ul v-if="selectedReport?.results.length" class="card-list">
-                    <li v-for="result in selectedReport.results" :key="result.post.id">
+                <ul v-if="filteredResults.length" class="card-list">
+                    <li v-for="result in filteredResults" :key="result.post.id">
                         <JobPostCard
                             :result="result"
                             :selected="selectedResult?.post.id === result.post.id"
@@ -117,7 +192,11 @@ onMounted(() => {
                 </ul>
                 <p v-else class="list-message">
                     {{
-                        selectedReport ? 'This report has no job posts.' : 'Select a search report.'
+                        selectedReport?.results.length
+                            ? 'No job posts match this filter.'
+                            : selectedReport
+                              ? 'This report has no job posts.'
+                              : 'Select a search report.'
                     }}
                 </p>
             </section>
@@ -138,7 +217,12 @@ onMounted(() => {
                 >
                     ←
                 </button>
-                <JobPostViewer :result="selectedResult" />
+                <JobPostViewer
+                    :result="selectedResult"
+                    :label-updating="labelUpdating"
+                    :label-error="labelError"
+                    @update-label="updateUserLabel"
+                />
             </aside>
         </div>
     </section>
@@ -207,6 +291,7 @@ onMounted(() => {
 
 .panel-heading {
     display: flex;
+    flex-wrap: wrap;
     gap: $space-4;
     align-items: end;
     justify-content: space-between;
@@ -246,6 +331,35 @@ onMounted(() => {
     background: rgb(245 241 251 / 6%);
     border: 1px solid rgb(245 241 251 / 10%);
     border-radius: $radius-full;
+}
+
+.panel-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.post-filter {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    color: $color-ink-muted;
+    font-size: 0.75rem;
+
+    &-select {
+        padding: $space-1 $space-2;
+        color: $color-ink;
+        font: inherit;
+        background: $color-night;
+        border: 1px solid rgb(245 241 251 / 16%);
+        border-radius: $radius-sm;
+
+        &:disabled {
+            opacity: 0.5;
+        }
+    }
 }
 
 .card-list {

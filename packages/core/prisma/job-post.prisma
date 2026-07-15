@@ -16,6 +16,7 @@ enum UserLabel {
   P1
   P2
   QUICK_APP @map("quick-app")
+  FORGO     @map("forgo")
 }
 
 model JobPost {

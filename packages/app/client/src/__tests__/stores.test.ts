@@ -102,7 +102,7 @@ describe('post store', () => {
         const updatedPost = {
             ...post,
             applicationStatus: 'awaiting-response' as const,
-            userLabel: 'P1' as const,
+            userLabel: 'forgo' as const,
         }
         const fetchMock = vi.mocked(fetch)
         fetchMock
@@ -117,7 +117,7 @@ describe('post store', () => {
         await store.fetchPost(secondPost.id)
         await store.updatePost(post.id, {
             applicationStatus: 'awaiting-response',
-            userLabel: 'P1',
+            userLabel: 'forgo',
         })
 
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -138,7 +138,7 @@ describe('post store', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     applicationStatus: 'awaiting-response',
-                    userLabel: 'P1',
+                    userLabel: 'forgo',
                 }),
             },
         )
