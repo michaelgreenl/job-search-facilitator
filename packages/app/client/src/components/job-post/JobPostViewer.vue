@@ -72,7 +72,7 @@ function updateLabel() {
                     <option v-for="label in USER_LABELS" :key="label" :value="label">
                         {{ label }}
                     </option>
-                    <option :value="null">Clear</option>
+                    <option :value="null">clear label</option>
                 </select>
             </label>
         </div>
