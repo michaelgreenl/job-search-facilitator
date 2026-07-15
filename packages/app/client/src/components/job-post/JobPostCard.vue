@@ -22,14 +22,16 @@ const emit = defineEmits<{
         :aria-pressed="selected"
         @click="emit('select')"
     >
-        <span class="component-label">Job post card · Rank {{ result.agentRank }}</span>
-        <span v-if="result.post.userLabel !== null" class="user-label">
-            {{ result.post.userLabel }}
-        </span>
+        <div class="post-card-header">
+            <span class="component-label">{{ result.post.company }}</span>
+            <span v-if="result.post.userLabel !== null" class="user-label">
+                {{ result.post.userLabel }}
+            </span>
+        </div>
         <strong class="post-role">{{ result.post.roleTitle }}</strong>
-        <span class="post-company">{{ result.post.company }}</span>
+        <span class="post-company">{{ result.post.location }}</span>
         <span class="post-meta">
-            {{ result.post.location ?? 'Location not listed' }} · {{ result.post.postSource }}
+            {{ result.post.postSource ?? 'Location not listed' }} · {{ result.post.compensation }}
         </span>
     </button>
 </template>
@@ -65,8 +67,13 @@ const emit = defineEmits<{
     }
 }
 
+.post-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
 .component-label {
-    margin-block-end: $space-1;
     color: $color-signal-light;
     font-family: $font-family-mono;
     font-size: 0.6875rem;

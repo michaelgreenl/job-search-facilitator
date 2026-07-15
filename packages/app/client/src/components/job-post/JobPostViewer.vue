@@ -26,10 +26,17 @@ function updateLabel() {
 
 <template>
     <section class="post-viewer" aria-labelledby="selected-post-title">
-        <span class="component-label">Job post viewer</span>
         <div class="post-heading">
+            <div class="post-labels">
+                <span class="component-label">{{ result.post.company }}</span>
+
+                <div v-if="result.post.userLabel !== null" class="user-label">
+                    {{ result.post.userLabel }}
+                </div>
+            </div>
+
             <h2 id="selected-post-title" class="post-title">{{ result.post.roleTitle }}</h2>
-            <p class="post-company">{{ result.post.company }}</p>
+            <p class="post-company">{{ result.post.location }}</p>
         </div>
 
         <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
@@ -53,7 +60,6 @@ function updateLabel() {
             </a>
 
             <label class="label-picker">
-                <span>Label</span>
                 <select
                     v-model="selectedLabel"
                     class="label-picker-select"
@@ -66,19 +72,9 @@ function updateLabel() {
                     <option v-for="label in USER_LABELS" :key="label" :value="label">
                         {{ label }}
                     </option>
+                    <option :value="null">Clear</option>
                 </select>
             </label>
-
-            <button
-                v-if="result.post.userLabel !== null"
-                class="user-label"
-                type="button"
-                :disabled="labelUpdating"
-                :aria-label="`Remove ${result.post.userLabel} label`"
-                @click="emit('updateLabel', null)"
-            >
-                {{ result.post.userLabel }}
-            </button>
         </div>
     </section>
 </template>
@@ -102,6 +98,12 @@ function updateLabel() {
     gap: $space-1;
 }
 
+.post-labels {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
 .post-title {
     margin: 0;
     font-size: clamp(1.5rem, 3vw, 2rem);
@@ -113,6 +115,7 @@ function updateLabel() {
     flex-wrap: wrap;
     gap: $space-3;
     align-items: center;
+    justify-content: space-between;
 }
 
 .open-post-button {
@@ -160,7 +163,6 @@ function updateLabel() {
     font: inherit;
     font-family: $font-family-mono;
     font-size: 0.75rem;
-    cursor: pointer;
     background: rgb(173 123 249 / 12%);
     border: 1px solid rgb(173 123 249 / 32%);
     border-radius: $radius-full;
@@ -170,15 +172,15 @@ function updateLabel() {
         --remove-label-opacity: 1;
     }
 
-    &:disabled {
-        cursor: wait;
-        opacity: 0.5;
-    }
+    // &:disabled {
+    //     cursor: wait;
+    //     opacity: 0.5;
+    // }
 
-    &::after {
-        content: '×';
-        opacity: var(--remove-label-opacity, 0);
-    }
+    // &::after {
+    //     content: '×';
+    //     opacity: var(--remove-label-opacity, 0);
+    // }
 }
 
 .label-error {
