@@ -3,8 +3,13 @@ import { z } from 'zod'
 
 const nonBlankString = z.string().trim().min(1)
 
-export const reportDateParamsSchema = z.strictObject({
+export const reportIdParamsSchema = z.strictObject({
+    reportId: z.uuid(),
+})
+
+export const reportUpsertParamsSchema = z.strictObject({
     reportDate: z.iso.date(),
+    reportId: z.uuid(),
 })
 
 export const jobPostInputSchema = z.strictObject({

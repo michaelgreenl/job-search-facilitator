@@ -9,7 +9,7 @@ describe('GET /health', () => {
 })
 
 describe('API routes', () => {
-    it.each(['/api/job-posts/invalid-id', '/api/job-search-reports/invalid-date'])(
+    it.each(['/api/job-posts/invalid-id', '/api/job-search-reports/invalid-id'])(
         'mounts %s',
         async (path) => {
             await request(app).get(path).expect(400, { error: 'Invalid request' })

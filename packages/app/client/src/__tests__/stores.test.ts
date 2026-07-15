@@ -56,16 +56,17 @@ describe('report store', () => {
         vi.stubGlobal('fetch', vi.fn())
     })
 
-    it('loads report lists and refreshes a report by date', async () => {
+    it('loads same-day reports and refreshes one by id', async () => {
+        const earlierReport = { ...report, id: 'report-2', summary: 'Earlier run' }
         const refreshedReport = { ...report, summary: 'Updated summary' }
         const fetchMock = vi.mocked(fetch)
         fetchMock
-            .mockResolvedValueOnce(jsonResponse([report]))
+            .mockResolvedValueOnce(jsonResponse([report, earlierReport]))
             .mockResolvedValueOnce(jsonResponse(refreshedReport))
         const store = useReportStore()
 
         await store.fetchReports()
-        await store.fetchReport(report.reportDate)
+        await store.fetchReport(report.id)
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
@@ -74,10 +75,10 @@ describe('report store', () => {
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            `http://localhost:3000/api/job-search-reports/${report.reportDate}`,
+            `http://localhost:3000/api/job-search-reports/${report.id}`,
             undefined,
         )
-        expect(store.reports).toEqual([refreshedReport])
+        expect(store.reports).toEqual([refreshedReport, earlierReport])
     })
 
     it('exposes failed requests to the UI', async () => {

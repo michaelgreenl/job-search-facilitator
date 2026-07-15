@@ -11,7 +11,7 @@ enum ResumeType {
 
 model JobSearchReport {
   id         String            @id @default(uuid()) @db.Uuid
-  reportDate DateTime          @unique @db.Date
+  reportDate DateTime          @db.Date
   summary    String
   archivedAt DateTime?         @db.Timestamptz(3)
   createdAt  DateTime          @default(now()) @db.Timestamptz(3)

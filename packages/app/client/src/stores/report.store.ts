@@ -5,8 +5,8 @@ import { request } from '@/api'
 
 const getJobSearchReports = () => request<JobSearchReport[]>('/job-search-reports')
 
-const getJobSearchReport = (reportDate: string) =>
-    request<JobSearchReport>(`/job-search-reports/${encodeURIComponent(reportDate)}`)
+const getJobSearchReport = (reportId: string) =>
+    request<JobSearchReport>(`/job-search-reports/${encodeURIComponent(reportId)}`)
 
 export const useReportStore = defineStore('reports', () => {
     const reports = ref<JobSearchReport[]>([])
@@ -27,12 +27,12 @@ export const useReportStore = defineStore('reports', () => {
         }
     }
 
-    async function fetchReport(reportDate: string) {
+    async function fetchReport(reportId: string) {
         loading.value = true
         error.value = null
 
         try {
-            const report = await getJobSearchReport(reportDate)
+            const report = await getJobSearchReport(reportId)
             const index = reports.value.findIndex(({ id }) => id === report.id)
 
             if (index === -1) {
