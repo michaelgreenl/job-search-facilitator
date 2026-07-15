@@ -56,7 +56,6 @@ function selectReport(report: JobSearchReport) {
     postFilter.value = 'all'
     selectedResult.value = report.results[0] ?? null
     labelError.value = null
-    activePanel.value = 'posts'
 }
 
 function selectResult(result: JobSearchResult) {
@@ -105,8 +104,6 @@ onMounted(() => {
 
 <template>
     <section class="layout-draft" aria-label="Job search review">
-        <!-- TODO: search-report statistics while the search-report list is active (e.g. "Last Run", "Report Count", keep it simple) -->
-
         <div class="layout-panels">
             <section
                 class="layout-panel glass-frame"
