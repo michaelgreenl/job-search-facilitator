@@ -174,16 +174,18 @@ onMounted(() => {
                         >
                         <label class="post-filter">
                             <span>Filter</span>
-                            <select
-                                v-model="postFilter"
-                                class="post-filter-select"
-                                :disabled="selectedReport === null"
-                            >
-                                <option value="all">All</option>
-                                <option value="labeled">Labeled</option>
-                                <option value="unreviewed">Unreviewed</option>
-                                <option value="forgone">Forgone</option>
-                            </select>
+                            <span class="select-field">
+                                <select
+                                    v-model="postFilter"
+                                    class="select-control post-filter-select"
+                                    :disabled="selectedReport === null"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="labeled">Labeled</option>
+                                    <option value="unreviewed">Unreviewed</option>
+                                    <option value="forgone">Forgone</option>
+                                </select>
+                            </span>
                         </label>
                     </div>
                 </header>
@@ -293,6 +295,7 @@ onMounted(() => {
 
     &.job-post-view {
         flex: 2;
+        padding: 1.5rem;
     }
 }
 
@@ -357,16 +360,7 @@ onMounted(() => {
     font-size: 0.75rem;
 
     &-select {
-        padding: $space-1 $space-2;
-        color: $color-ink;
-        font: inherit;
-        background: $color-night;
-        border: 1px solid rgb(245 241 251 / 16%);
-        border-radius: $radius-sm;
-
-        &:disabled {
-            opacity: 0.5;
-        }
+        min-width: 6.5rem;
     }
 }
 
