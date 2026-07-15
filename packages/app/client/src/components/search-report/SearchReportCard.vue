@@ -19,7 +19,6 @@ const emit = defineEmits<{
         :aria-pressed="selected"
         @click="emit('select')"
     >
-        <span class="component-label">Search report card</span>
         <span class="report-card-heading">
             <strong>{{ report.reportDate }}</strong>
             <span class="report-count">{{ report.results.length }} posts</span>
@@ -31,9 +30,9 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .report-card {
     display: grid;
-    gap: $space-2;
+    gap: $space-1;
     width: 100%;
-    padding: $space-4;
+    padding: $space-3 $space-4;
     color: $color-ink;
     font: inherit;
     text-align: start;
@@ -50,7 +49,7 @@ const emit = defineEmits<{
 
     &-selected {
         background: rgb(173 123 249 / 12%);
-        border-color: $color-signal;
+        border-color: $color-signal !important;
     }
 }
 
@@ -65,7 +64,6 @@ const emit = defineEmits<{
 .report-card-heading {
     display: flex;
     gap: $space-3;
-    align-items: baseline;
     justify-content: space-between;
 }
 
