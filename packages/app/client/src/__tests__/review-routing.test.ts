@@ -3,7 +3,7 @@
 import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
 import { createPinia } from 'pinia'
 import { createApp, type App } from 'vue'
-import { createMemoryHistory, createRouter, type Router } from 'vue-router'
+import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReviewView from '../views/ReviewView.vue'
 
@@ -79,12 +79,14 @@ const findButton = (root: HTMLElement, text: string) => {
     return button
 }
 
-const mountReview = async (initialUrl = '/') => {
+const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
     const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: '/', component: ReviewView }],
     })
-    await router.push(initialUrl)
+    await router.push(
+        initialState === undefined ? initialUrl : { path: initialUrl, state: initialState },
+    )
     await router.isReady()
 
     const root = document.createElement('div')
@@ -130,97 +132,135 @@ describe('review route selection', () => {
         vi.unstubAllGlobals()
     })
 
-    it('adds the selected report id to the URL', async () => {
+    it('keeps the selected report id out of the visible URL', async () => {
         const { root, router } = await mountReview()
 
         findButton(root, secondReport.summary).click()
 
-        await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({ reportId: secondReport.id }),
-        )
+        await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+            })
+        })
     })
 
-    it('adds the selected post id alongside its report id', async () => {
+    it('keeps the selected post id out of the visible URL', async () => {
         const { root, router } = await mountReview()
 
         findButton(root, secondReport.summary).click()
         await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
         findButton(root, secondPost.roleTitle).click()
 
-        await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({
-                reportId: secondReport.id,
-                postId: secondPost.id,
-            }),
-        )
+        await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+                reviewPostId: secondPost.id,
+            })
+        })
     })
 
-    it('removes only the post id when returning to the report posts', async () => {
+    it('removes only the hidden post state when returning to the report posts', async () => {
         const { root, router } = await mountReview()
 
         findButton(root, secondReport.summary).click()
         await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
         findButton(root, secondPost.roleTitle).click()
         await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({
-                reportId: secondReport.id,
-                postId: secondPost.id,
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+                reviewPostId: secondPost.id,
             }),
         )
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
 
-        await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({ reportId: secondReport.id }),
-        )
+        await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+            })
+            expect(router.options.history.state.reviewPostId).toBeUndefined()
+        })
     })
 
-    it('removes both ids when returning to the reports list', async () => {
+    it('removes hidden selection state when returning to the reports list', async () => {
         const { root, router } = await mountReview()
 
         findButton(root, secondReport.summary).click()
         await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({ reportId: secondReport.id }),
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+            }),
         )
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to search reports"]')?.click()
 
-        await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({}))
+        await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state.reviewReportId).toBeUndefined()
+            expect(router.options.history.state.reviewPostId).toBeUndefined()
+        })
     })
 
-    it('restores the selected report and post from the URL', async () => {
-        const { root } = await mountReview(`/?reportId=${secondReport.id}&postId=${secondPost.id}`)
+    it('restores the selected report and post from hidden history state', async () => {
+        const { root, router } = await mountReview('/', {
+            reviewReportId: secondReport.id,
+            reviewPostId: secondPost.id,
+        })
 
         await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
             expect(root.textContent).toContain(`Selected post: ${secondPost.id}`)
             expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
         })
     })
 
-    it('restores the layout through browser back and forward navigation', async () => {
+    it('migrates legacy visible ids into hidden history state', async () => {
+        const { root, router } = await mountReview(
+            `/?reportId=${secondReport.id}&postId=${secondPost.id}`,
+        )
+
+        await vi.waitFor(() => {
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+                reviewPostId: secondPost.id,
+            })
+            expect(root.textContent).toContain(`Selected post: ${secondPost.id}`)
+        })
+    })
+
+    it('restores hidden selection state through browser back and forward navigation', async () => {
         const { root, router } = await mountReview()
 
         findButton(root, secondReport.summary).click()
         await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
         findButton(root, secondPost.roleTitle).click()
         await vi.waitFor(() =>
-            expect(router.currentRoute.value.query).toEqual({
-                reportId: secondReport.id,
-                postId: secondPost.id,
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+                reviewPostId: secondPost.id,
             }),
         )
 
         router.back()
 
         await vi.waitFor(() => {
-            expect(router.currentRoute.value.query).toEqual({ reportId: secondReport.id })
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+            })
+            expect(router.options.history.state.reviewPostId).toBeUndefined()
             expect(root.textContent).not.toContain(`Selected post: ${secondPost.id}`)
         })
 
         router.back()
 
         await vi.waitFor(() => {
-            expect(router.currentRoute.value.query).toEqual({})
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state.reviewReportId).toBeUndefined()
             expect(root.querySelector('[aria-label="Back to search reports"]')).toBeNull()
         })
 
@@ -235,21 +275,27 @@ describe('review route selection', () => {
         )
     })
 
-    it('removes stale report and post ids from the URL', async () => {
+    it('removes stale legacy ids from the visible URL', async () => {
         const { root, router } = await mountReview('/?reportId=missing&postId=missing')
 
         await vi.waitFor(() => {
-            expect(router.currentRoute.value.query).toEqual({})
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state.reviewReportId).toBeUndefined()
+            expect(router.options.history.state.reviewPostId).toBeUndefined()
             expect(findButton(root, firstReport.summary).getAttribute('aria-pressed')).toBe('true')
             expect(root.textContent).not.toContain('Selected post:')
         })
     })
 
-    it('keeps a valid report id when removing a stale post id', async () => {
+    it('keeps valid hidden report state when removing a stale post id', async () => {
         const { root, router } = await mountReview(`/?reportId=${secondReport.id}&postId=missing`)
 
         await vi.waitFor(() => {
-            expect(router.currentRoute.value.query).toEqual({ reportId: secondReport.id })
+            expect(router.currentRoute.value.fullPath).toBe('/')
+            expect(router.options.history.state).toMatchObject({
+                reviewReportId: secondReport.id,
+            })
+            expect(router.options.history.state.reviewPostId).toBeUndefined()
             expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
             expect(root.textContent).not.toContain('Selected post:')
         })

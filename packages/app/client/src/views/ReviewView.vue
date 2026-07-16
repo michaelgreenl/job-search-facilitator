@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
-import { computed, onMounted, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useReportStore } from '@/stores/report.store'
@@ -29,36 +29,62 @@ const reportsLoaded = shallowRef(false)
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
 
-function getSelectionQuery(reportId?: string, postId?: string) {
+const getHistoryId = (key: 'reviewReportId' | 'reviewPostId') => {
+    const value = router.options.history.state[key]
+    return typeof value === 'string' ? value : null
+}
+
+function getVisibleQuery() {
     const query = { ...route.query }
     delete query.reportId
     delete query.postId
 
-    if (reportId !== undefined) {
-        query.reportId = reportId
-    }
-
-    if (postId !== undefined) {
-        query.postId = postId
-    }
-
     return query
 }
 
+function pushSelectionState(reportId?: string, postId?: string, replace = false) {
+    const state: Record<string, string> = {}
+
+    if (reportId !== undefined) {
+        state.reviewReportId = reportId
+    }
+
+    if (postId !== undefined) {
+        state.reviewPostId = postId
+    }
+
+    void router.push({
+        path: route.path,
+        query: getVisibleQuery(),
+        hash: route.hash,
+        force: true,
+        replace,
+        state,
+    })
+}
+
 function restoreRouteSelection() {
-    const reportId = getQueryId(route.query.reportId)
-    const postId = getQueryId(route.query.postId)
+    const stateReportId = getHistoryId('reviewReportId')
+    const statePostId = getHistoryId('reviewPostId')
+    const hasSelectionState = stateReportId !== null || statePostId !== null
+    const reportId = hasSelectionState ? stateReportId : getQueryId(route.query.reportId)
+    const postId = hasSelectionState ? statePostId : getQueryId(route.query.postId)
     const requestedReport = reportStore.reports.find(({ id }) => id === reportId)
     const report = requestedReport ?? reportStore.reports[0] ?? null
     const result = requestedReport?.results.find(({ post }) => post.id === postId) ?? null
+    const validReportId = requestedReport?.id
+    const validPostId = result?.post.id
 
     selectedReport.value = report
     selectedResult.value = result
 
-    if (reportId !== null && requestedReport === undefined) {
-        void router.replace({ query: getSelectionQuery() })
-    } else if (postId !== null && result === null) {
-        void router.replace({ query: getSelectionQuery(reportId ?? undefined) })
+    if (
+        route.query.reportId !== undefined ||
+        route.query.postId !== undefined ||
+        stateReportId !== (validReportId ?? null) ||
+        statePostId !== (validPostId ?? null)
+    ) {
+        pushSelectionState(validReportId, validPostId, true)
     }
 
     if (result !== null) {
@@ -108,11 +134,19 @@ watch(filteredResults, (results) => {
     }
 })
 
-watch([() => route.query.reportId, () => route.query.postId, bp.isLaptop], () => {
+watch(bp.isLaptop, () => {
     if (reportsLoaded.value) {
         restoreRouteSelection()
     }
 })
+
+const removeRouteListener = router.afterEach(() => {
+    if (reportsLoaded.value) {
+        restoreRouteSelection()
+    }
+})
+
+onUnmounted(removeRouteListener)
 
 function selectReport(report: JobSearchReport) {
     selectedReport.value = report
@@ -123,7 +157,7 @@ function selectReport(report: JobSearchReport) {
         activePanel.value = 'posts'
     }
 
-    void router.push({ query: getSelectionQuery(report.id) })
+    pushSelectionState(report.id)
 }
 
 function selectResult(result: JobSearchResult) {
@@ -132,23 +166,21 @@ function selectResult(result: JobSearchResult) {
     activePanel.value = 'viewer'
 
     if (selectedReport.value !== null) {
-        void router.push({
-            query: getSelectionQuery(selectedReport.value.id, result.post.id),
-        })
+        pushSelectionState(selectedReport.value.id, result.post.id)
     }
 }
 
 function showReports() {
     activePanel.value = 'reports'
     selectedResult.value = null
-    void router.push({ query: getSelectionQuery() })
+    pushSelectionState()
 }
 
 function showPosts() {
     activePanel.value = 'posts'
 
     if (selectedReport.value !== null) {
-        void router.push({ query: getSelectionQuery(selectedReport.value.id) })
+        pushSelectionState(selectedReport.value.id)
     }
 }
 
