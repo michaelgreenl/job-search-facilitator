@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { USER_LABELS, type JobSearchResult, type UserLabel } from '@job-search-facilitator/core'
+import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { shallowRef } from 'vue'
 
 defineProps<{
-    result: JobSearchResult
+    post: JobPost
     labelUpdating: boolean
     labelError: string | null
 }>()
@@ -28,31 +28,31 @@ function updateLabel() {
     <section class="post-viewer" aria-labelledby="selected-post-title">
         <div class="post-heading">
             <div class="post-labels">
-                <span class="component-label">{{ result.post.company }}</span>
+                <span class="component-label">{{ post.company }}</span>
 
                 <div
-                    v-if="result.post.userLabel !== null"
+                    v-if="post.userLabel !== null"
                     class="user-label"
-                    :class="{ 'user-label-forgo': result.post.userLabel === 'forgo' }"
+                    :class="{ 'user-label-forgo': post.userLabel === 'forgo' }"
                 >
-                    <template v-if="result.post.userLabel === 'forgo'"> forgone </template>
+                    <template v-if="post.userLabel === 'forgo'"> forgone </template>
                     <template v-else>
-                        {{ result.post.userLabel }}
+                        {{ post.userLabel }}
                     </template>
                 </div>
             </div>
 
-            <h2 id="selected-post-title" class="post-title">{{ result.post.roleTitle }}</h2>
-            <p class="post-company">{{ result.post.location }}</p>
+            <h2 id="selected-post-title" class="post-title">{{ post.roleTitle }}</h2>
+            <p class="post-company">{{ post.location }}</p>
         </div>
 
         <div class="post-actions">
             <a
                 class="open-post-button"
-                :href="result.post.applicationUrl"
+                :href="post.applicationUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                :aria-label="`Open ${result.post.roleTitle} in a new tab`"
+                :aria-label="`Open ${post.roleTitle} in a new tab`"
             >
                 Open post ↗
             </a>
@@ -67,7 +67,7 @@ function updateLabel() {
                         @change="updateLabel"
                     >
                         <option disabled value="">
-                            {{ result.post.userLabel === null ? 'Add label' : 'Change label' }}
+                            {{ post.userLabel === null ? 'Add label' : 'Change label' }}
                         </option>
                         <option v-for="label in USER_LABELS" :key="label" :value="label">
                             {{ label }}
@@ -81,7 +81,7 @@ function updateLabel() {
         <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
 
         <div class="placeholder-content">
-            <strong>Selected post: {{ result.post.id }}</strong>
+            <strong>Selected post: {{ post.id }}</strong>
             <p class="placeholder-copy">
                 Detailed job information and review controls will appear in this panel.
             </p>

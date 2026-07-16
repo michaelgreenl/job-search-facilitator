@@ -80,6 +80,36 @@ afterAll(async () => {
     await prisma.$disconnect()
 })
 
+describe('job post repository', () => {
+    it('lists only actionable labeled posts', async () => {
+        const userLabels = ['P1', 'P2', 'quick-app', 'forgo', null] as const
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-12',
+            createReportInput({
+                results: userLabels.map((_, index) =>
+                    createResultInput({
+                        agentRank: index + 1,
+                        post: { sourceKey: `example-source:${index}` },
+                    }),
+                ),
+            }),
+        )
+
+        await Promise.all(
+            userLabels.map((userLabel, index) =>
+                jobPostRepository.update(report.report.results[index]!.post.id, { userLabel }),
+            ),
+        )
+
+        const labeledPosts = await jobPostRepository.findLabeled()
+        const labels = labeledPosts.map(({ userLabel }) => userLabel)
+
+        expect(labels).toHaveLength(3)
+        expect(labels).toEqual(expect.arrayContaining(['P1', 'P2', 'quick-app']))
+    })
+})
+
 describe('search report repository', () => {
     it('replaces one report run without duplicating the report', async () => {
         const reportDate = '2026-07-12'

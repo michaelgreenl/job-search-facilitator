@@ -11,6 +11,10 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         response.json(await repository.findMany())
     },
 
+    listLabeled: async (_request: Request, response: Response): Promise<void> => {
+        response.json(await repository.findLabeled())
+    },
+
     getById: async (request: Request, response: Response): Promise<void> => {
         const params = jobPostIdParamsSchema.safeParse(request.params)
 

@@ -10,6 +10,7 @@ import { prisma } from '../prisma.ts'
 
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
+    findLabeled(): Promise<JobPost[]>
     findById(id: string): Promise<JobPost | null>
     update(id: string, input: UpdateJobPostInput): Promise<JobPost | null>
 }
@@ -17,6 +18,15 @@ export interface JobPostRepository {
 export const jobPostRepository: JobPostRepository = {
     async findMany() {
         const posts = await prisma.jobPost.findMany({
+            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        })
+
+        return posts.map(toJobPost)
+    },
+
+    async findLabeled() {
+        const posts = await prisma.jobPost.findMany({
+            where: { userLabel: { notIn: ['FORGO'] } },
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         })
 

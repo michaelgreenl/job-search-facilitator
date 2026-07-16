@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { JobSearchResult } from '@job-search-facilitator/core'
+import type { JobPost } from '@job-search-facilitator/core'
 
 defineProps<{
-    result: JobSearchResult
+    post: JobPost
     selected: boolean
 }>()
 
@@ -16,28 +16,26 @@ const emit = defineEmits<{
         class="post-card"
         :class="{
             'post-card-selected': selected,
-            'post-card-forgone': result.post.userLabel === 'forgo',
+            'post-card-forgone': post.userLabel === 'forgo',
         }"
         type="button"
         :aria-pressed="selected"
         @click="emit('select')"
     >
         <div class="post-card-header">
-            <span class="component-label">{{ result.post.company }}</span>
-            <span v-if="result.post.userLabel !== null" class="user-label">
-                <template v-if="result.post.userLabel === 'forgo'"> forgone </template>
+            <span class="component-label">{{ post.company }}</span>
+            <span v-if="post.userLabel !== null" class="user-label">
+                <template v-if="post.userLabel === 'forgo'"> forgone </template>
                 <template v-else>
-                    {{ result.post.userLabel }}
+                    {{ post.userLabel }}
                 </template>
             </span>
         </div>
-        <strong class="post-role">{{ result.post.roleTitle }}</strong>
-        <span class="post-company">{{ result.post.location }}</span>
-        <span class="post-meta" v-if="result.post.postSource">
-            · Source - {{ result.post.postSource }}
-        </span>
-        <span class="post-meta" v-if="result.post.compensation">
-            · Compensation - {{ result.post.compensation }}
+        <strong class="post-role">{{ post.roleTitle }}</strong>
+        <span class="post-company">{{ post.location }}</span>
+        <span class="post-meta" v-if="post.postSource"> · Source - {{ post.postSource }} </span>
+        <span class="post-meta" v-if="post.compensation">
+            · Compensation - {{ post.compensation }}
         </span>
     </button>
 </template>
