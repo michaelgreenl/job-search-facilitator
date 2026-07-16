@@ -40,6 +40,14 @@ const filteredResults = computed(() => {
     return results
 })
 
+const postCountLabel = computed(() => {
+    const total = selectedReport.value?.results.length ?? 0
+
+    return postFilter.value === 'all'
+        ? `${total} posts`
+        : `${filteredResults.value.length} of ${total} posts`
+})
+
 watch(filteredResults, (results) => {
     const selectedPostId = selectedResult.value?.post.id
 
@@ -166,12 +174,8 @@ onMounted(() => {
                     </div>
 
                     <div class="panel-controls">
-                        <span class="item-count"
-                            >{{ filteredResults.length }}/{{
-                                selectedReport?.results.length
-                            }}
-                            posts</span
-                        >
+                        <span class="item-count item-count--plain">{{ postCountLabel }}</span>
+
                         <label class="post-filter">
                             <span>Filter</span>
                             <span class="select-field">
@@ -289,7 +293,7 @@ onMounted(() => {
 
         &.is-adjacent {
             display: flex;
-            min-width: 20rem;
+            min-width: 24rem;
         }
     }
 
@@ -335,26 +339,26 @@ onMounted(() => {
 
 .item-count {
     flex: 0 0 auto;
-    padding: 0.625rem $space-3;
     color: $color-ink-secondary;
     font-size: 0.75rem;
-    background: rgb(245 241 251 / 6%);
-    border: 1px solid rgb(245 241 251 / 10%);
-    border-radius: $radius-md;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
 }
 
 .panel-controls {
     display: flex;
-    flex-wrap: wrap;
-    gap: $space-2;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
+    flex-flow: column wrap;
+    gap: $space-1;
+    align-items: end;
+    justify-content: flex-end;
+    height: 100%;
 }
 
 .post-filter {
     display: flex;
-    gap: $space-2;
+    gap: $space-3;
     align-items: center;
     color: $color-ink-muted;
     font-size: 0.75rem;

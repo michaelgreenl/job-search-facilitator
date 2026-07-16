@@ -46,15 +46,6 @@ function updateLabel() {
             <p class="post-company">{{ result.post.location }}</p>
         </div>
 
-        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
-
-        <div class="placeholder-content">
-            <strong>Selected post: {{ result.post.id }}</strong>
-            <p class="placeholder-copy">
-                Detailed job information and review controls will appear in this panel.
-            </p>
-        </div>
-
         <div class="post-actions">
             <a
                 class="open-post-button"
@@ -85,6 +76,15 @@ function updateLabel() {
                     </select>
                 </span>
             </label>
+        </div>
+
+        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
+
+        <div class="placeholder-content">
+            <strong>Selected post: {{ result.post.id }}</strong>
+            <p class="placeholder-copy">
+                Detailed job information and review controls will appear in this panel.
+            </p>
         </div>
     </section>
 </template>
