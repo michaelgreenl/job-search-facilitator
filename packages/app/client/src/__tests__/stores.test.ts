@@ -146,4 +146,18 @@ describe('post store', () => {
         expect(store.posts).toEqual([updatedPost, secondPost])
         expect(reportStore.reports[0]?.results[0]?.post).toEqual(updatedPost)
     })
+
+    it('loads labeled posts from the dedicated endpoint', async () => {
+        const labeledPost = { ...post, userLabel: 'P1' as const }
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([labeledPost]))
+        const store = usePostStore()
+
+        await store.fetchLabeledPosts()
+
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+            'http://localhost:3000/api/job-posts/labeled',
+            undefined,
+        )
+        expect(store.posts).toEqual([labeledPost])
+    })
 })

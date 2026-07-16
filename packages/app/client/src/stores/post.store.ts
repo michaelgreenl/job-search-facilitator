@@ -6,6 +6,8 @@ import { useReportStore } from '@/stores/report.store'
 
 const getJobPosts = () => request<JobPost[]>('/job-posts')
 
+const getLabeledJobPosts = () => request<JobPost[]>('/job-posts/labeled')
+
 const getJobPost = (id: string) => request<JobPost>(`/job-posts/${encodeURIComponent(id)}`)
 
 const patchJobPost = (id: string, input: UpdateJobPostInput) =>
@@ -20,12 +22,12 @@ export const usePostStore = defineStore('posts', () => {
     const loading = shallowRef(false)
     const error = shallowRef<string | null>(null)
 
-    async function fetchPosts() {
+    async function loadPosts(getPosts: () => Promise<JobPost[]>) {
         loading.value = true
         error.value = null
 
         try {
-            posts.value = await getJobPosts()
+            posts.value = await getPosts()
         } catch (requestError) {
             error.value = requestError instanceof Error ? requestError.message : 'Request failed'
             throw requestError
@@ -33,6 +35,10 @@ export const usePostStore = defineStore('posts', () => {
             loading.value = false
         }
     }
+
+    const fetchPosts = () => loadPosts(getJobPosts)
+
+    const fetchLabeledPosts = () => loadPosts(getLabeledJobPosts)
 
     async function fetchPost(id: string) {
         loading.value = true
@@ -83,6 +89,7 @@ export const usePostStore = defineStore('posts', () => {
         loading,
         error,
         fetchPosts,
+        fetchLabeledPosts,
         fetchPost,
         updatePost,
     }

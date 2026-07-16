@@ -45,6 +45,8 @@ const createFakeRepository = (initialPosts: JobPost[]) => {
     })
     const repository: JobPostRepository = {
         findMany: async () => [...posts],
+        findLabeled: async () =>
+            posts.filter(({ userLabel }) => userLabel !== null && userLabel !== 'forgo'),
         findById: async (id) => posts.find((post) => post.id === id) ?? null,
         update,
     }
@@ -64,6 +66,24 @@ describe('job post routes', () => {
         const { repository } = createFakeRepository([existingPost])
 
         await request(createTestApp(repository)).get('/job-posts').expect(200, [existingPost])
+    })
+
+    it('lists labeled job posts without forgone or unlabeled posts', async () => {
+        const labeledPost: JobPost = { ...existingPost, userLabel: 'P1' }
+        const forgonePost: JobPost = {
+            ...existingPost,
+            id: '22222222-2222-4222-8222-222222222222',
+            userLabel: 'forgo',
+        }
+        const unlabeledPost: JobPost = {
+            ...existingPost,
+            id: '33333333-3333-4333-8333-333333333333',
+        }
+        const { repository } = createFakeRepository([labeledPost, forgonePost, unlabeledPost])
+
+        await request(createTestApp(repository))
+            .get('/job-posts/labeled')
+            .expect(200, [labeledPost])
     })
 
     it('forwards an allowed update and returns the updated post', async () => {

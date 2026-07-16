@@ -297,7 +297,7 @@ onMounted(() => {
                 <ul v-if="filteredResults.length" class="card-list">
                     <li v-for="result in filteredResults" :key="result.post.id">
                         <JobPostCard
-                            :result="result"
+                            :post="result.post"
                             :selected="selectedResult?.post.id === result.post.id"
                             @select="selectResult(result)"
                         />
@@ -331,7 +331,7 @@ onMounted(() => {
                     ←
                 </button>
                 <JobPostViewer
-                    :result="selectedResult"
+                    :post="selectedResult.post"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     @update-label="updateUserLabel"
