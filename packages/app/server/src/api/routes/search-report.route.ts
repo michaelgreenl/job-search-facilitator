@@ -7,8 +7,8 @@ export const createSearchReportRouter = (repository: SearchReportRepository) => 
     const controller = createSearchReportController(repository)
 
     router.get('/', controller.list)
-    router.get('/:reportDate', controller.getByDate)
-    router.put('/:reportDate', controller.upsertByDate)
+    router.get('/:reportId', controller.getById)
+    router.put('/:reportDate/:reportId', controller.upsertById)
 
     return router
 }

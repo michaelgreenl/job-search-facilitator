@@ -74,7 +74,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.REJECTED,
         userRank: null,
-        userLabel: null,
+        userLabel: UserLabel.FORGO,
         archivedAt: null,
     },
     {

@@ -72,7 +72,7 @@ describe('job post routes', () => {
             applicationStatus: 'interviewing',
             postStatus: 'closed',
             userRank: 1,
-            userLabel: 'P1',
+            userLabel: 'forgo',
             archivedAt: '2026-07-12T12:00:00.000Z',
         }
 

@@ -6,12 +6,15 @@ interface SearchResultSeed {
     agentRank: number
     agentLabel: AgentLabel
     fitRationale: string
+    applicationFlow: string
+    keyLegitimacySignals: string
     recommendedResume: ResumeType
     recommendedAction: string
     legitimacyNotes: string | null
 }
 
 interface SearchReportSeed {
+    id: string
     reportDate: Date
     summary: string
     results: SearchResultSeed[]
@@ -71,6 +74,11 @@ const buildResults = (postIndexes: readonly number[], reportVersion: 1 | 2): Sea
                 reportVersion === 1
                     ? `${post.roleTitle}: ${evaluationFocus}.`
                     : `${evaluationFocus}; refreshed listing details remain promising.`,
+            applicationFlow:
+                post.postSource === 'Example Careers'
+                    ? 'Direct company application.'
+                    : 'External job-board application.',
+            keyLegitimacySignals: 'Named company, specific role, and public application URL.',
             recommendedResume:
                 reportVersion === 2 && postIndex % 5 === 0 ? ResumeType.GENERAL : recommendedResume,
             recommendedAction: quickApplication
@@ -87,11 +95,13 @@ const buildResults = (postIndexes: readonly number[], reportVersion: 1 | 2): Sea
 
 export const searchReportSeeds: readonly SearchReportSeed[] = [
     {
+        id: '00000000-0000-4000-8000-000000000001',
         reportDate: new Date('2026-07-01T00:00:00.000Z'),
         summary: 'Ten focused example opportunities spanning frontend, platform, and product work.',
         results: buildResults([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 1),
     },
     {
+        id: '00000000-0000-4000-8000-000000000002',
         reportDate: new Date('2026-07-08T00:00:00.000Z'),
         summary:
             'Twelve refreshed example opportunities with broader accessibility and TypeScript coverage.',
@@ -116,6 +126,8 @@ const toResultCreate = (
         agentRank: result.agentRank,
         agentLabel: result.agentLabel,
         fitRationale: result.fitRationale,
+        applicationFlow: result.applicationFlow,
+        keyLegitimacySignals: result.keyLegitimacySignals,
         recommendedResume: result.recommendedResume,
         recommendedAction: result.recommendedAction,
         legitimacyNotes: result.legitimacyNotes,
@@ -128,8 +140,9 @@ export const seedSearchReports = async (
 ): Promise<void> => {
     for (const report of searchReportSeeds) {
         const savedReport = await transaction.jobSearchReport.upsert({
-            where: { reportDate: report.reportDate },
+            where: { id: report.id },
             create: {
+                id: report.id,
                 reportDate: report.reportDate,
                 summary: report.summary,
             },

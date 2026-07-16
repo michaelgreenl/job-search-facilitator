@@ -3,8 +3,13 @@ import { z } from 'zod'
 
 const nonBlankString = z.string().trim().min(1)
 
-export const reportDateParamsSchema = z.strictObject({
+export const reportIdParamsSchema = z.strictObject({
+    reportId: z.uuid(),
+})
+
+export const reportUpsertParamsSchema = z.strictObject({
     reportDate: z.iso.date(),
+    reportId: z.uuid(),
 })
 
 export const jobPostInputSchema = z.strictObject({
@@ -22,6 +27,8 @@ export const jobSearchResultInputSchema = z.strictObject({
     agentRank: z.number().int().positive(),
     agentLabel: z.enum(AGENT_LABELS),
     fitRationale: nonBlankString,
+    applicationFlow: nonBlankString,
+    keyLegitimacySignals: nonBlankString,
     recommendedResume: z.enum(RESUME_TYPES),
     recommendedAction: nonBlankString,
     legitimacyNotes: nonBlankString.nullable(),

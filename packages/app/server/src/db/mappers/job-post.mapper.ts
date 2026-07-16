@@ -40,12 +40,14 @@ const userLabelToApi = {
     P1: 'P1',
     P2: 'P2',
     QUICK_APP: 'quick-app',
+    FORGO: 'forgo',
 } satisfies Record<NonNullable<PrismaJobPost['userLabel']>, UserLabel>
 
 const userLabelToPrisma = {
     P1: 'P1',
     P2: 'P2',
     'quick-app': 'QUICK_APP',
+    forgo: 'FORGO',
 } satisfies Record<UserLabel, NonNullable<PrismaJobPost['userLabel']>>
 
 export const toJobPost = (post: PrismaJobPost): JobPost => ({

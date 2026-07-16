@@ -1,3 +1,5 @@
+name: job-search-facilitator
+
 services:
     postgres:
         image: postgres:16
@@ -6,7 +8,7 @@ services:
             POSTGRES_USER: ${POSTGRES_USER:-job_search}
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
         ports:
-            - '${POSTGRES_PORT:-5432}:5432'
+            - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
         volumes:
             - postgres_data:/var/lib/postgresql/data
         healthcheck:
@@ -14,6 +16,32 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+
+    server:
+        build:
+            context: ../../..
+            dockerfile: packages/app/server/Dockerfile
+        environment:
+            PORT: 3000
+            CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
+            DATABASE_URL: postgresql://${POSTGRES_USER:-job_search}:${POSTGRES_PASSWORD:-local_dev_password}@postgres:5432/${POSTGRES_DB:-job_search_facilitator}
+        ports:
+            - '127.0.0.1:${PORT:-3000}:3000'
+        depends_on:
+            postgres:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+                ]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            start_period: 5s
 
 volumes:
     postgres_data:

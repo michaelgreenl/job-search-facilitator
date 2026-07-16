@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { RouterLink } from 'vue-router'
+</script>
+
 <template>
     <header class="app-header glass-frame">
         <a class="brand" href="/" aria-label="Job Search Facilitator home">
@@ -8,17 +12,19 @@
             </span>
         </a>
 
-        <span class="header-signal" aria-hidden="true"></span>
+        <div class="nav-links">
+            <RouterLink class="link" to="/">Review</RouterLink>
+            <RouterLink class="link" to="/apply">Apply</RouterLink>
+            <RouterLink class="link" to="/results">Results</RouterLink>
+        </div>
     </header>
 </template>
 
 <style scoped lang="scss">
 .app-header {
-    position: sticky;
-    inset-block-start: $space-4;
     z-index: 10;
     display: flex;
-    width: min(100%, 76rem);
+    width: min(100%, 84rem);
     min-height: 4.5rem;
     align-items: center;
     justify-content: space-between;
@@ -50,59 +56,58 @@
     border: 1px solid rgb(173 123 249 / 34%);
     border-radius: $radius-md;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+
+    @media (forced-colors: active) {
+        border: 1px solid ButtonText;
+    }
 }
 
 .brand-copy {
     display: grid;
     gap: 0.125rem;
     min-width: 0;
+
+    strong {
+        overflow: hidden;
+        font-size: 0.875rem;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    small {
+        color: $color-ink-muted;
+        font-size: 0.6875rem;
+
+        @include bp-max('xs') {
+            display: none;
+        }
+
+        @media (prefers-contrast: more) {
+            color: $color-ink;
+        }
+    }
 }
 
-.brand-copy strong {
-    overflow: hidden;
-    font-size: 0.875rem;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.nav-links {
+    display: flex;
+    gap: $space-5;
+    align-items: center;
+    padding-right: $space-3;
 }
 
-.brand-copy small {
+.link {
     color: $color-ink-muted;
-    font-size: 0.6875rem;
-}
+    text-decoration: none;
 
-.header-signal {
-    width: 0.5rem;
-    height: 0.5rem;
-    flex: 0 0 auto;
-    background: $color-signal;
-    border-radius: $radius-full;
-    box-shadow:
-        0 0 0 5px rgb(173 123 249 / 10%),
-        0 0 24px rgb(173 123 249 / 42%);
-}
-
-@media (width <= 42rem) {
-    .app-header {
-        inset-block-start: $space-3;
-    }
-}
-
-@media (width <= 30rem) {
-    .brand-copy small {
-        display: none;
-    }
-}
-
-@media (prefers-contrast: more) {
-    .brand-copy small {
+    &:hover,
+    &:focus-visible {
         color: $color-ink;
     }
-}
 
-@media (forced-colors: active) {
-    .brand-mark {
-        border: 1px solid ButtonText;
+    &:active,
+    &.router-link-exact-active {
+        color: $color-signal-light;
     }
 }
 </style>
