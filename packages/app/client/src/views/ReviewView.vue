@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
 import { computed, onMounted, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
@@ -12,6 +13,8 @@ type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 
 const bp = useBreakpoints()
+const route = useRoute()
+const router = useRouter()
 
 const reportStore = useReportStore()
 const postStore = usePostStore()
@@ -21,6 +24,51 @@ const selectedReport = shallowRef<JobSearchReport | null>(null)
 const selectedResult = shallowRef<JobSearchResult | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
+const reportsLoaded = shallowRef(false)
+
+const getQueryId = (value: (typeof route.query)[string] | undefined) =>
+    typeof value === 'string' ? value : null
+
+function getSelectionQuery(reportId?: string, postId?: string) {
+    const query = { ...route.query }
+    delete query.reportId
+    delete query.postId
+
+    if (reportId !== undefined) {
+        query.reportId = reportId
+    }
+
+    if (postId !== undefined) {
+        query.postId = postId
+    }
+
+    return query
+}
+
+function restoreRouteSelection() {
+    const reportId = getQueryId(route.query.reportId)
+    const postId = getQueryId(route.query.postId)
+    const requestedReport = reportStore.reports.find(({ id }) => id === reportId)
+    const report = requestedReport ?? reportStore.reports[0] ?? null
+    const result = requestedReport?.results.find(({ post }) => post.id === postId) ?? null
+
+    selectedReport.value = report
+    selectedResult.value = result
+
+    if (reportId !== null && requestedReport === undefined) {
+        void router.replace({ query: getSelectionQuery() })
+    } else if (postId !== null && result === null) {
+        void router.replace({ query: getSelectionQuery(reportId ?? undefined) })
+    }
+
+    if (result !== null) {
+        activePanel.value = 'viewer'
+    } else if (requestedReport !== undefined) {
+        activePanel.value = bp.isLaptop.value ? 'reports' : 'posts'
+    } else {
+        activePanel.value = 'reports'
+    }
+}
 
 const filteredResults = computed(() => {
     const results = selectedReport.value?.results ?? []
@@ -60,6 +108,12 @@ watch(filteredResults, (results) => {
     }
 })
 
+watch([() => route.query.reportId, () => route.query.postId, bp.isLaptop], () => {
+    if (reportsLoaded.value) {
+        restoreRouteSelection()
+    }
+})
+
 function selectReport(report: JobSearchReport) {
     selectedReport.value = report
     postFilter.value = 'all'
@@ -68,21 +122,34 @@ function selectReport(report: JobSearchReport) {
     if (!bp.isLaptop.value) {
         activePanel.value = 'posts'
     }
+
+    void router.push({ query: getSelectionQuery(report.id) })
 }
 
 function selectResult(result: JobSearchResult) {
     selectedResult.value = result
     labelError.value = null
     activePanel.value = 'viewer'
+
+    if (selectedReport.value !== null) {
+        void router.push({
+            query: getSelectionQuery(selectedReport.value.id, result.post.id),
+        })
+    }
 }
 
 function showReports() {
     activePanel.value = 'reports'
     selectedResult.value = null
+    void router.push({ query: getSelectionQuery() })
 }
 
 function showPosts() {
     activePanel.value = 'posts'
+
+    if (selectedReport.value !== null) {
+        void router.push({ query: getSelectionQuery(selectedReport.value.id) })
+    }
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
@@ -108,7 +175,8 @@ onMounted(() => {
     void reportStore
         .fetchReports()
         .then(() => {
-            selectedReport.value = reportStore.reports[0] ?? null
+            reportsLoaded.value = true
+            restoreRouteSelection()
         })
         .catch(() => undefined)
 })
