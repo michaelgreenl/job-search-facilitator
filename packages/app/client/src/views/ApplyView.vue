@@ -105,7 +105,7 @@ onMounted(() => {
                 <header class="panel-heading">
                     <div class="panel-title">
                         <span class="eyebrow">Apply</span>
-                        <h1 class="panel-heading-title">Labeled job posts</h1>
+                        <h1 class="panel-heading-title">Labeled posts</h1>
                     </div>
 
                     <div class="panel-controls">
@@ -209,6 +209,10 @@ onMounted(() => {
             display: flex;
             min-width: 24rem;
         }
+    }
+
+    &.apply-post-list {
+        min-width: 26em;
     }
 
     &.apply-job-post-view {
