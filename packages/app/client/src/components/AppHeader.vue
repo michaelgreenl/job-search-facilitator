@@ -1,18 +1,21 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+
+const showNav = ref(false)
 </script>
 
 <template>
-    <header class="app-header glass-frame">
+    <header
+        class="app-header glass-frame"
+        @mouseenter="showNav = true"
+        @mouseleave="showNav = false"
+    >
         <a class="brand" href="/" aria-label="Job Search Facilitator home">
             <span class="brand-mark" aria-hidden="true">JF</span>
-            <span class="brand-copy">
-                <strong>Job Search Facilitator</strong>
-                <small>Local-first workspace</small>
-            </span>
         </a>
 
-        <div class="nav-links">
+        <div v-if="showNav" class="nav-links">
             <RouterLink class="link" to="/">Review</RouterLink>
             <RouterLink class="link" to="/apply">Apply</RouterLink>
             <RouterLink class="link" to="/results">Results</RouterLink>
@@ -22,15 +25,22 @@ import { RouterLink } from 'vue-router'
 
 <style scoped lang="scss">
 .app-header {
+    position: absolute;
+    top: -$space-5;
+    right: 48.25%;
     z-index: 10;
     display: flex;
-    width: min(100%, 84rem);
-    min-height: 4.5rem;
     align-items: center;
     justify-content: space-between;
     margin-inline: auto;
-    padding: $space-3 $space-4;
-    border-radius: $radius-xl;
+    padding: $space-2;
+    border-radius: $radius-lg;
+
+    &:hover {
+        gap: $space-4;
+        top: $space-1;
+        right: 42%;
+    }
 }
 
 .brand {
