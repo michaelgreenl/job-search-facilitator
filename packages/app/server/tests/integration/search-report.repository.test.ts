@@ -5,6 +5,7 @@ import type {
 } from '@job-search-facilitator/core'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { jobPostRepository } from '../../src/db/repositories/job-post.repository.ts'
+import { outreachRunRepository } from '../../src/db/repositories/outreach-run.repository.ts'
 import { searchReportRepository } from '../../src/db/repositories/search-report.repository.ts'
 import { prisma } from '../../src/db/prisma.ts'
 
@@ -71,6 +72,7 @@ const createReportInput = (
 }
 
 beforeEach(async () => {
+    await prisma.outreachRun.deleteMany()
     await prisma.jobSearchResult.deleteMany()
     await prisma.jobSearchReport.deleteMany()
     await prisma.jobPost.deleteMany()
@@ -107,6 +109,45 @@ describe('job post repository', () => {
 
         expect(labels).toHaveLength(3)
         expect(labels).toEqual(expect.arrayContaining(['P1', 'P2', 'quick-app']))
+    })
+})
+
+describe('outreach run repository', () => {
+    it('persists the Work task lifecycle for a job post', async () => {
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-18',
+            createReportInput(),
+        )
+        const jobPostId = report.report.results[0]!.post.id
+        const created = await outreachRunRepository.create({
+            jobPostId,
+            requestedContactCount: 3,
+        })
+
+        expect(created).not.toBeNull()
+
+        const running = await outreachRunRepository.update(created!.id, {
+            status: 'running',
+            workTaskId: '22222222-2222-4222-8222-222222222222',
+            workThreadId: 'thread-id',
+            workTurnId: 'turn-id',
+        })
+        const completed = await outreachRunRepository.update(created!.id, {
+            status: 'completed',
+        })
+
+        expect(running).toMatchObject({
+            status: 'running',
+            workTaskId: '22222222-2222-4222-8222-222222222222',
+            workThreadId: 'thread-id',
+            workTurnId: 'turn-id',
+        })
+        expect(completed).toMatchObject({
+            status: 'completed',
+            error: null,
+        })
+        expect(completed?.completedAt).not.toBeNull()
     })
 })
 
