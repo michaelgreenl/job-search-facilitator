@@ -40,7 +40,7 @@ import AppHeader from '@/components/AppHeader.vue'
     flex-direction: column;
     gap: $space-4;
     min-height: 100dvh;
-    padding: $space-4;
+    padding: $space-3;
 
     @include bp-max('sm') {
         padding: $space-3;
