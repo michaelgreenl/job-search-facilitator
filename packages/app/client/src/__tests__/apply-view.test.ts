@@ -170,7 +170,7 @@ describe('apply view', () => {
         })
     })
 
-    it('finds the first engineering contact for the selected job post', async () => {
+    it('finds a relevant outreach contact for the selected job post', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
@@ -182,7 +182,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P2 Engineer').click()
-        findButton(root, 'Find engineering contact').click()
+        findButton(root, 'Find outreach contact').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const taskRequest = fetchMock.mock.calls[2]
@@ -202,8 +202,14 @@ describe('apply view', () => {
         expect(taskInput.prompt).toContain('https://example.com/jobs/post-p2')
         expect(taskInput.prompt).not.toContain('P1 Engineer')
         expect(taskInput.prompt).toContain('People')
-        expect(taskInput.prompt).toContain('Engineering')
-        expect(taskInput.outputSchema.required).toEqual(['personName'])
+        expect(taskInput.prompt).toContain('likely hiring manager or team lead')
+        expect(taskInput.prompt).toContain('not simply the first result')
+        expect(taskInput.outputSchema.required).toEqual([
+            'personName',
+            'personTitle',
+            'profileUrl',
+            'relevanceRationale',
+        ])
         expect(taskInput.capabilities).toEqual(['chrome'])
 
         const source = FakeEventSource.instances[0]!
@@ -216,13 +222,25 @@ describe('apply view', () => {
         })
         source.message({
             type: 'completed',
-            output: { personName: 'Ada Lovelace' },
+            output: {
+                personName: 'Ada Lovelace',
+                personTitle: 'Engineering Manager',
+                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                relevanceRationale: 'Their Engineering Manager title aligns with this role.',
+            },
             createdAt: '2026-07-18T12:00:01.000Z',
         })
 
         await vi.waitFor(() => {
             expect(root.textContent).toContain('Using Chrome')
             expect(root.textContent).toContain('Ada Lovelace')
+            expect(root.textContent).toContain('Engineering Manager')
+            expect(root.textContent).toContain(
+                'Their Engineering Manager title aligns with this role.',
+            )
+            expect(root.querySelector<HTMLAnchorElement>('.person-name')?.href).toBe(
+                'https://www.linkedin.com/in/ada-lovelace',
+            )
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -262,7 +280,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Find engineering contact').click()
+        findButton(root, 'Find outreach contact').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -315,7 +333,7 @@ describe('apply view', () => {
         const root = await mountApplyView(pinia)
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Find engineering contact').click()
+        findButton(root, 'Find outreach contact').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)

@@ -16,10 +16,33 @@ const activities = computed(() =>
 const commentary = computed(() =>
     events.value.flatMap((event) => (event.type === 'message' ? [event.textDelta] : [])).join(''),
 )
-const personName = computed(() => {
-    const value = task.value?.output?.personName
+
+const outputText = (key: string) => {
+    const value = task.value?.output?.[key]
 
     return typeof value === 'string' && value.trim() ? value : null
+}
+
+const personName = computed(() => outputText('personName'))
+const personTitle = computed(() => outputText('personTitle'))
+const relevanceRationale = computed(() => outputText('relevanceRationale'))
+const profileUrl = computed(() => {
+    const value = outputText('profileUrl')
+
+    if (value === null) {
+        return null
+    }
+
+    try {
+        const url = new URL(value)
+        const isLinkedIn = url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com')
+
+        return url.protocol === 'https:' && isLinkedIn && url.pathname.startsWith('/in/')
+            ? url.href
+            : null
+    } catch {
+        return null
+    }
 })
 const status = computed(() => {
     if (pendingAction.value !== null) {
@@ -55,7 +78,7 @@ function resolveAction(decision: WorkActionDecision) {
 <template>
     <section class="outreach-panel" aria-labelledby="outreach-title">
         <header class="outreach-heading">
-            <span class="eyebrow">Outreach proof</span>
+            <span class="eyebrow">Outreach search</span>
             <h2 id="outreach-title" class="outreach-title">{{ company }}</h2>
         </header>
 
@@ -103,8 +126,21 @@ function resolveAction(decision: WorkActionDecision) {
         </section>
 
         <div v-if="personName" class="outreach-result">
-            <span class="eyebrow">First engineering contact</span>
-            <strong class="person-name">{{ personName }}</strong>
+            <span class="eyebrow">Relevant contact</span>
+            <a
+                v-if="profileUrl"
+                class="person-name"
+                :href="profileUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {{ personName }} ↗
+            </a>
+            <strong v-else class="person-name">{{ personName }}</strong>
+            <span v-if="personTitle" class="person-title">{{ personTitle }}</span>
+            <p v-if="relevanceRationale" class="relevance-rationale">
+                {{ relevanceRationale }}
+            </p>
         </div>
     </section>
 </template>
@@ -137,7 +173,8 @@ function resolveAction(decision: WorkActionDecision) {
 .outreach-status,
 .outreach-error,
 .action-message,
-.commentary {
+.commentary,
+.relevance-rationale {
     margin: 0;
 }
 
@@ -237,6 +274,24 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .person-name {
+    width: fit-content;
+    color: $color-ink;
     font-size: 1.25rem;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+    }
+}
+
+.person-title,
+.relevance-rationale {
+    color: $color-ink-secondary;
+}
+
+.relevance-rationale {
+    font-size: 0.875rem;
 }
 </style>

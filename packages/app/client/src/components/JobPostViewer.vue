@@ -74,7 +74,7 @@ function updateLabel() {
                     :disabled="outreachDisabled"
                     @click="emit('startOutreach')"
                 >
-                    Find engineering contact
+                    Find outreach contact
                 </button>
             </div>
 
