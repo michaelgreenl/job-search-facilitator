@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
-import { shallowRef } from 'vue'
+import { computed, shallowRef } from 'vue'
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         post: JobPost
         labelUpdating: boolean
@@ -11,12 +11,18 @@ withDefaults(
         outreachDisabled?: boolean
         showApplicationHelpAction?: boolean
         applicationHelpDisabled?: boolean
+        showApplicationAction?: boolean
+        applicationUpdating?: boolean
+        applicationError?: string | null
     }>(),
     {
         showOutreachAction: false,
         outreachDisabled: false,
         showApplicationHelpAction: false,
         applicationHelpDisabled: false,
+        showApplicationAction: false,
+        applicationUpdating: false,
+        applicationError: null,
     },
 )
 
@@ -24,9 +30,12 @@ const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     startOutreach: []
     startApplicationHelp: []
+    toggleApplied: []
 }>()
 
 const selectedLabel = shallowRef<UserLabel | ''>('')
+const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
+const postError = computed(() => props.applicationError ?? props.labelError)
 
 function updateLabel() {
     if (selectedLabel.value === '') {
@@ -45,11 +54,15 @@ function updateLabel() {
                 <span class="component-label">{{ post.company }}</span>
 
                 <div
-                    v-if="post.userLabel !== null"
+                    v-if="applied || post.userLabel !== null"
                     class="user-label"
-                    :class="{ 'user-label-forgo': post.userLabel === 'forgo' }"
+                    :class="{
+                        'user-label-applied': applied,
+                        'user-label-forgo': !applied && post.userLabel === 'forgo',
+                    }"
                 >
-                    <template v-if="post.userLabel === 'forgo'"> forgone </template>
+                    <template v-if="applied"> applied </template>
+                    <template v-else-if="post.userLabel === 'forgo'"> forgone </template>
                     <template v-else>
                         {{ post.userLabel }}
                     </template>
@@ -91,6 +104,17 @@ function updateLabel() {
                 >
                     Find outreach contact
                 </button>
+
+                <button
+                    v-if="showApplicationAction"
+                    class="post-action-button"
+                    type="button"
+                    :aria-pressed="applied"
+                    :disabled="applicationUpdating || labelUpdating"
+                    @click="emit('toggleApplied')"
+                >
+                    {{ applied ? 'Undo' : 'Applied' }}
+                </button>
             </div>
 
             <label class="label-picker">
@@ -99,7 +123,7 @@ function updateLabel() {
                         v-model="selectedLabel"
                         class="select-control label-picker-select"
                         aria-label="Job post label"
-                        :disabled="labelUpdating"
+                        :disabled="labelUpdating || applicationUpdating || applied"
                         @change="updateLabel"
                     >
                         <option disabled value="">
@@ -114,7 +138,7 @@ function updateLabel() {
             </label>
         </div>
 
-        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
+        <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
 
         <div class="placeholder-content">
             <strong>Selected post: {{ post.id }}</strong>
@@ -227,6 +251,12 @@ function updateLabel() {
     &-forgo {
         filter: grayscale(1);
         opacity: 0.55;
+    }
+
+    &-applied {
+        color: $color-ink;
+        background: rgb(43 138 62 / 25%);
+        border-color: rgb(43 138 62 / 55%);
     }
 }
 

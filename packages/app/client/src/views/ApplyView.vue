@@ -30,9 +30,17 @@ const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
+const applicationUpdating = shallowRef(false)
+const applicationError = shallowRef<string | null>(null)
+const undoableAppliedPostId = shallowRef<string | null>(null)
 
 const actionablePosts = computed(() =>
-    postStore.posts.filter(({ userLabel }) => userLabel !== null && userLabel !== 'forgo'),
+    postStore.posts.filter(
+        ({ applicationStatus, id, userLabel }) =>
+            userLabel !== null &&
+            userLabel !== 'forgo' &&
+            (applicationStatus === 'not-applied' || id === undoableAppliedPostId.value),
+    ),
 )
 
 const filteredPosts = computed(() =>
@@ -65,13 +73,14 @@ watch(
         }
 
         const postId = posts[0]?.id ?? null
+        const changed = postId !== selectedPostId.value
+        selectedPostId.value = postId
 
-        if (postId !== selectedPostId.value) {
+        if (changed) {
+            undoableAppliedPostId.value = null
             outreachStore.reset()
             applicationHelpPostId.value = null
         }
-
-        selectedPostId.value = postId
 
         if (selectedPostId.value === null) {
             activePanel.value = 'posts'
@@ -81,21 +90,26 @@ watch(
 )
 
 function selectPost(postId: string) {
-    if (postId !== selectedPostId.value) {
+    const changed = postId !== selectedPostId.value
+    selectedPostId.value = postId
+
+    if (changed) {
+        undoableAppliedPostId.value = null
         outreachStore.reset()
     }
 
-    selectedPostId.value = postId
     applicationHelpPostId.value = null
     labelError.value = null
+    applicationError.value = null
     activePanel.value = 'viewer'
 }
 
 function showPosts() {
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
+        selectedPostId.value = filteredPosts.value[0]?.id ?? null
+        undoableAppliedPostId.value = null
         outreachStore.reset()
         applicationHelpPostId.value = null
-        selectedPostId.value = filteredPosts.value[0]?.id ?? null
     }
 
     activePanel.value = 'posts'
@@ -127,7 +141,7 @@ function startApplicationHelp() {
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
-    if (selectedPostId.value === null || labelUpdating.value) {
+    if (selectedPostId.value === null || labelUpdating.value || applicationUpdating.value) {
         return
     }
 
@@ -140,6 +154,45 @@ async function updateUserLabel(userLabel: UserLabel | null) {
         labelError.value = error instanceof Error ? error.message : 'Could not update label'
     } finally {
         labelUpdating.value = false
+    }
+}
+
+async function toggleApplied() {
+    const post = selectedPost.value
+
+    if (post === null || applicationUpdating.value || labelUpdating.value) {
+        return
+    }
+
+    const postId = post.id
+    const undo = post.applicationStatus === 'awaiting-response'
+
+    applicationUpdating.value = true
+    applicationError.value = null
+
+    if (!undo) {
+        undoableAppliedPostId.value = postId
+    }
+
+    try {
+        await postStore.updatePost(postId, {
+            applicationStatus: undo ? 'not-applied' : 'awaiting-response',
+        })
+
+        if (undo && undoableAppliedPostId.value === postId) {
+            undoableAppliedPostId.value = null
+        }
+    } catch (error) {
+        if (!undo && undoableAppliedPostId.value === postId) {
+            undoableAppliedPostId.value = null
+        }
+
+        if (selectedPostId.value === postId) {
+            applicationError.value =
+                error instanceof Error ? error.message : 'Could not update application status'
+        }
+    } finally {
+        applicationUpdating.value = false
     }
 }
 
@@ -238,13 +291,17 @@ onMounted(() => {
                     :post="selectedPost"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
+                    :application-updating="applicationUpdating"
+                    :application-error="applicationError"
                     show-outreach-action
                     :outreach-disabled="workRunning"
                     show-application-help-action
                     :application-help-disabled="workRunning"
+                    show-application-action
                     @update-label="updateUserLabel"
                     @start-outreach="startOutreach"
                     @start-application-help="startApplicationHelp"
+                    @toggle-applied="toggleApplied"
                 />
             </aside>
 

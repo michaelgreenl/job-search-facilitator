@@ -504,6 +504,84 @@ describe('apply view', () => {
         })
     })
 
+    it('keeps an applied post undoable until another post is selected', async () => {
+        const appliedPost = { ...posts[0]!, applicationStatus: 'awaiting-response' as const }
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(appliedPost))
+            .mockResolvedValueOnce(jsonResponse(posts[0]))
+            .mockResolvedValueOnce(jsonResponse(appliedPost))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Applied').click()
+
+        await vi.waitFor(() => {
+            expect(findButton(root, 'Undo')).toBeTruthy()
+            expect(
+                root.querySelector('.apply-job-post-view .user-label')?.textContent?.trim(),
+            ).toBe('applied')
+            expect(root.textContent).toContain('P1 Engineer')
+        })
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            'http://localhost:3000/api/job-posts/post-p1',
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationStatus: 'awaiting-response' }),
+            },
+        )
+
+        findButton(root, 'Undo').click()
+
+        await vi.waitFor(() => {
+            expect(findButton(root, 'Applied')).toBeTruthy()
+            expect(
+                root.querySelector('.apply-job-post-view .user-label')?.textContent?.trim(),
+            ).toBe('P1')
+        })
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            3,
+            'http://localhost:3000/api/job-posts/post-p1',
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationStatus: 'not-applied' }),
+            },
+        )
+
+        findButton(root, 'Applied').click()
+        await vi.waitFor(() => expect(findButton(root, 'Undo')).toBeTruthy())
+        findButton(root, 'P2 Engineer').click()
+
+        await vi.waitFor(() => {
+            expect(root.textContent).not.toContain('P1 Engineer')
+            expect(root.textContent).toContain('P2 Engineer')
+        })
+    })
+
+    it('keeps an unapplied post available when its status update fails', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse([posts[0]]))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Applied').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+                'API request failed (500)',
+            )
+            expect(findButton(root, 'Applied')).toBeTruthy()
+            expect(root.textContent).toContain('P1 Engineer')
+        })
+    })
+
     it('keeps the loaded list visible when a label update fails', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock

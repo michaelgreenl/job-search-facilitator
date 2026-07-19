@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
     post: JobPost
     selected: boolean
 }>()
@@ -9,6 +10,8 @@ defineProps<{
 const emit = defineEmits<{
     select: []
 }>()
+
+const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
 </script>
 
 <template>
@@ -24,8 +27,13 @@ const emit = defineEmits<{
     >
         <div class="post-card-header">
             <span class="component-label">{{ post.company }}</span>
-            <span v-if="post.userLabel !== null" class="user-label">
-                <template v-if="post.userLabel === 'forgo'"> forgone </template>
+            <span
+                v-if="applied || post.userLabel !== null"
+                class="user-label"
+                :class="{ 'user-label-applied': applied }"
+            >
+                <template v-if="applied"> applied </template>
+                <template v-else-if="post.userLabel === 'forgo'"> forgone </template>
                 <template v-else>
                     {{ post.userLabel }}
                 </template>
@@ -98,6 +106,12 @@ const emit = defineEmits<{
     background: rgb(173 123 249 / 12%);
     border: 1px solid rgb(173 123 249 / 24%);
     border-radius: $radius-full;
+
+    &-applied {
+        color: $color-ink;
+        background: rgb(43 138 62 / 25%);
+        border-color: rgb(43 138 62 / 55%);
+    }
 }
 
 .post-company,
