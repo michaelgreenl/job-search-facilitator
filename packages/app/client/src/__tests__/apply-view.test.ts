@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost, UserLabel } from '@job-search-facilitator/core'
-import { createPinia } from 'pinia'
+import type { JobPost, UserLabel, WorkTaskEvent } from '@job-search-facilitator/core'
+import { createPinia, type Pinia } from 'pinia'
 import { createApp, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ApplyView from '../views/ApplyView.vue'
@@ -30,6 +30,27 @@ const posts = [
     createPost('post-quick-app', 'quick-app'),
 ]
 
+const runningWorkTask = {
+    id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
+    status: 'running',
+    threadId: 'thread-id',
+    turnId: 'turn-id',
+    output: null,
+    error: null,
+}
+
+const linkedInActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+const linkedInActionRequired = {
+    type: 'action-required',
+    action: {
+        id: linkedInActionId,
+        kind: 'browser-origin',
+        message: 'Allow Chrome to access https://www.linkedin.com?',
+        origin: 'https://www.linkedin.com',
+    },
+    createdAt: '2026-07-18T12:00:00.000Z',
+} satisfies WorkTaskEvent
+
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
         status,
@@ -38,12 +59,29 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
-const mountApplyView = async () => {
+class FakeEventSource {
+    static instances: FakeEventSource[] = []
+
+    readonly close = vi.fn()
+    onopen: (() => void) | null = null
+    onmessage: ((event: { data: string }) => void) | null = null
+    onerror: (() => void) | null = null
+
+    constructor(readonly url: string) {
+        FakeEventSource.instances.push(this)
+    }
+
+    message(event: WorkTaskEvent) {
+        this.onmessage?.({ data: JSON.stringify(event) })
+    }
+}
+
+const mountApplyView = async (pinia: Pinia = createPinia()) => {
     const root = document.createElement('div')
     document.body.append(root)
 
     const app = createApp(ApplyView)
-    app.use(createPinia())
+    app.use(pinia)
     app.mount(root)
     mountedApps.push({ app, root })
 
@@ -129,6 +167,167 @@ describe('apply view', () => {
             expect(list?.classList.contains('is-adjacent')).toBe(false)
             expect(viewer?.classList.contains('is-active')).toBe(false)
             expect(viewer?.classList.contains('is-adjacent')).toBe(true)
+        })
+    })
+
+    it('finds the first engineering contact for the selected company', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Find engineering contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const taskRequest = fetchMock.mock.calls[2]
+        const taskBody = (taskRequest?.[1] as RequestInit | undefined)?.body
+
+        expect(typeof taskBody).toBe('string')
+
+        const taskInput = JSON.parse(taskBody as string) as {
+            prompt: string
+            outputSchema: { required: string[] }
+            capabilities: string[]
+        }
+
+        expect(taskRequest?.[0]).toBe('http://localhost:3001/tasks')
+        expect(taskInput.prompt).toContain('Example Co')
+        expect(taskInput.prompt).toContain('People')
+        expect(taskInput.prompt).toContain('Engineering')
+        expect(taskInput.outputSchema.required).toEqual(['personName'])
+        expect(taskInput.capabilities).toEqual(['chrome'])
+
+        const source = FakeEventSource.instances[0]!
+        expect(source.url).toBe(`http://localhost:3001/tasks/${runningWorkTask.id}/events`)
+
+        source.message({
+            type: 'activity',
+            message: 'Using Chrome',
+            createdAt: '2026-07-18T12:00:00.000Z',
+        })
+        source.message({
+            type: 'completed',
+            output: { personName: 'Ada Lovelace' },
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Using Chrome')
+            expect(root.textContent).toContain('Ada Lovelace')
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
+                false,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to selected job post"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
+                true,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                false,
+            )
+        })
+    })
+
+    it('shows and resolves a required LinkedIn permission without starting another task', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Find engineering contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const source = FakeEventSource.instances[0]!
+        source.message(linkedInActionRequired)
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Action required')
+            expect(root.textContent).toContain('Allow Chrome to access https://www.linkedin.com?')
+            expect(root.querySelector('textarea')).toBeNull()
+            expect(root.querySelector('[aria-label="Back to selected job post"]')).toBeNull()
+        })
+
+        findButton(root, 'Allow for this task').click()
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                4,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/actions/${linkedInActionId}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: 'approve' }),
+                },
+            )
+        })
+        expect(FakeEventSource.instances).toHaveLength(1)
+
+        source.message({
+            type: 'action-resolved',
+            actionId: linkedInActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(root.textContent).not.toContain('Allow Chrome to access')
+        })
+    })
+
+    it('keeps a pending outreach action available after the Apply view remounts', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(posts))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Find engineering contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        FakeEventSource.instances[0]!.message(linkedInActionRequired)
+
+        const mounted = mountedApps.pop()!
+        mounted.app.unmount()
+        mounted.root.remove()
+
+        const remountedRoot = await mountApplyView(pinia)
+
+        await vi.waitFor(() => {
+            expect(remountedRoot.textContent).toContain('Allow Chrome to access')
+            expect(
+                remountedRoot.querySelector('.apply-outreach')?.classList.contains('is-active'),
+            ).toBe(true)
         })
     })
 

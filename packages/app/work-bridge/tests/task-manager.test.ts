@@ -1,6 +1,15 @@
-import type { StartWorkTaskInput, WorkCapability } from '@job-search-facilitator/core'
+import type {
+    StartWorkTaskInput,
+    WorkActionDecision,
+    WorkCapability,
+} from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import type { AppServerNotification, StartedWorkTask, WorkRuntime } from '../src/app-server.ts'
+import type {
+    AppServerNotification,
+    StartedWorkTask,
+    WorkRuntime,
+    WorkRuntimeAction,
+} from '../src/app-server.ts'
 import { WorkTaskManager } from '../src/task-manager.ts'
 
 class FakeRuntime implements WorkRuntime {
@@ -12,6 +21,14 @@ class FakeRuntime implements WorkRuntime {
 
     async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
         return { threadId: 'thread-id', turnId: 'turn-id' }
+    }
+
+    resolveAction(_actionId: string, _decision: WorkActionDecision): boolean {
+        return false
+    }
+
+    onActionRequired(_listener: (action: WorkRuntimeAction) => void): () => void {
+        return () => {}
     }
 
     onNotification(listener: (notification: AppServerNotification) => void): () => void {
@@ -84,12 +101,17 @@ describe('Work task manager', () => {
             output: { contacts: [] },
         })
         expect(connection?.events).toEqual([
-            expect.objectContaining({ type: 'activity', message: 'Task started' }),
+            {
+                id: 1,
+                event: expect.objectContaining({ type: 'activity', message: 'Task started' }),
+            },
         ])
-        expect(manager.connect(started.id, () => {})?.events.map(({ type }) => type)).toEqual([
-            'activity',
-            'message',
-            'completed',
+        expect(
+            manager.connect(started.id, () => {})?.events.map(({ id, event }) => [id, event.type]),
+        ).toEqual([
+            [1, 'activity'],
+            [2, 'message'],
+            [3, 'completed'],
         ])
     })
 

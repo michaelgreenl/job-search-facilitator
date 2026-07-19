@@ -2,14 +2,23 @@
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { shallowRef } from 'vue'
 
-defineProps<{
-    post: JobPost
-    labelUpdating: boolean
-    labelError: string | null
-}>()
+withDefaults(
+    defineProps<{
+        post: JobPost
+        labelUpdating: boolean
+        labelError: string | null
+        showOutreachAction?: boolean
+        outreachDisabled?: boolean
+    }>(),
+    {
+        showOutreachAction: false,
+        outreachDisabled: false,
+    },
+)
 
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
+    startOutreach: []
 }>()
 
 const selectedLabel = shallowRef<UserLabel | ''>('')
@@ -47,15 +56,27 @@ function updateLabel() {
         </div>
 
         <div class="post-actions">
-            <a
-                class="open-post-button"
-                :href="post.applicationUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                :aria-label="`Open ${post.roleTitle} in a new tab`"
-            >
-                Open post ↗
-            </a>
+            <div class="primary-actions">
+                <a
+                    class="post-action-button"
+                    :href="post.applicationUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :aria-label="`Open ${post.roleTitle} in a new tab`"
+                >
+                    Open post ↗
+                </a>
+
+                <button
+                    v-if="showOutreachAction"
+                    class="post-action-button"
+                    type="button"
+                    :disabled="outreachDisabled"
+                    @click="emit('startOutreach')"
+                >
+                    Find engineering contact
+                </button>
+            </div>
 
             <label class="label-picker">
                 <span class="select-field">
@@ -130,17 +151,31 @@ function updateLabel() {
     justify-content: space-between;
 }
 
-.open-post-button {
+.primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+}
+
+.post-action-button {
     padding: $space-2 $space-3;
     color: $color-ink;
+    font: inherit;
     font-weight: 650;
+    cursor: pointer;
     text-decoration: none;
     background: #af8de2;
+    border: 0;
     border-radius: $radius-md;
 
     &:hover,
     &:focus-visible {
         background: $color-signal;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.55;
     }
 }
 

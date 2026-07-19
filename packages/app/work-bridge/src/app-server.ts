@@ -1,6 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { createInterface, type Interface } from 'node:readline'
-import type { JsonObject, StartWorkTaskInput, WorkCapability } from '@job-search-facilitator/core'
+import type {
+    JsonObject,
+    StartWorkTaskInput,
+    WorkActionDecision,
+    WorkActionRequired,
+    WorkCapability,
+} from '@job-search-facilitator/core'
 
 type RpcId = number | string
 
@@ -42,6 +49,12 @@ interface PendingRequest {
     reject: (error: Error) => void
 }
 
+interface PendingAction {
+    requestId: RpcId
+    action: WorkRuntimeAction
+    decision: WorkActionDecision | null
+}
+
 type SpawnProcess = (
     command: string,
     args: string[],
@@ -53,9 +66,16 @@ export interface StartedWorkTask {
     turnId: string
 }
 
+export interface WorkRuntimeAction extends WorkActionRequired {
+    threadId: string
+    turnId: string | null
+}
+
 export interface WorkRuntime {
     readonly capabilities: WorkCapability[]
     startTask(taskId: string, input: StartWorkTaskInput): Promise<StartedWorkTask>
+    resolveAction(actionId: string, decision: WorkActionDecision): boolean
+    onActionRequired(listener: (action: WorkRuntimeAction) => void): () => void
     onNotification(listener: (notification: AppServerNotification) => void): () => void
     onExit(listener: (error: Error) => void): () => void
 }
@@ -67,17 +87,59 @@ const pluginIds = {
 const isObject = (value: unknown): value is JsonObject =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
 
+const stringValue = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+
+const rpcIdValue = (value: unknown): RpcId | null =>
+    typeof value === 'string' || typeof value === 'number' ? value : null
+
+const rpcIdKey = (id: RpcId) => `${typeof id}:${id}`
+
+const browserOriginAction = (params: unknown): WorkRuntimeAction | null => {
+    if (!isObject(params)) {
+        return null
+    }
+
+    const meta = isObject(params._meta) ? params._meta : isObject(params.meta) ? params.meta : null
+    const threadId = stringValue(params.threadId)
+    const turnId = params.turnId === null ? null : stringValue(params.turnId)
+    const message = stringValue(params.message)
+    const origin = meta === null ? null : stringValue(meta.origin)
+
+    if (
+        meta === null ||
+        meta.connector_id !== 'browser-use' ||
+        meta.tool_name !== 'access_browser_origin' ||
+        threadId === null ||
+        message === null ||
+        origin === null
+    ) {
+        return null
+    }
+
+    return {
+        id: randomUUID(),
+        kind: 'browser-origin',
+        threadId,
+        turnId,
+        message,
+        origin,
+    }
+}
+
 export class CodexAppServer implements WorkRuntime {
     private process: ChildProcessWithoutNullStreams | null = null
     private output: Interface | null = null
     private requestId = 0
     private readonly pendingRequests = new Map<RpcId, PendingRequest>()
+    private readonly pendingActions = new Map<string, PendingAction>()
+    private readonly actionIdsByRequest = new Map<string, string>()
     private readonly capabilityRoots = new Map<WorkCapability, string>()
     private readonly queuedNotifications: AppServerNotification[] = []
     private notificationFlushScheduled = false
     private readonly notificationListeners = new Set<
         (notification: AppServerNotification) => void
     >()
+    private readonly actionListeners = new Set<(action: WorkRuntimeAction) => void>()
     private readonly exitListeners = new Set<(error: Error) => void>()
 
     constructor(
@@ -122,6 +184,7 @@ export class CodexAppServer implements WorkRuntime {
                 },
                 capabilities: {
                     experimentalApi: true,
+                    mcpServerOpenaiFormElicitation: true,
                     requestAttestation: false,
                 },
             })
@@ -148,7 +211,16 @@ export class CodexAppServer implements WorkRuntime {
         })
         const { thread } = await this.request<ThreadStartResponse>('thread/start', {
             cwd: this.cwd,
-            approvalPolicy: 'never',
+            approvalPolicy: {
+                granular: {
+                    sandbox_approval: false,
+                    rules: false,
+                    skill_approval: false,
+                    request_permissions: false,
+                    mcp_elicitations: true,
+                },
+            },
+            approvalsReviewer: 'user',
             sandbox: 'read-only',
             threadSource: 'job-search-facilitator',
             selectedCapabilityRoots,
@@ -161,6 +233,35 @@ export class CodexAppServer implements WorkRuntime {
         })
 
         return { threadId: thread.id, turnId: turn.id }
+    }
+
+    resolveAction(actionId: string, decision: WorkActionDecision): boolean {
+        const pending = this.pendingActions.get(actionId)
+
+        if (pending === undefined) {
+            return false
+        }
+
+        if (pending.decision !== null) {
+            return pending.decision === decision
+        }
+
+        this.send({
+            id: pending.requestId,
+            result: {
+                action: decision === 'approve' ? 'accept' : 'decline',
+                content: null,
+                _meta: null,
+            },
+        })
+        pending.decision = decision
+
+        return true
+    }
+
+    onActionRequired(listener: (action: WorkRuntimeAction) => void): () => void {
+        this.actionListeners.add(listener)
+        return () => this.actionListeners.delete(listener)
     }
 
     onNotification(listener: (notification: AppServerNotification) => void): () => void {
@@ -180,6 +281,8 @@ export class CodexAppServer implements WorkRuntime {
         this.output = null
         child?.kill()
         this.rejectPending(new Error('Work runtime closed'))
+        this.pendingActions.clear()
+        this.actionIdsByRequest.clear()
     }
 
     private async loadCapabilities(): Promise<void> {
@@ -249,7 +352,23 @@ export class CodexAppServer implements WorkRuntime {
         if (rpcMessage.method !== undefined && hasId) {
             this.handleServerRequest(rpcMessage)
         } else if (rpcMessage.method !== undefined) {
-            const params = isObject(rpcMessage.params) ? rpcMessage.params : {}
+            let params = isObject(rpcMessage.params) ? rpcMessage.params : {}
+
+            if (rpcMessage.method === 'serverRequest/resolved') {
+                const requestId = rpcIdValue(params.requestId)
+
+                if (requestId !== null) {
+                    const requestKey = rpcIdKey(requestId)
+                    const actionId = this.actionIdsByRequest.get(requestKey)
+
+                    if (actionId !== undefined) {
+                        this.pendingActions.delete(actionId)
+                        this.actionIdsByRequest.delete(requestKey)
+                        params = { ...params, actionId }
+                    }
+                }
+            }
+
             this.queueNotification({ method: rpcMessage.method, params })
         } else if (hasId && rpcMessage.id !== undefined) {
             const pending = this.pendingRequests.get(rpcMessage.id)
@@ -271,6 +390,25 @@ export class CodexAppServer implements WorkRuntime {
     private handleServerRequest(message: RpcMessage): void {
         if (message.id === undefined || message.method === undefined) {
             return
+        }
+
+        if (message.method === 'mcpServer/elicitation/request') {
+            const action = browserOriginAction(message.params)
+
+            if (action !== null) {
+                this.pendingActions.set(action.id, {
+                    requestId: message.id,
+                    action,
+                    decision: null,
+                })
+                this.actionIdsByRequest.set(rpcIdKey(message.id), action.id)
+                setImmediate(() => {
+                    for (const listener of this.actionListeners) {
+                        listener(action)
+                    }
+                })
+                return
+            }
         }
 
         let result: JsonObject | null = null
@@ -329,6 +467,8 @@ export class CodexAppServer implements WorkRuntime {
         this.output = null
         child.kill()
         this.rejectPending(error)
+        this.pendingActions.clear()
+        this.actionIdsByRequest.clear()
 
         for (const listener of this.exitListeners) {
             listener(error)

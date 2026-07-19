@@ -114,9 +114,28 @@ describe('Codex app server client', () => {
         expect(fake.requests).toContainEqual({ method: 'initialized' })
         expect(fake.requests).toContainEqual(
             expect.objectContaining({
+                method: 'initialize',
+                params: expect.objectContaining({
+                    capabilities: expect.objectContaining({
+                        mcpServerOpenaiFormElicitation: true,
+                    }),
+                }),
+            }),
+        )
+        expect(fake.requests).toContainEqual(
+            expect.objectContaining({
                 method: 'thread/start',
                 params: expect.objectContaining({
-                    approvalPolicy: 'never',
+                    approvalPolicy: {
+                        granular: {
+                            sandbox_approval: false,
+                            rules: false,
+                            skill_approval: false,
+                            request_permissions: false,
+                            mcp_elicitations: true,
+                        },
+                    },
+                    approvalsReviewer: 'user',
                     sandbox: 'read-only',
                     selectedCapabilityRoots: [
                         {
@@ -159,6 +178,68 @@ describe('Codex app server client', () => {
         await new Promise((resolve) => setImmediate(resolve))
 
         expect(fake.requests).toContainEqual({ id: 99, result: { decision: 'decline' } })
+
+        runtime.close()
+    })
+
+    it('resumes a browser-origin request after the client approves it', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+        const actions: Array<{ id: string; message: string; origin: string }> = []
+        const notifications: Array<{ method: string; params: Record<string, unknown> }> = []
+
+        runtime.onActionRequired((action) => actions.push(action))
+        runtime.onNotification((notification) => notifications.push(notification))
+        await runtime.start()
+        fake.respond({
+            id: 99,
+            method: 'mcpServer/elicitation/request',
+            params: {
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                serverName: 'node_repl',
+                mode: 'openai/form',
+                message: 'Allow Chrome to access https://www.linkedin.com?',
+                requestedSchema: {},
+                _meta: {
+                    connector_id: 'browser-use',
+                    tool_name: 'access_browser_origin',
+                    origin: 'https://www.linkedin.com',
+                },
+            },
+        })
+
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(actions).toHaveLength(1)
+        expect(actions[0]).toMatchObject({
+            message: 'Allow Chrome to access https://www.linkedin.com?',
+            origin: 'https://www.linkedin.com',
+        })
+        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(true)
+        expect(fake.requests).toContainEqual({
+            id: 99,
+            result: { action: 'accept', content: null, _meta: null },
+        })
+        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(true)
+        expect(runtime.resolveAction(actions[0]!.id, 'decline')).toBe(false)
+        expect(fake.requests.filter(({ id }) => id === 99)).toHaveLength(1)
+
+        fake.respond({
+            method: 'serverRequest/resolved',
+            params: { threadId: 'thread-id', requestId: 99 },
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(notifications).toContainEqual({
+            method: 'serverRequest/resolved',
+            params: {
+                threadId: 'thread-id',
+                requestId: 99,
+                actionId: actions[0]!.id,
+            },
+        })
+        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(false)
 
         runtime.close()
     })

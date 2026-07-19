@@ -1,10 +1,10 @@
-import type { WorkCapability, WorkTaskEvent } from '@job-search-facilitator/core'
+import type { WorkCapability } from '@job-search-facilitator/core'
 import { WORK_CAPABILITIES } from '@job-search-facilitator/core'
 import { ACCEPTED, BAD_REQUEST, NOT_FOUND, SERVER_ERROR } from '@job-search-facilitator/utils'
 import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
-import type { WorkTaskManager } from './task-manager.ts'
+import type { WorkTaskManager, WorkTaskStreamEvent } from './task-manager.ts'
 
 const startWorkTaskInputSchema = z.strictObject({
     prompt: z.string().trim().min(1),
@@ -13,11 +13,13 @@ const startWorkTaskInputSchema = z.strictObject({
 })
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })
+const taskActionParamsSchema = z.strictObject({ id: z.uuid(), actionId: z.uuid() })
+const taskActionInputSchema = z.strictObject({ decision: z.enum(['approve', 'decline']) })
 
 const taskNotFound = { error: 'Work task not found' }
 
-const sendEvent = (response: express.Response, event: WorkTaskEvent) => {
-    response.write(`data: ${JSON.stringify(event)}\n\n`)
+const sendEvent = (response: express.Response, { id, event }: WorkTaskStreamEvent) => {
+    response.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
 }
 
 export const createApp = (
@@ -69,10 +71,28 @@ export const createApp = (
         response.json(task)
     })
 
+    app.post('/tasks/:id/actions/:actionId', (request, response) => {
+        const params = taskActionParamsSchema.safeParse(request.params)
+        const input = taskActionInputSchema.safeParse(request.body)
+
+        if (!params.success || !input.success) {
+            response.status(BAD_REQUEST).json({ error: 'Invalid request' })
+            return
+        }
+
+        if (!taskManager.resolveAction(params.data.id, params.data.actionId, input.data.decision)) {
+            response.status(NOT_FOUND).json({ error: 'Work action not found' })
+            return
+        }
+
+        response.status(ACCEPTED).json({ status: 'accepted' })
+    })
+
     app.get('/tasks/:id/events', (request, response) => {
         const params = taskIdParamsSchema.safeParse(request.params)
+        const lastEventId = Number(request.get('Last-Event-ID') ?? 0)
 
-        if (!params.success) {
+        if (!params.success || !Number.isSafeInteger(lastEventId) || lastEventId < 0) {
             response.status(BAD_REQUEST).json({ error: 'Invalid request' })
             return
         }
@@ -90,14 +110,18 @@ export const createApp = (
         response.flushHeaders()
 
         let unsubscribe = () => {}
-        const connection = taskManager.connect(params.data.id, (event) => {
-            sendEvent(response, event)
+        const connection = taskManager.connect(
+            params.data.id,
+            (streamEvent) => {
+                sendEvent(response, streamEvent)
 
-            if (event.type === 'completed' || event.type === 'failed') {
-                unsubscribe()
-                response.end()
-            }
-        })
+                if (streamEvent.event.type === 'completed' || streamEvent.event.type === 'failed') {
+                    unsubscribe()
+                    response.end()
+                }
+            },
+            lastEventId,
+        )
 
         if (connection === null) {
             response.end()

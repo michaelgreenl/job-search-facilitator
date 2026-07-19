@@ -11,9 +11,9 @@ const showNav = ref(false)
         @mouseenter="showNav = true"
         @mouseleave="showNav = false"
     >
-        <a class="brand" href="/" aria-label="Job Search Facilitator home">
+        <RouterLink class="brand" to="/" aria-label="Job Search Facilitator home">
             <span class="brand-mark" aria-hidden="true">JF</span>
-        </a>
+        </RouterLink>
 
         <div v-if="showNav" class="nav-links">
             <RouterLink class="link" to="/">Review</RouterLink>

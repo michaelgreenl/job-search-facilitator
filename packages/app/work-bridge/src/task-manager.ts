@@ -2,23 +2,31 @@ import { randomUUID } from 'node:crypto'
 import type {
     JsonObject,
     StartWorkTaskInput,
+    WorkActionDecision,
+    WorkActionRequired,
     WorkTask,
     WorkTaskEvent,
 } from '@job-search-facilitator/core'
-import type { AppServerNotification, WorkRuntime } from './app-server.ts'
+import type { AppServerNotification, WorkRuntime, WorkRuntimeAction } from './app-server.ts'
 
 interface StoredTask extends WorkTask {
     capabilities: StartWorkTaskInput['capabilities']
-    events: WorkTaskEvent[]
-    listeners: Set<(event: WorkTaskEvent) => void>
+    events: WorkTaskStreamEvent[]
+    listeners: Set<(event: WorkTaskStreamEvent) => void>
     messagePhases: Map<string, string | null>
     finalMessages: string[]
+    pendingAction: WorkActionRequired | null
 }
 
 export interface WorkTaskConnection {
     task: WorkTask
-    events: WorkTaskEvent[]
+    events: WorkTaskStreamEvent[]
     unsubscribe: () => void
+}
+
+export interface WorkTaskStreamEvent {
+    id: number
+    event: WorkTaskEvent
 }
 
 const isObject = (value: unknown): value is JsonObject =>
@@ -32,6 +40,7 @@ const publicTask = ({
     listeners: _listeners,
     messagePhases: _messagePhases,
     finalMessages: _finalMessages,
+    pendingAction: _pendingAction,
     ...task
 }: StoredTask): WorkTask => task
 
@@ -39,6 +48,7 @@ export class WorkTaskManager {
     private readonly tasks = new Map<string, StoredTask>()
 
     constructor(private readonly runtime: WorkRuntime) {
+        runtime.onActionRequired((action) => this.handleActionRequired(action))
         runtime.onNotification((notification) => this.handleNotification(notification))
         runtime.onExit((error) => {
             for (const task of this.tasks.values()) {
@@ -64,6 +74,7 @@ export class WorkTaskManager {
             listeners: new Set(),
             messagePhases: new Map(),
             finalMessages: [],
+            pendingAction: null,
         }
 
         this.tasks.set(id, task)
@@ -82,7 +93,21 @@ export class WorkTaskManager {
         return task === undefined ? null : publicTask(task)
     }
 
-    connect(id: string, listener: (event: WorkTaskEvent) => void): WorkTaskConnection | null {
+    resolveAction(id: string, actionId: string, decision: WorkActionDecision): boolean {
+        const task = this.tasks.get(id)
+
+        if (task?.pendingAction?.id !== actionId) {
+            return false
+        }
+
+        return this.runtime.resolveAction(actionId, decision)
+    }
+
+    connect(
+        id: string,
+        listener: (event: WorkTaskStreamEvent) => void,
+        afterEventId = 0,
+    ): WorkTaskConnection | null {
         const task = this.tasks.get(id)
 
         if (task === undefined) {
@@ -93,13 +118,33 @@ export class WorkTaskManager {
 
         return {
             task: publicTask(task),
-            events: [...task.events],
+            events: task.events.filter(({ id: eventId }) => eventId > afterEventId),
             unsubscribe: () => task.listeners.delete(listener),
         }
     }
 
     private handleNotification({ method, params }: AppServerNotification): void {
         const threadId = stringValue(params.threadId)
+
+        if (method === 'serverRequest/resolved') {
+            const actionId = stringValue(params.actionId)
+            const task = [...this.tasks.values()].find(
+                (candidate) =>
+                    candidate.threadId === threadId && candidate.pendingAction?.id === actionId,
+            )
+
+            if (task !== undefined && actionId !== null) {
+                task.pendingAction = null
+                this.emit(task, {
+                    type: 'action-resolved',
+                    actionId,
+                    createdAt: new Date().toISOString(),
+                })
+            }
+
+            return
+        }
+
         const turnId =
             stringValue(params.turnId) ?? stringValue((params.turn as JsonObject | undefined)?.id)
 
@@ -139,6 +184,27 @@ export class WorkTaskManager {
         } else if (method === 'turn/completed') {
             this.completeTurn(task, params.turn)
         }
+    }
+
+    private handleActionRequired({ threadId, turnId, ...action }: WorkRuntimeAction): void {
+        const task = [...this.tasks.values()].find(
+            (candidate) =>
+                candidate.threadId === threadId &&
+                (turnId === null || candidate.turnId === turnId) &&
+                candidate.status === 'running',
+        )
+
+        if (task === undefined || task.pendingAction !== null) {
+            this.runtime.resolveAction(action.id, 'decline')
+            return
+        }
+
+        task.pendingAction = action
+        this.emit(task, {
+            type: 'action-required',
+            action,
+            createdAt: new Date().toISOString(),
+        })
     }
 
     private handleItemStarted(task: StoredTask, value: unknown): void {
@@ -206,6 +272,7 @@ export class WorkTaskManager {
 
             task.status = 'completed'
             task.output = output
+            task.pendingAction = null
             this.emit(task, { type: 'completed', output, createdAt: new Date().toISOString() })
         } catch {
             this.fail(task, 'Work task returned invalid structured output')
@@ -219,14 +286,16 @@ export class WorkTaskManager {
     private fail(task: StoredTask, error: string): void {
         task.status = 'failed'
         task.error = error
+        task.pendingAction = null
         this.emit(task, { type: 'failed', error, createdAt: new Date().toISOString() })
     }
 
     private emit(task: StoredTask, event: WorkTaskEvent): void {
-        task.events.push(event)
+        const streamEvent = { id: (task.events.at(-1)?.id ?? 0) + 1, event }
+        task.events.push(streamEvent)
 
         for (const listener of task.listeners) {
-            listener(event)
+            listener(streamEvent)
         }
     }
 }
