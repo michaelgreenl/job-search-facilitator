@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import type { WorkActionDecision } from '@job-search-facilitator/core'
+import type { JobPost, WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
+import OutreachDraft from '@/components/OutreachDraft.vue'
+import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
+import { createDraftTask } from '@/work-tasks'
 
-defineProps<{ company: string }>()
+const props = defineProps<{ post: JobPost }>()
 
 const workStore = useWorkStore()
+const outreachStore = useOutreachStore()
 const { actionSubmitting, connectionState, error, events, pendingAction, task } =
     storeToRefs(workStore)
+const { assistantReply, contact, draft, panelView, resultError, taskKind } =
+    storeToRefs(outreachStore)
+const draftRequest = shallowRef('')
+const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 
 const activities = computed(() =>
     events.value.flatMap((event) => (event.type === 'activity' ? [event.message] : [])),
@@ -16,41 +24,16 @@ const activities = computed(() =>
 const commentary = computed(() =>
     events.value.flatMap((event) => (event.type === 'message' ? [event.textDelta] : [])).join(''),
 )
-
-const outputText = (key: string) => {
-    const value = task.value?.output?.[key]
-
-    return typeof value === 'string' && value.trim() ? value : null
-}
-
-const personName = computed(() => outputText('personName'))
-const personTitle = computed(() => outputText('personTitle'))
-const relevanceRationale = computed(() => outputText('relevanceRationale'))
-const profileUrl = computed(() => {
-    const value = outputText('profileUrl')
-
-    if (value === null) {
-        return null
-    }
-
-    try {
-        const url = new URL(value)
-        const isLinkedIn = url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com')
-
-        return url.protocol === 'https:' && isLinkedIn && url.pathname.startsWith('/in/')
-            ? url.href
-            : null
-    } catch {
-        return null
-    }
-})
+const running = computed(() =>
+    ['connecting', 'connected', 'reconnecting'].includes(connectionState.value),
+)
 const status = computed(() => {
     if (pendingAction.value !== null) {
         return 'Action required before Work can continue.'
     }
 
     if (task.value?.status === 'completed') {
-        return personName.value === null ? 'Work completed without a contact.' : 'Contact found.'
+        return resultError.value === null ? 'Draft ready.' : 'Work completed.'
     }
 
     if (task.value?.status === 'failed') {
@@ -59,46 +42,114 @@ const status = computed(() => {
 
     switch (connectionState.value) {
         case 'connecting':
-            return 'Starting outreach task…'
+            return taskKind.value === 'draft' ? 'Starting draft task…' : 'Starting outreach task…'
         case 'connected':
-            return 'Searching LinkedIn…'
+            return taskKind.value === 'draft' ? 'Updating draft…' : 'Searching LinkedIn…'
         case 'reconnecting':
             return 'Connection interrupted. Retrying…'
         default:
             return 'Preparing outreach task…'
     }
 })
-const issue = computed(() => error.value ?? task.value?.error ?? null)
+const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+
+watch(
+    task,
+    (currentTask) => {
+        if (currentTask?.status === 'completed' && currentTask.output !== null) {
+            outreachStore.applyTaskResult(currentTask.output)
+        }
+    },
+    { immediate: true },
+)
+
+watch(draft, () => {
+    copyState.value = 'idle'
+})
 
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
+}
+
+function togglePanelView() {
+    panelView.value = panelView.value === 'draft' ? 'stream' : 'draft'
+}
+
+function submitDraftRequest() {
+    const request = draftRequest.value.trim()
+
+    if (contact.value === null || !draft.value.trim() || !request || running.value) {
+        return
+    }
+
+    outreachStore.beginDraft()
+    void workStore
+        .startTask(createDraftTask(props.post, contact.value, draft.value, request))
+        .then(() => {
+            draftRequest.value = ''
+        })
+        .catch(() => undefined)
+}
+
+async function copyDraft() {
+    if (!draft.value.trim()) {
+        return
+    }
+
+    try {
+        await navigator.clipboard.writeText(draft.value)
+        copyState.value = 'copied'
+    } catch {
+        copyState.value = 'failed'
+    }
 }
 </script>
 
 <template>
     <section class="outreach-panel" aria-labelledby="outreach-title">
         <header class="outreach-heading">
-            <span class="eyebrow">Outreach search</span>
-            <h2 id="outreach-title" class="outreach-title">{{ company }}</h2>
+            <div class="outreach-heading-copy">
+                <span class="eyebrow">Outreach</span>
+                <h2 id="outreach-title" class="outreach-title">{{ post.company }}</h2>
+            </div>
+            <button v-if="contact" class="view-toggle" type="button" @click="togglePanelView">
+                {{ panelView === 'draft' ? 'Show agent stream' : 'Back to draft' }}
+            </button>
         </header>
 
-        <p class="outreach-status" aria-live="polite">{{ status }}</p>
-        <p v-if="issue" class="outreach-error" role="alert">{{ issue }}</p>
+        <div v-show="panelView === 'stream'" class="outreach-stream">
+            <p class="outreach-status" aria-live="polite">{{ status }}</p>
+            <p v-if="issue" class="outreach-error" role="alert">{{ issue }}</p>
 
-        <div class="outreach-progress">
-            <ul
-                v-if="activities.length"
-                class="activity-list"
-                aria-label="Work activity"
-                role="log"
-            >
-                <li v-for="(activity, index) in activities" :key="`${index}:${activity}`">
-                    {{ activity }}
-                </li>
-            </ul>
+            <div class="outreach-progress">
+                <ul
+                    v-if="activities.length"
+                    class="activity-list"
+                    aria-label="Work activity"
+                    role="log"
+                >
+                    <li v-for="(activity, index) in activities" :key="`${index}:${activity}`">
+                        {{ activity }}
+                    </li>
+                </ul>
 
-            <p v-if="commentary" class="commentary">{{ commentary }}</p>
+                <p v-if="commentary" class="commentary">{{ commentary }}</p>
+            </div>
         </div>
+
+        <template v-if="contact">
+            <OutreachDraft
+                v-show="panelView === 'draft'"
+                v-model:draft="draft"
+                v-model:request="draftRequest"
+                :contact="contact"
+                :assistant-reply="assistantReply"
+                :running="running"
+                :copy-state="copyState"
+                @submit="submitDraftRequest"
+                @copy="copyDraft"
+            />
+        </template>
 
         <section v-if="pendingAction" class="action-required" aria-labelledby="action-title">
             <span class="eyebrow">Action required</span>
@@ -124,24 +175,6 @@ function resolveAction(decision: WorkActionDecision) {
                 </button>
             </div>
         </section>
-
-        <div v-if="personName" class="outreach-result">
-            <span class="eyebrow">Relevant contact</span>
-            <a
-                v-if="profileUrl"
-                class="person-name"
-                :href="profileUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                {{ personName }} ↗
-            </a>
-            <strong v-else class="person-name">{{ personName }}</strong>
-            <span v-if="personTitle" class="person-title">{{ personTitle }}</span>
-            <p v-if="relevanceRationale" class="relevance-rationale">
-                {{ relevanceRationale }}
-            </p>
-        </div>
     </section>
 </template>
 
@@ -155,6 +188,13 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .outreach-heading {
+    display: flex;
+    gap: $space-3;
+    align-items: start;
+    justify-content: space-between;
+}
+
+.outreach-heading-copy {
     display: grid;
     gap: $space-1;
 }
@@ -173,8 +213,7 @@ function resolveAction(decision: WorkActionDecision) {
 .outreach-status,
 .outreach-error,
 .action-message,
-.commentary,
-.relevance-rationale {
+.commentary {
     margin: 0;
 }
 
@@ -190,6 +229,29 @@ function resolveAction(decision: WorkActionDecision) {
 
 .outreach-error {
     color: lighten-color($color-red-600, 20%);
+}
+
+.view-toggle {
+    padding: 0;
+    color: $color-ink-muted;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+    }
+}
+
+.outreach-stream {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: $space-4;
+    min-height: 0;
 }
 
 .action-required {
@@ -262,36 +324,5 @@ function resolveAction(decision: WorkActionDecision) {
 
 .commentary {
     white-space: pre-wrap;
-}
-
-.outreach-result {
-    display: grid;
-    gap: $space-2;
-    padding: $space-4;
-    background: rgb(245 241 251 / 5%);
-    border: 1px solid rgb(221 199 255 / 18%);
-    border-radius: $radius-md;
-}
-
-.person-name {
-    width: fit-content;
-    color: $color-ink;
-    font-size: 1.25rem;
-    font-weight: 700;
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
-}
-
-.person-title,
-.relevance-rationale {
-    color: $color-ink-secondary;
-}
-
-.relevance-rationale {
-    font-size: 0.875rem;
 }
 </style>

@@ -113,6 +113,7 @@ describe('apply view', () => {
             root.remove()
         }
 
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
         vi.unstubAllGlobals()
     })
 
@@ -172,6 +173,11 @@ describe('apply view', () => {
 
     it('finds a relevant outreach contact for the selected job post', async () => {
         const fetchMock = vi.mocked(fetch)
+        const writeText = vi.fn().mockResolvedValue(undefined)
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText },
+        })
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
@@ -204,11 +210,14 @@ describe('apply view', () => {
         expect(taskInput.prompt).toContain('People')
         expect(taskInput.prompt).toContain('likely hiring manager or team lead')
         expect(taskInput.prompt).toContain('not simply the first result')
+        expect(taskInput.prompt).toContain('docs/agents/job-search-user-info.md')
+        expect(taskInput.prompt).toContain('truthful first outreach message')
         expect(taskInput.outputSchema.required).toEqual([
             'personName',
             'personTitle',
             'profileUrl',
             'relevanceRationale',
+            'draftMessage',
         ])
         expect(taskInput.capabilities).toEqual(['chrome'])
 
@@ -227,6 +236,7 @@ describe('apply view', () => {
                 personTitle: 'Engineering Manager',
                 profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
                 relevanceRationale: 'Their Engineering Manager title aligns with this role.',
+                draftMessage: 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             },
             createdAt: '2026-07-18T12:00:01.000Z',
         })
@@ -241,6 +251,10 @@ describe('apply view', () => {
             expect(root.querySelector<HTMLAnchorElement>('.person-name')?.href).toBe(
                 'https://www.linkedin.com/in/ada-lovelace',
             )
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
+            expect(root.querySelector<HTMLElement>('.outreach-stream')?.style.display).toBe('none')
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -250,6 +264,87 @@ describe('apply view', () => {
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
             )
+        })
+
+        findButton(root, 'Copy draft').click()
+        await vi.waitFor(() => {
+            expect(writeText).toHaveBeenCalledExactlyOnceWith(
+                'Hi Ada, I would value your perspective on the P2 Engineer role.',
+            )
+            expect(root.textContent).toContain('Copied')
+        })
+
+        findButton(root, 'Show agent stream').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector<HTMLElement>('.outreach-stream')?.style.display).not.toBe(
+                'none',
+            )
+            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).toBe('none')
+        })
+
+        findButton(root, 'Back to draft').click()
+
+        const draft = root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
+        const request = root.querySelector<HTMLTextAreaElement>('#draft-request')
+
+        if (draft === null || request === null) {
+            throw new Error('Could not find outreach draft fields')
+        }
+
+        draft.value = 'Hi Ada, could I ask about the engineering team?'
+        draft.dispatchEvent(new Event('input'))
+        request.value = 'Make this warmer without making it longer.'
+        request.dispatchEvent(new Event('input'))
+
+        const revisionTask = {
+            ...runningWorkTask,
+            id: '2ab5f86e-b2f8-47ed-a4bc-31f7891eae2f',
+            threadId: 'revision-thread-id',
+            turnId: 'revision-turn-id',
+        }
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
+
+        await vi.waitFor(() => expect(findButton(root, 'Send').disabled).toBe(false))
+        findButton(root, 'Send').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+        const revisionRequest = fetchMock.mock.calls[4]
+        const revisionBody = (revisionRequest?.[1] as RequestInit | undefined)?.body
+
+        expect(typeof revisionBody).toBe('string')
+
+        const revisionInput = JSON.parse(revisionBody as string) as {
+            prompt: string
+            outputSchema: { required: string[] }
+            capabilities: string[]
+        }
+
+        expect(revisionInput.prompt).toContain('P2 Engineer')
+        expect(revisionInput.prompt).toContain('Ada Lovelace')
+        expect(revisionInput.prompt).toContain('Hi Ada, could I ask about the engineering team?')
+        expect(revisionInput.prompt).toContain('Make this warmer without making it longer.')
+        expect(revisionInput.prompt).toContain('asks a question')
+        expect(revisionInput.outputSchema.required).toEqual(['draftMessage', 'response'])
+        expect(revisionInput.capabilities).toEqual([])
+
+        FakeEventSource.instances[1]!.message({
+            type: 'completed',
+            output: {
+                draftMessage: 'Hi Ada, I would love to hear about the engineering team.',
+                response: 'I made the opening warmer and kept it concise.',
+            },
+            createdAt: '2026-07-18T12:00:02.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe('Hi Ada, I would love to hear about the engineering team.')
+            expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
+            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to selected job post"]')?.click()
