@@ -5,7 +5,6 @@ import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
@@ -26,6 +25,7 @@ const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
 )
+const outreachExpanded = shallowRef(false)
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
@@ -56,8 +56,8 @@ const selectedPost = computed(
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
-const workRunning = computed(() =>
-    ['connecting', 'connected', 'reconnecting'].includes(workStore.connectionState),
+const outreachSearching = computed(
+    () => outreachPostId.value !== null && outreachContact.value === null && workStore.taskActive,
 )
 
 watch(
@@ -76,6 +76,7 @@ watch(
 
         if (changed) {
             outreachStore.reset()
+            outreachExpanded.value = false
         }
 
         if (selectedPostId.value === null) {
@@ -93,6 +94,7 @@ function selectPost(postId: string) {
         outreachStore.reset()
     }
 
+    outreachExpanded.value = false
     labelError.value = null
     applicationError.value = null
     activePanel.value = 'viewer'
@@ -104,21 +106,46 @@ function showPosts() {
         outreachStore.reset()
     }
 
+    outreachExpanded.value = false
     activePanel.value = 'posts'
 }
 
 function showViewer() {
+    outreachExpanded.value = false
     activePanel.value = 'viewer'
 }
 
 function startOutreach() {
-    if (selectedPost.value === null || workRunning.value) {
+    if (selectedPost.value === null || workStore.taskActive) {
         return
     }
 
     outreachStore.begin(selectedPost.value.id)
+    outreachExpanded.value = false
     activePanel.value = 'outreach'
     void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
+}
+
+async function cancelOutreach() {
+    const cancelledTask = await workStore.cancelTask().catch(() => null)
+
+    if (cancelledTask?.status !== 'cancelled') {
+        return
+    }
+
+    if (outreachContact.value !== null) {
+        outreachStore.cancelTask()
+        return
+    }
+
+    outreachStore.reset()
+    outreachExpanded.value = false
+    activePanel.value = 'viewer'
+}
+
+function expandOutreach() {
+    outreachExpanded.value = true
+    activePanel.value = 'outreach'
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
@@ -189,7 +216,7 @@ onMounted(() => {
             <FlowPanel
                 class="apply-panel apply-post-list glass-frame"
                 :active="activePanel === 'posts'"
-                :adjacent="activePanel === 'viewer'"
+                :adjacent="activePanel === 'viewer' && outreachContact === null"
                 aria-label="Job posts"
             >
                 <PanelHeading eyebrow="Apply" title="Labeled posts" title-tag="h1">
@@ -234,23 +261,23 @@ onMounted(() => {
                 as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
                 :active="activePanel === 'viewer'"
-                :adjacent="activePanel === 'posts' || activePanel === 'outreach'"
+                :adjacent="
+                    activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
+                "
             >
-                <PanelBackButton
-                    v-if="!workRunning"
-                    label="Back to job posts"
-                    mobile-only
-                    @back="showPosts"
-                />
                 <JobPostViewer
                     :post="selectedPost"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     :application-updating="applicationUpdating"
                     :application-error="applicationError"
+                    :back-label="workStore.taskActive ? null : 'Back to job posts'"
+                    :back-mobile-only="outreachPostId === null"
                     show-outreach-action
-                    :outreach-disabled="workRunning"
+                    :outreach-disabled="workStore.taskActive"
+                    :outreach-loading="outreachSearching"
                     show-applied-option
+                    @back="showPosts"
                     @update-label="updateUserLabel"
                     @start-outreach="startOutreach"
                     @mark-applied="markApplied"
@@ -258,16 +285,24 @@ onMounted(() => {
             </FlowPanel>
 
             <FlowPanel
-                v-if="outreachPost && activePanel === 'outreach'"
+                v-if="outreachPost"
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
                 :class="{
                     'apply-outreach-contact': outreachContact,
                 }"
-                active
-                :adjacent="false"
+                :active="activePanel === 'outreach'"
+                :adjacent="
+                    activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
+                "
             >
-                <OutreachPanel :post="outreachPost" @show-viewer="showViewer" />
+                <OutreachPanel
+                    :post="outreachPost"
+                    :expanded="outreachExpanded"
+                    @cancel="cancelOutreach"
+                    @expand="expandOutreach"
+                    @show-viewer="showViewer"
+                />
             </FlowPanel>
         </div>
     </section>

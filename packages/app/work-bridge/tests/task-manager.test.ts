@@ -14,13 +14,21 @@ import { WorkTaskManager } from '../src/task-manager.ts'
 
 class FakeRuntime implements WorkRuntime {
     readonly capabilities: WorkCapability[] = ['chrome']
+    readonly interruptions: Array<{ threadId: string; turnId: string }> = []
     private readonly notificationListeners = new Set<
         (notification: AppServerNotification) => void
     >()
     private readonly exitListeners = new Set<(error: Error) => void>()
 
+    constructor(private readonly onInterrupt: () => Promise<void> = async () => {}) {}
+
     async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
         return { threadId: 'thread-id', turnId: 'turn-id' }
+    }
+
+    async interruptTask(threadId: string, turnId: string): Promise<void> {
+        this.interruptions.push({ threadId, turnId })
+        await this.onInterrupt()
     }
 
     resolveAction(_actionId: string, _decision: WorkActionDecision): boolean {
@@ -136,6 +144,131 @@ describe('Work task manager', () => {
         expect(manager.get(started.id)).toMatchObject({
             status: 'failed',
             error: 'Work task returned invalid structured output',
+        })
+    })
+
+    it('interrupts a running task and records cancellation as a terminal event', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        const result = await manager.cancel(started.id)
+
+        expect(runtime.interruptions).toEqual([
+            { threadId: started.threadId, turnId: started.turnId },
+        ])
+        expect(result).toMatchObject({
+            accepted: true,
+            task: { status: 'cancelled', output: null, error: null },
+        })
+        expect(manager.connect(started.id, () => {})?.events.at(-1)?.event).toMatchObject({
+            type: 'cancelled',
+        })
+    })
+
+    it('coalesces concurrent cancellation requests', async () => {
+        let finishInterrupt = () => {}
+        const runtime = new FakeRuntime(
+            () =>
+                new Promise<void>((resolve) => {
+                    finishInterrupt = resolve
+                }),
+        )
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        const firstCancellation = manager.cancel(started.id)
+        const secondCancellation = manager.cancel(started.id)
+        finishInterrupt()
+
+        const results = await Promise.all([firstCancellation, secondCancellation])
+
+        expect(runtime.interruptions).toHaveLength(1)
+        expect(results).toEqual([
+            expect.objectContaining({ accepted: true }),
+            expect.objectContaining({ accepted: true }),
+        ])
+        expect(
+            manager
+                .connect(started.id, () => {})
+                ?.events.filter(({ event }) => event.type === 'cancelled'),
+        ).toHaveLength(1)
+    })
+
+    it('keeps a completed result when completion wins the cancellation race', async () => {
+        let rejectInterrupt = (_error: Error) => {}
+        const runtime = new FakeRuntime(
+            () =>
+                new Promise<void>((_resolve, reject) => {
+                    rejectInterrupt = reject
+                }),
+        )
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        const cancellation = manager.cancel(started.id)
+        runtime.notify(
+            'item/completed',
+            params({
+                item: {
+                    type: 'agentMessage',
+                    id: 'final',
+                    phase: 'final_answer',
+                    text: '{"contacts":[]}',
+                },
+            }),
+        )
+        runtime.notify('turn/completed', params({ turn: { status: 'completed' } }))
+        rejectInterrupt(new Error('Turn is no longer active'))
+
+        const result = await cancellation
+
+        expect(result).toMatchObject({
+            accepted: true,
+            task: { status: 'completed', output: { contacts: [] } },
+        })
+        expect(
+            manager
+                .connect(started.id, () => {})
+                ?.events.filter(({ event }) => event.type === 'cancelled'),
+        ).toHaveLength(0)
+    })
+
+    it('keeps a task running when interruption fails before a terminal event', async () => {
+        const runtime = new FakeRuntime(async () => {
+            throw new Error('Could not interrupt turn')
+        })
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        await expect(manager.cancel(started.id)).rejects.toThrow('Could not interrupt turn')
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'running',
+            output: null,
+            error: null,
+        })
+        expect(
+            manager
+                .connect(started.id, () => {})
+                ?.events.filter(({ event }) => event.type === 'cancelled'),
+        ).toHaveLength(0)
+    })
+
+    it('records an interrupted turn as cancelled instead of failed', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        runtime.notify('turn/completed', params({ turn: { status: 'interrupted' } }))
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'cancelled',
+            output: null,
+            error: null,
+        })
+        expect(manager.connect(started.id, () => {})?.events.at(-1)?.event).toMatchObject({
+            type: 'cancelled',
         })
     })
 })

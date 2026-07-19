@@ -8,7 +8,7 @@ import type {
     WorkTaskEvent,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
-import { ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 
 type WorkConnectionState =
     | 'idle'
@@ -63,7 +63,9 @@ const isWorkTaskEvent = (value: unknown): value is WorkTaskEvent => {
         return isObject(value.output)
     }
 
-    return value.type === 'failed' && typeof value.error === 'string'
+    return (
+        value.type === 'cancelled' || (value.type === 'failed' && typeof value.error === 'string')
+    )
 }
 
 const requestWork = async <T>(path: string, init?: RequestInit): Promise<T> => {
@@ -85,13 +87,26 @@ export const useWorkStore = defineStore('work', () => {
     const connectionState = shallowRef<WorkConnectionState>('idle')
     const pendingAction = shallowRef<WorkActionRequired | null>(null)
     const actionSubmitting = shallowRef(false)
+    const cancelling = shallowRef(false)
     const error = shallowRef<string | null>(null)
+    const taskActive = computed(
+        () => connectionState.value === 'connecting' || task.value?.status === 'running',
+    )
     let eventSource: EventSource | null = null
 
     function closeConnection(state: WorkConnectionState) {
         eventSource?.close()
         eventSource = null
         connectionState.value = state
+    }
+
+    function finishTask(currentTask: WorkTask) {
+        task.value = currentTask
+        pendingAction.value = null
+        actionSubmitting.value = false
+        cancelling.value = false
+        error.value = null
+        closeConnection('closed')
     }
 
     function connect(taskId: string) {
@@ -136,17 +151,16 @@ export const useWorkStore = defineStore('work', () => {
                     actionSubmitting.value = false
                     error.value = null
                 } else if (value.type === 'completed' && task.value !== null) {
-                    task.value = { ...task.value, status: 'completed', output: value.output }
-                    pendingAction.value = null
-                    actionSubmitting.value = false
-                    error.value = null
-                    closeConnection('closed')
+                    finishTask({ ...task.value, status: 'completed', output: value.output })
                 } else if (value.type === 'failed' && task.value !== null) {
-                    task.value = { ...task.value, status: 'failed', error: value.error }
-                    pendingAction.value = null
-                    actionSubmitting.value = false
-                    error.value = null
-                    closeConnection('closed')
+                    finishTask({ ...task.value, status: 'failed', error: value.error })
+                } else if (value.type === 'cancelled' && task.value !== null) {
+                    finishTask({
+                        ...task.value,
+                        status: 'cancelled',
+                        output: null,
+                        error: null,
+                    })
                 }
             } catch {
                 error.value = 'Work stream returned invalid data'
@@ -174,6 +188,7 @@ export const useWorkStore = defineStore('work', () => {
         events.value = []
         pendingAction.value = null
         actionSubmitting.value = false
+        cancelling.value = false
         error.value = null
 
         try {
@@ -227,14 +242,46 @@ export const useWorkStore = defineStore('work', () => {
         }
     }
 
+    async function cancelTask() {
+        if (task.value?.status !== 'running' || cancelling.value) {
+            return task.value
+        }
+
+        cancelling.value = true
+        error.value = null
+
+        try {
+            const currentTask = await requestWork<WorkTask>(`/tasks/${task.value.id}/cancel`, {
+                method: 'POST',
+            })
+
+            if (currentTask.status !== 'running') {
+                finishTask(currentTask)
+            } else {
+                task.value = currentTask
+            }
+
+            return currentTask
+        } catch (requestError) {
+            error.value =
+                requestError instanceof Error ? requestError.message : 'Could not cancel Work task'
+            throw requestError
+        } finally {
+            cancelling.value = false
+        }
+    }
+
     return {
         task,
         events,
         connectionState,
+        taskActive,
         pendingAction,
         actionSubmitting,
+        cancelling,
         error,
         startTask,
         resolveAction,
+        cancelTask,
     }
 })

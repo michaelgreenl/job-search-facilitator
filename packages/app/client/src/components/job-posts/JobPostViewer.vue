@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 
@@ -14,6 +15,9 @@ const props = withDefaults(
         showAppliedOption?: boolean
         applicationUpdating?: boolean
         applicationError?: string | null
+        backLabel?: string | null
+        backMobileOnly?: boolean
+        outreachLoading?: boolean
     }>(),
     {
         showOutreachAction: false,
@@ -21,6 +25,9 @@ const props = withDefaults(
         showAppliedOption: false,
         applicationUpdating: false,
         applicationError: null,
+        backLabel: null,
+        backMobileOnly: false,
+        outreachLoading: false,
     },
 )
 
@@ -28,6 +35,7 @@ const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     startOutreach: []
     markApplied: []
+    back: []
 }>()
 
 type LabelSelection = UserLabel | 'applied' | null | ''
@@ -60,6 +68,13 @@ function updateLabel() {
 
 <template>
     <section class="post-viewer" aria-labelledby="selected-post-title">
+        <PanelBackButton
+            v-if="backLabel"
+            :label="backLabel"
+            :mobile-only="backMobileOnly"
+            @back="emit('back')"
+        />
+
         <div class="post-heading">
             <div class="post-labels">
                 <span class="component-label">{{ post.company }}</span>
@@ -120,9 +135,11 @@ function updateLabel() {
                 class="post-action-button"
                 type="button"
                 :disabled="outreachDisabled"
+                :aria-busy="outreachLoading"
                 @click="emit('startOutreach')"
             >
-                Discover outreach
+                <span>Discover outreach</span>
+                <span v-if="outreachLoading" class="outreach-spinner" aria-hidden="true"></span>
             </button>
         </div>
     </section>
@@ -180,6 +197,9 @@ function updateLabel() {
 }
 
 .post-action-button {
+    display: inline-flex;
+    gap: $space-2;
+    align-items: center;
     padding: $space-2 $space-3;
     color: $color-ink;
     font: inherit;
@@ -198,6 +218,21 @@ function updateLabel() {
     &:disabled {
         cursor: wait;
         opacity: 0.55;
+    }
+}
+
+.outreach-spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+    border: 2px solid rgb(20 15 27 / 28%);
+    border-top-color: $color-night;
+    border-radius: 50%;
+    animation: outreach-spin 0.8s linear infinite;
+}
+
+@keyframes outreach-spin {
+    to {
+        transform: rotate(1turn);
     }
 }
 

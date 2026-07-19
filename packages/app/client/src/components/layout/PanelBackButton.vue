@@ -3,9 +3,11 @@ withDefaults(
     defineProps<{
         label: string
         mobileOnly?: boolean
+        disabled?: boolean
     }>(),
     {
         mobileOnly: false,
+        disabled: false,
     },
 )
 
@@ -20,6 +22,7 @@ const emit = defineEmits<{
         :class="{ 'back-button-mobile-only': mobileOnly }"
         type="button"
         :aria-label="label"
+        :disabled="disabled"
         @click="emit('back')"
     >
         ←
@@ -39,6 +42,11 @@ const emit = defineEmits<{
     &:hover,
     &:focus-visible {
         color: $color-signal-light;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.5;
     }
 
     &-mobile-only {

@@ -7,10 +7,22 @@ import { useWorkStore } from '@/stores/work.store'
 defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
-const { actionSubmitting, events, pendingAction } = storeToRefs(workStore)
+const { actionSubmitting, events, pendingAction, taskActive } = storeToRefs(workStore)
 
 const activities = computed(() =>
-    events.value.flatMap((event) => (event.type === 'activity' ? [event.message] : [])),
+    events.value.flatMap((event) =>
+        event.type === 'activity'
+            ? [
+                  {
+                      message: event.message,
+                      icon:
+                          event.message === 'Using Chrome' || event.message === 'Searching the web'
+                              ? ('globe' as const)
+                              : ('tool' as const),
+                  },
+              ]
+            : [],
+    ),
 )
 
 function resolveAction(decision: WorkActionDecision) {
@@ -29,8 +41,35 @@ function resolveAction(decision: WorkActionDecision) {
                 aria-label="Work activity"
                 role="log"
             >
-                <li v-for="(activity, index) in activities" :key="`${index}:${activity}`">
-                    {{ activity }}
+                <li
+                    v-for="(activity, index) in activities"
+                    :key="`${index}:${activity.message}`"
+                    class="activity-item"
+                >
+                    <svg
+                        class="activity-icon"
+                        :class="`activity-icon-${activity.icon}`"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <template v-if="activity.icon === 'globe'">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                        </template>
+                        <path
+                            v-else
+                            d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"
+                        />
+                    </svg>
+                    <span>{{ activity.message }}</span>
+                    <span
+                        v-if="
+                            taskActive && pendingAction === null && index === activities.length - 1
+                        "
+                        class="activity-progress"
+                        aria-hidden="true"
+                        >...</span
+                    >
                 </li>
             </ul>
         </div>
@@ -82,6 +121,7 @@ function resolveAction(decision: WorkActionDecision) {
 
 .work-progress {
     display: grid;
+    flex: 1;
     gap: $space-3;
     min-height: 0;
     overflow-y: auto;
@@ -92,9 +132,38 @@ function resolveAction(decision: WorkActionDecision) {
     display: grid;
     gap: $space-1;
     margin: 0;
-    padding-left: $space-5;
+    padding: 0;
     color: $color-ink-muted;
     font-size: 0.8125rem;
+    list-style: none;
+}
+
+.activity-item {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+}
+
+.activity-icon {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+}
+
+.activity-progress {
+    letter-spacing: 0.08em;
+    animation: activity-blink 1.1s steps(2, end) infinite;
+}
+
+@keyframes activity-blink {
+    50% {
+        opacity: 0.2;
+    }
 }
 
 .action-required {

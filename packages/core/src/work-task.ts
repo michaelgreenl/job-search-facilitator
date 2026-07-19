@@ -23,7 +23,7 @@ export interface StartWorkTaskInput {
 
 export interface WorkTask {
     id: string
-    status: 'running' | 'completed' | 'failed'
+    status: 'running' | 'completed' | 'failed' | 'cancelled'
     threadId: string
     turnId: string
     output: JsonObject | null
@@ -37,3 +37,4 @@ export type WorkTaskEvent =
     | { type: 'action-resolved'; actionId: string; createdAt: IsoDateTime }
     | { type: 'completed'; output: JsonObject; createdAt: IsoDateTime }
     | { type: 'failed'; error: string; createdAt: IsoDateTime }
+    | { type: 'cancelled'; createdAt: IsoDateTime }

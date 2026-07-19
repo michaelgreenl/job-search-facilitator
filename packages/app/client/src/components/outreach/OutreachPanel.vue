@@ -10,23 +10,25 @@ import { createDraftTask } from '@/work-tasks'
 
 import OutreachDraft from './OutreachDraft.vue'
 
-const props = defineProps<{ post: JobPost }>()
+const props = defineProps<{
+    post: JobPost
+    expanded: boolean
+}>()
 
 const emit = defineEmits<{
+    cancel: []
+    expand: []
     showViewer: []
 }>()
 
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { connectionState, error, task } = storeToRefs(workStore)
+const { cancelling, error, task, taskActive } = storeToRefs(workStore)
 const { assistantReply, contact, draft, resultError } = storeToRefs(outreachStore)
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 
-const running = computed(() =>
-    ['connecting', 'connected', 'reconnecting'].includes(connectionState.value),
-)
-
+const canCancel = computed(() => task.value?.status === 'running')
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
 
 watch(
@@ -46,7 +48,7 @@ watch(draft, () => {
 function submitDraftRequest() {
     const request = draftRequest.value.trim()
 
-    if (contact.value === null || !draft.value.trim() || !request || running.value) {
+    if (contact.value === null || !draft.value.trim() || !request || taskActive.value) {
         return
     }
 
@@ -77,7 +79,39 @@ async function copyDraft() {
     <section class="outreach-panel" aria-label="Outreach">
         <header>
             <div class="outreach-heading-copy">
-                <PanelBackButton label="Back to selected job post" @back="emit('showViewer')" />
+                <PanelBackButton
+                    v-if="canCancel"
+                    label="Cancel outreach task"
+                    :disabled="cancelling"
+                    @back="emit('cancel')"
+                />
+                <template v-else>
+                    <button
+                        v-if="contact && !expanded"
+                        class="panel-control panel-control-expand"
+                        type="button"
+                        aria-label="Expand outreach panel"
+                        aria-expanded="false"
+                        @click="emit('expand')"
+                    >
+                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m11 17-5-5 5-5M18 17l-5-5 5-5" />
+                        </svg>
+                    </button>
+                    <button
+                        class="panel-control"
+                        :class="{
+                            'panel-control-mobile-only': contact && !expanded,
+                        }"
+                        type="button"
+                        aria-label="Show selected job post"
+                        @click="emit('showViewer')"
+                    >
+                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                    </button>
+                </template>
                 <span class="eyebrow">Outreach</span>
             </div>
         </header>
@@ -88,7 +122,7 @@ async function copyDraft() {
                 v-model:request="draftRequest"
                 :contact="contact"
                 :assistant-reply="assistantReply"
-                :running="running"
+                :running="taskActive"
                 :copy-state="copyState"
                 @submit="submitDraftRequest"
                 @copy="copyDraft"
@@ -122,5 +156,49 @@ async function copyDraft() {
     font-weight: 650;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.panel-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    color: $color-ink-muted;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: $radius-sm;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+        background: rgb(173 123 249 / 10%);
+    }
+
+    &-expand {
+        display: none;
+
+        @include bp-md-tablet {
+            display: inline-flex;
+        }
+    }
+
+    &-mobile-only {
+        @include bp-md-tablet {
+            display: none;
+        }
+    }
+}
+
+.panel-control-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 </style>

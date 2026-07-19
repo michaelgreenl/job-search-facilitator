@@ -19,6 +19,7 @@ The bridge listens on `127.0.0.1:3001` by default. See `.env.example` for its op
 - `GET /health` reports the capabilities discovered from ChatGPT Work.
 - `POST /tasks` starts a structured task.
 - `GET /tasks/:id` returns its current state.
+- `POST /tasks/:id/cancel` interrupts a running task.
 - `GET /tasks/:id/events` streams user-safe progress with server-sent events.
 
 Task events and output are held in memory for the life of the bridge process. Durable workflow state belongs in the Docker API. The bridge is intentionally bound to loopback and starts Work tasks with a read-only sandbox and no approval escalation.

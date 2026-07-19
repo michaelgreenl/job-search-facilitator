@@ -19,9 +19,14 @@ class FakeRuntime implements WorkRuntime {
     private readonly listeners = new Set<(notification: AppServerNotification) => void>()
     private readonly actionListeners = new Set<(action: WorkRuntimeAction) => void>()
     readonly decisions: Array<{ actionId: string; decision: WorkActionDecision }> = []
+    readonly interruptions: Array<{ threadId: string; turnId: string }> = []
 
     async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
         return { threadId: 'thread-id', turnId: 'turn-id' }
+    }
+
+    async interruptTask(threadId: string, turnId: string): Promise<void> {
+        this.interruptions.push({ threadId, turnId })
     }
 
     resolveAction(actionId: string, decision: WorkActionDecision): boolean {
@@ -134,6 +139,56 @@ describe('Work bridge routes', () => {
         expect(resumed.text).not.toContain('"type":"activity"')
         expect(resumed.text).toContain('id: 2')
         expect(resumed.text).toContain('"type":"completed"')
+    })
+
+    it('cancels a running task and closes its event stream with cancellation', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const task = await manager.start(taskInput as StartWorkTaskInput)
+
+        const cancellation = await request(app).post(`/tasks/${task.id}/cancel`).expect(202)
+
+        expect(cancellation.body).toMatchObject({
+            id: task.id,
+            status: 'cancelled',
+            output: null,
+            error: null,
+        })
+        expect(runtime.interruptions).toEqual([{ threadId: task.threadId, turnId: task.turnId }])
+
+        const stream = await request(app).get(`/tasks/${task.id}/events`).expect(200)
+
+        expect(stream.text).toContain('"type":"cancelled"')
+        expect(stream.text).not.toContain('"type":"failed"')
+    })
+
+    it('rejects cancellation after a task finishes', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const task = await manager.start(taskInput as StartWorkTaskInput)
+        const baseParams = { threadId: task.threadId, turnId: task.turnId }
+
+        runtime.notify('item/completed', {
+            ...baseParams,
+            item: {
+                type: 'agentMessage',
+                id: 'final',
+                phase: 'final_answer',
+                text: '{"contacts":[]}',
+            },
+        })
+        runtime.notify('turn/completed', {
+            ...baseParams,
+            turn: { id: task.turnId, status: 'completed' },
+        })
+
+        await request(app)
+            .post(`/tasks/${task.id}/cancel`)
+            .expect(409, { error: 'Work task is not running' })
+
+        expect(runtime.interruptions).toHaveLength(0)
     })
 
     it('resumes a task after its browser-origin action is approved', async () => {

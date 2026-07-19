@@ -107,6 +107,11 @@ export const useOutreachStore = defineStore('outreach', () => {
         resultError.value = message
     }
 
+    function cancelTask() {
+        taskKind.value = null
+        resultError.value = null
+    }
+
     function reset() {
         postId.value = null
         contact.value = null
@@ -125,6 +130,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         begin,
         beginDraft,
         applyTaskResult,
+        cancelTask,
         reset,
     }
 })

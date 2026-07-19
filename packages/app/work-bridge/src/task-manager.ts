@@ -11,6 +11,7 @@ import type { AppServerNotification, WorkRuntime, WorkRuntimeAction } from './ap
 
 interface StoredTask extends WorkTask {
     capabilities: StartWorkTaskInput['capabilities']
+    cancellation: Promise<void> | null
     events: WorkTaskStreamEvent[]
     listeners: Set<(event: WorkTaskStreamEvent) => void>
     messagePhases: Map<string, string | null>
@@ -36,6 +37,7 @@ const stringValue = (value: unknown): string | null => (typeof value === 'string
 
 const publicTask = ({
     capabilities: _capabilities,
+    cancellation: _cancellation,
     events: _events,
     listeners: _listeners,
     messagePhases: _messagePhases,
@@ -70,6 +72,7 @@ export class WorkTaskManager {
             output: null,
             error: null,
             capabilities: input.capabilities,
+            cancellation: null,
             events: [],
             listeners: new Set(),
             messagePhases: new Map(),
@@ -91,6 +94,35 @@ export class WorkTaskManager {
         const task = this.tasks.get(id)
 
         return task === undefined ? null : publicTask(task)
+    }
+
+    async cancel(id: string): Promise<{ accepted: boolean; task: WorkTask } | null> {
+        const task = this.tasks.get(id)
+
+        if (task === undefined) {
+            return null
+        }
+
+        if (task.status !== 'running') {
+            return { accepted: false, task: publicTask(task) }
+        }
+
+        const cancellation = task.cancellation ?? this.interrupt(task)
+        task.cancellation = cancellation
+
+        try {
+            await cancellation
+        } catch (error) {
+            if (task.status === 'running') {
+                throw error
+            }
+        } finally {
+            if (task.cancellation === cancellation) {
+                task.cancellation = null
+            }
+        }
+
+        return { accepted: true, task: publicTask(task) }
     }
 
     resolveAction(id: string, actionId: string, decision: WorkActionDecision): boolean {
@@ -250,6 +282,11 @@ export class WorkTaskManager {
             return
         }
 
+        if (value.status === 'interrupted') {
+            this.markCancelled(task)
+            return
+        }
+
         if (value.status !== 'completed') {
             const turnError = isObject(value.error) ? stringValue(value.error.message) : null
             this.fail(task, turnError ?? 'Work task did not complete')
@@ -281,6 +318,20 @@ export class WorkTaskManager {
 
     private activity(task: StoredTask, message: string): void {
         this.emit(task, { type: 'activity', message, createdAt: new Date().toISOString() })
+    }
+
+    private async interrupt(task: StoredTask): Promise<void> {
+        await this.runtime.interruptTask(task.threadId, task.turnId)
+
+        if (task.status === 'running') {
+            this.markCancelled(task)
+        }
+    }
+
+    private markCancelled(task: StoredTask): void {
+        task.status = 'cancelled'
+        task.pendingAction = null
+        this.emit(task, { type: 'cancelled', createdAt: new Date().toISOString() })
     }
 
     private fail(task: StoredTask, error: string): void {

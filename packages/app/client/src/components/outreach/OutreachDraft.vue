@@ -36,45 +36,59 @@ const canSubmit = computed(() => request.value.trim().length > 0)
         </div>
 
         <form class="draft-request" @submit.prevent="emit('submit')">
-            <textarea
-                id="draft-request"
-                v-model="request"
-                class="text-field request-input"
-                rows="1"
-                :disabled="running"
-                placeholder="Request Changes"
-            ></textarea>
-            <button class="draft-button" type="submit" :disabled="running || !canSubmit">
-                Send
-            </button>
+            <div class="request-field">
+                <textarea
+                    id="draft-request"
+                    v-model="request"
+                    class="text-field request-input"
+                    rows="1"
+                    aria-label="Request draft changes"
+                    :disabled="running"
+                    placeholder="Request changes"
+                ></textarea>
+                <button
+                    class="field-action send-button"
+                    type="submit"
+                    :disabled="running || !canSubmit"
+                >
+                    Send
+                </button>
+            </div>
         </form>
 
         <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
             {{ assistantReply }}
         </p>
 
-        <label class="draft-content">
-            <span class="field-label">Message</span>
-            <textarea
-                v-model="draft"
-                class="text-field draft-textarea"
-                aria-label="Outreach message"
-                :disabled="running"
-            ></textarea>
-        </label>
-
-        <div class="draft-actions">
+        <div class="draft-content">
+            <label class="field-label" for="outreach-message">Message</label>
+            <div class="draft-field">
+                <textarea
+                    id="outreach-message"
+                    v-model="draft"
+                    class="text-field draft-textarea"
+                    aria-label="Outreach message"
+                    :disabled="running"
+                ></textarea>
+                <button
+                    class="field-action copy-button"
+                    type="button"
+                    :aria-label="
+                        copyState === 'copied' ? 'Outreach message copied' : 'Copy outreach message'
+                    "
+                    :disabled="draft.trim().length === 0"
+                    @click="emit('copy')"
+                >
+                    <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="9" y="9" width="11" height="11" rx="2" />
+                        <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+                    </svg>
+                </button>
+            </div>
+            <span v-if="copyState === 'copied'" class="copy-status" role="status">Copied</span>
             <span v-if="copyState === 'failed'" class="copy-error" role="alert">
                 Could not copy draft
             </span>
-            <button
-                class="draft-button"
-                type="button"
-                :disabled="draft.trim().length === 0"
-                @click="emit('copy')"
-            >
-                {{ copyState === 'copied' ? 'Copied' : 'Copy draft' }}
-            </button>
         </div>
     </section>
 </template>
@@ -133,9 +147,12 @@ const canSubmit = computed(() => request.value.trim().length > 0)
 }
 
 .draft-request {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: $space-2;
+    display: block;
+}
+
+.request-field,
+.draft-field {
+    position: relative;
 }
 
 .text-field {
@@ -156,6 +173,8 @@ const canSubmit = computed(() => request.value.trim().length > 0)
 }
 
 .request-input {
+    width: 100%;
+    padding-right: 5.25rem;
     resize: vertical;
 }
 
@@ -167,28 +186,30 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     min-height: 0;
 }
 
+.draft-field {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
 .draft-textarea {
     flex: 1;
+    width: 100%;
     min-height: 8rem;
+    padding-right: 3.25rem;
+    padding-bottom: 3.25rem;
     resize: none;
 }
 
-.draft-actions {
-    display: flex;
-    gap: $space-3;
-    align-items: center;
-    justify-content: flex-end;
-}
-
-.draft-button {
-    padding: $space-2 $space-3;
+.field-action {
+    position: absolute;
     color: $color-night;
     font: inherit;
     font-weight: 650;
     cursor: pointer;
     background: $color-signal-light;
     border: 0;
-    border-radius: $radius-md;
+    border-radius: $radius-sm;
 
     &:hover,
     &:focus-visible {
@@ -201,8 +222,44 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     }
 }
 
+.send-button {
+    top: 50%;
+    right: $space-2;
+    padding: $space-2 $space-3;
+    transform: translateY(-50%);
+}
+
+.copy-button {
+    right: $space-2;
+    bottom: $space-2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+}
+
+.copy-icon {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+}
+
+.copy-status,
+.copy-error {
+    font-size: 0.8125rem;
+}
+
+.copy-status {
+    color: $color-ink-muted;
+}
+
 .copy-error {
     color: lighten-color($color-red-600, 20%);
-    font-size: 0.8125rem;
 }
 </style>

@@ -188,9 +188,15 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P2 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        const discoverButton = findButton(root, 'Discover outreach')
+        discoverButton.click()
 
-        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        await vi.waitFor(() => {
+            expect(FakeEventSource.instances).toHaveLength(1)
+            expect(discoverButton.disabled).toBe(true)
+            expect(discoverButton.getAttribute('aria-busy')).toBe('true')
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
+        })
         const taskRequest = fetchMock.mock.calls[2]
         const taskBody = (taskRequest?.[1] as RequestInit | undefined)?.body
 
@@ -226,9 +232,24 @@ describe('apply view', () => {
 
         source.message({
             type: 'activity',
+            message: 'Task started',
+            createdAt: '2026-07-18T11:59:59.000Z',
+        })
+        source.message({
+            type: 'activity',
             message: 'Using Chrome',
             createdAt: '2026-07-18T12:00:00.000Z',
         })
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.activity-icon-tool')).not.toBeNull()
+            expect(root.querySelector('.activity-icon-globe')).not.toBeNull()
+            expect(root.querySelectorAll('.activity-progress')).toHaveLength(1)
+            expect(
+                root.querySelector('.activity-item:last-child .activity-progress'),
+            ).not.toBeNull()
+        })
+
         source.message({
             type: 'completed',
             output: {
@@ -254,6 +275,11 @@ describe('apply view', () => {
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
             expect(root.querySelector('.work-updates')).toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Back to job posts"]')).not.toBeNull()
+            expect(discoverButton.disabled).toBe(false)
+            expect(discoverButton.getAttribute('aria-busy')).toBe('false')
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -265,12 +291,22 @@ describe('apply view', () => {
             )
         })
 
-        findButton(root, 'Copy draft').click()
+        const copyButton = root.querySelector<HTMLButtonElement>(
+            '[aria-label="Copy outreach message"]',
+        )
+
+        if (copyButton === null) {
+            throw new Error('Could not find outreach copy button')
+        }
+
+        expect(copyButton.closest('.draft-field')).not.toBeNull()
+        copyButton.click()
         await vi.waitFor(() => {
             expect(writeText).toHaveBeenCalledExactlyOnceWith(
                 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             )
             expect(root.textContent).toContain('Copied')
+            expect(copyButton.getAttribute('aria-label')).toBe('Outreach message copied')
         })
 
         const draft = root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
@@ -296,7 +332,9 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
 
         await vi.waitFor(() => expect(findButton(root, 'Send').disabled).toBe(false))
-        findButton(root, 'Send').click()
+        const sendButton = findButton(root, 'Send')
+        expect(sendButton.closest('.request-field')).not.toBeNull()
+        sendButton.click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
         const revisionRequest = fetchMock.mock.calls[4]
@@ -333,18 +371,106 @@ describe('apply view', () => {
             ).toBe('Hi Ada, I would love to hear about the engineering team.')
             expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
             expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
+            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
         })
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to selected job post"]')?.click()
+        root.querySelector<HTMLButtonElement>('[aria-label="Expand outreach panel"]')?.click()
 
         await vi.waitFor(() => {
-            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(false)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
+            )
+            expect(root.querySelector('[aria-label="Show selected job post"]')).not.toBeNull()
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Show selected job post"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-adjacent')).toBe(
+                true,
+            )
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
+                false,
+            )
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
+                true,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(true)
+        })
+    })
+
+    it('cancels an active outreach task before returning to the selected post', async () => {
+        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Discover outreach').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                4,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/cancel`,
+                { method: 'POST' },
             )
             expect(
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
             ).toBe(true)
             expect(root.querySelector('.apply-outreach')).toBeNull()
+        })
+
+        expect(FakeEventSource.instances[0]!.close).toHaveBeenCalledOnce()
+    })
+
+    it('keeps an active outreach task visible when cancellation fails', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Discover outreach').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+                'Work request failed (500)',
+            )
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
         })
     })
 
@@ -371,7 +497,7 @@ describe('apply view', () => {
             expect(root.textContent).toContain('Action required')
             expect(root.textContent).toContain('Allow Chrome to access https://www.linkedin.com?')
             expect(root.querySelector('textarea')).toBeNull()
-            expect(root.querySelector('[aria-label="Back to selected job post"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
         })
 
         findButton(root, 'Allow for this task').click()

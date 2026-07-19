@@ -81,6 +81,8 @@ const createFakeProcess = (completeTaskImmediately = false) => {
                     stdout.write(
                         `${messages.map((message) => JSON.stringify(message)).join('\n')}\n`,
                     )
+                } else if (request.method === 'turn/interrupt') {
+                    respond({ id: request.id, result: {} })
                 }
             }
 
@@ -178,6 +180,23 @@ describe('Codex app server client', () => {
         await new Promise((resolve) => setImmediate(resolve))
 
         expect(fake.requests).toContainEqual({ id: 99, result: { decision: 'decline' } })
+
+        runtime.close()
+    })
+
+    it('interrupts the active turn', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+
+        await runtime.start()
+        await runtime.interruptTask('thread-id', 'turn-id')
+
+        expect(fake.requests).toContainEqual(
+            expect.objectContaining({
+                method: 'turn/interrupt',
+                params: { threadId: 'thread-id', turnId: 'turn-id' },
+            }),
+        )
 
         runtime.close()
     })

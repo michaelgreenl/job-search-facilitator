@@ -1,6 +1,12 @@
 import type { WorkCapability } from '@job-search-facilitator/core'
 import { WORK_CAPABILITIES } from '@job-search-facilitator/core'
-import { ACCEPTED, BAD_REQUEST, NOT_FOUND, SERVER_ERROR } from '@job-search-facilitator/utils'
+import {
+    ACCEPTED,
+    BAD_REQUEST,
+    CONFLICT,
+    NOT_FOUND,
+    SERVER_ERROR,
+} from '@job-search-facilitator/utils'
 import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
@@ -71,6 +77,35 @@ export const createApp = (
         response.json(task)
     })
 
+    app.post('/tasks/:id/cancel', async (request, response) => {
+        const params = taskIdParamsSchema.safeParse(request.params)
+
+        if (!params.success) {
+            response.status(BAD_REQUEST).json({ error: 'Invalid request' })
+            return
+        }
+
+        try {
+            const result = await taskManager.cancel(params.data.id)
+
+            if (result === null) {
+                response.status(NOT_FOUND).json(taskNotFound)
+                return
+            }
+
+            if (!result.accepted) {
+                response.status(CONFLICT).json({ error: 'Work task is not running' })
+                return
+            }
+
+            response.status(ACCEPTED).json(result.task)
+        } catch (error) {
+            response.status(SERVER_ERROR).json({
+                error: error instanceof Error ? error.message : 'Could not cancel Work task',
+            })
+        }
+    })
+
     app.post('/tasks/:id/actions/:actionId', (request, response) => {
         const params = taskActionParamsSchema.safeParse(request.params)
         const input = taskActionInputSchema.safeParse(request.body)
@@ -115,7 +150,11 @@ export const createApp = (
             (streamEvent) => {
                 sendEvent(response, streamEvent)
 
-                if (streamEvent.event.type === 'completed' || streamEvent.event.type === 'failed') {
+                if (
+                    streamEvent.event.type === 'completed' ||
+                    streamEvent.event.type === 'failed' ||
+                    streamEvent.event.type === 'cancelled'
+                ) {
                     unsubscribe()
                     response.end()
                 }

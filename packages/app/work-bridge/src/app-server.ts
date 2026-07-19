@@ -74,6 +74,7 @@ export interface WorkRuntimeAction extends WorkActionRequired {
 export interface WorkRuntime {
     readonly capabilities: WorkCapability[]
     startTask(taskId: string, input: StartWorkTaskInput): Promise<StartedWorkTask>
+    interruptTask(threadId: string, turnId: string): Promise<void>
     resolveAction(actionId: string, decision: WorkActionDecision): boolean
     onActionRequired(listener: (action: WorkRuntimeAction) => void): () => void
     onNotification(listener: (notification: AppServerNotification) => void): () => void
@@ -233,6 +234,10 @@ export class CodexAppServer implements WorkRuntime {
         })
 
         return { threadId: thread.id, turnId: turn.id }
+    }
+
+    async interruptTask(threadId: string, turnId: string): Promise<void> {
+        await this.request('turn/interrupt', { threadId, turnId })
     }
 
     resolveAction(actionId: string, decision: WorkActionDecision): boolean {
