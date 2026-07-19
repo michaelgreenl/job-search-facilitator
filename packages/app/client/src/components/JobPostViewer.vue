@@ -9,16 +9,21 @@ withDefaults(
         labelError: string | null
         showOutreachAction?: boolean
         outreachDisabled?: boolean
+        showApplicationHelpAction?: boolean
+        applicationHelpDisabled?: boolean
     }>(),
     {
         showOutreachAction: false,
         outreachDisabled: false,
+        showApplicationHelpAction: false,
+        applicationHelpDisabled: false,
     },
 )
 
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     startOutreach: []
+    startApplicationHelp: []
 }>()
 
 const selectedLabel = shallowRef<UserLabel | ''>('')
@@ -66,6 +71,16 @@ function updateLabel() {
                 >
                     Open post ↗
                 </a>
+
+                <button
+                    v-if="showApplicationHelpAction"
+                    class="post-action-button"
+                    type="button"
+                    :disabled="applicationHelpDisabled"
+                    @click="emit('startApplicationHelp')"
+                >
+                    Application help
+                </button>
 
                 <button
                     v-if="showOutreachAction"

@@ -254,7 +254,7 @@ describe('apply view', () => {
             expect(
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
-            expect(root.querySelector<HTMLElement>('.outreach-stream')?.style.display).toBe('none')
+            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).toBe('none')
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -277,9 +277,7 @@ describe('apply view', () => {
         findButton(root, 'Show agent stream').click()
 
         await vi.waitFor(() => {
-            expect(root.querySelector<HTMLElement>('.outreach-stream')?.style.display).not.toBe(
-                'none',
-            )
+            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).not.toBe('none')
             expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).toBe('none')
         })
 
@@ -356,8 +354,67 @@ describe('apply view', () => {
             expect(
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
             ).toBe(true)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                false,
+            expect(root.querySelector('.apply-outreach')).toBeNull()
+        })
+    })
+
+    it('opens application help for the selected job post', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P2 Engineer').click()
+        findButton(root, 'Application help').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const taskRequest = fetchMock.mock.calls[2]
+        const taskBody = (taskRequest?.[1] as RequestInit | undefined)?.body
+
+        expect(typeof taskBody).toBe('string')
+
+        const taskInput = JSON.parse(taskBody as string) as {
+            prompt: string
+            outputSchema: { required: string[] }
+            capabilities: string[]
+        }
+
+        expect(taskInput.prompt).toContain('P2 Engineer')
+        expect(taskInput.prompt).toContain('https://example.com/jobs/post-p2')
+        expect(taskInput.prompt).not.toContain('P1 Engineer')
+        expect(taskInput.prompt).toContain('docs/agents/job-search-user-info.md')
+        expect(taskInput.prompt).toContain('leave Chrome open')
+        expect(taskInput.prompt).toContain('Do not type into fields')
+        expect(taskInput.outputSchema.required).toEqual([
+            'applicationReady',
+            'currentUrl',
+            'summary',
+        ])
+        expect(taskInput.capabilities).toEqual(['chrome'])
+        expect(root.querySelector('.apply-application-help')?.classList.contains('is-active')).toBe(
+            true,
+        )
+
+        FakeEventSource.instances[0]!.message({
+            type: 'completed',
+            output: {
+                applicationReady: true,
+                currentUrl: 'https://example.com/jobs/post-p2/apply',
+                summary: 'The contact information step is ready for user input.',
+            },
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Application page inspected.')
+            expect(root.textContent).toContain('Ready for your input')
+            expect(root.textContent).toContain(
+                'The contact information step is ready for user input.',
             )
         })
     })

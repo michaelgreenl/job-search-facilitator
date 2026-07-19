@@ -2,17 +2,18 @@
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
+import ApplicationHelpPanel from '@/components/ApplicationHelpPanel.vue'
 import JobPostCard from '@/components/JobPostCard.vue'
 import JobPostViewer from '@/components/JobPostViewer.vue'
 import OutreachPanel from '@/components/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
 import { useWorkStore } from '@/stores/work.store'
-import { createOutreachTask } from '@/work-tasks'
+import { createApplicationHelpTask, createOutreachTask } from '@/work-tasks'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'posts' | 'viewer' | 'outreach'
+type ActivePanel = 'posts' | 'viewer' | 'outreach' | 'application-help'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postStore = usePostStore()
@@ -24,6 +25,7 @@ const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
 )
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
+const applicationHelpPostId = shallowRef<string | null>(null)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
@@ -45,7 +47,10 @@ const selectedPost = computed(
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
-const outreachRunning = computed(() =>
+const applicationHelpPost = computed(
+    () => postStore.posts.find(({ id }) => id === applicationHelpPostId.value) ?? null,
+)
+const workRunning = computed(() =>
     ['connecting', 'connected', 'reconnecting'].includes(workStore.connectionState),
 )
 
@@ -63,6 +68,7 @@ watch(
 
         if (postId !== selectedPostId.value) {
             outreachStore.reset()
+            applicationHelpPostId.value = null
         }
 
         selectedPostId.value = postId
@@ -80,6 +86,7 @@ function selectPost(postId: string) {
     }
 
     selectedPostId.value = postId
+    applicationHelpPostId.value = null
     labelError.value = null
     activePanel.value = 'viewer'
 }
@@ -87,6 +94,7 @@ function selectPost(postId: string) {
 function showPosts() {
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         outreachStore.reset()
+        applicationHelpPostId.value = null
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
     }
 
@@ -98,13 +106,24 @@ function showViewer() {
 }
 
 function startOutreach() {
-    if (selectedPost.value === null || outreachRunning.value) {
+    if (selectedPost.value === null || workRunning.value) {
         return
     }
 
     outreachStore.begin(selectedPost.value.id)
+    applicationHelpPostId.value = null
     activePanel.value = 'outreach'
     void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
+}
+
+function startApplicationHelp() {
+    if (selectedPost.value === null || workRunning.value) {
+        return
+    }
+
+    applicationHelpPostId.value = selectedPost.value.id
+    activePanel.value = 'application-help'
+    void workStore.startTask(createApplicationHelpTask(selectedPost.value)).catch(() => undefined)
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
@@ -200,11 +219,14 @@ onMounted(() => {
                 class="apply-panel apply-job-post-view glass-frame"
                 :class="{
                     'is-active': activePanel === 'viewer',
-                    'is-adjacent': activePanel === 'posts' || activePanel === 'outreach',
+                    'is-adjacent':
+                        activePanel === 'posts' ||
+                        activePanel === 'outreach' ||
+                        activePanel === 'application-help',
                 }"
             >
                 <button
-                    v-if="!outreachRunning"
+                    v-if="!workRunning"
                     class="back-button"
                     type="button"
                     aria-label="Back to job posts"
@@ -217,22 +239,22 @@ onMounted(() => {
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     show-outreach-action
-                    :outreach-disabled="outreachRunning"
+                    :outreach-disabled="workRunning"
+                    show-application-help-action
+                    :application-help-disabled="workRunning"
                     @update-label="updateUserLabel"
                     @start-outreach="startOutreach"
+                    @start-application-help="startApplicationHelp"
                 />
             </aside>
 
             <aside
-                v-if="outreachPost"
-                class="apply-panel apply-outreach glass-frame"
-                :class="{
-                    'is-active': activePanel === 'outreach',
-                }"
+                v-if="outreachPost && activePanel === 'outreach'"
+                class="apply-panel apply-outreach glass-frame is-active"
             >
                 <button
-                    v-if="!outreachRunning"
-                    class="back-button back-button-outreach"
+                    v-if="!workRunning"
+                    class="back-button back-button-work"
                     type="button"
                     aria-label="Back to selected job post"
                     @click="showViewer"
@@ -240,6 +262,22 @@ onMounted(() => {
                     ←
                 </button>
                 <OutreachPanel :post="outreachPost" />
+            </aside>
+
+            <aside
+                v-if="applicationHelpPost && activePanel === 'application-help'"
+                class="apply-panel apply-application-help glass-frame is-active"
+            >
+                <button
+                    v-if="!workRunning"
+                    class="back-button back-button-work"
+                    type="button"
+                    aria-label="Back to selected job post"
+                    @click="showViewer"
+                >
+                    ←
+                </button>
+                <ApplicationHelpPanel :post="applicationHelpPost" />
             </aside>
         </div>
     </section>
@@ -292,7 +330,8 @@ onMounted(() => {
         padding: $space-5;
     }
 
-    &.apply-outreach {
+    &.apply-outreach,
+    &.apply-application-help {
         overflow: hidden;
         padding: $space-5;
     }
@@ -316,7 +355,7 @@ onMounted(() => {
         display: none;
     }
 
-    &-outreach {
+    &-work {
         @include bp-md-tablet {
             display: block;
         }
