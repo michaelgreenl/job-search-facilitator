@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, shallowRef, watch } from 'vue'
+import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
 import JobPostCard from '@/components/JobPostCard.vue'
 import JobPostViewer from '@/components/JobPostViewer.vue'
 import OutreachPanel from '@/components/OutreachPanel.vue'
@@ -30,14 +30,14 @@ const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
-const undoableAppliedPostId = shallowRef<string | null>(null)
+const retainedAppliedPostIds = reactive(new Set<string>())
 
 const actionablePosts = computed(() =>
     postStore.posts.filter(
         ({ applicationStatus, id, userLabel }) =>
             userLabel !== null &&
             userLabel !== 'forgo' &&
-            (applicationStatus === 'not-applied' || id === undoableAppliedPostId.value),
+            (applicationStatus === 'not-applied' || retainedAppliedPostIds.has(id)),
     ),
 )
 
@@ -72,7 +72,6 @@ watch(
         selectedPostId.value = postId
 
         if (changed) {
-            undoableAppliedPostId.value = null
             outreachStore.reset()
         }
 
@@ -88,7 +87,6 @@ function selectPost(postId: string) {
     selectedPostId.value = postId
 
     if (changed) {
-        undoableAppliedPostId.value = null
         outreachStore.reset()
     }
 
@@ -100,7 +98,6 @@ function selectPost(postId: string) {
 function showPosts() {
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
-        undoableAppliedPostId.value = null
         outreachStore.reset()
     }
 
@@ -128,6 +125,7 @@ async function updateUserLabel(userLabel: UserLabel | null) {
 
     labelUpdating.value = true
     labelError.value = null
+    applicationError.value = null
 
     try {
         await postStore.updatePost(selectedPostId.value, { userLabel })
@@ -138,7 +136,7 @@ async function updateUserLabel(userLabel: UserLabel | null) {
     }
 }
 
-async function toggleApplied() {
+async function markApplied() {
     const post = selectedPost.value
 
     if (post === null || applicationUpdating.value || labelUpdating.value) {
@@ -146,27 +144,17 @@ async function toggleApplied() {
     }
 
     const postId = post.id
-    const undo = post.applicationStatus === 'awaiting-response'
-
     applicationUpdating.value = true
     applicationError.value = null
-
-    if (!undo) {
-        undoableAppliedPostId.value = postId
-    }
+    labelError.value = null
+    retainedAppliedPostIds.add(postId)
 
     try {
         await postStore.updatePost(postId, {
-            applicationStatus: undo ? 'not-applied' : 'awaiting-response',
+            applicationStatus: 'awaiting-response',
         })
-
-        if (undo && undoableAppliedPostId.value === postId) {
-            undoableAppliedPostId.value = null
-        }
     } catch (error) {
-        if (!undo && undoableAppliedPostId.value === postId) {
-            undoableAppliedPostId.value = null
-        }
+        retainedAppliedPostIds.delete(postId)
 
         if (selectedPostId.value === postId) {
             applicationError.value =
@@ -273,10 +261,10 @@ onMounted(() => {
                     :application-error="applicationError"
                     show-outreach-action
                     :outreach-disabled="workRunning"
-                    show-application-action
+                    show-applied-option
                     @update-label="updateUserLabel"
                     @start-outreach="startOutreach"
-                    @toggle-applied="toggleApplied"
+                    @mark-applied="markApplied"
                 />
             </aside>
 

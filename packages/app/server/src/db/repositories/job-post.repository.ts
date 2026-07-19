@@ -26,7 +26,10 @@ export const jobPostRepository: JobPostRepository = {
 
     async findLabeled() {
         const posts = await prisma.jobPost.findMany({
-            where: { userLabel: { notIn: ['FORGO'] } },
+            where: {
+                applicationStatus: 'NOT_APPLIED',
+                userLabel: { notIn: ['FORGO'] },
+            },
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         })
 

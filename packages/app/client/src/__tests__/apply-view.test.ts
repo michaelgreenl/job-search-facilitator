@@ -443,26 +443,32 @@ describe('apply view', () => {
         })
     })
 
-    it('keeps an applied post undoable until another post is selected', async () => {
+    it('keeps a newly applied post visible for the current route visit', async () => {
         const appliedPost = { ...posts[0]!, applicationStatus: 'awaiting-response' as const }
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
             .mockResolvedValueOnce(jsonResponse(appliedPost))
-            .mockResolvedValueOnce(jsonResponse(posts[0]))
-            .mockResolvedValueOnce(jsonResponse(appliedPost))
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Applied').click()
+        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
+
+        if (labelPicker === null) {
+            throw new Error('Could not find job post label picker')
+        }
+
+        expect([...labelPicker.options].map(({ value }) => value)).toContain('applied')
+        labelPicker.value = 'applied'
+        labelPicker.dispatchEvent(new Event('change'))
 
         await vi.waitFor(() => {
-            expect(findButton(root, 'Undo')).toBeTruthy()
             expect(
                 root.querySelector('.apply-job-post-view .user-label')?.textContent?.trim(),
             ).toBe('applied')
             expect(root.textContent).toContain('P1 Engineer')
+            expect(labelPicker.disabled).toBe(true)
         })
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
@@ -474,32 +480,14 @@ describe('apply view', () => {
             },
         )
 
-        findButton(root, 'Undo').click()
-
-        await vi.waitFor(() => {
-            expect(findButton(root, 'Applied')).toBeTruthy()
-            expect(
-                root.querySelector('.apply-job-post-view .user-label')?.textContent?.trim(),
-            ).toBe('P1')
-        })
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            3,
-            'http://localhost:3000/api/job-posts/post-p1',
-            {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ applicationStatus: 'not-applied' }),
-            },
-        )
-
-        findButton(root, 'Applied').click()
-        await vi.waitFor(() => expect(findButton(root, 'Undo')).toBeTruthy())
         findButton(root, 'P2 Engineer').click()
 
         await vi.waitFor(() => {
-            expect(root.textContent).not.toContain('P1 Engineer')
+            expect(root.textContent).toContain('P1 Engineer')
             expect(root.textContent).toContain('P2 Engineer')
         })
+
+        expect(root.textContent).not.toContain('Undo')
     })
 
     it('keeps an unapplied post available when its status update fails', async () => {
@@ -510,13 +498,20 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Applied').click()
+        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
+
+        if (labelPicker === null) {
+            throw new Error('Could not find job post label picker')
+        }
+
+        labelPicker.value = 'applied'
+        labelPicker.dispatchEvent(new Event('change'))
 
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')?.textContent).toBe(
                 'API request failed (500)',
             )
-            expect(findButton(root, 'Applied')).toBeTruthy()
+            expect(labelPicker.disabled).toBe(false)
             expect(root.textContent).toContain('P1 Engineer')
         })
     })

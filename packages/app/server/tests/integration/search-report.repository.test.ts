@@ -103,12 +103,15 @@ describe('job post repository', () => {
                 jobPostRepository.update(report.report.results[index]!.post.id, { userLabel }),
             ),
         )
+        await jobPostRepository.update(report.report.results[0]!.post.id, {
+            applicationStatus: 'awaiting-response',
+        })
 
         const labeledPosts = await jobPostRepository.findLabeled()
         const labels = labeledPosts.map(({ userLabel }) => userLabel)
 
-        expect(labels).toHaveLength(3)
-        expect(labels).toEqual(expect.arrayContaining(['P1', 'P2', 'quick-app']))
+        expect(labels).toHaveLength(2)
+        expect(labels).toEqual(expect.arrayContaining(['P2', 'quick-app']))
     })
 })
 

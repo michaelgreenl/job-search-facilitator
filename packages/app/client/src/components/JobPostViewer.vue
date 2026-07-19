@@ -9,14 +9,14 @@ const props = withDefaults(
         labelError: string | null
         showOutreachAction?: boolean
         outreachDisabled?: boolean
-        showApplicationAction?: boolean
+        showAppliedOption?: boolean
         applicationUpdating?: boolean
         applicationError?: string | null
     }>(),
     {
         showOutreachAction: false,
         outreachDisabled: false,
-        showApplicationAction: false,
+        showAppliedOption: false,
         applicationUpdating: false,
         applicationError: null,
     },
@@ -25,11 +25,20 @@ const props = withDefaults(
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     startOutreach: []
-    toggleApplied: []
+    markApplied: []
 }>()
 
-const selectedLabel = shallowRef<UserLabel | ''>('')
+type LabelSelection = UserLabel | 'applied' | null | ''
+
+const selectedLabel = shallowRef<LabelSelection>('')
 const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
+const labelPrompt = computed(() => {
+    if (applied.value) {
+        return 'Applied'
+    }
+
+    return props.post.userLabel === null ? 'Add label' : 'Change label'
+})
 const postError = computed(() => props.applicationError ?? props.labelError)
 
 function updateLabel() {
@@ -37,7 +46,12 @@ function updateLabel() {
         return
     }
 
-    emit('updateLabel', selectedLabel.value)
+    if (selectedLabel.value === 'applied') {
+        emit('markApplied')
+    } else {
+        emit('updateLabel', selectedLabel.value)
+    }
+
     selectedLabel.value = ''
 }
 </script>
@@ -89,17 +103,6 @@ function updateLabel() {
                 >
                     Find outreach contact
                 </button>
-
-                <button
-                    v-if="showApplicationAction"
-                    class="post-action-button"
-                    type="button"
-                    :aria-pressed="applied"
-                    :disabled="applicationUpdating || labelUpdating"
-                    @click="emit('toggleApplied')"
-                >
-                    {{ applied ? 'Undo' : 'Applied' }}
-                </button>
             </div>
 
             <label class="label-picker">
@@ -111,12 +114,11 @@ function updateLabel() {
                         :disabled="labelUpdating || applicationUpdating || applied"
                         @change="updateLabel"
                     >
-                        <option disabled value="">
-                            {{ post.userLabel === null ? 'Add label' : 'Change label' }}
-                        </option>
+                        <option disabled value="">{{ labelPrompt }}</option>
                         <option v-for="label in USER_LABELS" :key="label" :value="label">
                             {{ label }}
                         </option>
+                        <option v-if="showAppliedOption" value="applied">Applied</option>
                         <option :value="null">clear label</option>
                     </select>
                 </span>
