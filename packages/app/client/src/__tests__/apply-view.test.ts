@@ -170,7 +170,7 @@ describe('apply view', () => {
         })
     })
 
-    it('finds the first engineering contact for the selected company', async () => {
+    it('finds the first engineering contact for the selected job post', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
@@ -181,7 +181,7 @@ describe('apply view', () => {
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
-        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'P2 Engineer').click()
         findButton(root, 'Find engineering contact').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
@@ -198,6 +198,9 @@ describe('apply view', () => {
 
         expect(taskRequest?.[0]).toBe('http://localhost:3001/tasks')
         expect(taskInput.prompt).toContain('Example Co')
+        expect(taskInput.prompt).toContain('P2 Engineer')
+        expect(taskInput.prompt).toContain('https://example.com/jobs/post-p2')
+        expect(taskInput.prompt).not.toContain('P1 Engineer')
         expect(taskInput.prompt).toContain('People')
         expect(taskInput.prompt).toContain('Engineering')
         expect(taskInput.outputSchema.required).toEqual(['personName'])
