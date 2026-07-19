@@ -345,8 +345,6 @@ onMounted(() => {
 .layout-draft {
     display: flex;
     flex-direction: column;
-    width: min(100%, 84rem);
-    margin: 0 auto;
     flex: 1;
 }
 
