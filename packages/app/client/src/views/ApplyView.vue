@@ -254,6 +254,8 @@ onMounted(() => {
 .apply-layout {
     display: flex;
     flex: 1;
+    max-height: calc(100dvh - ($space-3 * 2));
+    min-height: 0;
     width: min(100%, 84rem);
     margin: 0 auto;
 }
@@ -262,6 +264,7 @@ onMounted(() => {
     display: flex;
     flex: 1;
     gap: $space-4;
+    min-height: 0;
     min-width: 0;
 }
 
@@ -297,6 +300,7 @@ onMounted(() => {
     }
 
     &.apply-outreach {
+        overflow: hidden;
         padding: $space-5;
     }
 }

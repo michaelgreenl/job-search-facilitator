@@ -62,6 +62,21 @@ function resolveAction(decision: WorkActionDecision) {
         <p class="outreach-status" aria-live="polite">{{ status }}</p>
         <p v-if="issue" class="outreach-error" role="alert">{{ issue }}</p>
 
+        <div class="outreach-progress">
+            <ul
+                v-if="activities.length"
+                class="activity-list"
+                aria-label="Work activity"
+                role="log"
+            >
+                <li v-for="(activity, index) in activities" :key="`${index}:${activity}`">
+                    {{ activity }}
+                </li>
+            </ul>
+
+            <p v-if="commentary" class="commentary">{{ commentary }}</p>
+        </div>
+
         <section v-if="pendingAction" class="action-required" aria-labelledby="action-title">
             <span class="eyebrow">Action required</span>
             <h3 id="action-title" class="action-title">Website access</h3>
@@ -86,21 +101,6 @@ function resolveAction(decision: WorkActionDecision) {
                 </button>
             </div>
         </section>
-
-        <div class="outreach-progress">
-            <ul
-                v-if="activities.length"
-                class="activity-list"
-                aria-label="Work activity"
-                role="log"
-            >
-                <li v-for="(activity, index) in activities" :key="`${index}:${activity}`">
-                    {{ activity }}
-                </li>
-            </ul>
-
-            <p v-if="commentary" class="commentary">{{ commentary }}</p>
-        </div>
 
         <div v-if="personName" class="outreach-result">
             <span class="eyebrow">First engineering contact</span>
@@ -209,9 +209,11 @@ function resolveAction(decision: WorkActionDecision) {
 
 .outreach-progress {
     display: grid;
+    flex: 1;
     gap: $space-3;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .activity-list {
