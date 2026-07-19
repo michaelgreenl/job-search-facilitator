@@ -9,8 +9,6 @@ const props = withDefaults(
         labelError: string | null
         showOutreachAction?: boolean
         outreachDisabled?: boolean
-        showApplicationHelpAction?: boolean
-        applicationHelpDisabled?: boolean
         showApplicationAction?: boolean
         applicationUpdating?: boolean
         applicationError?: string | null
@@ -18,8 +16,6 @@ const props = withDefaults(
     {
         showOutreachAction: false,
         outreachDisabled: false,
-        showApplicationHelpAction: false,
-        applicationHelpDisabled: false,
         showApplicationAction: false,
         applicationUpdating: false,
         applicationError: null,
@@ -29,7 +25,6 @@ const props = withDefaults(
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     startOutreach: []
-    startApplicationHelp: []
     toggleApplied: []
 }>()
 
@@ -84,16 +79,6 @@ function updateLabel() {
                 >
                     Open post ↗
                 </a>
-
-                <button
-                    v-if="showApplicationHelpAction"
-                    class="post-action-button"
-                    type="button"
-                    :disabled="applicationHelpDisabled"
-                    @click="emit('startApplicationHelp')"
-                >
-                    Application help
-                </button>
 
                 <button
                     v-if="showOutreachAction"

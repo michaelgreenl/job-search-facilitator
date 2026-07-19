@@ -2,18 +2,17 @@
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
-import ApplicationHelpPanel from '@/components/ApplicationHelpPanel.vue'
 import JobPostCard from '@/components/JobPostCard.vue'
 import JobPostViewer from '@/components/JobPostViewer.vue'
 import OutreachPanel from '@/components/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
 import { useWorkStore } from '@/stores/work.store'
-import { createApplicationHelpTask, createOutreachTask } from '@/work-tasks'
+import { createOutreachTask } from '@/work-tasks'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'posts' | 'viewer' | 'outreach' | 'application-help'
+type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postStore = usePostStore()
@@ -25,7 +24,6 @@ const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
 )
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
-const applicationHelpPostId = shallowRef<string | null>(null)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
@@ -55,9 +53,6 @@ const selectedPost = computed(
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
-const applicationHelpPost = computed(
-    () => postStore.posts.find(({ id }) => id === applicationHelpPostId.value) ?? null,
-)
 const workRunning = computed(() =>
     ['connecting', 'connected', 'reconnecting'].includes(workStore.connectionState),
 )
@@ -79,7 +74,6 @@ watch(
         if (changed) {
             undoableAppliedPostId.value = null
             outreachStore.reset()
-            applicationHelpPostId.value = null
         }
 
         if (selectedPostId.value === null) {
@@ -98,7 +92,6 @@ function selectPost(postId: string) {
         outreachStore.reset()
     }
 
-    applicationHelpPostId.value = null
     labelError.value = null
     applicationError.value = null
     activePanel.value = 'viewer'
@@ -109,7 +102,6 @@ function showPosts() {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
         undoableAppliedPostId.value = null
         outreachStore.reset()
-        applicationHelpPostId.value = null
     }
 
     activePanel.value = 'posts'
@@ -125,19 +117,8 @@ function startOutreach() {
     }
 
     outreachStore.begin(selectedPost.value.id)
-    applicationHelpPostId.value = null
     activePanel.value = 'outreach'
     void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
-}
-
-function startApplicationHelp() {
-    if (selectedPost.value === null || workRunning.value) {
-        return
-    }
-
-    applicationHelpPostId.value = selectedPost.value.id
-    activePanel.value = 'application-help'
-    void workStore.startTask(createApplicationHelpTask(selectedPost.value)).catch(() => undefined)
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
@@ -272,10 +253,7 @@ onMounted(() => {
                 class="apply-panel apply-job-post-view glass-frame"
                 :class="{
                     'is-active': activePanel === 'viewer',
-                    'is-adjacent':
-                        activePanel === 'posts' ||
-                        activePanel === 'outreach' ||
-                        activePanel === 'application-help',
+                    'is-adjacent': activePanel === 'posts' || activePanel === 'outreach',
                 }"
             >
                 <button
@@ -295,12 +273,9 @@ onMounted(() => {
                     :application-error="applicationError"
                     show-outreach-action
                     :outreach-disabled="workRunning"
-                    show-application-help-action
-                    :application-help-disabled="workRunning"
                     show-application-action
                     @update-label="updateUserLabel"
                     @start-outreach="startOutreach"
-                    @start-application-help="startApplicationHelp"
                     @toggle-applied="toggleApplied"
                 />
             </aside>
@@ -319,22 +294,6 @@ onMounted(() => {
                     ←
                 </button>
                 <OutreachPanel :post="outreachPost" />
-            </aside>
-
-            <aside
-                v-if="applicationHelpPost && activePanel === 'application-help'"
-                class="apply-panel apply-application-help glass-frame is-active"
-            >
-                <button
-                    v-if="!workRunning"
-                    class="back-button back-button-work"
-                    type="button"
-                    aria-label="Back to selected job post"
-                    @click="showViewer"
-                >
-                    ←
-                </button>
-                <ApplicationHelpPanel :post="applicationHelpPost" />
             </aside>
         </div>
     </section>
@@ -387,8 +346,7 @@ onMounted(() => {
         padding: $space-5;
     }
 
-    &.apply-outreach,
-    &.apply-application-help {
+    &.apply-outreach {
         overflow: hidden;
         padding: $space-5;
     }
