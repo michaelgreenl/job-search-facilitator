@@ -2,11 +2,12 @@
 import type { JobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
-import OutreachDraft from '@/components/OutreachDraft.vue'
-import WorkStream from '@/components/WorkStream.vue'
+import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
 import { createDraftTask } from '@/work-tasks'
+
+import OutreachDraft from './OutreachDraft.vue'
 
 const props = defineProps<{ post: JobPost }>()
 

@@ -2,9 +2,12 @@
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
-import JobPostCard from '@/components/JobPostCard.vue'
-import JobPostViewer from '@/components/JobPostViewer.vue'
-import OutreachPanel from '@/components/OutreachPanel.vue'
+import JobPostList from '@/components/job-posts/JobPostList.vue'
+import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import FlowPanel from '@/components/layout/FlowPanel.vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import PanelHeading from '@/components/layout/PanelHeading.vue'
+import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
 import { useWorkStore } from '@/stores/work.store'
@@ -183,21 +186,14 @@ onMounted(() => {
 <template>
     <section class="apply-layout" aria-label="Job applications">
         <div class="apply-panels">
-            <section
+            <FlowPanel
                 class="apply-panel apply-post-list glass-frame"
-                :class="{
-                    'is-active': activePanel === 'posts',
-                    'is-adjacent': activePanel === 'viewer',
-                }"
+                :active="activePanel === 'posts'"
+                :adjacent="activePanel === 'viewer'"
                 aria-label="Job posts"
             >
-                <header class="panel-heading">
-                    <div class="panel-title">
-                        <span class="eyebrow">Apply</span>
-                        <h1 class="panel-heading-title">Labeled posts</h1>
-                    </div>
-
-                    <div class="panel-controls">
+                <PanelHeading eyebrow="Apply" title="Labeled posts" title-tag="h1">
+                    <template #controls>
                         <span class="item-count">{{ filteredPosts.length }} posts</span>
 
                         <label class="post-filter">
@@ -219,40 +215,33 @@ onMounted(() => {
                                 </select>
                             </span>
                         </label>
-                    </div>
-                </header>
+                    </template>
+                </PanelHeading>
 
-                <p v-if="listLoading" class="list-message">Loading labeled posts…</p>
-                <p v-else-if="listError" class="list-message">{{ listError }}</p>
-                <ul v-else-if="filteredPosts.length" class="card-list">
-                    <li v-for="post in filteredPosts" :key="post.id">
-                        <JobPostCard
-                            :post="post"
-                            :selected="selectedPostId === post.id"
-                            @select="selectPost(post.id)"
-                        />
-                    </li>
-                </ul>
-                <p v-else class="list-message">No job posts match this filter.</p>
-            </section>
+                <JobPostList
+                    :posts="filteredPosts"
+                    :selected-post-id="selectedPostId"
+                    :loading="listLoading"
+                    :error="listError"
+                    loading-message="Loading labeled posts…"
+                    empty-message="No job posts match this filter."
+                    @select="selectPost"
+                />
+            </FlowPanel>
 
-            <aside
+            <FlowPanel
                 v-if="selectedPost"
+                as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
-                :class="{
-                    'is-active': activePanel === 'viewer',
-                    'is-adjacent': activePanel === 'posts' || activePanel === 'outreach',
-                }"
+                :active="activePanel === 'viewer'"
+                :adjacent="activePanel === 'posts' || activePanel === 'outreach'"
             >
-                <button
+                <PanelBackButton
                     v-if="!workRunning"
-                    class="back-button"
-                    type="button"
-                    aria-label="Back to job posts"
-                    @click="showPosts"
-                >
-                    ←
-                </button>
+                    label="Back to job posts"
+                    mobile-only
+                    @back="showPosts"
+                />
                 <JobPostViewer
                     :post="selectedPost"
                     :label-updating="labelUpdating"
@@ -266,23 +255,22 @@ onMounted(() => {
                     @start-outreach="startOutreach"
                     @mark-applied="markApplied"
                 />
-            </aside>
+            </FlowPanel>
 
-            <aside
+            <FlowPanel
                 v-if="outreachPost && activePanel === 'outreach'"
-                class="apply-panel apply-outreach glass-frame is-active"
+                as="aside"
+                class="apply-panel apply-outreach glass-frame"
+                active
+                :adjacent="false"
             >
-                <button
+                <PanelBackButton
                     v-if="!workRunning"
-                    class="back-button back-button-work"
-                    type="button"
-                    aria-label="Back to selected job post"
-                    @click="showViewer"
-                >
-                    ←
-                </button>
+                    label="Back to selected job post"
+                    @back="showViewer"
+                />
                 <OutreachPanel :post="outreachPost" />
-            </aside>
+            </FlowPanel>
         </div>
     </section>
 </template>
@@ -304,27 +292,6 @@ onMounted(() => {
 }
 
 .apply-panel {
-    display: none;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-4;
-    min-height: 24rem;
-    padding: $space-5 $space-5 0;
-    border-radius: $radius-lg;
-
-    &.is-active {
-        display: flex;
-    }
-
-    @include bp-md-tablet {
-        min-height: 38rem;
-
-        &.is-adjacent {
-            display: flex;
-            min-width: 24rem;
-        }
-    }
-
     &.apply-post-list {
         min-width: 26em;
     }
@@ -340,77 +307,9 @@ onMounted(() => {
     }
 }
 
-.back-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-ink-muted;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
-
-    @include bp-md-tablet {
-        display: none;
-    }
-
-    &-work {
-        @include bp-md-tablet {
-            display: block;
-        }
-    }
-}
-
-.panel-heading {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $space-4;
-    align-items: end;
-    justify-content: space-between;
-}
-
-.panel-title {
-    display: grid;
-    gap: $space-1;
-}
-
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-}
-
-.panel-heading-title {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 600;
-    letter-spacing: -0.035em;
-    line-height: 1.1;
-    text-wrap: balance;
-}
-
-.panel-controls {
-    display: flex;
-    flex-flow: column wrap;
-    gap: $space-1;
-    align-items: end;
-}
-
-.item-count,
-.post-filter,
-.list-message {
-    color: $color-ink-muted;
-}
-
 .item-count,
 .post-filter {
+    color: $color-ink-muted;
     font-size: 0.75rem;
 }
 
@@ -421,22 +320,6 @@ onMounted(() => {
 
     &-select {
         min-width: 7rem;
-    }
-}
-
-.card-list {
-    display: flex;
-    flex: 1 0 0;
-    flex-direction: column;
-    gap: $space-3;
-    margin: 0;
-    padding: 0 0 $space-5;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    list-style: none;
-
-    li {
-        min-width: 0;
     }
 }
 </style>

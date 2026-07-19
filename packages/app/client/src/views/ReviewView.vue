@@ -3,11 +3,14 @@ import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-fa
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBreakpoints } from '@/composables/useBreakpoints'
+import JobPostList from '@/components/job-posts/JobPostList.vue'
+import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import FlowPanel from '@/components/layout/FlowPanel.vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import PanelHeading from '@/components/layout/PanelHeading.vue'
+import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
-import JobPostCard from '@/components/JobPostCard.vue'
-import JobPostViewer from '@/components/JobPostViewer.vue'
-import SearchReportCard from '@/components/SearchReportCard.vue'
 
 type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
@@ -122,6 +125,17 @@ const postCountLabel = computed(() => {
         : `${filteredResults.value.length} of ${total} posts`
 })
 
+const filteredPosts = computed(() => filteredResults.value.map(({ post }) => post))
+const postListEmptyMessage = computed(() => {
+    if (selectedReport.value?.results.length) {
+        return 'No job posts match this filter.'
+    }
+
+    return selectedReport.value === null
+        ? 'Select a search report.'
+        : 'This report has no job posts.'
+})
+
 watch(filteredResults, (results) => {
     const selectedPostId = selectedResult.value?.post.id
 
@@ -167,6 +181,14 @@ function selectResult(result: JobSearchResult) {
 
     if (selectedReport.value !== null) {
         pushSelectionState(selectedReport.value.id, result.post.id)
+    }
+}
+
+function selectPost(postId: string) {
+    const result = filteredResults.value.find(({ post }) => post.id === postId)
+
+    if (result !== undefined) {
+        selectResult(result)
     }
 }
 
@@ -217,19 +239,17 @@ onMounted(() => {
 <template>
     <section class="layout-draft" aria-label="Job search review">
         <div class="layout-panels">
-            <section
-                class="layout-panel glass-frame"
-                :class="{ 'is-active': activePanel === 'reports' }"
+            <FlowPanel
+                class="glass-frame"
+                :active="activePanel === 'reports'"
+                :adjacent="false"
                 aria-label="Search reports"
             >
-                <header class="panel-heading">
-                    <div class="panel-title">
-                        <span class="eyebrow">Job Search reports</span>
-                        <h2 class="panel-heading-title">Select report to review</h2>
-                    </div>
-
-                    <span class="item-count">{{ reportStore.reports.length }} reports</span>
-                </header>
+                <PanelHeading eyebrow="Job Search reports" title="Select report to review">
+                    <template #controls>
+                        <span class="item-count">{{ reportStore.reports.length }} reports</span>
+                    </template>
+                </PanelHeading>
 
                 <p v-if="reportStore.loading" class="list-message">Loading search reports…</p>
                 <p v-else-if="reportStore.error" class="list-message">
@@ -245,36 +265,22 @@ onMounted(() => {
                     </li>
                 </ul>
                 <p v-else class="list-message">No search reports found.</p>
-            </section>
+            </FlowPanel>
 
-            <section
-                class="layout-panel glass-frame"
-                :class="{
-                    'is-active': activePanel === 'posts',
-                    'is-adjacent': activePanel === 'reports' || activePanel === 'viewer',
-                }"
+            <FlowPanel
+                class="glass-frame"
+                :active="activePanel === 'posts'"
+                :adjacent="activePanel === 'reports' || activePanel === 'viewer'"
                 aria-label="Job posts"
             >
-                <header class="panel-heading">
-                    <div class="panel-title">
-                        <button
-                            v-if="activePanel !== 'reports'"
-                            class="back-button"
-                            type="button"
-                            aria-label="Back to search reports"
-                            @click="showReports"
-                        >
-                            ←
-                        </button>
-
-                        <span class="eyebrow">Job posts</span>
-                        <h2 class="panel-heading-title">
-                            {{ selectedReport?.reportDate ?? 'Select a search report' }}
-                        </h2>
-                    </div>
-
-                    <div class="panel-controls">
-                        <span class="item-count item-count--plain">{{ postCountLabel }}</span>
+                <PanelHeading
+                    eyebrow="Job posts"
+                    :title="selectedReport?.reportDate ?? 'Select a search report'"
+                    :back-label="activePanel === 'reports' ? undefined : 'Back to search reports'"
+                    @back="showReports"
+                >
+                    <template #controls>
+                        <span class="item-count">{{ postCountLabel }}</span>
 
                         <label class="post-filter">
                             <span>Filter</span>
@@ -291,52 +297,32 @@ onMounted(() => {
                                 </select>
                             </span>
                         </label>
-                    </div>
-                </header>
+                    </template>
+                </PanelHeading>
 
-                <ul v-if="filteredResults.length" class="card-list">
-                    <li v-for="result in filteredResults" :key="result.post.id">
-                        <JobPostCard
-                            :post="result.post"
-                            :selected="selectedResult?.post.id === result.post.id"
-                            @select="selectResult(result)"
-                        />
-                    </li>
-                </ul>
-                <p v-else class="list-message">
-                    {{
-                        selectedReport?.results.length
-                            ? 'No job posts match this filter.'
-                            : selectedReport
-                              ? 'This report has no job posts.'
-                              : 'Select a search report.'
-                    }}
-                </p>
-            </section>
+                <JobPostList
+                    :posts="filteredPosts"
+                    :selected-post-id="selectedResult?.post.id ?? null"
+                    :empty-message="postListEmptyMessage"
+                    @select="selectPost"
+                />
+            </FlowPanel>
 
-            <aside
+            <FlowPanel
                 v-if="selectedResult"
-                class="job-post-view layout-panel glass-frame"
-                :class="{
-                    'is-active': activePanel === 'viewer',
-                    'is-adjacent': activePanel === 'posts',
-                }"
+                as="aside"
+                class="job-post-view glass-frame"
+                :active="activePanel === 'viewer'"
+                :adjacent="activePanel === 'posts'"
             >
-                <button
-                    class="back-button back-button-viewer"
-                    type="button"
-                    aria-label="Back to job posts"
-                    @click="showPosts"
-                >
-                    ←
-                </button>
+                <PanelBackButton label="Back to job posts" mobile-only @back="showPosts" />
                 <JobPostViewer
                     :post="selectedResult.post"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     @update-label="updateUserLabel"
                 />
-            </aside>
+            </FlowPanel>
         </div>
     </section>
 </template>
@@ -348,24 +334,6 @@ onMounted(() => {
     flex: 1;
 }
 
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-}
-
-.panel-heading-title {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 600;
-    letter-spacing: -0.035em;
-    line-height: 1.1;
-    text-wrap: balance;
-}
-
 .layout-panels {
     display: flex;
     flex: 1;
@@ -373,66 +341,9 @@ onMounted(() => {
     min-width: 0;
 }
 
-.layout-panel {
-    display: none;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-4;
-    min-height: 24rem;
-    padding: $space-5 $space-5 0;
-    border-radius: $radius-lg;
-
-    &.is-active {
-        display: flex;
-    }
-
-    @include bp-md-tablet {
-        min-height: 38rem;
-
-        &.is-adjacent {
-            display: flex;
-            min-width: 24rem;
-        }
-    }
-
-    &.job-post-view {
-        flex: 2;
-        padding: 1.5rem;
-    }
-}
-
-.panel-heading {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $space-4;
-    align-items: end;
-    justify-content: space-between;
-}
-
-.panel-title {
-    display: grid;
-    gap: $space-1;
-}
-
-.back-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-ink-muted;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
-
-    &-viewer {
-        @include bp-md-tablet {
-            display: none;
-        }
-    }
+.job-post-view {
+    flex: 2;
+    padding: 1.5rem;
 }
 
 .item-count {
@@ -443,15 +354,6 @@ onMounted(() => {
     background: transparent;
     border: 0;
     border-radius: 0;
-}
-
-.panel-controls {
-    display: flex;
-    flex-flow: column wrap;
-    gap: $space-1;
-    align-items: end;
-    justify-content: flex-end;
-    height: 100%;
 }
 
 .post-filter {

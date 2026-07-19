@@ -2,6 +2,8 @@
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
 
+import JobPostLabel from './JobPostLabel.vue'
+
 const props = withDefaults(
     defineProps<{
         post: JobPost
@@ -61,21 +63,10 @@ function updateLabel() {
         <div class="post-heading">
             <div class="post-labels">
                 <span class="component-label">{{ post.company }}</span>
-
-                <div
-                    v-if="applied || post.userLabel !== null"
-                    class="user-label"
-                    :class="{
-                        'user-label-applied': applied,
-                        'user-label-forgo': !applied && post.userLabel === 'forgo',
-                    }"
-                >
-                    <template v-if="applied"> applied </template>
-                    <template v-else-if="post.userLabel === 'forgo'"> forgone </template>
-                    <template v-else>
-                        {{ post.userLabel }}
-                    </template>
-                </div>
+                <JobPostLabel
+                    :application-status="post.applicationStatus"
+                    :user-label="post.userLabel"
+                />
             </div>
 
             <h2 id="selected-post-title" class="post-title">{{ post.roleTitle }}</h2>
@@ -214,36 +205,6 @@ function updateLabel() {
 
     &-select {
         min-width: 8rem;
-    }
-}
-
-.user-label {
-    display: inline-flex;
-    gap: $space-1;
-    align-items: center;
-    padding: $space-1 $space-3;
-    color: $color-signal-light;
-    font: inherit;
-    font-family: $font-family-mono;
-    font-size: 0.75rem;
-    background: rgb(173 123 249 / 12%);
-    border: 1px solid rgb(173 123 249 / 32%);
-    border-radius: $radius-full;
-
-    &:hover,
-    &:focus-visible {
-        --remove-label-opacity: 1;
-    }
-
-    &-forgo {
-        filter: grayscale(1);
-        opacity: 0.55;
-    }
-
-    &-applied {
-        color: $color-ink;
-        background: rgb(43 138 62 / 25%);
-        border-color: rgb(43 138 62 / 55%);
     }
 }
 

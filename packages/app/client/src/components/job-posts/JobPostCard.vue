@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
-import { computed } from 'vue'
 
-const props = defineProps<{
+import JobPostLabel from './JobPostLabel.vue'
+
+defineProps<{
     post: JobPost
     selected: boolean
 }>()
@@ -10,8 +11,6 @@ const props = defineProps<{
 const emit = defineEmits<{
     select: []
 }>()
-
-const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
 </script>
 
 <template>
@@ -27,17 +26,11 @@ const applied = computed(() => props.post.applicationStatus === 'awaiting-respon
     >
         <div class="post-card-header">
             <span class="component-label">{{ post.company }}</span>
-            <span
-                v-if="applied || post.userLabel !== null"
-                class="user-label"
-                :class="{ 'user-label-applied': applied }"
-            >
-                <template v-if="applied"> applied </template>
-                <template v-else-if="post.userLabel === 'forgo'"> forgone </template>
-                <template v-else>
-                    {{ post.userLabel }}
-                </template>
-            </span>
+            <JobPostLabel
+                :application-status="post.applicationStatus"
+                :user-label="post.userLabel"
+                compact
+            />
         </div>
         <strong class="post-role">{{ post.roleTitle }}</strong>
         <span class="post-company">{{ post.location }}</span>
@@ -95,23 +88,6 @@ const applied = computed(() => props.post.applicationStatus === 'awaiting-respon
 
 .post-role {
     text-wrap: balance;
-}
-
-.user-label {
-    width: fit-content;
-    padding: $space-1 $space-2;
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    background: rgb(173 123 249 / 12%);
-    border: 1px solid rgb(173 123 249 / 24%);
-    border-radius: $radius-full;
-
-    &-applied {
-        color: $color-ink;
-        background: rgb(43 138 62 / 25%);
-        border-color: rgb(43 138 62 / 55%);
-    }
 }
 
 .post-company,
