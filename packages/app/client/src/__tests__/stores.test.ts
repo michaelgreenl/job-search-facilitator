@@ -1,6 +1,7 @@
 import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useOutreachStore } from '../stores/outreach.store'
 import { usePostStore } from '../stores/post.store'
 import { useReportStore } from '../stores/report.store'
 
@@ -159,5 +160,30 @@ describe('post store', () => {
             undefined,
         )
         expect(store.posts).toEqual([labeledPost])
+    })
+})
+
+describe('outreach store', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+    })
+
+    it('does not replace an edited draft with a completed task that was already applied', () => {
+        const store = useOutreachStore()
+        const output = {
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+        }
+
+        store.begin(post.id)
+        store.applyTaskResult(output)
+        store.draft = 'Edited draft'
+        store.applyTaskResult(output)
+
+        expect(store.draft).toBe('Edited draft')
+        expect(store.taskKind).toBeNull()
     })
 })

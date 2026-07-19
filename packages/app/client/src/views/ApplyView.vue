@@ -1,26 +1,44 @@
 <script setup lang="ts">
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
-import { computed, onMounted, shallowRef, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
 import JobPostCard from '@/components/JobPostCard.vue'
 import JobPostViewer from '@/components/JobPostViewer.vue'
+import OutreachPanel from '@/components/OutreachPanel.vue'
+import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
+import { useWorkStore } from '@/stores/work.store'
+import { createOutreachTask } from '@/work-tasks'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'posts' | 'viewer'
+type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postStore = usePostStore()
+const workStore = useWorkStore()
+const outreachStore = useOutreachStore()
+const { postId: outreachPostId } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
-const activePanel = shallowRef<ActivePanel>('posts')
-const selectedPostId = shallowRef<string | null>(null)
+const activePanel = shallowRef<ActivePanel>(
+    outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
+)
+const selectedPostId = shallowRef<string | null>(outreachPostId.value)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
+const applicationUpdating = shallowRef(false)
+const applicationError = shallowRef<string | null>(null)
+const retainedAppliedPostIds = reactive(new Set<string>())
 
 const actionablePosts = computed(() =>
-    postStore.posts.filter(({ userLabel }) => userLabel !== null && userLabel !== 'forgo'),
+    postStore.posts.filter(
+        ({ applicationStatus, id, userLabel }) =>
+            userLabel !== null &&
+            userLabel !== 'forgo' &&
+            (applicationStatus === 'not-applied' || retainedAppliedPostIds.has(id)),
+    ),
 )
 
 const filteredPosts = computed(() =>
@@ -32,15 +50,30 @@ const filteredPosts = computed(() =>
 const selectedPost = computed(
     () => postStore.posts.find(({ id }) => id === selectedPostId.value) ?? null,
 )
+const outreachPost = computed(
+    () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
+)
+const workRunning = computed(() =>
+    ['connecting', 'connected', 'reconnecting'].includes(workStore.connectionState),
+)
 
 watch(
     filteredPosts,
     (posts) => {
-        if (posts.some(({ id }) => id === selectedPostId.value)) {
+        if (
+            posts.some(({ id }) => id === selectedPostId.value) ||
+            (activePanel.value === 'outreach' && outreachPostId.value !== null)
+        ) {
             return
         }
 
-        selectedPostId.value = posts[0]?.id ?? null
+        const postId = posts[0]?.id ?? null
+        const changed = postId !== selectedPostId.value
+        selectedPostId.value = postId
+
+        if (changed) {
+            outreachStore.reset()
+        }
 
         if (selectedPostId.value === null) {
             activePanel.value = 'posts'
@@ -50,22 +83,49 @@ watch(
 )
 
 function selectPost(postId: string) {
+    const changed = postId !== selectedPostId.value
     selectedPostId.value = postId
+
+    if (changed) {
+        outreachStore.reset()
+    }
+
     labelError.value = null
+    applicationError.value = null
     activePanel.value = 'viewer'
 }
 
 function showPosts() {
+    if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
+        selectedPostId.value = filteredPosts.value[0]?.id ?? null
+        outreachStore.reset()
+    }
+
     activePanel.value = 'posts'
 }
 
+function showViewer() {
+    activePanel.value = 'viewer'
+}
+
+function startOutreach() {
+    if (selectedPost.value === null || workRunning.value) {
+        return
+    }
+
+    outreachStore.begin(selectedPost.value.id)
+    activePanel.value = 'outreach'
+    void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
+}
+
 async function updateUserLabel(userLabel: UserLabel | null) {
-    if (selectedPostId.value === null || labelUpdating.value) {
+    if (selectedPostId.value === null || labelUpdating.value || applicationUpdating.value) {
         return
     }
 
     labelUpdating.value = true
     labelError.value = null
+    applicationError.value = null
 
     try {
         await postStore.updatePost(selectedPostId.value, { userLabel })
@@ -73,6 +133,35 @@ async function updateUserLabel(userLabel: UserLabel | null) {
         labelError.value = error instanceof Error ? error.message : 'Could not update label'
     } finally {
         labelUpdating.value = false
+    }
+}
+
+async function markApplied() {
+    const post = selectedPost.value
+
+    if (post === null || applicationUpdating.value || labelUpdating.value) {
+        return
+    }
+
+    const postId = post.id
+    applicationUpdating.value = true
+    applicationError.value = null
+    labelError.value = null
+    retainedAppliedPostIds.add(postId)
+
+    try {
+        await postStore.updatePost(postId, {
+            applicationStatus: 'awaiting-response',
+        })
+    } catch (error) {
+        retainedAppliedPostIds.delete(postId)
+
+        if (selectedPostId.value === postId) {
+            applicationError.value =
+                error instanceof Error ? error.message : 'Could not update application status'
+        }
+    } finally {
+        applicationUpdating.value = false
     }
 }
 
@@ -152,10 +241,11 @@ onMounted(() => {
                 class="apply-panel apply-job-post-view glass-frame"
                 :class="{
                     'is-active': activePanel === 'viewer',
-                    'is-adjacent': activePanel === 'posts',
+                    'is-adjacent': activePanel === 'posts' || activePanel === 'outreach',
                 }"
             >
                 <button
+                    v-if="!workRunning"
                     class="back-button"
                     type="button"
                     aria-label="Back to job posts"
@@ -167,8 +257,31 @@ onMounted(() => {
                     :post="selectedPost"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
+                    :application-updating="applicationUpdating"
+                    :application-error="applicationError"
+                    show-outreach-action
+                    :outreach-disabled="workRunning"
+                    show-applied-option
                     @update-label="updateUserLabel"
+                    @start-outreach="startOutreach"
+                    @mark-applied="markApplied"
                 />
+            </aside>
+
+            <aside
+                v-if="outreachPost && activePanel === 'outreach'"
+                class="apply-panel apply-outreach glass-frame is-active"
+            >
+                <button
+                    v-if="!workRunning"
+                    class="back-button back-button-work"
+                    type="button"
+                    aria-label="Back to selected job post"
+                    @click="showViewer"
+                >
+                    ←
+                </button>
+                <OutreachPanel :post="outreachPost" />
             </aside>
         </div>
     </section>
@@ -178,14 +291,15 @@ onMounted(() => {
 .apply-layout {
     display: flex;
     flex: 1;
-    width: min(100%, 84rem);
-    margin: 0 auto;
+    max-height: calc(100dvh - ($space-3 * 2));
+    min-height: 0;
 }
 
 .apply-panels {
     display: flex;
     flex: 1;
     gap: $space-4;
+    min-height: 0;
     min-width: 0;
 }
 
@@ -219,6 +333,11 @@ onMounted(() => {
         flex: 2;
         padding: $space-5;
     }
+
+    &.apply-outreach {
+        overflow: hidden;
+        padding: $space-5;
+    }
 }
 
 .back-button {
@@ -237,6 +356,12 @@ onMounted(() => {
 
     @include bp-md-tablet {
         display: none;
+    }
+
+    &-work {
+        @include bp-md-tablet {
+            display: block;
+        }
     }
 }
 

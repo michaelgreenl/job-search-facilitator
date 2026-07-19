@@ -1,25 +1,57 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
-import { shallowRef } from 'vue'
+import { computed, shallowRef } from 'vue'
 
-defineProps<{
-    post: JobPost
-    labelUpdating: boolean
-    labelError: string | null
-}>()
+const props = withDefaults(
+    defineProps<{
+        post: JobPost
+        labelUpdating: boolean
+        labelError: string | null
+        showOutreachAction?: boolean
+        outreachDisabled?: boolean
+        showAppliedOption?: boolean
+        applicationUpdating?: boolean
+        applicationError?: string | null
+    }>(),
+    {
+        showOutreachAction: false,
+        outreachDisabled: false,
+        showAppliedOption: false,
+        applicationUpdating: false,
+        applicationError: null,
+    },
+)
 
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
+    startOutreach: []
+    markApplied: []
 }>()
 
-const selectedLabel = shallowRef<UserLabel | ''>('')
+type LabelSelection = UserLabel | 'applied' | null | ''
+
+const selectedLabel = shallowRef<LabelSelection>('')
+const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
+const labelPrompt = computed(() => {
+    if (applied.value) {
+        return 'Applied'
+    }
+
+    return props.post.userLabel === null ? 'Add label' : 'Change label'
+})
+const postError = computed(() => props.applicationError ?? props.labelError)
 
 function updateLabel() {
     if (selectedLabel.value === '') {
         return
     }
 
-    emit('updateLabel', selectedLabel.value)
+    if (selectedLabel.value === 'applied') {
+        emit('markApplied')
+    } else {
+        emit('updateLabel', selectedLabel.value)
+    }
+
     selectedLabel.value = ''
 }
 </script>
@@ -31,11 +63,15 @@ function updateLabel() {
                 <span class="component-label">{{ post.company }}</span>
 
                 <div
-                    v-if="post.userLabel !== null"
+                    v-if="applied || post.userLabel !== null"
                     class="user-label"
-                    :class="{ 'user-label-forgo': post.userLabel === 'forgo' }"
+                    :class="{
+                        'user-label-applied': applied,
+                        'user-label-forgo': !applied && post.userLabel === 'forgo',
+                    }"
                 >
-                    <template v-if="post.userLabel === 'forgo'"> forgone </template>
+                    <template v-if="applied"> applied </template>
+                    <template v-else-if="post.userLabel === 'forgo'"> forgone </template>
                     <template v-else>
                         {{ post.userLabel }}
                     </template>
@@ -47,15 +83,27 @@ function updateLabel() {
         </div>
 
         <div class="post-actions">
-            <a
-                class="open-post-button"
-                :href="post.applicationUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                :aria-label="`Open ${post.roleTitle} in a new tab`"
-            >
-                Open post ↗
-            </a>
+            <div class="primary-actions">
+                <a
+                    class="post-action-button"
+                    :href="post.applicationUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :aria-label="`Open ${post.roleTitle} in a new tab`"
+                >
+                    Open post ↗
+                </a>
+
+                <button
+                    v-if="showOutreachAction"
+                    class="post-action-button"
+                    type="button"
+                    :disabled="outreachDisabled"
+                    @click="emit('startOutreach')"
+                >
+                    Find outreach contact
+                </button>
+            </div>
 
             <label class="label-picker">
                 <span class="select-field">
@@ -63,22 +111,21 @@ function updateLabel() {
                         v-model="selectedLabel"
                         class="select-control label-picker-select"
                         aria-label="Job post label"
-                        :disabled="labelUpdating"
+                        :disabled="labelUpdating || applicationUpdating || applied"
                         @change="updateLabel"
                     >
-                        <option disabled value="">
-                            {{ post.userLabel === null ? 'Add label' : 'Change label' }}
-                        </option>
+                        <option disabled value="">{{ labelPrompt }}</option>
                         <option v-for="label in USER_LABELS" :key="label" :value="label">
                             {{ label }}
                         </option>
+                        <option v-if="showAppliedOption" value="applied">Applied</option>
                         <option :value="null">clear label</option>
                     </select>
                 </span>
             </label>
         </div>
 
-        <p v-if="labelError" class="label-error" role="alert">{{ labelError }}</p>
+        <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
 
         <div class="placeholder-content">
             <strong>Selected post: {{ post.id }}</strong>
@@ -130,17 +177,31 @@ function updateLabel() {
     justify-content: space-between;
 }
 
-.open-post-button {
+.primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+}
+
+.post-action-button {
     padding: $space-2 $space-3;
     color: $color-ink;
+    font: inherit;
     font-weight: 650;
+    cursor: pointer;
     text-decoration: none;
     background: #af8de2;
+    border: 0;
     border-radius: $radius-md;
 
     &:hover,
     &:focus-visible {
         background: $color-signal;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.55;
     }
 }
 
@@ -177,6 +238,12 @@ function updateLabel() {
     &-forgo {
         filter: grayscale(1);
         opacity: 0.55;
+    }
+
+    &-applied {
+        color: $color-ink;
+        background: rgb(43 138 62 / 25%);
+        border-color: rgb(43 138 62 / 55%);
     }
 }
 

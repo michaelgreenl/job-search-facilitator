@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost, UserLabel } from '@job-search-facilitator/core'
-import { createPinia } from 'pinia'
+import type { JobPost, UserLabel, WorkTaskEvent } from '@job-search-facilitator/core'
+import { createPinia, type Pinia } from 'pinia'
 import { createApp, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ApplyView from '../views/ApplyView.vue'
@@ -30,6 +30,27 @@ const posts = [
     createPost('post-quick-app', 'quick-app'),
 ]
 
+const runningWorkTask = {
+    id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
+    status: 'running',
+    threadId: 'thread-id',
+    turnId: 'turn-id',
+    output: null,
+    error: null,
+}
+
+const linkedInActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+const linkedInActionRequired = {
+    type: 'action-required',
+    action: {
+        id: linkedInActionId,
+        kind: 'browser-origin',
+        message: 'Allow Chrome to access https://www.linkedin.com?',
+        origin: 'https://www.linkedin.com',
+    },
+    createdAt: '2026-07-18T12:00:00.000Z',
+} satisfies WorkTaskEvent
+
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
         status,
@@ -38,12 +59,29 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
-const mountApplyView = async () => {
+class FakeEventSource {
+    static instances: FakeEventSource[] = []
+
+    readonly close = vi.fn()
+    onopen: (() => void) | null = null
+    onmessage: ((event: { data: string }) => void) | null = null
+    onerror: (() => void) | null = null
+
+    constructor(readonly url: string) {
+        FakeEventSource.instances.push(this)
+    }
+
+    message(event: WorkTaskEvent) {
+        this.onmessage?.({ data: JSON.stringify(event) })
+    }
+}
+
+const mountApplyView = async (pinia: Pinia = createPinia()) => {
     const root = document.createElement('div')
     document.body.append(root)
 
     const app = createApp(ApplyView)
-    app.use(createPinia())
+    app.use(pinia)
     app.mount(root)
     mountedApps.push({ app, root })
 
@@ -75,6 +113,7 @@ describe('apply view', () => {
             root.remove()
         }
 
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
         vi.unstubAllGlobals()
     })
 
@@ -129,6 +168,351 @@ describe('apply view', () => {
             expect(list?.classList.contains('is-adjacent')).toBe(false)
             expect(viewer?.classList.contains('is-active')).toBe(false)
             expect(viewer?.classList.contains('is-adjacent')).toBe(true)
+        })
+    })
+
+    it('finds a relevant outreach contact for the selected job post', async () => {
+        const fetchMock = vi.mocked(fetch)
+        const writeText = vi.fn().mockResolvedValue(undefined)
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText },
+        })
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P2 Engineer').click()
+        findButton(root, 'Find outreach contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const taskRequest = fetchMock.mock.calls[2]
+        const taskBody = (taskRequest?.[1] as RequestInit | undefined)?.body
+
+        expect(typeof taskBody).toBe('string')
+
+        const taskInput = JSON.parse(taskBody as string) as {
+            prompt: string
+            outputSchema: { required: string[] }
+            capabilities: string[]
+        }
+
+        expect(taskRequest?.[0]).toBe('http://localhost:3001/tasks')
+        expect(taskInput.prompt).toContain('Example Co')
+        expect(taskInput.prompt).toContain('P2 Engineer')
+        expect(taskInput.prompt).toContain('https://example.com/jobs/post-p2')
+        expect(taskInput.prompt).not.toContain('P1 Engineer')
+        expect(taskInput.prompt).toContain('People')
+        expect(taskInput.prompt).toContain('likely hiring manager or team lead')
+        expect(taskInput.prompt).toContain('not simply the first result')
+        expect(taskInput.prompt).toContain('docs/agents/job-search-user-info.md')
+        expect(taskInput.prompt).toContain('truthful first outreach message')
+        expect(taskInput.outputSchema.required).toEqual([
+            'personName',
+            'personTitle',
+            'profileUrl',
+            'relevanceRationale',
+            'draftMessage',
+        ])
+        expect(taskInput.capabilities).toEqual(['chrome'])
+
+        const source = FakeEventSource.instances[0]!
+        expect(source.url).toBe(`http://localhost:3001/tasks/${runningWorkTask.id}/events`)
+
+        source.message({
+            type: 'activity',
+            message: 'Using Chrome',
+            createdAt: '2026-07-18T12:00:00.000Z',
+        })
+        source.message({
+            type: 'completed',
+            output: {
+                personName: 'Ada Lovelace',
+                personTitle: 'Engineering Manager',
+                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                relevanceRationale: 'Their Engineering Manager title aligns with this role.',
+                draftMessage: 'Hi Ada, I would value your perspective on the P2 Engineer role.',
+            },
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Using Chrome')
+            expect(root.textContent).toContain('Ada Lovelace')
+            expect(root.textContent).toContain('Engineering Manager')
+            expect(root.textContent).toContain(
+                'Their Engineering Manager title aligns with this role.',
+            )
+            expect(root.querySelector<HTMLAnchorElement>('.person-name')?.href).toBe(
+                'https://www.linkedin.com/in/ada-lovelace',
+            )
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
+            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).toBe('none')
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
+                false,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+        })
+
+        findButton(root, 'Copy draft').click()
+        await vi.waitFor(() => {
+            expect(writeText).toHaveBeenCalledExactlyOnceWith(
+                'Hi Ada, I would value your perspective on the P2 Engineer role.',
+            )
+            expect(root.textContent).toContain('Copied')
+        })
+
+        findButton(root, 'Show agent stream').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).not.toBe('none')
+            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).toBe('none')
+        })
+
+        findButton(root, 'Back to draft').click()
+
+        const draft = root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
+        const request = root.querySelector<HTMLTextAreaElement>('#draft-request')
+
+        if (draft === null || request === null) {
+            throw new Error('Could not find outreach draft fields')
+        }
+
+        draft.value = 'Hi Ada, could I ask about the engineering team?'
+        draft.dispatchEvent(new Event('input'))
+        request.value = 'Make this warmer without making it longer.'
+        request.dispatchEvent(new Event('input'))
+
+        const revisionTask = {
+            ...runningWorkTask,
+            id: '2ab5f86e-b2f8-47ed-a4bc-31f7891eae2f',
+            threadId: 'revision-thread-id',
+            turnId: 'revision-turn-id',
+        }
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
+
+        await vi.waitFor(() => expect(findButton(root, 'Send').disabled).toBe(false))
+        findButton(root, 'Send').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+        const revisionRequest = fetchMock.mock.calls[4]
+        const revisionBody = (revisionRequest?.[1] as RequestInit | undefined)?.body
+
+        expect(typeof revisionBody).toBe('string')
+
+        const revisionInput = JSON.parse(revisionBody as string) as {
+            prompt: string
+            outputSchema: { required: string[] }
+            capabilities: string[]
+        }
+
+        expect(revisionInput.prompt).toContain('P2 Engineer')
+        expect(revisionInput.prompt).toContain('Ada Lovelace')
+        expect(revisionInput.prompt).toContain('Hi Ada, could I ask about the engineering team?')
+        expect(revisionInput.prompt).toContain('Make this warmer without making it longer.')
+        expect(revisionInput.prompt).toContain('asks a question')
+        expect(revisionInput.outputSchema.required).toEqual(['draftMessage', 'response'])
+        expect(revisionInput.capabilities).toEqual([])
+
+        FakeEventSource.instances[1]!.message({
+            type: 'completed',
+            output: {
+                draftMessage: 'Hi Ada, I would love to hear about the engineering team.',
+                response: 'I made the opening warmer and kept it concise.',
+            },
+            createdAt: '2026-07-18T12:00:02.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe('Hi Ada, I would love to hear about the engineering team.')
+            expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
+            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to selected job post"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
+                true,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')).toBeNull()
+        })
+    })
+
+    it('shows and resolves a required LinkedIn permission without starting another task', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Find outreach contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const source = FakeEventSource.instances[0]!
+        source.message(linkedInActionRequired)
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Action required')
+            expect(root.textContent).toContain('Allow Chrome to access https://www.linkedin.com?')
+            expect(root.querySelector('textarea')).toBeNull()
+            expect(root.querySelector('[aria-label="Back to selected job post"]')).toBeNull()
+        })
+
+        findButton(root, 'Allow for this task').click()
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                4,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/actions/${linkedInActionId}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: 'approve' }),
+                },
+            )
+        })
+        expect(FakeEventSource.instances).toHaveLength(1)
+
+        source.message({
+            type: 'action-resolved',
+            actionId: linkedInActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(root.textContent).not.toContain('Allow Chrome to access')
+        })
+    })
+
+    it('keeps a pending outreach action available after the Apply view remounts', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(posts))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Find outreach contact').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        FakeEventSource.instances[0]!.message(linkedInActionRequired)
+
+        const mounted = mountedApps.pop()!
+        mounted.app.unmount()
+        mounted.root.remove()
+
+        const remountedRoot = await mountApplyView(pinia)
+
+        await vi.waitFor(() => {
+            expect(remountedRoot.textContent).toContain('Allow Chrome to access')
+            expect(
+                remountedRoot.querySelector('.apply-outreach')?.classList.contains('is-active'),
+            ).toBe(true)
+        })
+    })
+
+    it('keeps a newly applied post visible for the current route visit', async () => {
+        const appliedPost = { ...posts[0]!, applicationStatus: 'awaiting-response' as const }
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(appliedPost))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
+
+        if (labelPicker === null) {
+            throw new Error('Could not find job post label picker')
+        }
+
+        expect([...labelPicker.options].map(({ value }) => value)).toContain('applied')
+        labelPicker.value = 'applied'
+        labelPicker.dispatchEvent(new Event('change'))
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('.apply-job-post-view .user-label')?.textContent?.trim(),
+            ).toBe('applied')
+            expect(root.textContent).toContain('P1 Engineer')
+            expect(labelPicker.disabled).toBe(true)
+        })
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            'http://localhost:3000/api/job-posts/post-p1',
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationStatus: 'awaiting-response' }),
+            },
+        )
+
+        findButton(root, 'P2 Engineer').click()
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('P1 Engineer')
+            expect(root.textContent).toContain('P2 Engineer')
+        })
+
+        expect(root.textContent).not.toContain('Undo')
+    })
+
+    it('keeps an unapplied post available when its status update fails', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse([posts[0]]))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
+
+        if (labelPicker === null) {
+            throw new Error('Could not find job post label picker')
+        }
+
+        labelPicker.value = 'applied'
+        labelPicker.dispatchEvent(new Event('change'))
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+                'API request failed (500)',
+            )
+            expect(labelPicker.disabled).toBe(false)
+            expect(root.textContent).toContain('P1 Engineer')
         })
     })
 
