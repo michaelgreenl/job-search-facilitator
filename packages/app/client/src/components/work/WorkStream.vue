@@ -4,22 +4,13 @@ import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useWorkStore } from '@/stores/work.store'
 
-withDefaults(
-    defineProps<{
-        status: string
-        issue: string | null
-        showUpdates?: boolean
-    }>(),
-    { showUpdates: true },
-)
+defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
 const { actionSubmitting, events, pendingAction } = storeToRefs(workStore)
+
 const activities = computed(() =>
     events.value.flatMap((event) => (event.type === 'activity' ? [event.message] : [])),
-)
-const commentary = computed(() =>
-    events.value.flatMap((event) => (event.type === 'message' ? [event.textDelta] : [])).join(''),
 )
 
 function resolveAction(decision: WorkActionDecision) {
@@ -28,8 +19,7 @@ function resolveAction(decision: WorkActionDecision) {
 </script>
 
 <template>
-    <div v-show="showUpdates" class="work-updates">
-        <p class="work-status" aria-live="polite">{{ status }}</p>
+    <div class="work-updates">
         <p v-if="issue" class="work-error" role="alert">{{ issue }}</p>
 
         <div class="work-progress">
@@ -43,8 +33,6 @@ function resolveAction(decision: WorkActionDecision) {
                     {{ activity }}
                 </li>
             </ul>
-
-            <p v-if="commentary" class="commentary">{{ commentary }}</p>
         </div>
     </div>
 
@@ -55,20 +43,20 @@ function resolveAction(decision: WorkActionDecision) {
 
         <div class="action-buttons">
             <button
-                class="action-button action-button-primary"
-                type="button"
-                :disabled="actionSubmitting"
-                @click="resolveAction('approve')"
-            >
-                Allow for this task
-            </button>
-            <button
                 class="action-button"
                 type="button"
                 :disabled="actionSubmitting"
                 @click="resolveAction('decline')"
             >
                 Decline
+            </button>
+            <button
+                class="action-button action-button-primary"
+                type="button"
+                :disabled="actionSubmitting"
+                @click="resolveAction('approve')"
+            >
+                Allow for this task
             </button>
         </div>
     </section>
@@ -79,22 +67,13 @@ function resolveAction(decision: WorkActionDecision) {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: $space-4;
     min-height: 0;
 }
 
-.work-status,
 .work-error,
 .action-title,
-.action-message,
-.commentary {
+.action-message {
     margin: 0;
-}
-
-.work-status,
-.activity-list {
-    color: $color-ink-muted;
-    font-size: 0.8125rem;
 }
 
 .work-error {
@@ -103,7 +82,6 @@ function resolveAction(decision: WorkActionDecision) {
 
 .work-progress {
     display: grid;
-    flex: 1;
     gap: $space-3;
     min-height: 0;
     overflow-y: auto;
@@ -115,17 +93,13 @@ function resolveAction(decision: WorkActionDecision) {
     gap: $space-1;
     margin: 0;
     padding-left: $space-5;
-}
-
-.commentary {
-    color: $color-ink-secondary;
-    font-size: 0.875rem;
-    white-space: pre-wrap;
+    color: $color-ink-muted;
+    font-size: 0.8125rem;
 }
 
 .action-required {
     display: grid;
-    gap: $space-3;
+    gap: $space-1;
     padding: $space-4;
     background: rgb(173 123 249 / 10%);
     border: 1px solid rgb(173 123 249 / 32%);
@@ -154,6 +128,8 @@ function resolveAction(decision: WorkActionDecision) {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
+    justify-content: flex-end;
+    margin-top: $space-3;
 }
 
 .action-button {

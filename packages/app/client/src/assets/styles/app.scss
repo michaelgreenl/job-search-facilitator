@@ -42,8 +42,8 @@ a {
 }
 
 :focus-visible {
-    outline: 2px solid $color-signal;
-    outline-offset: 3px;
+    outline: 1px solid $color-signal;
+    outline-offset: 0;
 }
 
 ::selection {

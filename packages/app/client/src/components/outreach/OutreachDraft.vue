@@ -36,15 +36,13 @@ const canSubmit = computed(() => request.value.trim().length > 0)
         </div>
 
         <form class="draft-request" @submit.prevent="emit('submit')">
-            <label class="field-label draft-request-label" for="draft-request">
-                Ask for changes or ask a question
-            </label>
             <textarea
                 id="draft-request"
                 v-model="request"
                 class="text-field request-input"
-                rows="2"
+                rows="1"
                 :disabled="running"
+                placeholder="Request Changes"
             ></textarea>
             <button class="draft-button" type="submit" :disabled="running || !canSubmit">
                 Send
@@ -56,7 +54,7 @@ const canSubmit = computed(() => request.value.trim().length > 0)
         </p>
 
         <label class="draft-content">
-            <span class="field-label">Message draft</span>
+            <span class="field-label">Message</span>
             <textarea
                 v-model="draft"
                 class="text-field draft-textarea"
@@ -88,8 +86,6 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
 }
 
 .contact-card {
@@ -140,10 +136,6 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     display: grid;
     grid-template-columns: 1fr auto;
     gap: $space-2;
-}
-
-.draft-request-label {
-    grid-column: 1 / -1;
 }
 
 .text-field {

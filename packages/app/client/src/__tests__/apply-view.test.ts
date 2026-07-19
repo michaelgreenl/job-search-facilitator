@@ -188,7 +188,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P2 Engineer').click()
-        findButton(root, 'Find outreach contact').click()
+        findButton(root, 'Discover outreach').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const taskRequest = fetchMock.mock.calls[2]
@@ -242,7 +242,6 @@ describe('apply view', () => {
         })
 
         await vi.waitFor(() => {
-            expect(root.textContent).toContain('Using Chrome')
             expect(root.textContent).toContain('Ada Lovelace')
             expect(root.textContent).toContain('Engineering Manager')
             expect(root.textContent).toContain(
@@ -254,7 +253,7 @@ describe('apply view', () => {
             expect(
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
-            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).toBe('none')
+            expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -273,15 +272,6 @@ describe('apply view', () => {
             )
             expect(root.textContent).toContain('Copied')
         })
-
-        findButton(root, 'Show agent stream').click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector<HTMLElement>('.work-updates')?.style.display).not.toBe('none')
-            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).toBe('none')
-        })
-
-        findButton(root, 'Back to draft').click()
 
         const draft = root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
         const request = root.querySelector<HTMLTextAreaElement>('#draft-request')
@@ -371,7 +361,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Find outreach contact').click()
+        findButton(root, 'Discover outreach').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -381,7 +371,7 @@ describe('apply view', () => {
             expect(root.textContent).toContain('Action required')
             expect(root.textContent).toContain('Allow Chrome to access https://www.linkedin.com?')
             expect(root.querySelector('textarea')).toBeNull()
-            expect(root.querySelector('[aria-label="Back to selected job post"]')).toBeNull()
+            expect(root.querySelector('[aria-label="Back to selected job post"]')).not.toBeNull()
         })
 
         findButton(root, 'Allow for this task').click()
@@ -424,7 +414,7 @@ describe('apply view', () => {
         const root = await mountApplyView(pinia)
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Find outreach contact').click()
+        findButton(root, 'Discover outreach').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)

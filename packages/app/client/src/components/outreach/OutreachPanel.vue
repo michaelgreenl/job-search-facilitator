@@ -2,6 +2,7 @@
 import type { JobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
@@ -11,41 +12,21 @@ import OutreachDraft from './OutreachDraft.vue'
 
 const props = defineProps<{ post: JobPost }>()
 
+const emit = defineEmits<{
+    showViewer: []
+}>()
+
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { connectionState, error, pendingAction, task } = storeToRefs(workStore)
-const { assistantReply, contact, draft, panelView, resultError, taskKind } =
-    storeToRefs(outreachStore)
+const { connectionState, error, task } = storeToRefs(workStore)
+const { assistantReply, contact, draft, resultError } = storeToRefs(outreachStore)
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 
 const running = computed(() =>
     ['connecting', 'connected', 'reconnecting'].includes(connectionState.value),
 )
-const status = computed(() => {
-    if (pendingAction.value !== null) {
-        return 'Action required before Work can continue.'
-    }
 
-    if (task.value?.status === 'completed') {
-        return resultError.value === null ? 'Draft ready.' : 'Work completed.'
-    }
-
-    if (task.value?.status === 'failed') {
-        return 'Work task failed.'
-    }
-
-    switch (connectionState.value) {
-        case 'connecting':
-            return taskKind.value === 'draft' ? 'Starting draft task…' : 'Starting outreach task…'
-        case 'connected':
-            return taskKind.value === 'draft' ? 'Updating draft…' : 'Searching LinkedIn…'
-        case 'reconnecting':
-            return 'Connection interrupted. Retrying…'
-        default:
-            return 'Preparing outreach task…'
-    }
-})
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
 
 watch(
@@ -61,10 +42,6 @@ watch(
 watch(draft, () => {
     copyState.value = 'idle'
 })
-
-function togglePanelView() {
-    panelView.value = panelView.value === 'draft' ? 'stream' : 'draft'
-}
 
 function submitDraftRequest() {
     const request = draftRequest.value.trim()
@@ -97,20 +74,16 @@ async function copyDraft() {
 </script>
 
 <template>
-    <section class="outreach-panel" aria-labelledby="outreach-title">
-        <header class="outreach-heading">
+    <section class="outreach-panel" aria-label="Outreach">
+        <header>
             <div class="outreach-heading-copy">
+                <PanelBackButton label="Back to selected job post" @back="emit('showViewer')" />
                 <span class="eyebrow">Outreach</span>
-                <h2 id="outreach-title" class="outreach-title">{{ post.company }}</h2>
             </div>
-            <button v-if="contact" class="view-toggle" type="button" @click="togglePanelView">
-                {{ panelView === 'draft' ? 'Show agent stream' : 'Back to draft' }}
-            </button>
         </header>
 
         <template v-if="contact">
             <OutreachDraft
-                v-show="panelView === 'draft'"
                 v-model:draft="draft"
                 v-model:request="draftRequest"
                 :contact="contact"
@@ -122,29 +95,24 @@ async function copyDraft() {
             />
         </template>
 
-        <WorkStream :status="status" :issue="issue" :show-updates="panelView === 'stream'" />
+        <WorkStream v-else :issue="issue" />
     </section>
 </template>
 
 <style scoped lang="scss">
 .outreach-panel {
     display: flex;
-    flex: 1;
     flex-direction: column;
     gap: $space-4;
+    height: 100%;
     min-height: 0;
 }
 
-.outreach-heading {
-    display: flex;
-    gap: $space-3;
-    align-items: start;
-    justify-content: space-between;
-}
-
 .outreach-heading-copy {
-    display: grid;
-    gap: $space-1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .eyebrow {
@@ -154,25 +122,5 @@ async function copyDraft() {
     font-weight: 650;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-}
-
-.outreach-title {
-    margin: 0;
-    font-size: 1.5rem;
-}
-
-.view-toggle {
-    padding: 0;
-    color: $color-ink-muted;
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
 }
 </style>

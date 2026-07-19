@@ -184,6 +184,5 @@ describe('outreach store', () => {
         store.applyTaskResult(output)
 
         expect(store.draft).toBe('Edited draft')
-        expect(store.taskKind).toBeNull()
     })
 })

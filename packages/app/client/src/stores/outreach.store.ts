@@ -3,8 +3,7 @@ import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
 import type { OutreachContact } from '@/work-tasks'
 
-export type OutreachPanelView = 'stream' | 'draft'
-export type OutreachTaskKind = 'contact' | 'draft'
+type OutreachTaskKind = 'contact' | 'draft'
 
 const outputText = (output: JsonObject, key: string) => {
     const value = output[key]
@@ -36,7 +35,6 @@ export const useOutreachStore = defineStore('outreach', () => {
     const contact = shallowRef<OutreachContact | null>(null)
     const draft = shallowRef('')
     const assistantReply = shallowRef<string | null>(null)
-    const panelView = shallowRef<OutreachPanelView>('stream')
     const taskKind = shallowRef<OutreachTaskKind | null>(null)
     const resultError = shallowRef<string | null>(null)
 
@@ -48,14 +46,12 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
 
         postId.value = post
-        panelView.value = 'stream'
         taskKind.value = 'contact'
         resultError.value = null
     }
 
     function beginDraft() {
         assistantReply.value = null
-        panelView.value = 'stream'
         taskKind.value = 'draft'
         resultError.value = null
     }
@@ -102,13 +98,11 @@ export const useOutreachStore = defineStore('outreach', () => {
             return
         }
 
-        panelView.value = 'draft'
         taskKind.value = null
         resultError.value = null
     }
 
     function failResult(message: string) {
-        panelView.value = 'stream'
         taskKind.value = null
         resultError.value = message
     }
@@ -118,7 +112,6 @@ export const useOutreachStore = defineStore('outreach', () => {
         contact.value = null
         draft.value = ''
         assistantReply.value = null
-        panelView.value = 'stream'
         taskKind.value = null
         resultError.value = null
     }
@@ -128,8 +121,6 @@ export const useOutreachStore = defineStore('outreach', () => {
         contact,
         draft,
         assistantReply,
-        panelView,
-        taskKind,
         resultError,
         begin,
         beginDraft,

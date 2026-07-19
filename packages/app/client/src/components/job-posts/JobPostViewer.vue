@@ -84,16 +84,6 @@ function updateLabel() {
                 >
                     Open post ↗
                 </a>
-
-                <button
-                    v-if="showOutreachAction"
-                    class="post-action-button"
-                    type="button"
-                    :disabled="outreachDisabled"
-                    @click="emit('startOutreach')"
-                >
-                    Find outreach contact
-                </button>
             </div>
 
             <label class="label-picker">
@@ -123,6 +113,17 @@ function updateLabel() {
             <p class="placeholder-copy">
                 Detailed job information and review controls will appear in this panel.
             </p>
+        </div>
+
+        <div v-if="showOutreachAction" class="primary-actions primary-actions-outreach">
+            <button
+                class="post-action-button"
+                type="button"
+                :disabled="outreachDisabled"
+                @click="emit('startOutreach')"
+            >
+                Discover outreach
+            </button>
         </div>
     </section>
 </template>
@@ -172,6 +173,10 @@ function updateLabel() {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
+
+    &-outreach {
+        justify-content: flex-end;
+    }
 }
 
 .post-action-button {

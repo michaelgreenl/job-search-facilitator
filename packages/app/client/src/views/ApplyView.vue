@@ -21,7 +21,7 @@ const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !==
 const postStore = usePostStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { postId: outreachPostId } = storeToRefs(outreachStore)
+const { postId: outreachPostId, contact: outreachContact } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
@@ -261,15 +261,13 @@ onMounted(() => {
                 v-if="outreachPost && activePanel === 'outreach'"
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
+                :class="{
+                    'apply-outreach-contact': outreachContact,
+                }"
                 active
                 :adjacent="false"
             >
-                <PanelBackButton
-                    v-if="!workRunning"
-                    label="Back to selected job post"
-                    @back="showViewer"
-                />
-                <OutreachPanel :post="outreachPost" />
+                <OutreachPanel :post="outreachPost" @show-viewer="showViewer" />
             </FlowPanel>
         </div>
     </section>
@@ -303,7 +301,12 @@ onMounted(() => {
 
     &.apply-outreach {
         overflow: hidden;
+        flex: 1.5;
         padding: $space-5;
+
+        &-contact {
+            flex: 2.5;
+        }
     }
 }
 
