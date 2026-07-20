@@ -91,7 +91,7 @@ function handleFocusOut(event: FocusEvent) {
 </template>
 
 <style scoped lang="scss">
-$nav-surface-height: 3.5rem;
+$nav-surface-height: 4.25rem;
 
 .app-header {
     position: absolute;
@@ -115,7 +115,7 @@ $nav-surface-height: 3.5rem;
     gap: $space-4;
     align-items: center;
     min-height: $nav-surface-height;
-    padding: $space-2 $space-3;
+    padding: $space-3 $space-4 $space-3 $space-3;
     border-top: 0;
     border-radius: 0 0 $radius-lg $radius-lg;
 }
@@ -123,23 +123,22 @@ $nav-surface-height: 3.5rem;
 .nav-handle {
     display: grid;
     order: 2;
-    width: 4rem;
-    height: 1.5rem;
+    width: 10rem;
+    height: 1.4rem;
     padding: 0;
     margin-top: -1px;
     cursor: pointer;
     background: $color-night-navigation-alpha-92;
     border: 1px solid $color-signal-light-alpha-22;
     border-top: 0;
-    border-radius: 0 0 $radius-full $radius-full;
+    border-radius: 0 0 9865px 9865px;
     box-shadow: 0 8px 20px $color-black-alpha-24;
     place-items: center;
 
     &:hover,
     &:focus-visible,
     &[aria-expanded='true'] {
-        background: $color-signal-alpha-18;
-        border-color: $color-signal-alpha-48;
+        height: 0.75rem;
     }
 }
 
@@ -151,7 +150,8 @@ $nav-surface-height: 3.5rem;
     box-shadow: 0 0 10px $color-signal-alpha-24;
 
     [aria-expanded='true'] & {
-        background: $color-signal-light;
+        height: 0.0625rem;
+        background: $color-signal-light-alpha-50;
     }
 }
 
