@@ -138,6 +138,35 @@ describe('Work task manager', () => {
         })
     })
 
+    it('marks boundaries between fragmented reasoning summary sections', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        for (const [summaryIndex, delta] of [
+            [0, '**Reviewing '],
+            [0, 'the role**'],
+            [1, '**Finding '],
+            [1, 'the team**'],
+        ] as const) {
+            runtime.notify(
+                'item/reasoning/summaryTextDelta',
+                params({ itemId: 'reasoning', summaryIndex, delta }),
+            )
+        }
+
+        const messages = manager
+            .connect(started.id, () => {})
+            ?.events.flatMap(({ event }) => (event.type === 'message' ? [event] : []))
+
+        expect(messages).toEqual([
+            expect.objectContaining({ textDelta: '**Reviewing ', startsNewStatement: true }),
+            expect.objectContaining({ textDelta: 'the role**', startsNewStatement: false }),
+            expect.objectContaining({ textDelta: '**Finding ', startsNewStatement: true }),
+            expect.objectContaining({ textDelta: 'the team**', startsNewStatement: false }),
+        ])
+    })
+
     it('fails a completed turn that does not contain structured output', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)

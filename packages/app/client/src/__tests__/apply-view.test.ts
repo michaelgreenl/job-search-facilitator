@@ -285,11 +285,13 @@ describe('apply view', () => {
         source.message({
             type: 'message',
             textDelta: 'I am reviewing the ',
+            startsNewStatement: true,
             createdAt: '2026-07-18T12:00:00.100Z',
         })
         source.message({
             type: 'message',
             textDelta: 'hiring team.',
+            startsNewStatement: false,
             createdAt: '2026-07-18T12:00:00.200Z',
         })
 

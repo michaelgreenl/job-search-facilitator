@@ -48,7 +48,7 @@ const isWorkTaskEvent = (value: unknown): value is WorkTaskEvent => {
     }
 
     if (value.type === 'message') {
-        return typeof value.textDelta === 'string'
+        return typeof value.textDelta === 'string' && typeof value.startsNewStatement === 'boolean'
     }
 
     if (value.type === 'action-required') {

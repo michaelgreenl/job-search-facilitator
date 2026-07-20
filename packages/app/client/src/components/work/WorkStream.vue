@@ -17,10 +17,16 @@ interface StreamItem {
     type: 'activity' | 'commentary'
 }
 
-const streamItems = computed(() =>
-    events.value.reduce<StreamItem[]>((items, event) => {
+const stripStatementMarkers = (message: string) =>
+    message
+        .split('\n')
+        .map((statement) => statement.replace(/^(\s*)\*\*/, '$1').replace(/\*\*(\s*)$/, '$1'))
+        .join('\n')
+
+const streamItems = computed(() => {
+    const items = events.value.reduce<StreamItem[]>((currentItems, event) => {
         if (event.type === 'activity') {
-            items.push({
+            currentItems.push({
                 message: event.message,
                 icon:
                     event.message === 'Using Chrome' || event.message === 'Searching the web'
@@ -29,18 +35,32 @@ const streamItems = computed(() =>
                 type: 'activity',
             })
         } else if (event.type === 'message') {
-            const lastItem = items.at(-1)
+            const lastItem = currentItems.at(-1)
 
             if (lastItem?.type === 'commentary') {
+                if (event.startsNewStatement && lastItem.message) {
+                    lastItem.message += '\n'
+                }
+
                 lastItem.message += event.textDelta
             } else if (event.textDelta) {
-                items.push({ icon: 'agent', message: event.textDelta, type: 'commentary' })
+                currentItems.push({
+                    icon: 'agent',
+                    message: event.textDelta,
+                    type: 'commentary',
+                })
             }
         }
 
-        return items
-    }, []),
-)
+        return currentItems
+    }, [])
+
+    return items.map((item) =>
+        item.type === 'commentary'
+            ? { ...item, message: stripStatementMarkers(item.message) }
+            : item,
+    )
+})
 
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
@@ -184,6 +204,7 @@ function resolveAction(decision: WorkActionDecision) {
 .activity-copy {
     min-width: 0;
     line-height: 1.25;
+    white-space: pre-line;
 }
 
 .activity-progress {

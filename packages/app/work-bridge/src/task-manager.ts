@@ -16,6 +16,7 @@ interface StoredTask extends WorkTask {
     listeners: Set<(event: WorkTaskStreamEvent) => void>
     finalMessages: string[]
     pendingAction: WorkActionRequired | null
+    reasoningSection: { itemId: string; summaryIndex: number } | null
 }
 
 export interface WorkTaskConnection {
@@ -41,6 +42,7 @@ const publicTask = ({
     listeners: _listeners,
     finalMessages: _finalMessages,
     pendingAction: _pendingAction,
+    reasoningSection: _reasoningSection,
     ...task
 }: StoredTask): WorkTask => task
 
@@ -75,6 +77,7 @@ export class WorkTaskManager {
             listeners: new Set(),
             finalMessages: [],
             pendingAction: null,
+            reasoningSection: null,
         }
 
         this.tasks.set(id, task)
@@ -193,11 +196,28 @@ export class WorkTaskManager {
             this.handleItemStarted(task, params.item)
         } else if (method === 'item/reasoning/summaryTextDelta') {
             const delta = stringValue(params.delta)
+            const itemId = stringValue(params.itemId)
+            const summaryIndex =
+                typeof params.summaryIndex === 'number' && Number.isInteger(params.summaryIndex)
+                    ? params.summaryIndex
+                    : null
 
             if (delta !== null) {
+                const startsNewStatement =
+                    itemId !== null &&
+                    summaryIndex !== null &&
+                    (task.reasoningSection === null ||
+                        task.reasoningSection.itemId !== itemId ||
+                        task.reasoningSection.summaryIndex !== summaryIndex)
+
+                if (itemId !== null && summaryIndex !== null) {
+                    task.reasoningSection = { itemId, summaryIndex }
+                }
+
                 this.emit(task, {
                     type: 'message',
                     textDelta: delta,
+                    startsNewStatement,
                     createdAt: new Date().toISOString(),
                 })
             }

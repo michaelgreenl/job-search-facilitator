@@ -32,7 +32,12 @@ export interface WorkTask {
 
 export type WorkTaskEvent =
     | { type: 'activity'; message: string; createdAt: IsoDateTime }
-    | { type: 'message'; textDelta: string; createdAt: IsoDateTime }
+    | {
+          type: 'message'
+          textDelta: string
+          startsNewStatement: boolean
+          createdAt: IsoDateTime
+      }
     | { type: 'action-required'; action: WorkActionRequired; createdAt: IsoDateTime }
     | { type: 'action-resolved'; actionId: string; createdAt: IsoDateTime }
     | { type: 'completed'; output: JsonObject; createdAt: IsoDateTime }
