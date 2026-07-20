@@ -58,6 +58,7 @@ export const toJobPost = (post: PrismaJobPost): JobPost => ({
     location: post.location,
     compensation: post.compensation,
     postSource: post.postSource,
+    postUrl: post.postUrl,
     applicationUrl: post.applicationUrl,
     postStatus: postStatusToApi[post.postStatus],
     applicationStatus: applicationStatusToApi[post.applicationStatus],

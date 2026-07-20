@@ -41,6 +41,19 @@ const emit = defineEmits<{
 }>()
 
 const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
+const toHttpUrl = (value: string) => {
+    try {
+        const url = new URL(value)
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+    } catch {
+        return null
+    }
+}
+const postUrl = computed(() => toHttpUrl(props.post.postUrl))
+const applicationUrl = computed(() => {
+    const url = toHttpUrl(props.post.applicationUrl)
+    return url !== postUrl.value ? url : null
+})
 const labelPrompt = computed(() => {
     if (applied.value) {
         return 'Applied'
@@ -101,13 +114,24 @@ function selectLabel(value: string) {
         <div class="post-actions">
             <div class="primary-actions">
                 <a
+                    v-if="postUrl"
                     class="post-action-button"
-                    :href="post.applicationUrl"
+                    :href="postUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                     :aria-label="`Open ${post.roleTitle} in a new tab`"
                 >
                     Open post ↗
+                </a>
+                <a
+                    v-if="applicationUrl"
+                    class="post-action-button"
+                    :href="applicationUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :aria-label="`Open application for ${post.roleTitle} in a new tab`"
+                >
+                    Open application ↗
                 </a>
             </div>
 

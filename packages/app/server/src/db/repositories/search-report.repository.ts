@@ -122,6 +122,7 @@ export const searchReportRepository: SearchReportRepository = {
                     location: result.post.location,
                     compensation: result.post.compensation,
                     postSource: result.post.postSource,
+                    postUrl: result.post.postUrl,
                     applicationUrl: result.post.applicationUrl,
                     postStatus: toPrismaPostStatus(result.post.postStatus),
                 }

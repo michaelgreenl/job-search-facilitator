@@ -2,6 +2,10 @@ import { AGENT_LABELS, POST_STATUSES, RESUME_TYPES } from '@job-search-facilitat
 import { z } from 'zod'
 
 const nonBlankString = z.string().trim().min(1)
+const httpUrl = z.url().refine((value) => {
+    const protocol = new URL(value).protocol
+    return protocol === 'http:' || protocol === 'https:'
+})
 
 export const reportIdParamsSchema = z.strictObject({
     reportId: z.uuid(),
@@ -19,7 +23,8 @@ export const jobPostInputSchema = z.strictObject({
     location: nonBlankString.nullable(),
     compensation: nonBlankString.nullable(),
     postSource: nonBlankString,
-    applicationUrl: z.url(),
+    postUrl: httpUrl,
+    applicationUrl: httpUrl,
     postStatus: z.enum(POST_STATUSES),
 })
 

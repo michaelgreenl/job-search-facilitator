@@ -22,7 +22,8 @@ const post: JobPost = {
     location: 'Detroit, MI',
     compensation: '$120,000',
     postSource: 'Example Source',
-    applicationUrl: 'https://example.com/jobs/123',
+    postUrl: 'https://example.com/jobs/123',
+    applicationUrl: 'https://apply.example.com/jobs/123',
     postStatus: 'active',
     applicationStatus: 'not-applied',
     userRank: null,
@@ -72,6 +73,7 @@ const input: UpsertJobSearchReportInput = {
             location: result.post.location,
             compensation: result.post.compensation,
             postSource: result.post.postSource,
+            postUrl: result.post.postUrl,
             applicationUrl: result.post.applicationUrl,
             postStatus: result.post.postStatus,
         },
@@ -216,6 +218,23 @@ describe('job search report routes', () => {
                         },
                     },
                 ],
+            })
+            .expect(400, { error: 'Invalid request' })
+
+        expect(upsertById).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['post URL', { ...input.results[0]!.post, postUrl: 'javascript:alert(1)' }],
+        ['application URL', { ...input.results[0]!.post, applicationUrl: 'ftp://example.com/job' }],
+    ])('rejects an unsafe %s without writing', async (_description, invalidPost) => {
+        const { repository, upsertById } = createFakeRepository([])
+
+        await request(createTestApp(repository))
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
+            .send({
+                ...input,
+                results: [{ ...input.results[0], post: invalidPost }],
             })
             .expect(400, { error: 'Invalid request' })
 

@@ -26,6 +26,7 @@ export interface JobPost {
     location: string | null
     compensation: string | null
     postSource: string
+    postUrl: string
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
@@ -43,6 +44,7 @@ export interface JobPostInput {
     location: string | null
     compensation: string | null
     postSource: string
+    postUrl: string
     applicationUrl: string
     postStatus: PostStatus
 }

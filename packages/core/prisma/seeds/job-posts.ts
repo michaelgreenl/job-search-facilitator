@@ -12,6 +12,7 @@ interface JobPostSeed {
     location: string | null
     compensation: string | null
     postSource: string
+    postUrl: string
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
@@ -28,6 +29,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Remote — United States',
         compensation: '$145,000–$170,000',
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-northstar-frontend',
         applicationUrl: 'https://example.com/jobs/seed-northstar-frontend',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.INTERVIEWING,
@@ -42,6 +44,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Detroit, MI (Hybrid)',
         compensation: '$125,000–$155,000',
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-copper-finch-full-stack',
         applicationUrl: 'https://example.com/jobs/seed-copper-finch-full-stack',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.AWAITING_RESPONSE,
@@ -56,6 +59,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: null,
         compensation: '$135,000–$165,000',
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-lakeview-backend',
         applicationUrl: 'https://example.com/jobs/seed-lakeview-backend',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -70,6 +74,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Ann Arbor, MI',
         compensation: null,
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-juniper-ui-infrastructure',
         applicationUrl: 'https://example.com/jobs/seed-juniper-ui-infrastructure',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.REJECTED,
@@ -84,6 +89,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Remote',
         compensation: '$130,000–$158,000',
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-moonrise-developer-experience',
         applicationUrl: 'https://example.com/jobs/seed-moonrise-developer-experience',
         postStatus: PostStatus.CLOSED,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -98,6 +104,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Chicago, IL (Hybrid)',
         compensation: null,
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-emberline-product',
         applicationUrl: 'https://example.com/jobs/seed-emberline-product',
         postStatus: PostStatus.UNKNOWN,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -112,6 +119,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Remote — Eastern Time',
         compensation: '$140,000–$172,000',
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-atlas-grove-node-api',
         applicationUrl: 'https://example.com/jobs/seed-atlas-grove-node-api',
         postStatus: PostStatus.CLOSED,
         applicationStatus: ApplicationStatus.HIRED,
@@ -126,6 +134,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: null,
         compensation: '$120,000–$148,000',
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-blue-heron-design-systems',
         applicationUrl: 'https://example.com/jobs/seed-blue-heron-design-systems',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -140,6 +149,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Grand Rapids, MI',
         compensation: null,
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-cedar-signal-performance',
         applicationUrl: 'https://example.com/jobs/seed-cedar-signal-performance',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -154,6 +164,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Remote — United States',
         compensation: '$118,000–$142,000',
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-great-lakes-internal-tools',
         applicationUrl: 'https://example.com/jobs/seed-great-lakes-internal-tools',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -168,6 +179,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: 'Remote',
         compensation: '$128,000–$154,000',
         postSource: 'Example Careers',
+        postUrl: 'https://example.com/jobs/seed-lumen-harbor-accessibility',
         applicationUrl: 'https://example.com/jobs/seed-lumen-harbor-accessibility',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -182,6 +194,7 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         location: null,
         compensation: null,
         postSource: 'Example Job Board',
+        postUrl: 'https://example.com/jobs/seed-paper-kite-typescript',
         applicationUrl: 'https://example.com/jobs/seed-paper-kite-typescript',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
@@ -197,6 +210,7 @@ const toListingUpdate = (post: JobPostSeed): Prisma.JobPostUpdateInput => ({
     location: post.location,
     compensation: post.compensation,
     postSource: post.postSource,
+    postUrl: post.postUrl,
     applicationUrl: post.applicationUrl,
     postStatus: post.postStatus,
 })

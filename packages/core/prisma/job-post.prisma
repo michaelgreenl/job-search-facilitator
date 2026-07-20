@@ -27,6 +27,7 @@ model JobPost {
   location          String?
   compensation      String?
   postSource        String
+  postUrl           String
   applicationUrl    String
   postStatus        PostStatus        @default(UNKNOWN)
   applicationStatus ApplicationStatus @default(NOT_APPLIED)

@@ -10,7 +10,8 @@ const post: JobPost = {
     location: 'Remote',
     compensation: null,
     postSource: 'Greenhouse',
-    applicationUrl: 'https://example.com/jobs/post-id',
+    postUrl: 'https://example.com/jobs/post-id',
+    applicationUrl: 'https://apply.example.com/jobs/post-id',
     postStatus: 'active',
     applicationStatus: 'not-applied',
     userRank: null,
@@ -26,22 +27,23 @@ const contact: OutreachContact = {
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
     relevanceRationale: 'Her visible role is relevant to the team.',
 }
+const tasks = [
+    ['initial outreach', createOutreachTask(post)],
+    [
+        'draft revision',
+        createDraftTask(post, contact, 'Hi Ada, could I ask about the team?', 'Make it warmer.'),
+    ],
+] as const
 
 describe('outreach work tasks', () => {
-    it.each([
-        ['initial outreach', createOutreachTask(post)],
-        [
-            'draft revision',
-            createDraftTask(
-                post,
-                contact,
-                'Hi Ada, could I ask about the team?',
-                'Make it warmer.',
-            ),
-        ],
-    ])('guides %s messages toward natural formatting', (_name, task) => {
+    it.each(tasks)('guides %s messages toward natural formatting', (_name, task) => {
         expect(task.prompt).toContain('intentional line breaks')
         expect(task.prompt).toContain('Never use em dashes')
         expect(task.prompt).toContain('not a generated template')
+    })
+
+    it.each(tasks)('uses the job detail URL for %s context', (_name, task) => {
+        expect(task.prompt).toContain(post.postUrl)
+        expect(task.prompt).not.toContain(post.applicationUrl)
     })
 })
