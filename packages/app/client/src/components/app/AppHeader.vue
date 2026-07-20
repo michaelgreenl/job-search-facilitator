@@ -131,7 +131,7 @@ $nav-surface-height: 4.25rem;
     background: $color-night-navigation-alpha-92;
     border: 1px solid $color-signal-light-alpha-22;
     border-top: 0;
-    border-radius: 0 0 9865px 9865px;
+    border-radius: 0 0 $radius-full $radius-full;
     box-shadow: 0 8px 20px $color-black-alpha-24;
     place-items: center;
 
