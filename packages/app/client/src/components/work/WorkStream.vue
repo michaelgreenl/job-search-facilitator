@@ -9,20 +9,37 @@ defineProps<{ issue: string | null }>()
 const workStore = useWorkStore()
 const { actionSubmitting, events, pendingAction, taskActive } = storeToRefs(workStore)
 
-const activities = computed(() =>
-    events.value.flatMap((event) =>
-        event.type === 'activity'
-            ? [
-                  {
-                      message: event.message,
-                      icon:
-                          event.message === 'Using Chrome' || event.message === 'Searching the web'
-                              ? ('globe' as const)
-                              : ('tool' as const),
-                  },
-              ]
-            : [],
-    ),
+type StreamIcon = 'agent' | 'globe' | 'tool'
+
+interface StreamItem {
+    icon: StreamIcon
+    message: string
+    type: 'activity' | 'commentary'
+}
+
+const streamItems = computed(() =>
+    events.value.reduce<StreamItem[]>((items, event) => {
+        if (event.type === 'activity') {
+            items.push({
+                message: event.message,
+                icon:
+                    event.message === 'Using Chrome' || event.message === 'Searching the web'
+                        ? 'globe'
+                        : 'tool',
+                type: 'activity',
+            })
+        } else if (event.type === 'message') {
+            const lastItem = items.at(-1)
+
+            if (lastItem?.type === 'commentary') {
+                lastItem.message += event.textDelta
+            } else if (event.textDelta) {
+                items.push({ icon: 'agent', message: event.textDelta, type: 'commentary' })
+            }
+        }
+
+        return items
+    }, []),
 )
 
 function resolveAction(decision: WorkActionDecision) {
@@ -36,40 +53,43 @@ function resolveAction(decision: WorkActionDecision) {
 
         <div class="work-progress">
             <ul
-                v-if="activities.length"
+                v-if="streamItems.length"
                 class="activity-list"
                 aria-label="Work activity"
+                aria-live="polite"
+                :aria-busy="taskActive"
                 role="log"
             >
                 <li
-                    v-for="(activity, index) in activities"
-                    :key="`${index}:${activity.message}`"
+                    v-for="(item, index) in streamItems"
+                    :key="`${index}:${item.type}`"
                     class="activity-item"
+                    :class="`activity-item-${item.type}`"
                 >
                     <svg
                         class="activity-icon"
-                        :class="`activity-icon-${activity.icon}`"
+                        :class="`activity-icon-${item.icon}`"
                         viewBox="0 0 24 24"
                         aria-hidden="true"
                     >
-                        <template v-if="activity.icon === 'globe'">
+                        <template v-if="item.icon === 'globe'">
                             <circle cx="12" cy="12" r="9" />
                             <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
                         </template>
                         <path
-                            v-else
+                            v-else-if="item.icon === 'tool'"
                             d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"
                         />
+                        <path v-else d="m8 5 8 7-8 7" />
                     </svg>
-                    <span>{{ activity.message }}</span>
+                    <span class="activity-copy">{{ item.message }}</span>
                     <span
                         v-if="
-                            taskActive && pendingAction === null && index === activities.length - 1
+                            taskActive && pendingAction === null && index === streamItems.length - 1
                         "
                         class="activity-progress"
                         aria-hidden="true"
-                        >...</span
-                    >
+                    ></span>
                 </li>
             </ul>
         </div>
@@ -120,9 +140,9 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .work-progress {
-    display: grid;
+    display: flex;
     flex: 1;
-    gap: $space-3;
+    flex-direction: column;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -131,9 +151,8 @@ function resolveAction(decision: WorkActionDecision) {
 .activity-list {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
     gap: $space-2;
-    margin: 0;
+    margin: auto 0 0;
     padding: 0;
     color: $color-ink-muted;
     font-size: 0.8125rem;
@@ -141,9 +160,14 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .activity-item {
-    display: flex;
-    gap: $space-2;
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr) 1ch;
+    column-gap: $space-2;
     align-items: center;
+
+    &-commentary {
+        color: $color-ink-secondary;
+    }
 }
 
 .activity-icon {
@@ -157,19 +181,69 @@ function resolveAction(decision: WorkActionDecision) {
     stroke-width: 1.6;
 }
 
-.activity-progress {
-    letter-spacing: 0.08em;
-    animation: activity-blink 1.1s steps(2, end) infinite;
+.activity-copy {
+    min-width: 0;
+    line-height: 1.25;
 }
 
-@keyframes activity-blink {
+.activity-progress {
+    display: inline-block;
+    width: 1ch;
+    overflow: hidden;
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    line-height: 1;
+
+    &::after {
+        content: '⠋';
+        animation: activity-spin 0.8s step-end infinite;
+    }
+}
+
+@keyframes activity-spin {
+    0% {
+        content: '⠋';
+    }
+
+    10% {
+        content: '⠙';
+    }
+
+    20% {
+        content: '⠹';
+    }
+
+    30% {
+        content: '⠸';
+    }
+
+    40% {
+        content: '⠼';
+    }
+
     50% {
-        opacity: 0.2;
+        content: '⠴';
+    }
+
+    60% {
+        content: '⠦';
+    }
+
+    70% {
+        content: '⠧';
+    }
+
+    80% {
+        content: '⠇';
+    }
+
+    90%,
+    100% {
+        content: '⠏';
     }
 }
 
 .action-required {
-    position: absolute;
     display: grid;
     gap: $space-1;
     padding: $space-4;

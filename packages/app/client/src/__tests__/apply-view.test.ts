@@ -240,10 +240,21 @@ describe('apply view', () => {
             message: 'Using Chrome',
             createdAt: '2026-07-18T12:00:00.000Z',
         })
+        source.message({
+            type: 'message',
+            textDelta: 'I am reviewing the ',
+            createdAt: '2026-07-18T12:00:00.100Z',
+        })
+        source.message({
+            type: 'message',
+            textDelta: 'hiring team.',
+            createdAt: '2026-07-18T12:00:00.200Z',
+        })
 
         await vi.waitFor(() => {
             expect(root.querySelector('.activity-icon-tool')).not.toBeNull()
             expect(root.querySelector('.activity-icon-globe')).not.toBeNull()
+            expect(root.textContent).toContain('I am reviewing the hiring team.')
             expect(root.querySelectorAll('.activity-progress')).toHaveLength(1)
             expect(
                 root.querySelector('.activity-item:last-child .activity-progress'),
