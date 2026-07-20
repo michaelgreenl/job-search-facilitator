@@ -146,8 +146,8 @@ watch(
     display: grid;
     gap: $space-1;
     padding: $space-3;
-    background: rgb(245 241 251 / 5%);
-    border: 1px solid rgb(221 199 255 / 18%);
+    background: $color-ink-alpha-5;
+    border: 1px solid $color-signal-light-alpha-18;
     border-radius: $radius-md;
 
     .draft-board.is-expanded & {
@@ -226,8 +226,8 @@ watch(
     padding: $space-3;
     color: $color-ink;
     font: inherit;
-    background: rgb(245 241 251 / 6%);
-    border: 1px solid rgb(245 241 251 / 16%);
+    background: $color-ink-alpha-6;
+    border: 1px solid $color-ink-alpha-16;
     border-radius: $radius-md;
 
     &:focus {

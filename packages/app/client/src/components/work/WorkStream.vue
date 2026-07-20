@@ -247,8 +247,8 @@ function resolveAction(decision: WorkActionDecision) {
     display: grid;
     gap: $space-1;
     padding: $space-4;
-    background: rgb(173 123 249 / 10%);
-    border: 1px solid rgb(173 123 249 / 32%);
+    background: $color-signal-alpha-10;
+    border: 1px solid $color-signal-alpha-32;
     border-radius: $radius-md;
 }
 
@@ -284,7 +284,7 @@ function resolveAction(decision: WorkActionDecision) {
     font: inherit;
     cursor: pointer;
     background: transparent;
-    border: 1px solid rgb(221 199 255 / 28%);
+    border: 1px solid $color-signal-light-alpha-28;
     border-radius: $radius-md;
 
     &:hover,

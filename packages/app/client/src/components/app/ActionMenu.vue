@@ -181,15 +181,15 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     color: $color-ink;
     font: inherit;
     cursor: pointer;
-    background: rgb(245 241 251 / 6%);
-    border: 1px solid rgb(245 241 251 / 16%);
+    background: $color-ink-alpha-6;
+    border: 1px solid $color-ink-alpha-16;
     border-radius: $radius-md;
 
     &:hover,
     &:focus-visible,
     &[aria-expanded='true'] {
-        background: rgb(173 123 249 / 10%);
-        border-color: rgb(173 123 249 / 45%);
+        background: $color-signal-alpha-10;
+        border-color: $color-signal-alpha-45;
     }
 
     &:disabled {
@@ -231,7 +231,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 .action-menu-option.has-separator {
     padding-top: $space-2;
     margin-top: $space-1;
-    border-top: 1px solid rgb(245 241 251 / 12%);
+    border-top: 1px solid $color-ink-alpha-12;
 }
 
 .action-menu-item {
@@ -252,7 +252,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     &:hover,
     &:focus-visible {
         color: $color-ink;
-        background: rgb(173 123 249 / 13%);
+        background: $color-signal-alpha-13;
         outline: none;
     }
 
@@ -273,22 +273,22 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 
     .action-menu-item-priority-high & {
         background: lighten-color($color-red-600, 25%);
-        box-shadow: 0 0 0 3px rgba($color-red-600, 0.14);
+        box-shadow: 0 0 0 3px $color-red-600-alpha-14;
     }
 
     .action-menu-item-priority-medium & {
         background: $color-amber-500;
-        box-shadow: 0 0 0 3px rgba($color-amber-500, 0.12);
+        box-shadow: 0 0 0 3px $color-amber-500-alpha-12;
     }
 
     .action-menu-item-quick & {
         background: $color-signal-light;
-        box-shadow: 0 0 0 3px rgb(173 123 249 / 14%);
+        box-shadow: 0 0 0 3px $color-signal-alpha-14;
     }
 
     .action-menu-item-success & {
         background: lighten-color($color-green-600, 25%);
-        box-shadow: 0 0 0 3px rgba($color-green-600, 0.16);
+        box-shadow: 0 0 0 3px $color-green-600-alpha-16;
     }
 
     .action-menu-item-muted & {

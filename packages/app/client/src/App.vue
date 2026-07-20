@@ -24,9 +24,9 @@ import AppHeader from '@/components/app/AppHeader.vue'
     background: linear-gradient(
         118deg,
         transparent 35%,
-        rgb(173 123 249 / 4%) 43%,
-        rgb(173 123 249 / 18%) 50%,
-        rgb(173 123 249 / 5%) 57%,
+        $color-signal-alpha-4 43%,
+        $color-signal-alpha-18 50%,
+        $color-signal-alpha-5 57%,
         transparent 67%
     );
     filter: blur(76px);

@@ -128,18 +128,18 @@ $nav-surface-height: 3.5rem;
     padding: 0;
     margin-top: -1px;
     cursor: pointer;
-    background: rgb(24 18 33 / 92%);
-    border: 1px solid rgb(221 199 255 / 22%);
+    background: $color-night-navigation-alpha-92;
+    border: 1px solid $color-signal-light-alpha-22;
     border-top: 0;
     border-radius: 0 0 $radius-full $radius-full;
-    box-shadow: 0 8px 20px rgb(0 0 0 / 24%);
+    box-shadow: 0 8px 20px $color-black-alpha-24;
     place-items: center;
 
     &:hover,
     &:focus-visible,
     &[aria-expanded='true'] {
-        background: rgb(173 123 249 / 18%);
-        border-color: rgb(173 123 249 / 48%);
+        background: $color-signal-alpha-18;
+        border-color: $color-signal-alpha-48;
     }
 }
 
@@ -148,7 +148,7 @@ $nav-surface-height: 3.5rem;
     height: 0.1875rem;
     background: $color-ink-muted;
     border-radius: $radius-full;
-    box-shadow: 0 0 10px rgb(173 123 249 / 24%);
+    box-shadow: 0 0 10px $color-signal-alpha-24;
 
     [aria-expanded='true'] & {
         background: $color-signal-light;
@@ -173,10 +173,10 @@ $nav-surface-height: 3.5rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     place-items: center;
-    background: rgb(173 123 249 / 12%);
-    border: 1px solid rgb(173 123 249 / 34%);
+    background: $color-signal-alpha-12;
+    border: 1px solid $color-signal-alpha-34;
     border-radius: $radius-md;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+    box-shadow: inset 0 1px 0 $color-white-alpha-14;
 
     @media (forced-colors: active) {
         border: 1px solid ButtonText;

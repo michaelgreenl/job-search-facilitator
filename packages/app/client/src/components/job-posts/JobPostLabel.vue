@@ -47,14 +47,14 @@ const label = computed(() => {
     color: $color-signal-light;
     font-family: $font-family-mono;
     font-size: 0.75rem;
-    background: rgb(173 123 249 / 12%);
-    border: 1px solid rgb(173 123 249 / 32%);
+    background: $color-signal-alpha-12;
+    border: 1px solid $color-signal-alpha-32;
     border-radius: $radius-full;
 
     &-compact {
         padding-inline: $space-2;
         font-size: 0.6875rem;
-        border-color: rgb(173 123 249 / 24%);
+        border-color: $color-signal-alpha-24;
     }
 
     &-forgo {
@@ -64,8 +64,8 @@ const label = computed(() => {
 
     &-applied {
         color: $color-ink;
-        background: rgb(43 138 62 / 25%);
-        border-color: rgb(43 138 62 / 55%);
+        background: $color-green-600-alpha-25;
+        border-color: $color-green-600-alpha-55;
     }
 }
 </style>

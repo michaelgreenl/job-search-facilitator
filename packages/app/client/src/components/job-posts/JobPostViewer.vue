@@ -234,7 +234,7 @@ function selectLabel(value: string) {
 .outreach-spinner {
     width: 0.875rem;
     height: 0.875rem;
-    border: 2px solid rgba($color-ink, 0.5);
+    border: 2px solid $color-ink-alpha-50;
     border-top-color: $color-ink;
     border-radius: 50%;
     animation: outreach-spin 0.8s linear infinite;
@@ -267,8 +267,8 @@ function selectLabel(value: string) {
     gap: $space-3;
     min-height: 12rem;
     padding: $space-4;
-    background: rgb(245 241 251 / 5%);
-    border: 1px dashed rgb(221 199 255 / 18%);
+    background: $color-ink-alpha-5;
+    border: 1px dashed $color-signal-light-alpha-18;
     border-radius: $radius-md;
 }
 </style>

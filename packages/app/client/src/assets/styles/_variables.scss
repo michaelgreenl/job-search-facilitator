@@ -12,15 +12,62 @@ $color-green-600: #2b8a3e;
 $color-amber-500: #f59f00;
 $color-red-600: #c92a2a;
 
+// Base palette alpha variants
+$color-white-alpha-7: rgba($color-white, 0.07);
+$color-white-alpha-9: rgba($color-white, 0.09);
+$color-white-alpha-14: rgba($color-white, 0.14);
+$color-white-alpha-30: rgba($color-white, 0.3);
+$color-black-alpha-24: rgba($color-black, 0.24);
+$color-black-alpha-28: rgba($color-black, 0.28);
+$color-green-600-alpha-16: rgba($color-green-600, 0.16);
+$color-green-600-alpha-25: rgba($color-green-600, 0.25);
+$color-green-600-alpha-55: rgba($color-green-600, 0.55);
+$color-amber-500-alpha-12: rgba($color-amber-500, 0.12);
+$color-red-600-alpha-14: rgba($color-red-600, 0.14);
+
 // Dark workspace palette
 $color-night: #0a0710;
 $color-night-deep: #060409;
+$color-night-panel: #140f1b;
+$color-night-navigation: #181221;
 $color-signal: #ad7bf9;
 $color-signal-light: #ddc7ff;
 $color-action: #af8de2;
 $color-ink: #f5f1fb;
 $color-ink-secondary: #c5bdcf;
 $color-ink-muted: #8f859c;
+
+// Dark workspace alpha variants
+$color-night-panel-alpha-62: rgba($color-night-panel, 0.62);
+$color-night-panel-alpha-94: rgba($color-night-panel, 0.94);
+$color-night-navigation-alpha-92: rgba($color-night-navigation, 0.92);
+$color-signal-alpha-2-5: rgba($color-signal, 0.025);
+$color-signal-alpha-3-5: rgba($color-signal, 0.035);
+$color-signal-alpha-4: rgba($color-signal, 0.04);
+$color-signal-alpha-5: rgba($color-signal, 0.05);
+$color-signal-alpha-9: rgba($color-signal, 0.09);
+$color-signal-alpha-10: rgba($color-signal, 0.1);
+$color-signal-alpha-12: rgba($color-signal, 0.12);
+$color-signal-alpha-13: rgba($color-signal, 0.13);
+$color-signal-alpha-14: rgba($color-signal, 0.14);
+$color-signal-alpha-18: rgba($color-signal, 0.18);
+$color-signal-alpha-24: rgba($color-signal, 0.24);
+$color-signal-alpha-28: rgba($color-signal, 0.28);
+$color-signal-alpha-32: rgba($color-signal, 0.32);
+$color-signal-alpha-34: rgba($color-signal, 0.34);
+$color-signal-alpha-45: rgba($color-signal, 0.45);
+$color-signal-alpha-48: rgba($color-signal, 0.48);
+$color-signal-light-alpha-16: rgba($color-signal-light, 0.16);
+$color-signal-light-alpha-18: rgba($color-signal-light, 0.18);
+$color-signal-light-alpha-22: rgba($color-signal-light, 0.22);
+$color-signal-light-alpha-28: rgba($color-signal-light, 0.28);
+$color-signal-light-alpha-50: rgba($color-signal-light, 0.5);
+$color-ink-alpha-5: rgba($color-ink, 0.05);
+$color-ink-alpha-6: rgba($color-ink, 0.06);
+$color-ink-alpha-9: rgba($color-ink, 0.09);
+$color-ink-alpha-12: rgba($color-ink, 0.12);
+$color-ink-alpha-16: rgba($color-ink, 0.16);
+$color-ink-alpha-50: rgba($color-ink, 0.5);
 
 // Typography
 $font-family-sans: avenir, 'Segoe UI', system-ui, sans-serif;
