@@ -56,7 +56,7 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                     :aria-expanded="descriptionExpanded"
                     @click="descriptionExpanded = !descriptionExpanded"
                 >
-                    {{ descriptionExpanded ? 'Show less' : '… Show more' }}
+                    {{ descriptionExpanded ? 'Show less' : 'Show more' }}
                 </button>
             </div>
         </div>
@@ -87,15 +87,15 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                             <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
                         </svg>
                     </button>
+                    <span
+                        class="copy-feedback"
+                        :class="{ 'copy-feedback-error': copyState === 'failed' }"
+                        :role="copyState === 'failed' ? 'alert' : 'status'"
+                    >
+                        <template v-if="copyState === 'copied'">Copied!</template>
+                        <template v-else-if="copyState === 'failed'">Could not copy draft</template>
+                    </span>
                 </div>
-                <span
-                    class="copy-feedback"
-                    :class="{ 'copy-feedback-error': copyState === 'failed' }"
-                    :role="copyState === 'failed' ? 'alert' : 'status'"
-                >
-                    <template v-if="copyState === 'copied'">Copied to clipboard</template>
-                    <template v-else-if="copyState === 'failed'">Could not copy draft</template>
-                </span>
             </div>
 
             <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
@@ -202,6 +202,8 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 
 .rationale-copy {
     position: relative;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
 }
 
@@ -214,9 +216,9 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 
 .rationale-toggle {
     width: fit-content;
-    padding: 0;
-    margin-top: $space-1;
+    padding-right: $space-1;
     color: $color-signal-light;
+    margin-left: auto;
     font: inherit;
     font-size: 0.875rem;
     cursor: pointer;
@@ -231,12 +233,11 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     }
 
     &-more {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        padding-left: $space-4;
-        margin-top: 0;
-        background: linear-gradient(90deg, transparent, $color-night-panel 30%);
+        // position: absolute;
+        // right: 0;
+        // bottom: 0;
+        // margin-top: 0;
+        // background: linear-gradient(90deg, transparent, $color-night-panel 30%);
     }
 }
 
@@ -351,6 +352,9 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 }
 
 .copy-feedback {
+    position: absolute;
+    bottom: 3rem;
+    right: 0.2rem;
     min-height: 1rem;
     color: $color-ink-muted;
     font-size: 0.8125rem;

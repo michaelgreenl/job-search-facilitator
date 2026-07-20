@@ -350,7 +350,7 @@ describe('apply view', () => {
         })
 
         const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
-        const rationaleToggle = findButton(root, '… Show more')
+        const rationaleToggle = findButton(root, 'Show more')
         const expandControl = root.querySelector<HTMLButtonElement>(
             '[aria-label="Expand outreach panel"]',
         )
@@ -387,7 +387,7 @@ describe('apply view', () => {
             expect(writeText).toHaveBeenCalledExactlyOnceWith(
                 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             )
-            expect(root.textContent).toContain('Copied to clipboard')
+            expect(root.textContent).toContain('Copied!')
             expect(copyButton.getAttribute('aria-label')).toBe('Outreach message copied')
         })
 
@@ -491,7 +491,7 @@ describe('apply view', () => {
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
             )
-            expect(findButton(root, '… Show more')).not.toBeNull()
+            expect(findButton(root, 'Show more')).not.toBeNull()
             expect(
                 root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
             ).toBe(true)
