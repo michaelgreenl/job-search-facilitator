@@ -267,7 +267,8 @@ describe('apply view', () => {
                 personName: 'Ada Lovelace',
                 personTitle: 'Engineering Manager',
                 profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-                relevanceRationale: 'Their Engineering Manager title aligns with this role.',
+                relevanceRationale:
+                    'Their Engineering Manager title aligns with this role, and their platform leadership gives them direct context on the team, its priorities, and the day-to-day work.',
                 draftMessage: 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             },
             createdAt: '2026-07-18T12:00:01.000Z',
@@ -277,7 +278,7 @@ describe('apply view', () => {
             expect(root.textContent).toContain('Ada Lovelace')
             expect(root.textContent).toContain('Engineering Manager')
             expect(root.textContent).toContain(
-                'Their Engineering Manager title aligns with this role.',
+                'Their Engineering Manager title aligns with this role, and their platform leadership',
             )
             expect(root.querySelector<HTMLAnchorElement>('.person-name')?.href).toBe(
                 'https://www.linkedin.com/in/ada-lovelace',
@@ -302,6 +303,19 @@ describe('apply view', () => {
             )
         })
 
+        const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
+        const rationaleToggle = findButton(root, 'Show more')
+
+        expect(rationale?.classList.contains('is-expanded')).toBe(false)
+        expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
+        rationaleToggle.click()
+
+        await vi.waitFor(() => {
+            expect(rationale?.classList.contains('is-expanded')).toBe(true)
+            expect(rationaleToggle.textContent).toContain('Show less')
+            expect(rationaleToggle.getAttribute('aria-expanded')).toBe('true')
+        })
+
         const copyButton = root.querySelector<HTMLButtonElement>(
             '[aria-label="Copy outreach message"]',
         )
@@ -316,7 +330,7 @@ describe('apply view', () => {
             expect(writeText).toHaveBeenCalledExactlyOnceWith(
                 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             )
-            expect(root.textContent).toContain('Copied')
+            expect(root.textContent).toContain('Copied to clipboard')
             expect(copyButton.getAttribute('aria-label')).toBe('Outreach message copied')
         })
 
@@ -326,6 +340,10 @@ describe('apply view', () => {
         if (draft === null || request === null) {
             throw new Error('Could not find outreach draft fields')
         }
+
+        expect(draft.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(
+            0,
+        )
 
         draft.value = 'Hi Ada, could I ask about the engineering team?'
         draft.dispatchEvent(new Event('input'))
@@ -394,7 +412,24 @@ describe('apply view', () => {
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
             )
+            expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
+            expect(root.querySelector('[aria-label="Collapse outreach panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Show selected job post"]')).not.toBeNull()
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Collapse outreach panel"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(
+                false,
+            )
+            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Show selected job post"]')?.click()

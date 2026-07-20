@@ -148,6 +148,11 @@ function expandOutreach() {
     activePanel.value = 'outreach'
 }
 
+function collapseOutreach() {
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+}
+
 async function updateUserLabel(userLabel: UserLabel | null) {
     if (selectedPostId.value === null || labelUpdating.value || applicationUpdating.value) {
         return
@@ -300,6 +305,7 @@ onMounted(() => {
                     :post="outreachPost"
                     :expanded="outreachExpanded"
                     @cancel="cancelOutreach"
+                    @collapse="collapseOutreach"
                     @expand="expandOutreach"
                     @show-viewer="showViewer"
                 />

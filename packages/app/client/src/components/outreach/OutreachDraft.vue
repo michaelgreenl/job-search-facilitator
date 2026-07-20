@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import type { OutreachContact } from '@/work-tasks'
 
-defineProps<{
+const props = defineProps<{
     contact: OutreachContact
     assistantReply: string | null
     running: boolean
     copyState: 'idle' | 'copied' | 'failed'
+    expanded: boolean
 }>()
 
 const emit = defineEmits<{
@@ -17,10 +18,18 @@ const emit = defineEmits<{
 const draft = defineModel<string>('draft', { required: true })
 const request = defineModel<string>('request', { required: true })
 const canSubmit = computed(() => request.value.trim().length > 0)
+const descriptionExpanded = shallowRef(false)
+
+watch(
+    () => props.contact.profileUrl,
+    () => {
+        descriptionExpanded.value = false
+    },
+)
 </script>
 
 <template>
-    <section class="draft-board" aria-label="Outreach draft">
+    <section class="draft-board" :class="{ 'is-expanded': expanded }" aria-label="Outreach draft">
         <div class="contact-card">
             <span class="eyebrow">Relevant contact</span>
             <a
@@ -32,63 +41,86 @@ const canSubmit = computed(() => request.value.trim().length > 0)
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
-            <p class="relevance-rationale">{{ contact.relevanceRationale }}</p>
+            <p
+                id="contact-rationale"
+                class="relevance-rationale"
+                :class="{ 'is-expanded': descriptionExpanded }"
+            >
+                {{ contact.relevanceRationale }}
+            </p>
+            <button
+                class="rationale-toggle"
+                type="button"
+                aria-controls="contact-rationale"
+                :aria-expanded="descriptionExpanded"
+                @click="descriptionExpanded = !descriptionExpanded"
+            >
+                {{ descriptionExpanded ? 'Show less' : 'Show more' }}
+            </button>
         </div>
 
-        <form class="draft-request" @submit.prevent="emit('submit')">
-            <div class="request-field">
-                <textarea
-                    id="draft-request"
-                    v-model="request"
-                    class="text-field request-input"
-                    rows="1"
-                    aria-label="Request draft changes"
-                    :disabled="running"
-                    placeholder="Request changes"
-                ></textarea>
-                <button
-                    class="field-action send-button"
-                    type="submit"
-                    :disabled="running || !canSubmit"
+        <div class="draft-workspace">
+            <div class="draft-content">
+                <label class="field-label" for="outreach-message">Message</label>
+                <div class="draft-field">
+                    <textarea
+                        id="outreach-message"
+                        v-model="draft"
+                        class="text-field draft-textarea"
+                        aria-label="Outreach message"
+                        :disabled="running"
+                    ></textarea>
+                    <button
+                        class="field-action copy-button"
+                        type="button"
+                        :aria-label="
+                            copyState === 'copied'
+                                ? 'Outreach message copied'
+                                : 'Copy outreach message'
+                        "
+                        :disabled="draft.trim().length === 0"
+                        @click="emit('copy')"
+                    >
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+                        </svg>
+                    </button>
+                </div>
+                <span
+                    class="copy-feedback"
+                    :class="{ 'copy-feedback-error': copyState === 'failed' }"
+                    :role="copyState === 'failed' ? 'alert' : 'status'"
                 >
-                    Send
-                </button>
+                    <template v-if="copyState === 'copied'">Copied to clipboard</template>
+                    <template v-else-if="copyState === 'failed'">Could not copy draft</template>
+                </span>
             </div>
-        </form>
 
-        <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
-            {{ assistantReply }}
-        </p>
+            <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
+                {{ assistantReply }}
+            </p>
 
-        <div class="draft-content">
-            <label class="field-label" for="outreach-message">Message</label>
-            <div class="draft-field">
-                <textarea
-                    id="outreach-message"
-                    v-model="draft"
-                    class="text-field draft-textarea"
-                    aria-label="Outreach message"
-                    :disabled="running"
-                ></textarea>
-                <button
-                    class="field-action copy-button"
-                    type="button"
-                    :aria-label="
-                        copyState === 'copied' ? 'Outreach message copied' : 'Copy outreach message'
-                    "
-                    :disabled="draft.trim().length === 0"
-                    @click="emit('copy')"
-                >
-                    <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="9" y="9" width="11" height="11" rx="2" />
-                        <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
-                    </svg>
-                </button>
-            </div>
-            <span v-if="copyState === 'copied'" class="copy-status" role="status">Copied</span>
-            <span v-if="copyState === 'failed'" class="copy-error" role="alert">
-                Could not copy draft
-            </span>
+            <form class="draft-request" @submit.prevent="emit('submit')">
+                <div class="request-field">
+                    <textarea
+                        id="draft-request"
+                        v-model="request"
+                        class="text-field request-input"
+                        rows="1"
+                        aria-label="Request draft changes"
+                        :disabled="running"
+                        placeholder="Request changes"
+                    ></textarea>
+                    <button
+                        class="field-action send-button"
+                        type="submit"
+                        :disabled="running || !canSubmit"
+                    >
+                        Send
+                    </button>
+                </div>
+            </form>
         </div>
     </section>
 </template>
@@ -100,6 +132,14 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
+
+    &.is-expanded {
+        @include bp-md-tablet {
+            display: grid;
+            grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.8fr);
+            align-items: stretch;
+        }
+    }
 }
 
 .contact-card {
@@ -109,6 +149,12 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     background: rgb(245 241 251 / 5%);
     border: 1px solid rgb(221 199 255 / 18%);
     border-radius: $radius-md;
+
+    .draft-board.is-expanded & {
+        @include bp-md-tablet {
+            align-self: start;
+        }
+    }
 }
 
 .eyebrow,
@@ -140,10 +186,31 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     color: $color-ink-secondary;
 }
 
+.rationale-toggle {
+    justify-self: start;
+    padding: $space-1 $space-2;
+    font-size: 0.75rem;
+}
+
+.draft-workspace {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: $space-3;
+    min-height: 0;
+}
+
 .relevance-rationale,
 .assistant-reply {
     margin: 0;
     font-size: 0.875rem;
+}
+
+.relevance-rationale:not(.is-expanded) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .draft-request {
@@ -173,6 +240,7 @@ const canSubmit = computed(() => request.value.trim().length > 0)
 }
 
 .request-input {
+    display: block;
     width: 100%;
     padding-right: 5.25rem;
     resize: vertical;
@@ -203,13 +271,17 @@ const canSubmit = computed(() => request.value.trim().length > 0)
 
 .field-action {
     position: absolute;
-    color: $color-night;
+}
+
+.rationale-toggle,
+.field-action {
+    color: $color-ink;
     font: inherit;
     font-weight: 650;
     cursor: pointer;
-    background: $color-signal-light;
+    background: $color-action;
     border: 0;
-    border-radius: $radius-sm;
+    border-radius: $radius-md;
 
     &:hover,
     &:focus-visible {
@@ -225,7 +297,12 @@ const canSubmit = computed(() => request.value.trim().length > 0)
 .send-button {
     top: 50%;
     right: $space-2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 4rem;
     padding: $space-2 $space-3;
+    line-height: 1;
     transform: translateY(-50%);
 }
 
@@ -250,16 +327,13 @@ const canSubmit = computed(() => request.value.trim().length > 0)
     stroke-width: 1.75;
 }
 
-.copy-status,
-.copy-error {
-    font-size: 0.8125rem;
-}
-
-.copy-status {
+.copy-feedback {
+    min-height: 1rem;
     color: $color-ink-muted;
-}
+    font-size: 0.8125rem;
 
-.copy-error {
-    color: lighten-color($color-red-600, 20%);
+    &-error {
+        color: lighten-color($color-red-600, 20%);
+    }
 }
 </style>

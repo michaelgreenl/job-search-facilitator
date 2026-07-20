@@ -206,7 +206,7 @@ function updateLabel() {
     font-weight: 650;
     cursor: pointer;
     text-decoration: none;
-    background: #af8de2;
+    background: $color-action;
     border: 0;
     border-radius: $radius-md;
 

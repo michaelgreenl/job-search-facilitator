@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
@@ -17,6 +17,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     cancel: []
+    collapse: []
     expand: []
     showViewer: []
 }>()
@@ -27,6 +28,7 @@ const { cancelling, error, task, taskActive } = storeToRefs(workStore)
 const { assistantReply, contact, draft, resultError } = storeToRefs(outreachStore)
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => task.value?.status === 'running')
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
@@ -41,9 +43,17 @@ watch(
     { immediate: true },
 )
 
-watch(draft, () => {
+function resetCopyState() {
+    if (copyResetTimer !== null) {
+        clearTimeout(copyResetTimer)
+        copyResetTimer = null
+    }
+
     copyState.value = 'idle'
-})
+}
+
+watch(draft, resetCopyState)
+onBeforeUnmount(resetCopyState)
 
 function submitDraftRequest() {
     const request = draftRequest.value.trim()
@@ -61,14 +71,28 @@ function submitDraftRequest() {
         .catch(() => undefined)
 }
 
+function toggleExpanded() {
+    if (props.expanded) {
+        emit('collapse')
+    } else {
+        emit('expand')
+    }
+}
+
 async function copyDraft() {
     if (!draft.value.trim()) {
         return
     }
 
+    resetCopyState()
+
     try {
         await navigator.clipboard.writeText(draft.value)
         copyState.value = 'copied'
+        copyResetTimer = setTimeout(() => {
+            copyState.value = 'idle'
+            copyResetTimer = null
+        }, 2400)
     } catch {
         copyState.value = 'failed'
     }
@@ -87,21 +111,22 @@ async function copyDraft() {
                 />
                 <template v-else>
                     <button
-                        v-if="contact && !expanded"
-                        class="panel-control panel-control-expand"
+                        v-if="contact"
+                        class="panel-control panel-control-desktop"
                         type="button"
-                        aria-label="Expand outreach panel"
-                        aria-expanded="false"
-                        @click="emit('expand')"
+                        :aria-label="expanded ? 'Collapse outreach panel' : 'Expand outreach panel'"
+                        :aria-expanded="expanded"
+                        @click="toggleExpanded"
                     >
                         <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m11 17-5-5 5-5M18 17l-5-5 5-5" />
+                            <path v-if="expanded" d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                            <path v-else d="M9 3H3v6M3 3l7 7M15 21h6v-6M21 21l-7-7" />
                         </svg>
                     </button>
                     <button
                         class="panel-control"
                         :class="{
-                            'panel-control-mobile-only': contact && !expanded,
+                            'panel-control-mobile-only': contact,
                         }"
                         type="button"
                         aria-label="Show selected job post"
@@ -124,6 +149,7 @@ async function copyDraft() {
                 :assistant-reply="assistantReply"
                 :running="taskActive"
                 :copy-state="copyState"
+                :expanded="expanded"
                 @submit="submitDraftRequest"
                 @copy="copyDraft"
             />
@@ -165,19 +191,19 @@ async function copyDraft() {
     width: 2rem;
     height: 2rem;
     padding: 0;
-    color: $color-ink-muted;
+    color: $color-ink;
     cursor: pointer;
-    background: transparent;
+    background: $color-action;
     border: 0;
     border-radius: $radius-sm;
 
     &:hover,
     &:focus-visible {
-        color: $color-signal-light;
-        background: rgb(173 123 249 / 10%);
+        color: $color-ink;
+        background: $color-signal;
     }
 
-    &-expand {
+    &-desktop {
         display: none;
 
         @include bp-md-tablet {
