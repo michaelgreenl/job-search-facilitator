@@ -1,51 +1,162 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, shallowRef, useTemplateRef } from 'vue'
 import { RouterLink } from 'vue-router'
+import { navigationRoutes } from '@/router'
 
-const showNav = ref(false)
+const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => ({
+    label: meta.title,
+    path,
+}))
+const showNav = shallowRef(false)
+const header = useTemplateRef<HTMLElement>('header')
+const trigger = useTemplateRef<HTMLButtonElement>('trigger')
+
+function openNavigation() {
+    showNav.value = true
+}
+
+function closeNavigation(restoreFocus = false) {
+    showNav.value = false
+
+    if (restoreFocus) {
+        void nextTick(() => trigger.value?.focus())
+    }
+}
+
+function toggleNavigation() {
+    if (showNav.value) {
+        closeNavigation(true)
+    } else {
+        openNavigation()
+    }
+}
+
+function handleFocusOut(event: FocusEvent) {
+    if (!header.value?.contains(event.relatedTarget as Node | null)) {
+        closeNavigation()
+    }
+}
 </script>
 
 <template>
     <header
-        class="app-header glass-frame"
-        @mouseenter="showNav = true"
-        @mouseleave="showNav = false"
+        ref="header"
+        class="app-header"
+        :class="{ 'is-open': showNav }"
+        @mouseenter="openNavigation"
+        @mouseleave="closeNavigation()"
+        @focusout="handleFocusOut"
+        @keydown.esc.prevent="closeNavigation(true)"
     >
-        <RouterLink class="brand" to="/" aria-label="Job Search Facilitator home">
-            <span class="brand-mark" aria-hidden="true">JF</span>
-        </RouterLink>
+        <button
+            ref="trigger"
+            class="nav-handle"
+            type="button"
+            aria-controls="primary-navigation"
+            :aria-label="showNav ? 'Close navigation' : 'Open navigation'"
+            :aria-expanded="showNav"
+            @click="toggleNavigation"
+        >
+            <span class="nav-handle-bar" aria-hidden="true"></span>
+        </button>
 
-        <div v-if="showNav" class="nav-links">
-            <RouterLink class="link" to="/">Review</RouterLink>
-            <RouterLink class="link" to="/apply">Apply</RouterLink>
-            <RouterLink class="link" to="/results">Results</RouterLink>
+        <div class="nav-surface glass-frame" :aria-hidden="!showNav" :inert="!showNav">
+            <RouterLink
+                class="brand"
+                to="/"
+                aria-label="Job Search Facilitator home"
+                @click="closeNavigation()"
+            >
+                <span class="brand-mark" aria-hidden="true">JF</span>
+            </RouterLink>
+
+            <nav
+                id="primary-navigation"
+                class="nav-links"
+                aria-label="Primary"
+                :aria-hidden="!showNav"
+            >
+                <RouterLink
+                    v-for="item in navigationItems"
+                    :key="item.path"
+                    class="link"
+                    :to="item.path"
+                    @click="closeNavigation()"
+                >
+                    {{ item.label }}
+                </RouterLink>
+            </nav>
         </div>
     </header>
 </template>
 
 <style scoped lang="scss">
+$nav-surface-height: 3.5rem;
+
 .app-header {
     position: absolute;
-    top: -$space-5;
-    right: 48.25%;
+    top: -$nav-surface-height;
+    left: 50%;
     z-index: 10;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    margin-inline: auto;
-    padding: $space-2;
-    border-radius: $radius-lg;
+    max-width: calc(100vw - ($space-4 * 2));
+    transform: translateX(-50%);
 
-    &:hover {
-        gap: $space-4;
-        top: $space-1;
-        right: 42%;
+    &.is-open {
+        top: 0;
+    }
+}
+
+.nav-surface {
+    display: flex;
+    order: 1;
+    gap: $space-4;
+    align-items: center;
+    min-height: $nav-surface-height;
+    padding: $space-2 $space-3;
+    border-top: 0;
+    border-radius: 0 0 $radius-lg $radius-lg;
+}
+
+.nav-handle {
+    display: grid;
+    order: 2;
+    width: 4rem;
+    height: 1.5rem;
+    padding: 0;
+    margin-top: -1px;
+    cursor: pointer;
+    background: rgb(24 18 33 / 92%);
+    border: 1px solid rgb(221 199 255 / 22%);
+    border-top: 0;
+    border-radius: 0 0 $radius-full $radius-full;
+    box-shadow: 0 8px 20px rgb(0 0 0 / 24%);
+    place-items: center;
+
+    &:hover,
+    &:focus-visible,
+    &[aria-expanded='true'] {
+        background: rgb(173 123 249 / 18%);
+        border-color: rgb(173 123 249 / 48%);
+    }
+}
+
+.nav-handle-bar {
+    width: 1.75rem;
+    height: 0.1875rem;
+    background: $color-ink-muted;
+    border-radius: $radius-full;
+    box-shadow: 0 0 10px rgb(173 123 249 / 24%);
+
+    [aria-expanded='true'] & {
+        background: $color-signal-light;
     }
 }
 
 .brand {
     display: inline-flex;
-    gap: $space-3;
     align-items: center;
     min-width: 0;
     text-decoration: none;
@@ -72,43 +183,16 @@ const showNav = ref(false)
     }
 }
 
-.brand-copy {
-    display: grid;
-    gap: 0.125rem;
-    min-width: 0;
-
-    strong {
-        overflow: hidden;
-        font-size: 0.875rem;
-        font-weight: 650;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    small {
-        color: $color-ink-muted;
-        font-size: 0.6875rem;
-
-        @include bp-max('xs') {
-            display: none;
-        }
-
-        @media (prefers-contrast: more) {
-            color: $color-ink;
-        }
-    }
-}
-
 .nav-links {
     display: flex;
     gap: $space-5;
     align-items: center;
-    padding-right: $space-3;
 }
 
 .link {
     color: $color-ink-muted;
     text-decoration: none;
+    white-space: nowrap;
 
     &:hover,
     &:focus-visible {
