@@ -102,6 +102,34 @@ const findButton = (root: HTMLElement, text: string) => {
     return button
 }
 
+const openJobPostActions = async (root: HTMLElement) => {
+    const trigger = root.querySelector<HTMLButtonElement>('button[aria-label="Job post label"]')
+
+    if (trigger === null) {
+        throw new Error('Could not find job post action menu')
+    }
+
+    trigger.click()
+    await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).not.toBeNull())
+
+    return {
+        items: [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')],
+        trigger,
+    }
+}
+
+const chooseJobPostAction = async (root: HTMLElement, label: string) => {
+    const { items, trigger } = await openJobPostActions(root)
+    const item = items.find((candidate) => candidate.textContent?.trim() === label)
+
+    if (item === undefined) {
+        throw new Error(`Could not find job post action "${label}"`)
+    }
+
+    item.click()
+    return trigger
+}
+
 describe('apply view', () => {
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(posts)))
@@ -615,15 +643,10 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
+        const { items, trigger: labelPicker } = await openJobPostActions(root)
 
-        if (labelPicker === null) {
-            throw new Error('Could not find job post label picker')
-        }
-
-        expect([...labelPicker.options].map(({ value }) => value)).toContain('applied')
-        labelPicker.value = 'applied'
-        labelPicker.dispatchEvent(new Event('change'))
+        expect(items.map(({ textContent }) => textContent?.trim())).toContain('Applied')
+        items.find(({ textContent }) => textContent?.trim() === 'Applied')?.click()
 
         await vi.waitFor(() => {
             expect(
@@ -660,14 +683,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
-
-        if (labelPicker === null) {
-            throw new Error('Could not find job post label picker')
-        }
-
-        labelPicker.value = 'applied'
-        labelPicker.dispatchEvent(new Event('change'))
+        const labelPicker = await chooseJobPostAction(root, 'Applied')
 
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')?.textContent).toBe(
@@ -685,14 +701,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(posts))
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const root = await mountApplyView()
-        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
-
-        if (labelPicker === null) {
-            throw new Error('Could not find job post label picker')
-        }
-
-        labelPicker.value = 'P2'
-        labelPicker.dispatchEvent(new Event('change'))
+        await chooseJobPostAction(root, 'P2')
 
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')?.textContent).toBe(
@@ -712,15 +721,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-
-        const labelPicker = root.querySelector<HTMLSelectElement>('[aria-label="Job post label"]')
-
-        if (labelPicker === null) {
-            throw new Error('Could not find job post label picker')
-        }
-
-        labelPicker.value = 'forgo'
-        labelPicker.dispatchEvent(new Event('change'))
+        await chooseJobPostAction(root, 'forgo')
 
         await vi.waitFor(() => {
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
-import { computed, shallowRef } from 'vue'
+import { computed } from 'vue'
+import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
@@ -38,9 +39,6 @@ const emit = defineEmits<{
     back: []
 }>()
 
-type LabelSelection = UserLabel | 'applied' | null | ''
-
-const selectedLabel = shallowRef<LabelSelection>('')
 const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
 const labelPrompt = computed(() => {
     if (applied.value) {
@@ -50,19 +48,41 @@ const labelPrompt = computed(() => {
     return props.post.userLabel === null ? 'Add label' : 'Change label'
 })
 const postError = computed(() => props.applicationError ?? props.labelError)
+const labelActions = computed<ActionMenuItem[]>(() => [
+    ...USER_LABELS.map((label) => ({
+        value: label,
+        label,
+        tone:
+            label === 'P1'
+                ? ('priority-high' as const)
+                : label === 'P2'
+                  ? ('priority-medium' as const)
+                  : label === 'quick-app'
+                    ? ('quick' as const)
+                    : ('muted' as const),
+    })),
+    ...(props.showAppliedOption
+        ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
+        : []),
+    {
+        value: 'clear',
+        label: 'Clear label',
+        tone: 'muted' as const,
+        separatorBefore: true,
+    },
+])
 
-function updateLabel() {
-    if (selectedLabel.value === '') {
-        return
-    }
+const isUserLabel = (value: string): value is UserLabel =>
+    USER_LABELS.some((label) => label === value)
 
-    if (selectedLabel.value === 'applied') {
+function selectLabel(value: string) {
+    if (value === 'applied') {
         emit('markApplied')
-    } else {
-        emit('updateLabel', selectedLabel.value)
+    } else if (value === 'clear') {
+        emit('updateLabel', null)
+    } else if (isUserLabel(value)) {
+        emit('updateLabel', value)
     }
-
-    selectedLabel.value = ''
 }
 </script>
 
@@ -101,24 +121,14 @@ function updateLabel() {
                 </a>
             </div>
 
-            <label class="label-picker">
-                <span class="select-field">
-                    <select
-                        v-model="selectedLabel"
-                        class="select-control label-picker-select"
-                        aria-label="Job post label"
-                        :disabled="labelUpdating || applicationUpdating || applied"
-                        @change="updateLabel"
-                    >
-                        <option disabled value="">{{ labelPrompt }}</option>
-                        <option v-for="label in USER_LABELS" :key="label" :value="label">
-                            {{ label }}
-                        </option>
-                        <option v-if="showAppliedOption" value="applied">Applied</option>
-                        <option :value="null">clear label</option>
-                    </select>
-                </span>
-            </label>
+            <ActionMenu
+                class="label-picker-menu"
+                button-label="Job post label"
+                :label="labelPrompt"
+                :items="labelActions"
+                :disabled="labelUpdating || applicationUpdating || applied"
+                @select="selectLabel"
+            />
         </div>
 
         <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
@@ -236,16 +246,9 @@ function updateLabel() {
     }
 }
 
-.label-picker {
-    display: flex;
-    gap: $space-2;
-    align-items: center;
-    color: $color-ink-muted;
+.label-picker-menu {
+    min-width: 9rem;
     font-size: 0.8125rem;
-
-    &-select {
-        min-width: 8rem;
-    }
 }
 
 .label-error {
