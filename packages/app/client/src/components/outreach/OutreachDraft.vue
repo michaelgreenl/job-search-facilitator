@@ -19,13 +19,11 @@ const draft = defineModel<string>('draft', { required: true })
 const request = defineModel<string>('request', { required: true })
 const canSubmit = computed(() => request.value.trim().length > 0)
 const descriptionExpanded = shallowRef(false)
+const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.value)
 
-watch(
-    () => props.contact.profileUrl,
-    () => {
-        descriptionExpanded.value = false
-    },
-)
+watch([() => props.contact.profileUrl, () => props.expanded], () => {
+    descriptionExpanded.value = false
+})
 </script>
 
 <template>
@@ -41,27 +39,30 @@ watch(
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
-            <p
-                id="contact-rationale"
-                class="relevance-rationale"
-                :class="{ 'is-expanded': descriptionExpanded }"
-            >
-                {{ contact.relevanceRationale }}
-            </p>
-            <button
-                class="rationale-toggle"
-                type="button"
-                aria-controls="contact-rationale"
-                :aria-expanded="descriptionExpanded"
-                @click="descriptionExpanded = !descriptionExpanded"
-            >
-                {{ descriptionExpanded ? 'Show less' : 'Show more' }}
-            </button>
+            <div class="rationale-copy">
+                <p
+                    id="contact-rationale"
+                    class="relevance-rationale"
+                    :class="{ 'is-clamped': !rationaleExpanded }"
+                >
+                    {{ contact.relevanceRationale }}
+                </p>
+                <button
+                    v-if="!expanded"
+                    class="rationale-toggle"
+                    :class="{ 'rationale-toggle-more': !descriptionExpanded }"
+                    type="button"
+                    aria-controls="contact-rationale"
+                    :aria-expanded="descriptionExpanded"
+                    @click="descriptionExpanded = !descriptionExpanded"
+                >
+                    {{ descriptionExpanded ? 'Show less' : '… Show more' }}
+                </button>
+            </div>
         </div>
 
         <div class="draft-workspace">
             <div class="draft-content">
-                <label class="field-label" for="outreach-message">Message</label>
                 <div class="draft-field">
                     <textarea
                         id="outreach-message"
@@ -157,8 +158,7 @@ watch(
     }
 }
 
-.eyebrow,
-.field-label {
+.eyebrow {
     color: $color-signal-light;
     font-family: $font-family-mono;
     font-size: 0.6875rem;
@@ -186,12 +186,6 @@ watch(
     color: $color-ink-secondary;
 }
 
-.rationale-toggle {
-    justify-self: start;
-    padding: $space-1 $space-2;
-    font-size: 0.75rem;
-}
-
 .draft-workspace {
     display: flex;
     flex: 1;
@@ -206,11 +200,44 @@ watch(
     font-size: 0.875rem;
 }
 
-.relevance-rationale:not(.is-expanded) {
+.rationale-copy {
+    position: relative;
+    min-width: 0;
+}
+
+.relevance-rationale.is-clamped {
     display: -webkit-box;
     overflow: hidden;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
+}
+
+.rationale-toggle {
+    width: fit-content;
+    padding: 0;
+    margin-top: $space-1;
+    color: $color-signal-light;
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-ink;
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
+
+    &-more {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        padding-left: $space-4;
+        margin-top: 0;
+        background: linear-gradient(90deg, transparent, $color-night-panel 30%);
+    }
 }
 
 .draft-request {
@@ -271,10 +298,6 @@ watch(
 
 .field-action {
     position: absolute;
-}
-
-.rationale-toggle,
-.field-action {
     color: $color-ink;
     font: inherit;
     font-weight: 650;

@@ -330,6 +330,7 @@ describe('apply view', () => {
             expect(
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
+            expect(root.querySelector('label[for="outreach-message"]')).toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
             expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
@@ -348,14 +349,25 @@ describe('apply view', () => {
         })
 
         const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
-        const rationaleToggle = findButton(root, 'Show more')
+        const rationaleToggle = findButton(root, '… Show more')
+        const expandControl = root.querySelector<HTMLButtonElement>(
+            '[aria-label="Expand outreach panel"]',
+        )
 
-        expect(rationale?.classList.contains('is-expanded')).toBe(false)
+        expect(rationale?.classList.contains('is-clamped')).toBe(true)
+        expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
+        expect(rationaleToggle.classList.contains('rationale-toggle-more')).toBe(true)
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
+        expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
+        expect(
+            [...(expandControl?.querySelectorAll('polyline') ?? [])].map((chevron) =>
+                chevron.getAttribute('points'),
+            ),
+        ).toEqual(['11 7 5 5 7 11', '13 17 19 19 17 13'])
         rationaleToggle.click()
 
         await vi.waitFor(() => {
-            expect(rationale?.classList.contains('is-expanded')).toBe(true)
+            expect(rationale?.classList.contains('is-clamped')).toBe(false)
             expect(rationaleToggle.textContent).toContain('Show less')
             expect(rationaleToggle.getAttribute('aria-expanded')).toBe('true')
         })
@@ -459,6 +471,10 @@ describe('apply view', () => {
             expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
             expect(root.querySelector('[aria-label="Collapse outreach panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Show selected job post"]')).not.toBeNull()
+            expect(root.querySelector('.rationale-toggle')).toBeNull()
+            expect(
+                root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
+            ).toBe(false)
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Collapse outreach panel"]')?.click()
@@ -474,6 +490,10 @@ describe('apply view', () => {
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
             )
+            expect(findButton(root, '… Show more')).not.toBeNull()
+            expect(
+                root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
+            ).toBe(true)
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Show selected job post"]')?.click()

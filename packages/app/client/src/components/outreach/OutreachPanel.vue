@@ -112,15 +112,21 @@ async function copyDraft() {
                 <template v-else>
                     <button
                         v-if="contact"
-                        class="panel-control panel-control-desktop"
+                        class="panel-control panel-control-expand panel-control-desktop"
                         type="button"
                         :aria-label="expanded ? 'Collapse outreach panel' : 'Expand outreach panel'"
                         :aria-expanded="expanded"
                         @click="toggleExpanded"
                     >
                         <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path v-if="expanded" d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
-                            <path v-else d="M9 3H3v6M3 3l7 7M15 21h6v-6M21 21l-7-7" />
+                            <template v-if="expanded">
+                                <polyline points="4 8 10 10 8 4" />
+                                <polyline points="20 16 14 14 16 20" />
+                            </template>
+                            <template v-else>
+                                <polyline points="11 7 5 5 7 11" />
+                                <polyline points="13 17 19 19 17 13" />
+                            </template>
                         </svg>
                     </button>
                     <button
@@ -214,6 +220,17 @@ async function copyDraft() {
     &-mobile-only {
         @include bp-md-tablet {
             display: none;
+        }
+    }
+
+    &-expand {
+        color: $color-ink-muted;
+        background: transparent;
+
+        &:hover,
+        &:focus-visible {
+            color: $color-signal-light;
+            background: transparent;
         }
     }
 }
