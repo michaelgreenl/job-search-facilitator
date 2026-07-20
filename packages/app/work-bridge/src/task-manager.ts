@@ -14,7 +14,6 @@ interface StoredTask extends WorkTask {
     cancellation: Promise<void> | null
     events: WorkTaskStreamEvent[]
     listeners: Set<(event: WorkTaskStreamEvent) => void>
-    messagePhases: Map<string, string | null>
     finalMessages: string[]
     pendingAction: WorkActionRequired | null
 }
@@ -40,7 +39,6 @@ const publicTask = ({
     cancellation: _cancellation,
     events: _events,
     listeners: _listeners,
-    messagePhases: _messagePhases,
     finalMessages: _finalMessages,
     pendingAction: _pendingAction,
     ...task
@@ -75,7 +73,6 @@ export class WorkTaskManager {
             cancellation: null,
             events: [],
             listeners: new Set(),
-            messagePhases: new Map(),
             finalMessages: [],
             pendingAction: null,
         }
@@ -194,15 +191,10 @@ export class WorkTaskManager {
 
         if (method === 'item/started') {
             this.handleItemStarted(task, params.item)
-        } else if (method === 'item/agentMessage/delta') {
-            const itemId = stringValue(params.itemId)
+        } else if (method === 'item/reasoning/summaryTextDelta') {
             const delta = stringValue(params.delta)
 
-            if (
-                itemId !== null &&
-                delta !== null &&
-                task.messagePhases.get(itemId) === 'commentary'
-            ) {
+            if (delta !== null) {
                 this.emit(task, {
                     type: 'message',
                     textDelta: delta,
@@ -245,11 +237,8 @@ export class WorkTaskManager {
         }
 
         const type = stringValue(value.type)
-        const itemId = stringValue(value.id)
 
-        if (type === 'agentMessage' && itemId !== null) {
-            task.messagePhases.set(itemId, stringValue(value.phase))
-        } else if (type === 'webSearch') {
+        if (type === 'webSearch') {
             this.activity(task, 'Searching the web')
         } else if (type === 'mcpToolCall') {
             this.activity(

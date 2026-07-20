@@ -231,6 +231,7 @@ export class CodexAppServer implements WorkRuntime {
             clientUserMessageId: taskId,
             input: [{ type: 'text', text: input.prompt, text_elements: [] }],
             outputSchema: input.outputSchema,
+            summary: 'concise',
         })
 
         return { threadId: thread.id, turnId: turn.id }

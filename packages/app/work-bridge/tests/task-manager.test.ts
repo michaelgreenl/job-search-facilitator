@@ -81,7 +81,18 @@ describe('Work task manager', () => {
         )
         runtime.notify(
             'item/agentMessage/delta',
-            params({ itemId: 'commentary', delta: 'Checking company staff' }),
+            params({
+                itemId: 'commentary',
+                delta: '{"personName":"Checking company staff","personTitle":"Working"}',
+            }),
+        )
+        runtime.notify(
+            'item/reasoning/summaryTextDelta',
+            params({
+                itemId: 'reasoning',
+                summaryIndex: 0,
+                delta: 'Comparing relevant employees',
+            }),
         )
         runtime.notify(
             'item/started',
@@ -121,6 +132,10 @@ describe('Work task manager', () => {
             [2, 'message'],
             [3, 'completed'],
         ])
+        expect(manager.connect(started.id, () => {})?.events[1]?.event).toMatchObject({
+            type: 'message',
+            textDelta: 'Comparing relevant employees',
+        })
     })
 
     it('fails a completed turn that does not contain structured output', async () => {

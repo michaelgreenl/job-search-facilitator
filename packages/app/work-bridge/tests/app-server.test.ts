@@ -159,6 +159,7 @@ describe('Codex app server client', () => {
                     clientUserMessageId: 'task-id',
                     input: [{ type: 'text', text: 'Find contacts', text_elements: [] }],
                     outputSchema: { type: 'object' },
+                    summary: 'concise',
                 }),
             }),
         )
