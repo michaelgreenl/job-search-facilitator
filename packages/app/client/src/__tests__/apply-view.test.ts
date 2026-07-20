@@ -298,12 +298,11 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(root.querySelector('.activity-icon-tool')).not.toBeNull()
-            expect(root.querySelector('.activity-icon-globe')).not.toBeNull()
+            expect(root.querySelector('.activity-icon-globe')).toBeNull()
             expect(root.textContent).toContain('I am reviewing the hiring team.')
             expect(root.querySelectorAll('.activity-progress')).toHaveLength(1)
-            expect(
-                root.querySelector('.activity-item:last-child .activity-progress'),
-            ).not.toBeNull()
+            expect(root.querySelector('.activity-item-activity .activity-progress')).not.toBeNull()
+            expect(root.querySelector('.activity-item-commentary .activity-progress')).toBeNull()
         })
 
         source.message({

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, useTemplateRef, watch } from 'vue'
+import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import { useWorkStore } from '@/stores/work.store'
 
-defineProps<{ issue: string | null }>()
+const props = defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
 const { actionSubmitting, events, pendingAction, taskActive } = storeToRefs(workStore)
@@ -61,6 +62,33 @@ const streamItems = computed(() => {
             : item,
     )
 })
+const latestActivityIndex = computed(() => {
+    const items = streamItems.value
+
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+        if (items[index]?.type === 'activity') {
+            return index
+        }
+    }
+
+    return -1
+})
+const scrollRevision = computed(() => [
+    streamItems.value,
+    pendingAction.value?.id ?? null,
+    props.issue,
+])
+const progress = useTemplateRef<HTMLElement>('progress')
+const { handleScroll, resetFollowing } = useStickyBottomScroll(progress, scrollRevision)
+
+watch(
+    () => events.value.length,
+    (eventCount) => {
+        if (eventCount === 0) {
+            resetFollowing()
+        }
+    },
+)
 
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
@@ -71,7 +99,7 @@ function resolveAction(decision: WorkActionDecision) {
     <div class="work-updates">
         <p v-if="issue" class="work-error" role="alert">{{ issue }}</p>
 
-        <div class="work-progress">
+        <div ref="progress" class="work-progress" @scroll.passive="handleScroll">
             <ul
                 v-if="streamItems.length"
                 class="activity-list"
@@ -86,7 +114,13 @@ function resolveAction(decision: WorkActionDecision) {
                     class="activity-item"
                     :class="`activity-item-${item.type}`"
                 >
+                    <span
+                        v-if="taskActive && pendingAction === null && index === latestActivityIndex"
+                        class="activity-progress"
+                        aria-hidden="true"
+                    ></span>
                     <svg
+                        v-else
                         class="activity-icon"
                         :class="`activity-icon-${item.icon}`"
                         viewBox="0 0 24 24"
@@ -103,13 +137,6 @@ function resolveAction(decision: WorkActionDecision) {
                         <path v-else d="m8 5 8 7-8 7" />
                     </svg>
                     <span class="activity-copy">{{ item.message }}</span>
-                    <span
-                        v-if="
-                            taskActive && pendingAction === null && index === streamItems.length - 1
-                        "
-                        class="activity-progress"
-                        aria-hidden="true"
-                    ></span>
                 </li>
             </ul>
         </div>
@@ -181,7 +208,7 @@ function resolveAction(decision: WorkActionDecision) {
 
 .activity-item {
     display: grid;
-    grid-template-columns: 1rem minmax(0, 1fr) 1ch;
+    grid-template-columns: 1rem minmax(0, 1fr);
     column-gap: $space-2;
     align-items: center;
 
@@ -208,12 +235,14 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .activity-progress {
-    display: inline-block;
-    width: 1ch;
+    display: grid;
+    width: 1rem;
+    height: 1rem;
     overflow: hidden;
     color: $color-signal-light;
     font-family: $font-family-mono;
     line-height: 1;
+    place-items: center;
 
     &::after {
         content: '⠋';
