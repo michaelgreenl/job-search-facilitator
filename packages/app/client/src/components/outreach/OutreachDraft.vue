@@ -56,7 +56,6 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                     :aria-expanded="descriptionExpanded"
                     @click="descriptionExpanded = !descriptionExpanded"
                 >
-                    <span v-if="!descriptionExpanded" aria-hidden="true">…&nbsp;</span>
                     {{ descriptionExpanded ? 'Show less' : 'Show more' }}
                 </button>
             </div>
@@ -234,15 +233,11 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     }
 
     &-more {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        display: inline-flex;
-        align-items: center;
-        padding: 0 0 0 $space-5;
-        margin-left: 0;
-        line-height: 1.5;
-        background: linear-gradient(90deg, transparent, $color-night-panel 38%);
+        // position: absolute;
+        // right: 0;
+        // bottom: 0;
+        // margin-top: 0;
+        // background: linear-gradient(90deg, transparent, $color-night-panel 30%);
     }
 }
 
