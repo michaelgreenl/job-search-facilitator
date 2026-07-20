@@ -145,6 +145,34 @@ describe('review route selection', () => {
         })
     })
 
+    it('uses the shared dropdown for job post filters', async () => {
+        const { root } = await mountReview()
+
+        findButton(root, secondReport.summary).click()
+        const filter = await vi.waitFor(() => {
+            const button = root.querySelector<HTMLButtonElement>(
+                'button[aria-label="Filter job posts"]',
+            )
+
+            if (button === null) {
+                throw new Error('Could not find job post filter')
+            }
+
+            return button
+        })
+
+        expect(root.querySelector('select')).toBeNull()
+        filter.click()
+
+        await vi.waitFor(() => {
+            expect(
+                [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((item) =>
+                    item.textContent?.trim(),
+                ),
+            ).toEqual(['All', 'Labeled', 'Unreviewed', 'Forgone'])
+        })
+    })
+
     it('keeps the selected post id out of the visible URL', async () => {
         const { root, router } = await mountReview()
 

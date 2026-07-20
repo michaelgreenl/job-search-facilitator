@@ -2,6 +2,7 @@
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
+import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
@@ -17,6 +18,21 @@ type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
+const postFilterItems: ActionMenuItem[] = [
+    { value: 'all', label: 'All' },
+    ...applyLabels.map((label) => ({
+        value: label,
+        label,
+        tone:
+            label === 'P1'
+                ? ('priority-high' as const)
+                : label === 'P2'
+                  ? ('priority-medium' as const)
+                  : ('quick' as const),
+    })),
+]
+const isPostFilter = (value: string): value is PostFilter =>
+    value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
@@ -48,6 +64,9 @@ const filteredPosts = computed(() =>
     postFilter.value === 'all'
         ? actionablePosts.value
         : actionablePosts.value.filter(({ userLabel }) => userLabel === postFilter.value),
+)
+const postFilterLabel = computed(
+    () => postFilterItems.find(({ value }) => value === postFilter.value)?.label ?? 'All',
 )
 
 const selectedPost = computed(
@@ -98,6 +117,12 @@ function selectPost(postId: string) {
     labelError.value = null
     applicationError.value = null
     activePanel.value = 'viewer'
+}
+
+function selectPostFilter(value: string) {
+    if (isPostFilter(value)) {
+        postFilter.value = value
+    }
 }
 
 function showPosts() {
@@ -228,25 +253,17 @@ onMounted(() => {
                     <template #controls>
                         <span class="item-count">{{ filteredPosts.length }} posts</span>
 
-                        <label class="post-filter">
+                        <div class="post-filter">
                             <span>Filter</span>
-                            <span class="select-field">
-                                <select
-                                    v-model="postFilter"
-                                    class="select-control post-filter-select"
-                                    aria-label="Filter job posts"
-                                >
-                                    <option value="all">All</option>
-                                    <option
-                                        v-for="label in applyLabels"
-                                        :key="label"
-                                        :value="label"
-                                    >
-                                        {{ label }}
-                                    </option>
-                                </select>
-                            </span>
-                        </label>
+                            <ActionMenu
+                                class="post-filter-select"
+                                button-label="Filter job posts"
+                                :disabled="false"
+                                :items="postFilterItems"
+                                :label="postFilterLabel"
+                                @select="selectPostFilter"
+                            />
+                        </div>
                     </template>
                 </PanelHeading>
 

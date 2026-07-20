@@ -147,23 +147,37 @@ describe('apply view', () => {
 
     it('filters application candidates by user label', async () => {
         const root = await mountApplyView()
-        const filter = root.querySelector<HTMLSelectElement>('[aria-label="Filter job posts"]')
+        const filter = root.querySelector<HTMLButtonElement>(
+            'button[aria-label="Filter job posts"]',
+        )
 
         if (filter === null) {
             throw new Error('Could not find job post filter')
         }
 
-        expect([...filter.options].map(({ value }) => value)).toEqual([
-            'all',
-            'P1',
-            'P2',
-            'quick-app',
-        ])
-
-        filter.value = 'P2'
-        filter.dispatchEvent(new Event('change'))
+        expect(root.querySelector('select[aria-label="Filter job posts"]')).toBeNull()
+        filter.click()
 
         await vi.waitFor(() => {
+            expect(
+                [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((item) =>
+                    item.textContent?.trim(),
+                ),
+            ).toEqual(['All', 'P1', 'P2', 'quick-app'])
+        })
+
+        const p2Filter = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+            ({ textContent }) => textContent?.trim() === 'P2',
+        )
+
+        if (p2Filter === undefined) {
+            throw new Error('Could not find P2 filter option')
+        }
+
+        p2Filter.click()
+
+        await vi.waitFor(() => {
+            expect(filter.textContent).toContain('P2')
             expect(root.textContent).toContain('P2 Engineer')
             expect(root.textContent).not.toContain('P1 Engineer')
             expect(root.textContent).not.toContain('quick-app Engineer')

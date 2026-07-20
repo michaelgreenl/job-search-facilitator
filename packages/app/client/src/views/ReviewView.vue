@@ -2,6 +2,7 @@
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -14,6 +15,15 @@ import { usePostStore } from '@/stores/post.store'
 
 type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
+
+const postFilterItems: ActionMenuItem[] = [
+    { value: 'all', label: 'All' },
+    { value: 'labeled', label: 'Labeled' },
+    { value: 'unreviewed', label: 'Unreviewed' },
+    { value: 'forgone', label: 'Forgone', tone: 'muted' },
+]
+const isPostFilter = (value: string): value is PostFilter =>
+    postFilterItems.some((item) => item.value === value)
 
 const bp = useBreakpoints()
 const route = useRoute()
@@ -124,6 +134,9 @@ const postCountLabel = computed(() => {
         ? `${total} posts`
         : `${filteredResults.value.length} of ${total} posts`
 })
+const postFilterLabel = computed(
+    () => postFilterItems.find(({ value }) => value === postFilter.value)?.label ?? 'All',
+)
 
 const filteredPosts = computed(() => filteredResults.value.map(({ post }) => post))
 const postListEmptyMessage = computed(() => {
@@ -189,6 +202,12 @@ function selectPost(postId: string) {
 
     if (result !== undefined) {
         selectResult(result)
+    }
+}
+
+function selectPostFilter(value: string) {
+    if (isPostFilter(value)) {
+        postFilter.value = value
     }
 }
 
@@ -282,21 +301,17 @@ onMounted(() => {
                     <template #controls>
                         <span class="item-count">{{ postCountLabel }}</span>
 
-                        <label class="post-filter">
+                        <div class="post-filter">
                             <span>Filter</span>
-                            <span class="select-field">
-                                <select
-                                    v-model="postFilter"
-                                    class="select-control post-filter-select"
-                                    :disabled="selectedReport === null"
-                                >
-                                    <option value="all">All</option>
-                                    <option value="labeled">Labeled</option>
-                                    <option value="unreviewed">Unreviewed</option>
-                                    <option value="forgone">Forgone</option>
-                                </select>
-                            </span>
-                        </label>
+                            <ActionMenu
+                                class="post-filter-select"
+                                button-label="Filter job posts"
+                                :disabled="selectedReport === null"
+                                :items="postFilterItems"
+                                :label="postFilterLabel"
+                                @select="selectPostFilter"
+                            />
+                        </div>
                     </template>
                 </PanelHeading>
 
