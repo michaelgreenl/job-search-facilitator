@@ -345,7 +345,11 @@ onMounted(() => {
 
 .apply-panel {
     &.apply-post-list {
-        min-width: 26em;
+        min-width: 0;
+
+        @include bp-md-tablet {
+            min-width: 26em;
+        }
     }
 
     &.apply-job-post-view {
