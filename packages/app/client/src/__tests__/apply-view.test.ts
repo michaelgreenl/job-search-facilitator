@@ -358,6 +358,7 @@ describe('apply view', () => {
         expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
         expect(rationaleToggle.classList.contains('rationale-toggle-more')).toBe(true)
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
+        expect(rationaleToggle.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('…')
         expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
         expect(
             [...(expandControl?.querySelectorAll('polyline') ?? [])].map((chevron) =>
