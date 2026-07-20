@@ -224,8 +224,8 @@ function updateLabel() {
 .outreach-spinner {
     width: 0.875rem;
     height: 0.875rem;
-    border: 2px solid rgb(20 15 27 / 28%);
-    border-top-color: $color-night;
+    border: 2px solid rgba($color-ink, 0.5);
+    border-top-color: $color-ink;
     border-radius: 50%;
     animation: outreach-spin 0.8s linear infinite;
 }

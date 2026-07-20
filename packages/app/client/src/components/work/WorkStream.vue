@@ -129,8 +129,10 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .activity-list {
-    display: grid;
-    gap: $space-1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: $space-2;
     margin: 0;
     padding: 0;
     color: $color-ink-muted;
@@ -167,6 +169,7 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .action-required {
+    position: absolute;
     display: grid;
     gap: $space-1;
     padding: $space-4;
