@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ApplicationStatus, UserLabel } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import { getUserLabelTone } from './job-post-labels'
 
 const props = withDefaults(
     defineProps<{
@@ -21,17 +22,20 @@ const label = computed(() => {
 
     return props.userLabel === 'forgo' ? 'forgone' : props.userLabel
 })
+const tone = computed(() => {
+    if (applied.value) {
+        return 'success'
+    }
+
+    return props.userLabel === null ? null : getUserLabelTone(props.userLabel)
+})
 </script>
 
 <template>
     <span
         v-if="label"
         class="user-label"
-        :class="{
-            'user-label-compact': compact,
-            'user-label-forgo': !applied && userLabel === 'forgo',
-            'user-label-applied': applied,
-        }"
+        :class="[{ 'user-label-compact': compact }, tone && `user-label-${tone}`]"
     >
         {{ label }}
     </span>
@@ -57,15 +61,28 @@ const label = computed(() => {
         border-color: $color-signal-alpha-24;
     }
 
-    &-forgo {
-        filter: grayscale(1);
-        opacity: 0.55;
+    &-priority-high {
+        color: lighten-color($color-red-600, 25%);
+        background: $color-red-600-alpha-14;
+        border-color: lighten-color($color-red-600, 25%);
     }
 
-    &-applied {
-        color: $color-ink;
+    &-priority-medium {
+        color: $color-amber-500;
+        background: $color-amber-500-alpha-12;
+        border-color: $color-amber-500;
+    }
+
+    &-success {
+        color: lighten-color($color-green-600, 35%);
         background: $color-green-600-alpha-25;
         border-color: $color-green-600-alpha-55;
+    }
+
+    &-muted {
+        color: $color-ink-muted;
+        background: transparent;
+        border-color: $color-ink-muted;
     }
 }
 </style>

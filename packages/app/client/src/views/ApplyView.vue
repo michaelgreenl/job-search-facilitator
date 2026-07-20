@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
 import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
@@ -23,12 +24,7 @@ const postFilterItems: ActionMenuItem[] = [
     ...applyLabels.map((label) => ({
         value: label,
         label,
-        tone:
-            label === 'P1'
-                ? ('priority-high' as const)
-                : label === 'P2'
-                  ? ('priority-medium' as const)
-                  : ('quick' as const),
+        tone: getUserLabelTone(label),
     })),
 ]
 const isPostFilter = (value: string): value is PostFilter =>

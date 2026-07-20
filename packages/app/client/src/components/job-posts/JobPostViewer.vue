@@ -5,6 +5,7 @@ import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
+import { USER_LABEL_ACTIONS } from './job-post-labels'
 
 const props = withDefaults(
     defineProps<{
@@ -49,18 +50,7 @@ const labelPrompt = computed(() => {
 })
 const postError = computed(() => props.applicationError ?? props.labelError)
 const labelActions = computed<ActionMenuItem[]>(() => [
-    ...USER_LABELS.map((label) => ({
-        value: label,
-        label,
-        tone:
-            label === 'P1'
-                ? ('priority-high' as const)
-                : label === 'P2'
-                  ? ('priority-medium' as const)
-                  : label === 'quick-app'
-                    ? ('quick' as const)
-                    : ('muted' as const),
-    })),
+    ...USER_LABEL_ACTIONS,
     ...(props.showAppliedOption
         ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
         : []),
