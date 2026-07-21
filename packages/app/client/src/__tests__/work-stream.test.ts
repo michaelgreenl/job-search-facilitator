@@ -125,9 +125,12 @@ describe('work stream', () => {
 
         store.events = [{ type: 'activity', message: 'Task started', createdAt }]
         await vi.waitFor(() => expect(scrollTop).toBe(80))
+        expect(progress.classList.contains('work-progress-following')).toBe(true)
 
         scrollTop = 20
         progress.dispatchEvent(new Event('scroll'))
+        await nextTick()
+        expect(progress.classList.contains('work-progress-following')).toBe(false)
         scrollHeight = 220
         store.events.push({
             type: 'message',
@@ -142,6 +145,8 @@ describe('work stream', () => {
 
         scrollTop = 120
         progress.dispatchEvent(new Event('scroll'))
+        await nextTick()
+        expect(progress.classList.contains('work-progress-following')).toBe(true)
         scrollHeight = 260
         store.events.push({
             type: 'message',
@@ -151,5 +156,41 @@ describe('work stream', () => {
         })
 
         await vi.waitFor(() => expect(scrollTop).toBe(160))
+    })
+
+    it('does not rewrite an already-bottomed scroll position for a same-height update', async () => {
+        const { root, store } = mountWorkStream()
+        const progress = root.querySelector<HTMLElement>('.work-progress')
+
+        if (progress === null) {
+            throw new Error('Could not find work progress viewport')
+        }
+
+        let scrollTop = 80
+        let scrollWrites = 0
+
+        Object.defineProperties(progress, {
+            clientHeight: { configurable: true, get: () => 100 },
+            scrollHeight: { configurable: true, get: () => 180 },
+            scrollTop: {
+                configurable: true,
+                get: () => scrollTop,
+                set: (value: number) => {
+                    scrollTop = value
+                    scrollWrites += 1
+                },
+            },
+        })
+
+        await nextTick()
+        await nextTick()
+        scrollWrites = 0
+
+        store.events = [{ type: 'activity', message: 'Task started', createdAt }]
+        await nextTick()
+        await nextTick()
+
+        expect(scrollTop).toBe(80)
+        expect(scrollWrites).toBe(0)
     })
 })

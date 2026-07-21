@@ -80,7 +80,10 @@ const scrollRevision = computed(() => [
     props.issue,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
-const { handleScroll, resetFollowing } = useStickyBottomScroll(progress, scrollRevision)
+const { followingLatest, handleScroll, resetFollowing } = useStickyBottomScroll(
+    progress,
+    scrollRevision,
+)
 
 watch(
     () => events.value.length,
@@ -100,7 +103,12 @@ function resolveAction(decision: WorkActionDecision) {
     <div class="work-updates">
         <p v-if="issue" class="work-error" role="alert">{{ issue }}</p>
 
-        <div ref="progress" class="work-progress" @scroll.passive="handleScroll">
+        <div
+            ref="progress"
+            class="work-progress"
+            :class="{ 'work-progress-following': followingLatest }"
+            @scroll.passive="handleScroll"
+        >
             <ul
                 v-if="streamItems.length"
                 class="activity-list"
@@ -183,6 +191,14 @@ function resolveAction(decision: WorkActionDecision) {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+
+    &-following {
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
 }
 
 .activity-list {
