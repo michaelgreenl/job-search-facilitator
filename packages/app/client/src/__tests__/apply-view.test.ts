@@ -81,6 +81,17 @@ const linkedInActionRequired = {
     },
     createdAt: '2026-07-18T12:00:00.000Z',
 } satisfies WorkTaskEvent
+const exampleActionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
+const exampleActionRequired = {
+    type: 'action-required',
+    action: {
+        id: exampleActionId,
+        kind: 'browser-origin',
+        message: 'Allow Chrome to access https://example.com?',
+        origin: 'https://example.com',
+    },
+    createdAt: '2026-07-18T12:00:02.000Z',
+} satisfies WorkTaskEvent
 
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -809,6 +820,191 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(root.textContent).not.toContain('Allow Chrome to access')
         })
+    })
+
+    it('always allows later websites for the current task without another prompt', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Discover outreach').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const source = FakeEventSource.instances[0]!
+        source.message(linkedInActionRequired)
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(linkedInActionRequired.action.message)
+        })
+        const alwaysAllow = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+
+        if (alwaysAllow === null) {
+            throw new Error('Could not find Always allow checkbox')
+        }
+
+        const alwaysAllowLabel = alwaysAllow.closest('label')
+
+        expect(alwaysAllowLabel?.textContent).toContain('Always allow for this task')
+        expect(alwaysAllow.checked).toBe(false)
+        expect(alwaysAllow.disabled).toBe(false)
+        expect(
+            (alwaysAllowLabel?.compareDocumentPosition(findButton(root, 'Decline')) ?? 0) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).not.toBe(0)
+        alwaysAllow.click()
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                5,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/actions/${linkedInActionId}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: 'approve' }),
+                },
+            )
+            expect(root.textContent).not.toContain(linkedInActionRequired.action.message)
+        })
+
+        source.message({
+            type: 'action-resolved',
+            actionId: linkedInActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+        source.message(exampleActionRequired)
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                6,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/actions/${exampleActionId}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: 'approve' }),
+                },
+            )
+            expect(root.textContent).not.toContain(exampleActionRequired.action.message)
+            expect(root.textContent).not.toContain('Action required')
+        })
+        expect(FakeEventSource.instances).toHaveLength(1)
+    })
+
+    it('returns to a website prompt when automatic approval fails', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Discover outreach').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        const source = FakeEventSource.instances[0]!
+        source.message(linkedInActionRequired)
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(linkedInActionRequired.action.message)
+        })
+        const alwaysAllow = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+
+        if (alwaysAllow === null) {
+            throw new Error('Could not find Always allow checkbox')
+        }
+
+        alwaysAllow.click()
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
+        source.message({
+            type: 'action-resolved',
+            actionId: linkedInActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+        })
+
+        source.message(exampleActionRequired)
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenCalledTimes(6)
+            expect(root.querySelector('.contact-history')).toBeNull()
+            expect(root.querySelector('.work-updates')).not.toBeNull()
+            expect(root.textContent).toContain(exampleActionRequired.action.message)
+            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+                'Work request failed (500)',
+            )
+        })
+
+        const restoredCheckbox = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+
+        expect(restoredCheckbox?.checked).toBe(false)
+        expect(findButton(root, 'Decline').disabled).toBe(false)
+        expect(findButton(root, 'Allow for this task').disabled).toBe(false)
+    })
+
+    it('returns to a website prompt when manual approval fails after navigating back', async () => {
+        let resolveActionResponse: ((response: Response) => void) | undefined
+        const actionResponse = new Promise<Response>((resolve) => {
+            resolveActionResponse = resolve
+        })
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockReturnValueOnce(actionResponse)
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, 'Discover outreach').click()
+
+        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+        FakeEventSource.instances[0]!.message(linkedInActionRequired)
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(linkedInActionRequired.action.message)
+        })
+        findButton(root, 'Allow for this task').click()
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+        })
+        resolveActionResponse?.(jsonResponse({}, 500))
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).toBeNull()
+            expect(root.querySelector('.work-updates')).not.toBeNull()
+            expect(root.textContent).toContain(linkedInActionRequired.action.message)
+            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+                'Work request failed (500)',
+            )
+        })
+        expect(findButton(root, 'Decline').disabled).toBe(false)
+        expect(findButton(root, 'Allow for this task').disabled).toBe(false)
     })
 
     it('keeps a pending outreach action available after the Apply view remounts', async () => {

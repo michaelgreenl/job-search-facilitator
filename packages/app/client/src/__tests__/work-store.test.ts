@@ -46,6 +46,12 @@ const startedTask: WorkTask = {
     output: null,
     error: null,
 }
+const nextTask: WorkTask = {
+    ...startedTask,
+    id: 'a8314bdd-2a1c-48f3-8982-a57fd8b04f5c',
+    threadId: 'next-thread-id',
+    turnId: 'next-turn-id',
+}
 
 const taskInput = {
     prompt: 'Read Example Domain',
@@ -235,5 +241,66 @@ describe('work store', () => {
         expect(store.pendingAction).toBeNull()
         expect(store.task?.output).toEqual({ personName: 'Ada Lovelace' })
         expect(source.close).toHaveBeenCalledOnce()
+    })
+
+    it('asks again after an always-allowed task completes', async () => {
+        const firstActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+        const secondActionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(nextTask, 202))
+        const store = useWorkStore()
+
+        await store.startTask(taskInput)
+        const firstSource = FakeEventSource.instances[0]!
+        firstSource.message({
+            type: 'action-required',
+            action: {
+                id: firstActionId,
+                kind: 'browser-origin',
+                message: 'Allow Chrome to access https://www.linkedin.com?',
+                origin: 'https://www.linkedin.com',
+            },
+            createdAt: '2026-07-18T12:00:00.000Z',
+        })
+
+        await store.allowBrowserActionsForTask()
+        firstSource.message({
+            type: 'action-resolved',
+            actionId: firstActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+        expect(store.alwaysAllowBrowserActions).toBe(true)
+
+        firstSource.message({
+            type: 'completed',
+            output: { title: 'First task complete' },
+            createdAt: '2026-07-18T12:00:02.000Z',
+        })
+        expect(store.alwaysAllowBrowserActions).toBe(false)
+
+        await store.startTask(taskInput)
+
+        const secondSource = FakeEventSource.instances[1]!
+        secondSource.message({
+            type: 'action-required',
+            action: {
+                id: secondActionId,
+                kind: 'browser-origin',
+                message: 'Allow Chrome to access https://example.com?',
+                origin: 'https://example.com',
+            },
+            createdAt: '2026-07-18T12:00:03.000Z',
+        })
+
+        expect(fetchMock).toHaveBeenCalledTimes(5)
+        expect(store.task?.id).toBe(nextTask.id)
+        expect(store.pendingAction?.id).toBe(secondActionId)
+        expect(store.alwaysAllowBrowserActions).toBe(false)
+        expect(store.actionNeedsAttention).toBe(true)
     })
 })

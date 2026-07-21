@@ -30,7 +30,8 @@ const emit = defineEmits<{
 
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { cancelling, error, task, taskActive } = storeToRefs(workStore)
+const { actionNeedsAttention, actionSubmitting, cancelling, error, task, taskActive } =
+    storeToRefs(workStore)
 const {
     assistantReply,
     contact,
@@ -82,6 +83,16 @@ watch(
     discovering,
     (isDiscovering) => {
         if (isDiscovering) {
+            panelView.value = 'stream'
+        }
+    },
+    { immediate: true },
+)
+
+watch(
+    [actionNeedsAttention, actionSubmitting],
+    ([needsAttention, submitting]) => {
+        if (needsAttention && !submitting) {
             panelView.value = 'stream'
         }
     },

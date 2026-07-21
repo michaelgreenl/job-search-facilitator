@@ -86,11 +86,15 @@ export const useWorkStore = defineStore('work', () => {
     const events = ref<WorkTaskEvent[]>([])
     const connectionState = shallowRef<WorkConnectionState>('idle')
     const pendingAction = shallowRef<WorkActionRequired | null>(null)
+    const alwaysAllowBrowserActions = shallowRef(false)
     const actionSubmitting = shallowRef(false)
     const cancelling = shallowRef(false)
     const error = shallowRef<string | null>(null)
     const taskActive = computed(
         () => connectionState.value === 'connecting' || task.value?.status === 'running',
+    )
+    const actionNeedsAttention = computed(
+        () => pendingAction.value !== null && !alwaysAllowBrowserActions.value,
     )
     let eventSource: EventSource | null = null
 
@@ -103,6 +107,7 @@ export const useWorkStore = defineStore('work', () => {
     function finishTask(currentTask: WorkTask) {
         task.value = currentTask
         pendingAction.value = null
+        alwaysAllowBrowserActions.value = false
         actionSubmitting.value = false
         cancelling.value = false
         error.value = null
@@ -143,6 +148,10 @@ export const useWorkStore = defineStore('work', () => {
                     pendingAction.value = value.action
                     actionSubmitting.value = false
                     error.value = null
+
+                    if (alwaysAllowBrowserActions.value) {
+                        void allowBrowserActionsForTask().catch(() => undefined)
+                    }
                 } else if (
                     value.type === 'action-resolved' &&
                     pendingAction.value?.id === value.actionId
@@ -187,6 +196,7 @@ export const useWorkStore = defineStore('work', () => {
         task.value = null
         events.value = []
         pendingAction.value = null
+        alwaysAllowBrowserActions.value = false
         actionSubmitting.value = false
         cancelling.value = false
         error.value = null
@@ -219,7 +229,10 @@ export const useWorkStore = defineStore('work', () => {
     }
 
     async function resolveAction(decision: WorkActionDecision) {
-        if (task.value === null || pendingAction.value === null || actionSubmitting.value) {
+        const currentTask = task.value
+        const currentAction = pendingAction.value
+
+        if (currentTask === null || currentAction === null || actionSubmitting.value) {
             return
         }
 
@@ -227,17 +240,46 @@ export const useWorkStore = defineStore('work', () => {
         error.value = null
 
         try {
-            await requestWork(`/tasks/${task.value.id}/actions/${pendingAction.value.id}`, {
+            await requestWork(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ decision }),
             })
         } catch (requestError) {
-            error.value =
-                requestError instanceof Error
-                    ? requestError.message
-                    : 'Could not resolve Work action'
-            actionSubmitting.value = false
+            if (task.value?.id === currentTask.id && pendingAction.value?.id === currentAction.id) {
+                error.value =
+                    requestError instanceof Error
+                        ? requestError.message
+                        : 'Could not resolve Work action'
+                actionSubmitting.value = false
+            }
+
+            throw requestError
+        }
+    }
+
+    async function allowBrowserActionsForTask() {
+        const taskId = task.value?.id
+        const actionId = pendingAction.value?.id
+
+        if (
+            task.value?.status !== 'running' ||
+            taskId === undefined ||
+            actionId === undefined ||
+            actionSubmitting.value
+        ) {
+            return
+        }
+
+        alwaysAllowBrowserActions.value = true
+
+        try {
+            await resolveAction('approve')
+        } catch (requestError) {
+            if (task.value?.id === taskId && pendingAction.value?.id === actionId) {
+                alwaysAllowBrowserActions.value = false
+            }
+
             throw requestError
         }
     }
@@ -277,11 +319,14 @@ export const useWorkStore = defineStore('work', () => {
         connectionState,
         taskActive,
         pendingAction,
+        alwaysAllowBrowserActions,
+        actionNeedsAttention,
         actionSubmitting,
         cancelling,
         error,
         startTask,
         resolveAction,
+        allowBrowserActionsForTask,
         cancelTask,
     }
 })

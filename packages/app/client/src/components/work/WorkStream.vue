@@ -11,7 +11,14 @@ import { useWorkStore } from '@/stores/work.store'
 const props = defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
-const { actionSubmitting, events, pendingAction, taskActive } = storeToRefs(workStore)
+const {
+    actionNeedsAttention,
+    actionSubmitting,
+    alwaysAllowBrowserActions,
+    events,
+    pendingAction,
+    taskActive,
+} = storeToRefs(workStore)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -82,9 +89,12 @@ const latestActivityIndex = computed(() => {
 
     return -1
 })
+const visiblePendingAction = computed(() =>
+    actionNeedsAttention.value ? pendingAction.value : null,
+)
 const scrollRevision = computed(() => [
     streamItems.value,
-    pendingAction.value?.id ?? null,
+    visiblePendingAction.value?.id ?? null,
     props.issue,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
@@ -104,6 +114,10 @@ watch(
 
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
+}
+
+function allowBrowserActionsForTask() {
+    void workStore.allowBrowserActionsForTask().catch(() => undefined)
 }
 </script>
 
@@ -132,7 +146,11 @@ function resolveAction(decision: WorkActionDecision) {
                     :class="`activity-item-${item.type}`"
                 >
                     <span
-                        v-if="taskActive && pendingAction === null && index === latestActivityIndex"
+                        v-if="
+                            taskActive &&
+                            visiblePendingAction === null &&
+                            index === latestActivityIndex
+                        "
                         class="activity-progress"
                         aria-hidden="true"
                     ></span>
@@ -148,28 +166,41 @@ function resolveAction(decision: WorkActionDecision) {
         </div>
     </div>
 
-    <section v-if="pendingAction" class="action-required" aria-labelledby="action-title">
+    <section v-if="visiblePendingAction" class="action-required" aria-labelledby="action-title">
         <span class="eyebrow">Action required</span>
         <h3 id="action-title" class="action-title">Website access</h3>
-        <p class="action-message">{{ pendingAction.message }}</p>
+        <p class="action-message">{{ visiblePendingAction.message }}</p>
 
-        <div class="action-buttons">
-            <button
-                class="action-button"
-                type="button"
-                :disabled="actionSubmitting"
-                @click="resolveAction('decline')"
-            >
-                Decline
-            </button>
-            <button
-                class="action-button action-button-primary"
-                type="button"
-                :disabled="actionSubmitting"
-                @click="resolveAction('approve')"
-            >
-                Allow for this task
-            </button>
+        <div class="action-controls">
+            <label class="always-allow">
+                <input
+                    class="always-allow-checkbox"
+                    type="checkbox"
+                    :checked="alwaysAllowBrowserActions"
+                    :disabled="actionSubmitting"
+                    @change="allowBrowserActionsForTask"
+                />
+                <span>Always allow for this task</span>
+            </label>
+
+            <div class="action-buttons">
+                <button
+                    class="action-button"
+                    type="button"
+                    :disabled="actionSubmitting"
+                    @click="resolveAction('decline')"
+                >
+                    Decline
+                </button>
+                <button
+                    class="action-button action-button-primary"
+                    type="button"
+                    :disabled="actionSubmitting"
+                    @click="resolveAction('approve')"
+                >
+                    Allow for this task
+                </button>
+            </div>
         </div>
     </section>
 </template>
@@ -334,12 +365,42 @@ function resolveAction(decision: WorkActionDecision) {
     font-size: 0.875rem;
 }
 
+.action-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-3;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: $space-3;
+}
+
+.always-allow {
+    display: inline-flex;
+    gap: $space-2;
+    align-items: center;
+    color: $color-ink-secondary;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.always-allow-checkbox {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    cursor: pointer;
+    accent-color: $color-signal-light;
+
+    &:disabled {
+        cursor: wait;
+    }
+}
+
 .action-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
     justify-content: flex-end;
-    margin-top: $space-3;
+    margin-left: auto;
 }
 
 .action-button {
