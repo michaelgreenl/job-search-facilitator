@@ -48,6 +48,7 @@ describe('ActionMenu', () => {
 
         expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
         expect(trigger.getAttribute('aria-expanded')).toBe('false')
+        expect(trigger.querySelector('.app-icon-chevron-down')).not.toBeNull()
 
         trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
 

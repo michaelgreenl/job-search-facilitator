@@ -2,6 +2,7 @@
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
+import AppIcon from '@/components/app/AppIcon.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
@@ -121,7 +122,8 @@ function selectLabel(value: string) {
                     rel="noopener noreferrer"
                     :aria-label="`Open ${post.roleTitle} in a new tab`"
                 >
-                    Open post ↗
+                    <span>Open post</span>
+                    <AppIcon class="post-action-icon" name="external-link" />
                 </a>
                 <a
                     v-if="applicationUrl"
@@ -131,7 +133,8 @@ function selectLabel(value: string) {
                     rel="noopener noreferrer"
                     :aria-label="`Open application for ${post.roleTitle} in a new tab`"
                 >
-                    Open application ↗
+                    <span>Open application</span>
+                    <AppIcon class="post-action-icon" name="external-link" />
                 </a>
             </div>
 
@@ -163,7 +166,7 @@ function selectLabel(value: string) {
                 @click="emit('startOutreach')"
             >
                 <span>Discover outreach</span>
-                <span v-if="outreachLoading" class="outreach-spinner" aria-hidden="true"></span>
+                <AppIcon v-if="outreachLoading" class="outreach-spinner" name="loader" />
             </button>
         </div>
     </section>
@@ -245,19 +248,15 @@ function selectLabel(value: string) {
     }
 }
 
+.post-action-icon {
+    width: 0.9375rem;
+    height: 0.9375rem;
+}
+
 .outreach-spinner {
     width: 0.875rem;
     height: 0.875rem;
-    border: 2px solid $color-ink-alpha-50;
-    border-top-color: $color-ink;
-    border-radius: 50%;
-    animation: outreach-spin 0.8s linear infinite;
-}
-
-@keyframes outreach-spin {
-    to {
-        transform: rotate(1turn);
-    }
+    color: $color-ink;
 }
 
 .label-picker-menu {

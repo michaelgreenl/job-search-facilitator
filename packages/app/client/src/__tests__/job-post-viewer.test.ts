@@ -54,9 +54,10 @@ describe('JobPostViewer', () => {
         const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
 
         expect(links.map(({ textContent }) => textContent?.trim())).toEqual([
-            'Open post ↗',
-            'Open application ↗',
+            'Open post',
+            'Open application',
         ])
+        expect(links.every((link) => link.querySelector('.app-icon-external-link'))).toBe(true)
         expect(links.map(({ href }) => href)).toEqual([post.postUrl, post.applicationUrl])
         expect(links.map((link) => link.getAttribute('target'))).toEqual(['_blank', '_blank'])
         expect(links.map((link) => link.getAttribute('rel'))).toEqual([
@@ -72,7 +73,7 @@ describe('JobPostViewer', () => {
         const root = mountViewer({ applicationUrl: post.postUrl })
         const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
 
-        expect(links.map(({ textContent }) => textContent?.trim())).toEqual(['Open post ↗'])
+        expect(links.map(({ textContent }) => textContent?.trim())).toEqual(['Open post'])
     })
 
     it('omits unsafe external destinations', () => {

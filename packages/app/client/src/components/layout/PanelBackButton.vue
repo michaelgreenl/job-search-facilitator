@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import AppIcon from '@/components/app/AppIcon.vue'
+import IconTooltip from '@/components/app/IconTooltip.vue'
+
 withDefaults(
     defineProps<{
         label: string
@@ -17,42 +20,59 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <button
-        class="back-button"
-        :class="{ 'back-button-mobile-only': mobileOnly }"
-        type="button"
-        :aria-label="label"
-        :disabled="disabled"
-        @click="emit('back')"
+    <IconTooltip
+        v-slot="{ tooltipId }"
+        :class="{ 'back-button-tooltip-mobile-only': mobileOnly }"
+        :label="label"
     >
-        ←
-    </button>
+        <button
+            class="back-button"
+            type="button"
+            :aria-label="label"
+            :aria-describedby="tooltipId"
+            :disabled="disabled"
+            @click="emit('back')"
+        >
+            <AppIcon class="back-button-icon" name="back" />
+        </button>
+    </IconTooltip>
 </template>
 
 <style scoped lang="scss">
 .back-button {
-    width: fit-content;
+    display: inline-grid;
+    width: 2rem;
+    height: 2rem;
     padding: 0;
     color: $color-ink-muted;
     font: inherit;
     cursor: pointer;
     background: transparent;
-    border: 0;
+    border: 1px solid transparent;
+    border-radius: $radius-md;
+    place-items: center;
 
     &:hover,
     &:focus-visible {
-        color: $color-signal-light;
+        color: $color-ink;
+        background: $color-ink-alpha-9;
+        border-color: $color-ink-alpha-12;
     }
 
     &:disabled {
         cursor: wait;
         opacity: 0.5;
     }
+}
 
-    &-mobile-only {
-        @include bp-md-tablet {
-            display: none;
-        }
+.back-button-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.back-button-tooltip-mobile-only {
+    @include bp-md-tablet {
+        display: none;
     }
 }
 </style>
