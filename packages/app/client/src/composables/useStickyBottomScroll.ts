@@ -1,7 +1,8 @@
-import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, readonly, shallowRef, watch } from 'vue'
 import type { ShallowRef, WatchSource } from 'vue'
 
 const BOTTOM_TOLERANCE = 4
+const SCROLL_WRITE_TOLERANCE = 0.5
 
 export function useStickyBottomScroll(
     container: Readonly<ShallowRef<HTMLElement | null>>,
@@ -17,7 +18,13 @@ export function useStickyBottomScroll(
             return
         }
 
-        element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
+        const bottom = Math.max(0, element.scrollHeight - element.clientHeight)
+
+        if (Math.abs(element.scrollTop - bottom) <= SCROLL_WRITE_TOLERANCE) {
+            return
+        }
+
+        element.scrollTop = bottom
     }
 
     async function followLatestAfterRender() {
@@ -67,5 +74,5 @@ export function useStickyBottomScroll(
     })
     onBeforeUnmount(() => resizeObserver?.disconnect())
 
-    return { handleScroll, resetFollowing }
+    return { followingLatest: readonly(followingLatest), handleScroll, resetFollowing }
 }
