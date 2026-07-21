@@ -1,6 +1,11 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost, UserLabel, WorkTaskEvent } from '@job-search-facilitator/core'
+import type {
+    JobPost,
+    OutreachContact,
+    UserLabel,
+    WorkTaskEvent,
+} from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,6 +44,31 @@ const runningWorkTask = {
     output: null,
     error: null,
 }
+const savedContact: OutreachContact = {
+    id: 'contact-1',
+    jobPostId: posts[0]!.id,
+    personName: 'Grace Hopper',
+    personTitle: 'Director of Engineering',
+    profileUrl: 'https://www.linkedin.com/in/grace-hopper',
+    relevanceRationale: 'Her visible role aligns with the engineering team.',
+    draftMessage: 'Hi Grace, I would value your perspective on the engineering team.',
+    messaged: true,
+    createdAt: '2026-07-20T12:00:00.000Z',
+    updatedAt: '2026-07-20T12:00:00.000Z',
+}
+const discoveredContact: OutreachContact = {
+    id: 'contact-2',
+    jobPostId: posts[1]!.id,
+    personName: 'Ada Lovelace',
+    personTitle: 'Engineering Manager',
+    profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    relevanceRationale:
+        'Their Engineering Manager title aligns with this role, and their platform leadership gives them direct context on the team, its priorities, and the day-to-day work.',
+    draftMessage: 'Hi Ada, I would value your perspective on the P2 Engineer role.',
+    messaged: false,
+    createdAt: '2026-07-21T12:00:00.000Z',
+    updatedAt: '2026-07-21T12:00:00.000Z',
+}
 
 const linkedInActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
 const linkedInActionRequired = {
@@ -57,6 +87,8 @@ const jsonResponse = (body: unknown, status = 200) =>
         status,
         headers: { 'Content-Type': 'application/json' },
     })
+const fetchUrl = (input: string | URL | Request) =>
+    typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
@@ -214,6 +246,86 @@ describe('apply view', () => {
         })
     })
 
+    it('returns from a running discovery to saved contacts without cancelling it', async () => {
+        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+        const fetchMock = vi.mocked(fetch).mockReset()
+        fetchMock.mockImplementation((input, init) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/labeled')) {
+                return Promise.resolve(jsonResponse(posts))
+            }
+
+            if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
+                return Promise.resolve(jsonResponse([savedContact]))
+            }
+
+            if (url.endsWith('/health')) {
+                return Promise.resolve(
+                    jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                )
+            }
+
+            if (url.endsWith('/tasks') && init?.method === 'POST') {
+                return Promise.resolve(jsonResponse(runningWorkTask, 202))
+            }
+
+            if (url.endsWith(`/tasks/${runningWorkTask.id}/cancel`)) {
+                return Promise.resolve(jsonResponse(cancelledTask, 202))
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        const discoverButton = findButton(root, 'Discover outreach')
+        discoverButton.click()
+
+        await vi.waitFor(() => {
+            expect(FakeEventSource.instances).toHaveLength(1)
+            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
+            expect(root.querySelector('.contact-spinner')).not.toBeNull()
+        })
+        expect(discoverButton.querySelector('.outreach-spinner')).toBeNull()
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+            ).not.toBeNull()
+            expect(root.querySelectorAll('.contact-spinner')).toHaveLength(1)
+        })
+        expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel'))).toBe(
+            false,
+        )
+
+        root.querySelector<HTMLButtonElement>(
+            '[aria-label="Open outreach draft for Grace Hopper"]',
+        )?.click()
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Messaged')
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe(savedContact.draftMessage)
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel')),
+            ).toBe(true)
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.textContent).toContain('Grace Hopper')
+        })
+    })
+
     it('finds a relevant outreach contact for the selected job post', async () => {
         const fetchMock = vi.mocked(fetch)
         const writeText = vi.fn().mockResolvedValue(undefined)
@@ -224,8 +336,10 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(discoveredContact, 201))
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -237,10 +351,10 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(1)
             expect(discoverButton.disabled).toBe(true)
-            expect(discoverButton.getAttribute('aria-busy')).toBe('true')
+            expect(discoverButton.getAttribute('aria-busy')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
         })
-        const taskRequest = fetchMock.mock.calls[2]
+        const taskRequest = fetchMock.mock.calls[3]
         const taskBody = (taskRequest?.[1] as RequestInit | undefined)?.body
 
         expect(typeof taskBody).toBe('string')
@@ -333,13 +447,14 @@ describe('apply view', () => {
             expect(root.querySelector('label[for="outreach-message"]')).toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Back to job posts"]')).not.toBeNull()
             expect(
                 root.querySelector('[aria-label="Back to job posts"] .back-button-icon'),
             ).not.toBeNull()
             expect(discoverButton.disabled).toBe(false)
-            expect(discoverButton.getAttribute('aria-busy')).toBe('false')
+            expect(discoverButton.getAttribute('aria-busy')).toBeNull()
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
                 false,
             )
@@ -350,6 +465,26 @@ describe('apply view', () => {
                 true,
             )
         })
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            5,
+            `http://localhost:3000/api/job-posts/${posts[1]!.id}/outreach-contacts`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    personName: discoveredContact.personName,
+                    personTitle: discoveredContact.personTitle,
+                    profileUrl: discoveredContact.profileUrl,
+                    relevanceRationale: discoveredContact.relevanceRationale,
+                    draftMessage: discoveredContact.draftMessage,
+                }),
+            },
+        )
+
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
+        window.dispatchEvent(new Event('resize'))
+        expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+        expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
 
         const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
         const rationaleToggle = findButton(root, 'Show more')
@@ -357,7 +492,6 @@ describe('apply view', () => {
 
         expect(rationale?.classList.contains('is-clamped')).toBe(true)
         expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
-        expect(rationaleToggle.classList.contains('rationale-toggle-more')).toBe(true)
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
         expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
         const expandTooltipId = expandControl?.getAttribute('aria-describedby')
@@ -441,7 +575,7 @@ describe('apply view', () => {
         sendButton.click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
-        const revisionRequest = fetchMock.mock.calls[4]
+        const revisionRequest = fetchMock.mock.calls[6]
         const revisionBody = (revisionRequest?.[1] as RequestInit | undefined)?.body
 
         expect(typeof revisionBody).toBe('string')
@@ -550,12 +684,13 @@ describe('apply view', () => {
         })
     })
 
-    it('cancels an active outreach task before returning to the selected post', async () => {
+    it('cancels an active outreach task without using panel navigation', async () => {
         const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
@@ -571,14 +706,15 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
-                4,
+                5,
                 `http://localhost:3001/tasks/${runningWorkTask.id}/cancel`,
                 { method: 'POST' },
             )
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
-            ).toBe(true)
-            expect(root.querySelector('.apply-outreach')).toBeNull()
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
         })
 
         expect(FakeEventSource.instances[0]!.close).toHaveBeenCalledOnce()
@@ -588,6 +724,7 @@ describe('apply view', () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockResolvedValueOnce(jsonResponse({}, 500))
@@ -617,6 +754,7 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
@@ -642,7 +780,7 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
-                4,
+                5,
                 `http://localhost:3001/tasks/${runningWorkTask.id}/actions/${linkedInActionId}`,
                 {
                     method: 'POST',
@@ -669,6 +807,7 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockResolvedValueOnce(jsonResponse(posts))

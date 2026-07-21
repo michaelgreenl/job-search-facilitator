@@ -19,7 +19,6 @@ const props = withDefaults(
         applicationError?: string | null
         backLabel?: string | null
         backMobileOnly?: boolean
-        outreachLoading?: boolean
     }>(),
     {
         showOutreachAction: false,
@@ -29,7 +28,6 @@ const props = withDefaults(
         applicationError: null,
         backLabel: null,
         backMobileOnly: false,
-        outreachLoading: false,
     },
 )
 
@@ -159,11 +157,9 @@ function selectLabel(value: string) {
                 class="post-action-button"
                 type="button"
                 :disabled="outreachDisabled"
-                :aria-busy="outreachLoading"
                 @click="emit('startOutreach')"
             >
-                <span>Discover outreach</span>
-                <span v-if="outreachLoading" class="outreach-spinner" aria-hidden="true"></span>
+                Discover outreach
             </button>
         </div>
     </section>
@@ -242,21 +238,6 @@ function selectLabel(value: string) {
     &:disabled {
         cursor: wait;
         opacity: 0.55;
-    }
-}
-
-.outreach-spinner {
-    width: 0.875rem;
-    height: 0.875rem;
-    border: 2px solid $color-ink-alpha-50;
-    border-top-color: $color-ink;
-    border-radius: 50%;
-    animation: outreach-spin 0.8s linear infinite;
-}
-
-@keyframes outreach-spin {
-    to {
-        transform: rotate(1turn);
     }
 }
 

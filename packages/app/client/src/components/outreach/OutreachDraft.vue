@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, shallowRef, useId, watch } from 'vue'
+import type { OutreachContact } from '@job-search-facilitator/core'
+import { computed, useId } from 'vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
-import type { OutreachContact } from '@/work-tasks'
 
-const props = defineProps<{
+import OutreachContactCard from './OutreachContactCard.vue'
+
+defineProps<{
     contact: OutreachContact
     assistantReply: string | null
     running: boolean
@@ -20,49 +22,12 @@ const emit = defineEmits<{
 const draft = defineModel<string>('draft', { required: true })
 const request = defineModel<string>('request', { required: true })
 const canSubmit = computed(() => request.value.trim().length > 0)
-const descriptionExpanded = shallowRef(false)
-const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.value)
 const copyFeedbackId = useId()
-
-watch([() => props.contact.profileUrl, () => props.expanded], () => {
-    descriptionExpanded.value = false
-})
 </script>
 
 <template>
     <section class="draft-board" :class="{ 'is-expanded': expanded }" aria-label="Outreach draft">
-        <div class="contact-card">
-            <span class="eyebrow">Relevant contact</span>
-            <a
-                class="person-name"
-                :href="contact.profileUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                {{ contact.personName }} ↗
-            </a>
-            <span class="person-title">{{ contact.personTitle }}</span>
-            <div class="rationale-copy">
-                <p
-                    id="contact-rationale"
-                    class="relevance-rationale"
-                    :class="{ 'is-clamped': !rationaleExpanded }"
-                >
-                    {{ contact.relevanceRationale }}
-                </p>
-                <button
-                    v-if="!expanded"
-                    class="rationale-toggle"
-                    :class="{ 'rationale-toggle-more': !descriptionExpanded }"
-                    type="button"
-                    aria-controls="contact-rationale"
-                    :aria-expanded="descriptionExpanded"
-                    @click="descriptionExpanded = !descriptionExpanded"
-                >
-                    {{ descriptionExpanded ? 'Show less' : 'Show more' }}
-                </button>
-            </div>
-        </div>
+        <OutreachContactCard class="draft-contact-card" :contact="contact" :expanded="expanded" />
 
         <div class="draft-workspace">
             <div class="draft-content">
@@ -149,47 +114,12 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     }
 }
 
-.contact-card {
-    display: grid;
-    gap: $space-1;
-    padding: $space-3;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-signal-light-alpha-18;
-    border-radius: $radius-md;
-
+.draft-contact-card {
     .draft-board.is-expanded & {
         @include bp-md-tablet {
             align-self: start;
         }
     }
-}
-
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
-.person-name {
-    width: fit-content;
-    color: $color-ink;
-    font-size: 1.125rem;
-    font-weight: 700;
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
-}
-
-.person-title,
-.relevance-rationale,
-.assistant-reply {
-    color: $color-ink-secondary;
 }
 
 .draft-workspace {
@@ -200,51 +130,10 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     min-height: 0;
 }
 
-.relevance-rationale,
 .assistant-reply {
     margin: 0;
+    color: $color-ink-secondary;
     font-size: 0.875rem;
-}
-
-.rationale-copy {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.relevance-rationale.is-clamped {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-}
-
-.rationale-toggle {
-    width: fit-content;
-    padding-right: $space-1;
-    color: $color-signal-light;
-    margin-left: auto;
-    font: inherit;
-    font-size: 0.875rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
-
-    &-more {
-        // position: absolute;
-        // right: 0;
-        // bottom: 0;
-        // margin-top: 0;
-        // background: linear-gradient(90deg, transparent, $color-night-panel 30%);
-    }
 }
 
 .draft-request {

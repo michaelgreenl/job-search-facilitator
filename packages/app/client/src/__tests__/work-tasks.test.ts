@@ -1,6 +1,6 @@
-import type { JobPost } from '@job-search-facilitator/core'
+import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import { createDraftTask, createOutreachTask, type OutreachContact } from '../work-tasks'
+import { createDraftTask, createOutreachTask } from '../work-tasks'
 
 const post: JobPost = {
     id: 'post-id',
@@ -22,10 +22,16 @@ const post: JobPost = {
 }
 
 const contact: OutreachContact = {
+    id: 'contact-id',
+    jobPostId: post.id,
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
     relevanceRationale: 'Her visible role is relevant to the team.',
+    draftMessage: 'Hi Ada, could I ask about the team?',
+    messaged: false,
+    createdAt: '2026-07-20T12:00:00.000Z',
+    updatedAt: '2026-07-20T12:00:00.000Z',
 }
 const tasks = [
     ['initial outreach', createOutreachTask(post)],

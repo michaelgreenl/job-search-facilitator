@@ -71,10 +71,6 @@ const selectedPost = computed(
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
-const outreachSearching = computed(
-    () => outreachPostId.value !== null && outreachContact.value === null && workStore.taskActive,
-)
-
 watch(
     filteredPosts,
     (posts) => {
@@ -144,6 +140,7 @@ function startOutreach() {
     outreachStore.begin(selectedPost.value.id)
     outreachExpanded.value = false
     activePanel.value = 'outreach'
+    void outreachStore.fetchContacts(selectedPost.value.id).catch(() => undefined)
     void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
 }
 
@@ -154,14 +151,7 @@ async function cancelOutreach() {
         return
     }
 
-    if (outreachContact.value !== null) {
-        outreachStore.cancelTask()
-        return
-    }
-
-    outreachStore.reset()
-    outreachExpanded.value = false
-    activePanel.value = 'viewer'
+    outreachStore.cancelTask()
 }
 
 function expandOutreach() {
@@ -293,7 +283,6 @@ onMounted(() => {
                     :back-mobile-only="outreachPostId === null"
                     show-outreach-action
                     :outreach-disabled="workStore.taskActive"
-                    :outreach-loading="outreachSearching"
                     show-applied-option
                     @back="showPosts"
                     @update-label="updateUserLabel"

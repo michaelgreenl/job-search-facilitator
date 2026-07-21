@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { JobPost } from '@job-search-facilitator/core'
+import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, useId, watch } from 'vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
@@ -11,7 +11,11 @@ import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
 import { createDraftTask } from '@/work-tasks'
 
+import OutreachContactCard from './OutreachContactCard.vue'
+import OutreachContactList from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
+
+type PanelView = 'contacts' | 'draft' | 'stream'
 
 const props = defineProps<{
     post: JobPost
@@ -28,7 +32,17 @@ const emit = defineEmits<{
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
 const { cancelling, error, task, taskActive } = storeToRefs(workStore)
-const { assistantReply, contact, draft, resultError } = storeToRefs(outreachStore)
+const {
+    assistantReply,
+    contact,
+    contacts,
+    contactsError,
+    contactsLoading,
+    discovering,
+    draft,
+    resultError,
+} = storeToRefs(outreachStore)
+const panelView = shallowRef<PanelView>(contact.value === null ? 'stream' : 'draft')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 const resizeTooltipDismissed = shallowRef(false)
@@ -43,7 +57,33 @@ watch(
     task,
     (currentTask) => {
         if (currentTask?.status === 'completed' && currentTask.output !== null) {
-            outreachStore.applyTaskResult(currentTask.output)
+            void outreachStore.applyTaskResult(currentTask.output).then((savedContact) => {
+                if (
+                    savedContact?.jobPostId === props.post.id &&
+                    !discovering.value &&
+                    panelView.value === 'stream'
+                ) {
+                    outreachStore.selectContact(savedContact)
+                    panelView.value = 'draft'
+                }
+            })
+        }
+    },
+    { immediate: true },
+)
+
+watch(
+    () => props.post.id,
+    () => {
+        panelView.value = 'stream'
+    },
+)
+
+watch(
+    discovering,
+    (isDiscovering) => {
+        if (isDiscovering) {
+            panelView.value = 'stream'
         }
     },
     { immediate: true },
@@ -85,6 +125,16 @@ function toggleExpanded() {
     }
 }
 
+function showContacts() {
+    outreachStore.clearContact()
+    panelView.value = 'contacts'
+}
+
+function selectContact(selectedContact: OutreachContact) {
+    outreachStore.selectContact(selectedContact)
+    panelView.value = 'draft'
+}
+
 async function copyDraft() {
     if (!draft.value.trim()) {
         return
@@ -109,15 +159,23 @@ async function copyDraft() {
     <section class="outreach-panel" aria-label="Outreach">
         <header>
             <div class="outreach-heading-copy">
-                <PanelBackButton
-                    v-if="canCancel"
-                    label="Cancel outreach task"
-                    :disabled="cancelling"
-                    @back="emit('cancel')"
-                />
-                <template v-else>
+                <div class="panel-navigation">
+                    <PanelBackButton
+                        v-if="panelView !== 'contacts'"
+                        label="Back to saved contacts"
+                        @back="showContacts"
+                    />
                     <button
-                        v-if="contact"
+                        class="panel-control panel-control-mobile-only"
+                        type="button"
+                        aria-label="Show selected job post"
+                        @click="emit('showViewer')"
+                    >
+                        <ChevronRightIcon class="panel-control-icon" />
+                    </button>
+
+                    <button
+                        v-if="panelView === 'draft'"
                         class="panel-control panel-control-expand panel-control-desktop"
                         type="button"
                         :aria-label="resizeLabel"
@@ -134,7 +192,7 @@ async function copyDraft() {
                         <ExpandIcon v-else class="panel-control-icon" />
                     </button>
                     <span
-                        v-if="contact"
+                        v-if="panelView === 'draft'"
                         :id="resizeTooltipId"
                         class="panel-control-tooltip tooltip-surface"
                         :class="{ 'is-dismissed': resizeTooltipDismissed }"
@@ -142,23 +200,34 @@ async function copyDraft() {
                     >
                         {{ resizeLabel }}
                     </span>
+                </div>
+
+                <div class="heading-status">
                     <button
-                        class="panel-control"
-                        :class="{
-                            'panel-control-mobile-only': contact,
-                        }"
+                        v-if="canCancel"
+                        class="cancel-action"
                         type="button"
-                        aria-label="Show selected job post"
-                        @click="emit('showViewer')"
+                        aria-label="Cancel outreach task"
+                        :disabled="cancelling"
+                        @click="emit('cancel')"
                     >
-                        <ChevronRightIcon class="panel-control-icon" />
+                        {{ cancelling ? 'Cancelling…' : 'Cancel' }}
                     </button>
-                </template>
-                <span class="eyebrow">Outreach</span>
+                    <span class="eyebrow">Outreach</span>
+                </div>
             </div>
         </header>
 
-        <template v-if="contact">
+        <OutreachContactList
+            v-if="panelView === 'contacts'"
+            :contacts="contacts"
+            :discovering="discovering && taskActive"
+            :error="contactsError"
+            :loading="contactsLoading"
+            @select="selectContact"
+        />
+
+        <template v-else-if="panelView === 'draft' && contact">
             <OutreachDraft
                 v-model:draft="draft"
                 v-model:request="draftRequest"
@@ -172,7 +241,10 @@ async function copyDraft() {
             />
         </template>
 
-        <WorkStream v-else :issue="issue" />
+        <div v-else class="stream-view">
+            <OutreachContactCard v-if="discovering && taskActive" loading />
+            <WorkStream :issue="issue" />
+        </div>
     </section>
 </template>
 
@@ -191,6 +263,43 @@ async function copyDraft() {
     align-items: center;
     justify-content: space-between;
     width: 100%;
+}
+
+.panel-navigation,
+.heading-status {
+    display: flex;
+    gap: $space-3;
+    align-items: center;
+}
+
+.stream-view {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: $space-3;
+    min-height: 0;
+}
+
+.cancel-action {
+    padding: 0;
+    color: $color-signal-light;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-ink;
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.5;
+    }
 }
 
 .panel-control-tooltip {

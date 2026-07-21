@@ -1,4 +1,4 @@
-import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
+import type { JobPost, JobSearchReport, OutreachContact } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '../stores/outreach.store'
@@ -167,9 +167,10 @@ describe('post store', () => {
 describe('outreach store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
+        vi.stubGlobal('fetch', vi.fn())
     })
 
-    it('does not replace an edited draft with a completed task that was already applied', () => {
+    it('does not replace an edited draft with a completed task that was already applied', async () => {
         const store = useOutreachStore()
         const output = {
             personName: 'Ada Lovelace',
@@ -178,12 +179,75 @@ describe('outreach store', () => {
             relevanceRationale: 'Her title aligns with the role.',
             draftMessage: 'Initial draft',
         }
+        vi.mocked(fetch).mockResolvedValueOnce(
+            jsonResponse({
+                id: 'contact-1',
+                jobPostId: post.id,
+                ...output,
+                messaged: false,
+                createdAt: '2026-07-21T12:00:00.000Z',
+                updatedAt: '2026-07-21T12:00:00.000Z',
+            }),
+        )
 
         store.begin(post.id)
-        store.applyTaskResult(output)
+        await store.applyTaskResult(output)
         store.draft = 'Edited draft'
-        store.applyTaskResult(output)
+        await store.applyTaskResult(output)
 
         expect(store.draft).toBe('Edited draft')
+    })
+
+    it('loads saved contacts and persists a completed discovery', async () => {
+        const savedContact: OutreachContact = {
+            id: 'contact-1',
+            jobPostId: post.id,
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+            messaged: false,
+            createdAt: '2026-07-21T12:00:00.000Z',
+            updatedAt: '2026-07-21T12:00:00.000Z',
+        }
+        const fetchMock = vi
+            .mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(savedContact, 201))
+        const store = useOutreachStore()
+
+        store.begin(post.id)
+        await store.fetchContacts(post.id)
+        const completedContact = await store.applyTaskResult({
+            personName: savedContact.personName,
+            personTitle: savedContact.personTitle,
+            profileUrl: savedContact.profileUrl,
+            relevanceRationale: savedContact.relevanceRationale,
+            draftMessage: savedContact.draftMessage,
+        })
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            1,
+            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
+            undefined,
+        )
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    personName: savedContact.personName,
+                    personTitle: savedContact.personTitle,
+                    profileUrl: savedContact.profileUrl,
+                    relevanceRationale: savedContact.relevanceRationale,
+                    draftMessage: savedContact.draftMessage,
+                }),
+            },
+        )
+        expect(completedContact).toEqual(savedContact)
+        expect(store.contacts).toEqual([savedContact])
     })
 })

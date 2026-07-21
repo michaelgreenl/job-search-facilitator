@@ -1,11 +1,4 @@
-import type { JobPost, StartWorkTaskInput } from '@job-search-facilitator/core'
-
-export interface OutreachContact {
-    personName: string
-    personTitle: string
-    profileUrl: string
-    relevanceRationale: string
-}
+import type { JobPost, OutreachContact, StartWorkTaskInput } from '@job-search-facilitator/core'
 
 const outreachDraftStyle =
     'Whenever writing or revising the draft, use natural, conversational language that sounds like the applicant, not a generated template. Format it with intentional line breaks between the greeting, short body paragraphs, and closing. Never use em dashes; use commas, periods, or parentheses instead. Avoid canned, generic, overly polished, or salesy phrasing.'
