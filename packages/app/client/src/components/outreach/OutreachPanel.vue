@@ -11,7 +11,6 @@ import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
 import { createDraftTask } from '@/work-tasks'
 
-import OutreachContactCard from './OutreachContactCard.vue'
 import OutreachContactList from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
 
@@ -202,19 +201,7 @@ async function copyDraft() {
                     </span>
                 </div>
 
-                <div class="heading-status">
-                    <button
-                        v-if="canCancel"
-                        class="cancel-action"
-                        type="button"
-                        aria-label="Cancel outreach task"
-                        :disabled="cancelling"
-                        @click="emit('cancel')"
-                    >
-                        {{ cancelling ? 'Cancelling…' : 'Cancel' }}
-                    </button>
-                    <span class="eyebrow">Outreach</span>
-                </div>
+                <span class="eyebrow">Outreach</span>
             </div>
         </header>
 
@@ -241,10 +228,18 @@ async function copyDraft() {
             />
         </template>
 
-        <div v-else class="stream-view">
-            <OutreachContactCard v-if="discovering && taskActive" loading />
-            <WorkStream :issue="issue" />
-        </div>
+        <WorkStream v-else :issue="issue" />
+
+        <button
+            v-if="canCancel"
+            class="cancel-action"
+            type="button"
+            aria-label="Cancel outreach task"
+            :disabled="cancelling"
+            @click="emit('cancel')"
+        >
+            {{ cancelling ? 'Cancelling…' : 'Cancel' }}
+        </button>
     </section>
 </template>
 
@@ -265,22 +260,14 @@ async function copyDraft() {
     width: 100%;
 }
 
-.panel-navigation,
-.heading-status {
+.panel-navigation {
     display: flex;
     gap: $space-3;
     align-items: center;
 }
 
-.stream-view {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-3;
-    min-height: 0;
-}
-
 .cancel-action {
+    align-self: flex-end;
     padding: 0;
     color: $color-signal-light;
     font: inherit;

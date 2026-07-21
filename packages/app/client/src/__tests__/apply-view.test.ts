@@ -288,9 +288,16 @@ describe('apply view', () => {
             expect(FakeEventSource.instances).toHaveLength(1)
             expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
-            expect(root.querySelector('.contact-spinner')).not.toBeNull()
+            expect(root.querySelector('.work-updates')).not.toBeNull()
+            expect(root.querySelector('.contact-history')).toBeNull()
+            expect(root.querySelector('.contact-card')).toBeNull()
         })
         expect(discoverButton.querySelector('.outreach-spinner')).toBeNull()
+        const outreachPanel = root.querySelector('section[aria-label="Outreach"]')
+        const cancelButton = root.querySelector('[aria-label="Cancel outreach task"]')
+
+        expect(cancelButton?.parentElement).toBe(outreachPanel)
+        expect(outreachPanel?.lastElementChild).toBe(cancelButton)
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
 
@@ -298,6 +305,8 @@ describe('apply view', () => {
             expect(
                 root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
             ).not.toBeNull()
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelectorAll('.contact-spinner')).toHaveLength(1)
         })
         expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel'))).toBe(
