@@ -5,6 +5,7 @@ import type {
 } from '@job-search-facilitator/core'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { jobPostRepository } from '../../src/db/repositories/job-post.repository.ts'
+import { outreachContactRepository } from '../../src/db/repositories/outreach-contact.repository.ts'
 import { outreachRunRepository } from '../../src/db/repositories/outreach-run.repository.ts'
 import { searchReportRepository } from '../../src/db/repositories/search-report.repository.ts'
 import { prisma } from '../../src/db/prisma.ts'
@@ -73,6 +74,7 @@ const createReportInput = (
 }
 
 beforeEach(async () => {
+    await prisma.outreachContact.deleteMany()
     await prisma.outreachRun.deleteMany()
     await prisma.jobSearchResult.deleteMany()
     await prisma.jobSearchReport.deleteMany()
@@ -152,6 +154,40 @@ describe('outreach run repository', () => {
             error: null,
         })
         expect(completed?.completedAt).not.toBeNull()
+    })
+})
+
+describe('outreach contact repository', () => {
+    it('stores job-post contacts with an unmessaged default and lists newest first', async () => {
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-21',
+            createReportInput(),
+        )
+        const jobPostId = report.report.results[0]!.post.id
+        const first = await outreachContactRepository.create(jobPostId, {
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her visible role aligns with the position.',
+            draftMessage: 'Hi Ada, I would value your perspective on the role.',
+        })
+        const second = await outreachContactRepository.create(jobPostId, {
+            personName: 'Grace Hopper',
+            personTitle: 'Director of Engineering',
+            profileUrl: 'https://www.linkedin.com/in/grace-hopper',
+            relevanceRationale: 'Her visible role aligns with the team.',
+            draftMessage: 'Hi Grace, I would value your perspective on the team.',
+        })
+
+        const contacts = await outreachContactRepository.findByJobPostId(jobPostId)
+
+        expect(first).toMatchObject({ jobPostId, messaged: false })
+        expect(second).toMatchObject({ jobPostId, messaged: false })
+        expect(contacts.map(({ personName }) => personName)).toEqual([
+            'Grace Hopper',
+            'Ada Lovelace',
+        ])
     })
 })
 

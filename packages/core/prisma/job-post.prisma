@@ -37,5 +37,6 @@ model JobPost {
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
   results           JobSearchResult[]
+  outreachContacts  OutreachContact[]
   outreachRuns      OutreachRun[]
 }
