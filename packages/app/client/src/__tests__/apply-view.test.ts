@@ -204,19 +204,7 @@ describe('apply view', () => {
             expect(viewer?.classList.contains('is-adjacent')).toBe(false)
         })
 
-        const backButton = root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')
-
-        if (backButton === null) {
-            throw new Error('Could not find job post back button')
-        }
-
-        const backTooltip = backButton
-            .closest('.icon-tooltip')
-            ?.querySelector<HTMLElement>('[role="tooltip"]')
-        expect(backButton.querySelector('.app-icon-back')).not.toBeNull()
-        expect(backTooltip?.textContent).toBe('Back to job posts')
-        expect(backButton.getAttribute('aria-describedby')).toBe(backTooltip?.id)
-        backButton.click()
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
 
         await vi.waitFor(() => {
             expect(list?.classList.contains('is-active')).toBe(true)
@@ -371,12 +359,11 @@ describe('apply view', () => {
         expect(rationaleToggle.classList.contains('rationale-toggle-more')).toBe(true)
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
         expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
-        expect(expandControl?.querySelector('.app-icon-expand')).not.toBeNull()
-        const expandTooltip = expandControl
-            ?.closest('.icon-tooltip')
-            ?.querySelector<HTMLElement>('[role="tooltip"]')
-        expect(expandTooltip?.textContent).toBe('Expand panel')
-        expect(expandControl?.getAttribute('aria-describedby')).toBe(expandTooltip?.id)
+        expect(
+            [...(expandControl?.querySelectorAll('polyline') ?? [])].map((chevron) =>
+                chevron.getAttribute('points'),
+            ),
+        ).toEqual(['11 7 5 5 7 11', '13 17 19 19 17 13'])
         rationaleToggle.click()
 
         await vi.waitFor(() => {
@@ -394,12 +381,6 @@ describe('apply view', () => {
         }
 
         expect(copyButton.closest('.draft-field')).not.toBeNull()
-        expect(copyButton.querySelector('.app-icon-copy')).not.toBeNull()
-        const copyTooltip = copyButton
-            .closest('.icon-tooltip')
-            ?.querySelector<HTMLElement>('[role="tooltip"]')
-        expect(copyTooltip?.textContent).toBe('Copy message')
-        expect(copyButton.getAttribute('aria-describedby')).toBe(copyTooltip?.id)
         copyButton.click()
         await vi.waitFor(() => {
             expect(writeText).toHaveBeenCalledExactlyOnceWith(
@@ -435,15 +416,9 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
 
-        const sendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
-
-        if (sendButton === null) {
-            throw new Error('Could not find outreach send button')
-        }
-
-        await vi.waitFor(() => expect(sendButton.disabled).toBe(false))
+        await vi.waitFor(() => expect(findButton(root, 'Send').disabled).toBe(false))
+        const sendButton = findButton(root, 'Send')
         expect(sendButton.closest('.request-field')).not.toBeNull()
-        expect(sendButton.querySelector('.app-icon-send')).not.toBeNull()
         sendButton.click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))

@@ -2,8 +2,6 @@
 import type { JobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
-import AppIcon from '@/components/app/AppIcon.vue'
-import IconTooltip from '@/components/app/IconTooltip.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
@@ -112,45 +110,38 @@ async function copyDraft() {
                     @back="emit('cancel')"
                 />
                 <template v-else>
-                    <IconTooltip
+                    <button
                         v-if="contact"
-                        v-slot="{ tooltipId }"
-                        class="panel-control-desktop"
-                        :label="expanded ? 'Collapse panel' : 'Expand panel'"
+                        class="panel-control panel-control-expand panel-control-desktop"
+                        type="button"
+                        :aria-label="expanded ? 'Collapse outreach panel' : 'Expand outreach panel'"
+                        :aria-expanded="expanded"
+                        @click="toggleExpanded"
                     >
-                        <button
-                            class="panel-control panel-control-expand"
-                            type="button"
-                            :aria-label="
-                                expanded ? 'Collapse outreach panel' : 'Expand outreach panel'
-                            "
-                            :aria-describedby="tooltipId"
-                            :aria-expanded="expanded"
-                            @click="toggleExpanded"
-                        >
-                            <AppIcon
-                                class="panel-control-icon"
-                                :name="expanded ? 'collapse' : 'expand'"
-                            />
-                        </button>
-                    </IconTooltip>
-                    <IconTooltip
-                        v-slot="{ tooltipId }"
+                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <template v-if="expanded">
+                                <polyline points="4 8 10 10 8 4" />
+                                <polyline points="20 16 14 14 16 20" />
+                            </template>
+                            <template v-else>
+                                <polyline points="11 7 5 5 7 11" />
+                                <polyline points="13 17 19 19 17 13" />
+                            </template>
+                        </svg>
+                    </button>
+                    <button
+                        class="panel-control"
                         :class="{
                             'panel-control-mobile-only': contact,
                         }"
-                        label="Show job post"
+                        type="button"
+                        aria-label="Show selected job post"
+                        @click="emit('showViewer')"
                     >
-                        <button
-                            class="panel-control"
-                            type="button"
-                            aria-label="Show selected job post"
-                            :aria-describedby="tooltipId"
-                            @click="emit('showViewer')"
-                        >
-                            <AppIcon class="panel-control-icon" name="chevron-right" />
-                        </button>
-                    </IconTooltip>
+                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                    </button>
                 </template>
                 <span class="eyebrow">Outreach</span>
             </div>
@@ -206,17 +197,16 @@ async function copyDraft() {
     width: 2rem;
     height: 2rem;
     padding: 0;
-    color: $color-ink-muted;
+    color: $color-ink;
     cursor: pointer;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: $radius-md;
+    background: $color-action;
+    border: 0;
+    border-radius: $radius-sm;
 
     &:hover,
     &:focus-visible {
         color: $color-ink;
-        background: $color-ink-alpha-9;
-        border-color: $color-ink-alpha-12;
+        background: $color-signal;
     }
 
     &-desktop {
@@ -233,15 +223,25 @@ async function copyDraft() {
         }
     }
 
-    &-expand[aria-expanded='true'] {
-        color: $color-ink;
-        background: $color-ink-alpha-9;
-        border-color: $color-ink-alpha-12;
+    &-expand {
+        color: $color-ink-muted;
+        background: transparent;
+
+        &:hover,
+        &:focus-visible {
+            color: $color-signal-light;
+            background: transparent;
+        }
     }
 }
 
 .panel-control-icon {
     width: 1.25rem;
     height: 1.25rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 </style>

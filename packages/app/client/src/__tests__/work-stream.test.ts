@@ -87,7 +87,6 @@ describe('work stream', () => {
         expect(latestActivity.querySelector('.activity-icon')).toBeNull()
         expect(commentaryItem?.querySelector('.activity-progress')).toBeNull()
         expect(commentaryItem?.querySelector('.activity-icon-agent')).not.toBeNull()
-        expect(commentaryItem?.querySelector('.app-icon-agent')).not.toBeNull()
 
         store.events.push({ type: 'activity', message: 'Reading local context', createdAt })
         await nextTick()

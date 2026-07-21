@@ -2,7 +2,6 @@
 import type { WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, useTemplateRef, watch } from 'vue'
-import AppIcon from '@/components/app/AppIcon.vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import { useWorkStore } from '@/stores/work.store'
 
@@ -115,17 +114,28 @@ function resolveAction(decision: WorkActionDecision) {
                     class="activity-item"
                     :class="`activity-item-${item.type}`"
                 >
-                    <AppIcon
+                    <span
                         v-if="taskActive && pendingAction === null && index === latestActivityIndex"
                         class="activity-progress"
-                        name="loader"
-                    />
-                    <AppIcon
+                        aria-hidden="true"
+                    ></span>
+                    <svg
                         v-else
                         class="activity-icon"
                         :class="`activity-icon-${item.icon}`"
-                        :name="item.icon"
-                    />
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <template v-if="item.icon === 'globe'">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                        </template>
+                        <path
+                            v-else-if="item.icon === 'tool'"
+                            d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"
+                        />
+                        <path v-else d="m8 5 8 7-8 7" />
+                    </svg>
                     <span class="activity-copy">{{ item.message }}</span>
                 </li>
             </ul>
@@ -208,8 +218,14 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .activity-icon {
+    flex: 0 0 auto;
     width: 1rem;
     height: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
 }
 
 .activity-copy {
@@ -219,9 +235,62 @@ function resolveAction(decision: WorkActionDecision) {
 }
 
 .activity-progress {
+    display: grid;
     width: 1rem;
     height: 1rem;
+    overflow: hidden;
     color: $color-signal-light;
+    font-family: $font-family-mono;
+    line-height: 1;
+    place-items: center;
+
+    &::after {
+        content: '⠋';
+        animation: activity-spin 0.8s step-end infinite;
+    }
+}
+
+@keyframes activity-spin {
+    0% {
+        content: '⠋';
+    }
+
+    10% {
+        content: '⠙';
+    }
+
+    20% {
+        content: '⠹';
+    }
+
+    30% {
+        content: '⠸';
+    }
+
+    40% {
+        content: '⠼';
+    }
+
+    50% {
+        content: '⠴';
+    }
+
+    60% {
+        content: '⠦';
+    }
+
+    70% {
+        content: '⠧';
+    }
+
+    80% {
+        content: '⠇';
+    }
+
+    90%,
+    100% {
+        content: '⠏';
+    }
 }
 
 .action-required {

@@ -17,7 +17,6 @@ export interface ActionMenuItem {
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue'
-import AppIcon from '@/components/app/AppIcon.vue'
 
 const props = defineProps<{
     buttonLabel: string
@@ -123,7 +122,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             @keydown.up.prevent="showMenu('last')"
         >
             <span>{{ label }}</span>
-            <AppIcon class="action-menu-chevron" name="chevron-down" />
+            <svg class="action-menu-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="m4 6 4 4 4-4" />
+            </svg>
         </button>
 
         <ul
@@ -200,7 +201,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 .action-menu-chevron {
     width: 0.875rem;
     height: 0.875rem;
-    color: $color-ink-secondary;
+    fill: none;
+    stroke: $color-ink-secondary;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
     transition: transform 160ms ease;
 
     [aria-expanded='true'] & {

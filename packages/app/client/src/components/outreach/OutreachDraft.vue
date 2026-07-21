@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue'
-import AppIcon from '@/components/app/AppIcon.vue'
-import IconTooltip from '@/components/app/IconTooltip.vue'
 import type { OutreachContact } from '@/work-tasks'
 
 const props = defineProps<{
@@ -38,8 +36,7 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                <span>{{ contact.personName }}</span>
-                <AppIcon class="person-link-icon" name="external-link" />
+                {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
             <div class="rationale-copy">
@@ -74,27 +71,22 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                         aria-label="Outreach message"
                         :disabled="running"
                     ></textarea>
-                    <IconTooltip
-                        v-slot="{ tooltipId }"
-                        class="copy-control"
-                        :label="copyState === 'copied' ? 'Copied' : 'Copy message'"
-                        placement="top"
+                    <button
+                        class="field-action copy-button"
+                        type="button"
+                        :aria-label="
+                            copyState === 'copied'
+                                ? 'Outreach message copied'
+                                : 'Copy outreach message'
+                        "
+                        :disabled="draft.trim().length === 0"
+                        @click="emit('copy')"
                     >
-                        <button
-                            class="field-action copy-button"
-                            type="button"
-                            :aria-label="
-                                copyState === 'copied'
-                                    ? 'Outreach message copied'
-                                    : 'Copy outreach message'
-                            "
-                            :aria-describedby="tooltipId"
-                            :disabled="draft.trim().length === 0"
-                            @click="emit('copy')"
-                        >
-                            <AppIcon class="copy-icon" name="copy" />
-                        </button>
-                    </IconTooltip>
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+                        </svg>
+                    </button>
                     <span
                         class="copy-feedback"
                         :class="{ 'copy-feedback-error': copyState === 'failed' }"
@@ -121,22 +113,13 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                         :disabled="running"
                         placeholder="Request changes"
                     ></textarea>
-                    <IconTooltip
-                        v-slot="{ tooltipId }"
-                        class="send-control"
-                        label="Send request"
-                        placement="top"
+                    <button
+                        class="field-action send-button"
+                        type="submit"
+                        :disabled="running || !canSubmit"
                     >
-                        <button
-                            class="field-action send-button"
-                            type="submit"
-                            aria-label="Send request"
-                            :aria-describedby="tooltipId"
-                            :disabled="running || !canSubmit"
-                        >
-                            <AppIcon class="send-icon" name="send" />
-                        </button>
-                    </IconTooltip>
+                        Send
+                    </button>
                 </div>
             </form>
         </div>
@@ -185,9 +168,6 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 }
 
 .person-name {
-    display: inline-flex;
-    gap: $space-1;
-    align-items: center;
     width: fit-content;
     color: $color-ink;
     font-size: 1.125rem;
@@ -198,11 +178,6 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     &:focus-visible {
         color: $color-signal-light;
     }
-}
-
-.person-link-icon {
-    width: 0.875rem;
-    height: 0.875rem;
 }
 
 .person-title,
@@ -295,7 +270,7 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 .request-input {
     display: block;
     width: 100%;
-    padding-right: 3.5rem;
+    padding-right: 5.25rem;
     resize: vertical;
 }
 
@@ -343,31 +318,21 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     }
 }
 
-.send-control {
-    position: absolute;
+.send-button {
     top: 50%;
     right: $space-2;
-    transform: translateY(-50%);
-}
-
-.send-button {
-    position: static;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
-}
-
-.copy-control {
-    position: absolute;
-    right: $space-2;
-    bottom: $space-2;
+    min-width: 4rem;
+    padding: $space-2 $space-3;
+    line-height: 1;
+    transform: translateY(-50%);
 }
 
 .copy-button {
-    position: static;
+    right: $space-2;
+    bottom: $space-2;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -379,17 +344,17 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 .copy-icon {
     width: 1rem;
     height: 1rem;
-}
-
-.send-icon {
-    width: 1.125rem;
-    height: 1.125rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 
 .copy-feedback {
     position: absolute;
-    right: 3rem;
-    bottom: 0.65rem;
+    bottom: 3rem;
+    right: 0.2rem;
     min-height: 1rem;
     color: $color-ink-muted;
     font-size: 0.8125rem;
