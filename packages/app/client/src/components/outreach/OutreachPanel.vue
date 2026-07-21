@@ -267,7 +267,7 @@ async function copyDraft() {
 }
 
 .cancel-action {
-    align-self: flex-end;
+    align-self: flex-start;
     padding: 0;
     color: $color-signal-light;
     font: inherit;
