@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, shallowRef, useId, watch } from 'vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import ChevronRightIcon from '@/components/svgs/ChevronRightIcon.vue'
+import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
+import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
@@ -28,10 +31,13 @@ const { cancelling, error, task, taskActive } = storeToRefs(workStore)
 const { assistantReply, contact, draft, resultError } = storeToRefs(outreachStore)
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
+const resizeTooltipDismissed = shallowRef(false)
+const resizeTooltipId = useId()
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => task.value?.status === 'running')
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
     task,
@@ -114,21 +120,28 @@ async function copyDraft() {
                         v-if="contact"
                         class="panel-control panel-control-expand panel-control-desktop"
                         type="button"
-                        :aria-label="expanded ? 'Collapse outreach panel' : 'Expand outreach panel'"
+                        :aria-label="resizeLabel"
+                        :aria-describedby="resizeTooltipId"
                         :aria-expanded="expanded"
+                        @mouseenter="resizeTooltipDismissed = false"
+                        @mouseleave="resizeTooltipDismissed = false"
+                        @focus="resizeTooltipDismissed = false"
+                        @blur="resizeTooltipDismissed = false"
+                        @keydown.esc.stop="resizeTooltipDismissed = true"
                         @click="toggleExpanded"
                     >
-                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <template v-if="expanded">
-                                <polyline points="4 8 10 10 8 4" />
-                                <polyline points="20 16 14 14 16 20" />
-                            </template>
-                            <template v-else>
-                                <polyline points="11 7 5 5 7 11" />
-                                <polyline points="13 17 19 19 17 13" />
-                            </template>
-                        </svg>
+                        <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                        <ExpandIcon v-else class="panel-control-icon" />
                     </button>
+                    <span
+                        v-if="contact"
+                        :id="resizeTooltipId"
+                        class="panel-control-tooltip tooltip-surface"
+                        :class="{ 'is-dismissed': resizeTooltipDismissed }"
+                        role="tooltip"
+                    >
+                        {{ resizeLabel }}
+                    </span>
                     <button
                         class="panel-control"
                         :class="{
@@ -138,9 +151,7 @@ async function copyDraft() {
                         aria-label="Show selected job post"
                         @click="emit('showViewer')"
                     >
-                        <svg class="panel-control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m9 18 6-6-6-6" />
-                        </svg>
+                        <ChevronRightIcon class="panel-control-icon" />
                     </button>
                 </template>
                 <span class="eyebrow">Outreach</span>
@@ -175,10 +186,57 @@ async function copyDraft() {
 }
 
 .outreach-heading-copy {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
+}
+
+.panel-control-tooltip {
+    position: absolute;
+    top: calc(2rem + $space-1);
+    left: -1rem;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    transform: translateY(-$space-1);
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease,
+        visibility 150ms ease;
+
+    &::before {
+        position: absolute;
+        right: 0;
+        bottom: 100%;
+        left: 0;
+        height: $space-2;
+        content: '';
+    }
+
+    &:hover {
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    &.is-dismissed {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        transform: translateY(-$space-1);
+    }
+}
+
+.panel-control-expand:hover + .panel-control-tooltip:not(.is-dismissed),
+.panel-control-expand:focus-visible + .panel-control-tooltip:not(.is-dismissed) {
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .eyebrow {

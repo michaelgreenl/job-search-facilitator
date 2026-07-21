@@ -75,6 +75,20 @@ a {
     }
 }
 
+.tooltip-surface {
+    width: max-content;
+    padding: $space-2 $space-3;
+    color: $color-ink;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+    background: $color-night-navigation;
+    border: 1px solid $color-ink-alpha-16;
+    border-radius: $radius-md;
+    box-shadow: 0 8px 20px $color-black-alpha-24;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

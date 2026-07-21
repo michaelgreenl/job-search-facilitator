@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue'
+import { computed, shallowRef, useId, watch } from 'vue'
+import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
+import CopyIcon from '@/components/svgs/CopyIcon.vue'
 import type { OutreachContact } from '@/work-tasks'
 
 const props = defineProps<{
@@ -20,6 +22,7 @@ const request = defineModel<string>('request', { required: true })
 const canSubmit = computed(() => request.value.trim().length > 0)
 const descriptionExpanded = shallowRef(false)
 const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.value)
+const copyFeedbackId = useId()
 
 watch([() => props.contact.profileUrl, () => props.expanded], () => {
     descriptionExpanded.value = false
@@ -79,20 +82,22 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                                 ? 'Outreach message copied'
                                 : 'Copy outreach message'
                         "
+                        :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
                         :disabled="draft.trim().length === 0"
                         @click="emit('copy')"
                     >
-                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="9" y="9" width="11" height="11" rx="2" />
-                            <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
-                        </svg>
+                        <CopyIcon class="copy-icon" />
                     </button>
                     <span
+                        :id="copyFeedbackId"
                         class="copy-feedback"
-                        :class="{ 'copy-feedback-error': copyState === 'failed' }"
+                        :class="{
+                            'copy-feedback-copied tooltip-surface': copyState === 'copied',
+                            'copy-feedback-error': copyState === 'failed',
+                        }"
                         :role="copyState === 'failed' ? 'alert' : 'status'"
                     >
-                        <template v-if="copyState === 'copied'">Copied!</template>
+                        <template v-if="copyState === 'copied'">Copied</template>
                         <template v-else-if="copyState === 'failed'">Could not copy draft</template>
                     </span>
                 </div>
@@ -116,9 +121,10 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
                     <button
                         class="field-action send-button"
                         type="submit"
+                        aria-label="Send request"
                         :disabled="running || !canSubmit"
                     >
-                        Send
+                        <ArrowUpIcon class="send-icon" />
                     </button>
                 </div>
             </form>
@@ -324,10 +330,20 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 4rem;
-    padding: $space-2 $space-3;
+    min-width: 2.25rem;
+    padding: $space-2 0;
     line-height: 1;
     transform: translateY(-50%);
+}
+
+.send-icon {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 
 .copy-button {
@@ -353,11 +369,18 @@ watch([() => props.contact.profileUrl, () => props.expanded], () => {
 
 .copy-feedback {
     position: absolute;
-    bottom: 3rem;
-    right: 0.2rem;
+    bottom: 3.25rem;
+    right: -0.4rem;
     min-height: 1rem;
     color: $color-ink-muted;
     font-size: 0.8125rem;
+
+    &-copied {
+        z-index: 1;
+        min-height: 0;
+        color: $color-ink;
+        pointer-events: none;
+    }
 
     &-error {
         color: lighten-color($color-red-600, 20%);

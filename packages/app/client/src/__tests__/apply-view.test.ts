@@ -333,8 +333,11 @@ describe('apply view', () => {
             expect(root.querySelector('label[for="outreach-message"]')).toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Back to job posts"]')).not.toBeNull()
+            expect(
+                root.querySelector('[aria-label="Back to job posts"] .back-button-icon'),
+            ).not.toBeNull()
             expect(discoverButton.disabled).toBe(false)
             expect(discoverButton.getAttribute('aria-busy')).toBe('false')
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
@@ -350,15 +353,18 @@ describe('apply view', () => {
 
         const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
         const rationaleToggle = findButton(root, 'Show more')
-        const expandControl = root.querySelector<HTMLButtonElement>(
-            '[aria-label="Expand outreach panel"]',
-        )
+        const expandControl = root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')
 
         expect(rationale?.classList.contains('is-clamped')).toBe(true)
         expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
         expect(rationaleToggle.classList.contains('rationale-toggle-more')).toBe(true)
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
         expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
+        const expandTooltipId = expandControl?.getAttribute('aria-describedby')
+        const expandTooltip = expandTooltipId ? document.getElementById(expandTooltipId) : null
+
+        expect(expandTooltip?.getAttribute('role')).toBe('tooltip')
+        expect(expandTooltip?.textContent).toContain('Expand panel')
         expect(
             [...(expandControl?.querySelectorAll('polyline') ?? [])].map((chevron) =>
                 chevron.getAttribute('points'),
@@ -381,12 +387,19 @@ describe('apply view', () => {
         }
 
         expect(copyButton.closest('.draft-field')).not.toBeNull()
+        expect(copyButton.querySelector('.copy-icon')?.tagName.toLowerCase()).toBe('svg')
+        expect(copyButton.getAttribute('aria-describedby')).toBeNull()
         copyButton.click()
         await vi.waitFor(() => {
             expect(writeText).toHaveBeenCalledExactlyOnceWith(
                 'Hi Ada, I would value your perspective on the P2 Engineer role.',
             )
-            expect(root.textContent).toContain('Copied!')
+            const feedbackId = copyButton.getAttribute('aria-describedby')
+            const feedback = feedbackId ? document.getElementById(feedbackId) : null
+
+            expect(feedback?.getAttribute('role')).toBe('status')
+            expect(feedback?.classList.contains('copy-feedback-copied')).toBe(true)
+            expect(feedback?.textContent).toContain('Copied')
             expect(copyButton.getAttribute('aria-label')).toBe('Outreach message copied')
         })
 
@@ -416,9 +429,15 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
 
-        await vi.waitFor(() => expect(findButton(root, 'Send').disabled).toBe(false))
-        const sendButton = findButton(root, 'Send')
+        const sendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
+
+        if (sendButton === null) {
+            throw new Error('Could not find outreach send button')
+        }
+
+        await vi.waitFor(() => expect(sendButton.disabled).toBe(false))
         expect(sendButton.closest('.request-field')).not.toBeNull()
+        expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
         sendButton.click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
@@ -456,10 +475,10 @@ describe('apply view', () => {
             ).toBe('Hi Ada, I would love to hear about the engineering team.')
             expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
             expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
-            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
         })
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Expand outreach panel"]')?.click()
+        root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')?.click()
 
         await vi.waitFor(() => {
             expect(
@@ -469,7 +488,7 @@ describe('apply view', () => {
                 true,
             )
             expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
-            expect(root.querySelector('[aria-label="Collapse outreach panel"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Collapse panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Show selected job post"]')).not.toBeNull()
             expect(root.querySelector('.rationale-toggle')).toBeNull()
             expect(
@@ -477,13 +496,22 @@ describe('apply view', () => {
             ).toBe(false)
         })
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Collapse outreach panel"]')?.click()
+        const collapseControl = root.querySelector<HTMLButtonElement>(
+            '[aria-label="Collapse panel"]',
+        )
+        const collapseTooltipId = collapseControl?.getAttribute('aria-describedby')
+
+        expect(document.getElementById(collapseTooltipId ?? '')?.textContent).toContain(
+            'Collapse panel',
+        )
+
+        collapseControl?.click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(
                 false,
             )
-            expect(root.querySelector('[aria-label="Expand outreach panel"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
             expect(
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
             ).toBe(true)

@@ -17,6 +17,7 @@ export interface ActionMenuItem {
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue'
+import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 
 const props = defineProps<{
     buttonLabel: string
@@ -122,9 +123,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             @keydown.up.prevent="showMenu('last')"
         >
             <span>{{ label }}</span>
-            <svg class="action-menu-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="m4 6 4 4 4-4" />
-            </svg>
+            <ChevronDownIcon class="action-menu-chevron" />
         </button>
 
         <ul

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
+
 withDefaults(
     defineProps<{
         label: string
@@ -25,7 +27,7 @@ const emit = defineEmits<{
         :disabled="disabled"
         @click="emit('back')"
     >
-        ←
+        <ArrowLeftIcon class="back-button-icon" />
     </button>
 </template>
 
@@ -54,5 +56,16 @@ const emit = defineEmits<{
             display: none;
         }
     }
+}
+
+.back-button-icon {
+    width: 0.875rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+    vertical-align: -0.125em;
 }
 </style>

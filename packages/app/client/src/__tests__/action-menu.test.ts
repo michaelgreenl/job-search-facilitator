@@ -48,6 +48,10 @@ describe('ActionMenu', () => {
 
         expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
         expect(trigger.getAttribute('aria-expanded')).toBe('false')
+        expect(trigger.querySelector('.action-menu-chevron')?.tagName.toLowerCase()).toBe('svg')
+        expect(trigger.querySelector('.action-menu-chevron path')?.getAttribute('d')).toBe(
+            'm4 6 4 4 4-4',
+        )
 
         trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
 

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, useTemplateRef, watch } from 'vue'
+import { computed, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
+import AgentIcon from '@/components/svgs/AgentIcon.vue'
+import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
+import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import { useWorkStore } from '@/stores/work.store'
 
 const props = defineProps<{ issue: string | null }>()
@@ -16,6 +19,12 @@ interface StreamItem {
     icon: StreamIcon
     message: string
     type: 'activity' | 'commentary'
+}
+
+const streamIcons: Record<StreamIcon, Component> = {
+    agent: AgentIcon,
+    globe: GlobeIcon,
+    tool: ToolIcon,
 }
 
 const stripStatementMarkers = (message: string) =>
@@ -127,23 +136,12 @@ function resolveAction(decision: WorkActionDecision) {
                         class="activity-progress"
                         aria-hidden="true"
                     ></span>
-                    <svg
+                    <component
                         v-else
+                        :is="streamIcons[item.icon]"
                         class="activity-icon"
                         :class="`activity-icon-${item.icon}`"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                    >
-                        <template v-if="item.icon === 'globe'">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                        </template>
-                        <path
-                            v-else-if="item.icon === 'tool'"
-                            d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"
-                        />
-                        <path v-else d="m8 5 8 7-8 7" />
-                    </svg>
+                    />
                     <span class="activity-copy">{{ item.message }}</span>
                 </li>
             </ul>
@@ -218,7 +216,7 @@ function resolveAction(decision: WorkActionDecision) {
     margin: auto 0 0;
     padding: 0;
     color: $color-ink-muted;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     list-style: none;
 }
 
