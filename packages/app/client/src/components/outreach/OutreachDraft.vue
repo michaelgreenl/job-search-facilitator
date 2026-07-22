@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { computed, useId } from 'vue'
+import { computed, shallowRef, useId, watch } from 'vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
-defineProps<{
-    contact: OutreachContact
-    assistantReply: string | null
-    running: boolean
-    copyState: 'idle' | 'copied' | 'failed'
-    expanded: boolean
-}>()
+const props = withDefaults(
+    defineProps<{
+        contact?: OutreachContact | null
+        contactLoading?: boolean
+        assistantReply: string | null
+        running: boolean
+        copyState: 'idle' | 'copied' | 'failed'
+        expanded: boolean
+    }>(),
+    {
+        contact: null,
+        contactLoading: false,
+    },
+)
 
 const emit = defineEmits<{
     submit: []
@@ -21,13 +28,44 @@ const emit = defineEmits<{
 
 const draft = defineModel<string>('draft', { required: true })
 const request = defineModel<string>('request', { required: true })
+const announceContactDiscovery = shallowRef(props.contactLoading)
 const canSubmit = computed(() => request.value.trim().length > 0)
 const copyFeedbackId = useId()
+
+watch(
+    () => props.contactLoading,
+    (loading) => {
+        if (loading) {
+            announceContactDiscovery.value = true
+        }
+    },
+)
 </script>
 
 <template>
     <section class="draft-board" :class="{ 'is-expanded': expanded }" aria-label="Outreach draft">
-        <OutreachContactCard class="draft-contact-card" :contact="contact" :expanded="expanded" />
+        <span
+            v-if="announceContactDiscovery"
+            class="draft-contact-announcement"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+        >
+            {{
+                contactLoading
+                    ? 'Discovering contact…'
+                    : contact
+                      ? `Contact found: ${contact.personName}`
+                      : ''
+            }}
+        </span>
+
+        <OutreachContactCard
+            class="draft-contact-card"
+            :contact="contact ?? undefined"
+            :expanded="expanded"
+            :loading="contactLoading"
+        />
 
         <div class="draft-workspace">
             <div class="draft-content">
@@ -112,6 +150,18 @@ const copyFeedbackId = useId()
             align-items: stretch;
         }
     }
+}
+
+.draft-contact-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 .draft-contact-card {

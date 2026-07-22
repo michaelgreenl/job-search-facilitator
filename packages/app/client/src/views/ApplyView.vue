@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, shallowRef, useTemplateRef, watch } from 'vue'
 import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
+import OutreachDraftPanel from '@/components/outreach/OutreachDraftPanel.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
@@ -16,7 +17,10 @@ import { createOutreachTask } from '@/work-tasks'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'posts' | 'viewer' | 'outreach'
+type ActivePanel = 'posts' | 'viewer' | 'outreach' | 'outreach-draft'
+interface OutreachPanelHandle {
+    focusPanel: () => void
+}
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postFilterItems: ActionMenuItem[] = [
@@ -32,12 +36,19 @@ const isPostFilter = (value: string): value is PostFilter =>
 const postStore = usePostStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { postId: outreachPostId, contact: outreachContact } = storeToRefs(outreachStore)
+const { error: workError } = storeToRefs(workStore)
+const {
+    postId: outreachPostId,
+    contact: outreachContact,
+    resultError: outreachResultError,
+} = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
 )
 const outreachExpanded = shallowRef(false)
+const draftPreviewActive = shallowRef(false)
+const outreachPanel = useTemplateRef<OutreachPanelHandle>('outreachPanel')
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
@@ -76,7 +87,8 @@ watch(
     (posts) => {
         if (
             posts.some(({ id }) => id === selectedPostId.value) ||
-            (activePanel.value === 'outreach' && outreachPostId.value !== null)
+            ((activePanel.value === 'outreach' || activePanel.value === 'outreach-draft') &&
+                outreachPostId.value !== null)
         ) {
             return
         }
@@ -88,6 +100,7 @@ watch(
         if (changed) {
             outreachStore.reset()
             outreachExpanded.value = false
+            draftPreviewActive.value = false
         }
 
         if (selectedPostId.value === null) {
@@ -106,6 +119,7 @@ function selectPost(postId: string) {
     }
 
     outreachExpanded.value = false
+    draftPreviewActive.value = false
     labelError.value = null
     applicationError.value = null
     activePanel.value = 'viewer'
@@ -139,6 +153,7 @@ function startOutreach() {
 
     outreachStore.begin(selectedPost.value.id)
     outreachExpanded.value = false
+    draftPreviewActive.value = false
     activePanel.value = 'outreach'
     void outreachStore.fetchContacts(selectedPost.value.id).catch(() => undefined)
     void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
@@ -152,17 +167,61 @@ async function cancelOutreach() {
     }
 
     outreachStore.cancelTask()
+    draftPreviewActive.value = false
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+    await nextTick()
+    outreachPanel.value?.focusPanel()
 }
 
 function expandOutreach() {
     outreachExpanded.value = true
-    activePanel.value = 'outreach'
+    activePanel.value = draftPreviewActive.value ? 'outreach-draft' : 'outreach'
 }
 
 function collapseOutreach() {
     outreachExpanded.value = false
+    activePanel.value = draftPreviewActive.value ? 'outreach-draft' : 'outreach'
+}
+
+function previewDraft() {
+    draftPreviewActive.value = true
+    outreachExpanded.value = false
+    activePanel.value = 'outreach-draft'
+}
+
+function closeDraftPreview() {
+    draftPreviewActive.value = false
+    outreachExpanded.value = false
     activePanel.value = 'outreach'
 }
+
+function returnToOutreachProgress() {
+    closeDraftPreview()
+    void nextTick(() => outreachPanel.value?.focusPanel())
+}
+
+watch(
+    [
+        () => workStore.actionNeedsAttention,
+        () => workStore.task?.status,
+        workError,
+        outreachResultError,
+    ],
+    ([needsAttention, taskStatus, currentWorkError, resultError]) => {
+        if (
+            draftPreviewActive.value &&
+            (needsAttention ||
+                taskStatus === 'failed' ||
+                taskStatus === 'cancelled' ||
+                currentWorkError !== null ||
+                (resultError !== null && outreachContact.value === null))
+        ) {
+            closeDraftPreview()
+        }
+    },
+    { immediate: true },
+)
 
 async function updateUserLabel(userLabel: UserLabel | null) {
     if (selectedPostId.value === null || labelUpdating.value || applicationUpdating.value) {
@@ -296,17 +355,51 @@ onMounted(() => {
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
                 :class="{
-                    'apply-outreach-contact': outreachContact,
+                    'apply-outreach-contact': outreachContact && !draftPreviewActive,
                 }"
                 :active="activePanel === 'outreach'"
                 :adjacent="
-                    activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
+                    (activePanel === 'outreach-draft' && !outreachExpanded) ||
+                    (activePanel === 'viewer' &&
+                        outreachContact !== null &&
+                        !outreachExpanded &&
+                        !draftPreviewActive)
                 "
             >
                 <OutreachPanel
+                    ref="outreachPanel"
                     :post="outreachPost"
                     :expanded="outreachExpanded"
+                    :draft-preview-active="draftPreviewActive"
                     @cancel="cancelOutreach"
+                    @collapse="collapseOutreach"
+                    @expand="expandOutreach"
+                    @preview-draft="previewDraft"
+                    @show-contacts="closeDraftPreview"
+                    @show-viewer="showViewer"
+                />
+            </FlowPanel>
+
+            <FlowPanel
+                v-if="outreachPost && draftPreviewActive"
+                as="aside"
+                class="apply-panel apply-outreach-draft glass-frame"
+                :active="activePanel === 'outreach-draft'"
+                :adjacent="
+                    activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
+                "
+                aria-label="Message draft"
+            >
+                <OutreachDraftPanel
+                    :post="outreachPost"
+                    :contact="outreachContact"
+                    :expanded="outreachExpanded"
+                    focus-on-mount
+                    :loading="outreachContact === null"
+                    back-label="Back to outreach progress"
+                    :show-cancel="false"
+                    :show-viewer-control="false"
+                    @back="returnToOutreachProgress"
                     @collapse="collapseOutreach"
                     @expand="expandOutreach"
                     @show-viewer="showViewer"
@@ -354,6 +447,12 @@ onMounted(() => {
         &-contact {
             flex: 2.5;
         }
+    }
+
+    &.apply-outreach-draft {
+        overflow: hidden;
+        flex: 2.5;
+        padding: $space-5;
     }
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, useTemplateRef, watch, type Component } from 'vue'
+import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
@@ -98,6 +98,8 @@ const scrollRevision = computed(() => [
     props.issue,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
+const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
+const issueMessage = useTemplateRef<HTMLElement>('issueMessage')
 const { followingLatest, handleScroll, resetFollowing } = useStickyBottomScroll(
     progress,
     scrollRevision,
@@ -112,6 +114,26 @@ watch(
     },
 )
 
+watch(
+    visiblePendingAction,
+    (action) => {
+        if (action !== null) {
+            void nextTick(() => actionRequired.value?.focus())
+        }
+    },
+    { immediate: true },
+)
+
+watch(
+    () => props.issue,
+    (issue) => {
+        if (issue !== null) {
+            void nextTick(() => issueMessage.value?.focus())
+        }
+    },
+    { immediate: true },
+)
+
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
 }
@@ -123,7 +145,9 @@ function allowBrowserActionsForTask() {
 
 <template>
     <div class="work-updates">
-        <p v-if="issue" class="work-error" role="alert">{{ issue }}</p>
+        <p v-if="issue" ref="issueMessage" class="work-error" role="alert" tabindex="-1">
+            {{ issue }}
+        </p>
 
         <div
             ref="progress"
@@ -166,7 +190,13 @@ function allowBrowserActionsForTask() {
         </div>
     </div>
 
-    <section v-if="visiblePendingAction" class="action-required" aria-labelledby="action-title">
+    <section
+        v-if="visiblePendingAction"
+        ref="actionRequired"
+        class="action-required"
+        aria-labelledby="action-title"
+        tabindex="-1"
+    >
         <span class="eyebrow">Action required</span>
         <h3 id="action-title" class="action-title">Website access</h3>
         <p class="action-message">{{ visiblePendingAction.message }}</p>

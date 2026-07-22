@@ -250,4 +250,128 @@ describe('outreach store', () => {
         expect(completedContact).toEqual(savedContact)
         expect(store.contacts).toEqual([savedContact])
     })
+
+    it('ignores a completed discovery save after outreach moves to another post', async () => {
+        const nextPostId = 'post-2'
+        const savedContact: OutreachContact = {
+            id: 'contact-1',
+            jobPostId: post.id,
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+            messaged: false,
+            createdAt: '2026-07-21T12:00:00.000Z',
+            updatedAt: '2026-07-21T12:00:00.000Z',
+        }
+        let resolveSave: ((response: Response) => void) | undefined
+        const saveResponse = new Promise<Response>((resolve) => {
+            resolveSave = resolve
+        })
+        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
+        const store = useOutreachStore()
+
+        store.begin(post.id)
+        const completedContact = store.applyTaskResult({
+            personName: savedContact.personName,
+            personTitle: savedContact.personTitle,
+            profileUrl: savedContact.profileUrl,
+            relevanceRationale: savedContact.relevanceRationale,
+            draftMessage: savedContact.draftMessage,
+        })
+        store.begin(nextPostId)
+        resolveSave?.(jsonResponse(savedContact, 201))
+
+        await expect(completedContact).resolves.toBeNull()
+        expect(store.postId).toBe(nextPostId)
+        expect(store.contact).toBeNull()
+        expect(store.contacts).toEqual([])
+    })
+
+    it('ignores an earlier discovery save after outreach restarts for the same post', async () => {
+        let resolveSave: ((response: Response) => void) | undefined
+        const saveResponse = new Promise<Response>((resolve) => {
+            resolveSave = resolve
+        })
+        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
+        const store = useOutreachStore()
+
+        store.begin(post.id)
+        const completedContact = store.applyTaskResult({
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+        })
+        store.begin(post.id)
+        resolveSave?.(jsonResponse({ error: 'Previous save failed' }, 500))
+
+        await expect(completedContact).resolves.toBeNull()
+        expect(store.postId).toBe(post.id)
+        expect(store.discovering).toBe(true)
+        expect(store.resultError).toBeNull()
+    })
+
+    it('ignores an earlier successful save after outreach restarts for the same post', async () => {
+        const savedContact: OutreachContact = {
+            id: 'contact-1',
+            jobPostId: post.id,
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+            messaged: false,
+            createdAt: '2026-07-21T12:00:00.000Z',
+            updatedAt: '2026-07-21T12:00:00.000Z',
+        }
+        let resolveSave: ((response: Response) => void) | undefined
+        const saveResponse = new Promise<Response>((resolve) => {
+            resolveSave = resolve
+        })
+        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
+        const store = useOutreachStore()
+
+        store.begin(post.id)
+        const completedContact = store.applyTaskResult({
+            personName: savedContact.personName,
+            personTitle: savedContact.personTitle,
+            profileUrl: savedContact.profileUrl,
+            relevanceRationale: savedContact.relevanceRationale,
+            draftMessage: savedContact.draftMessage,
+        })
+        store.begin(post.id)
+        resolveSave?.(jsonResponse(savedContact, 201))
+
+        await expect(completedContact).resolves.toBeNull()
+        expect(store.discovering).toBe(true)
+        expect(store.contacts).toEqual([])
+        expect(store.resultError).toBeNull()
+    })
+
+    it('ignores an earlier discovery save after draft work begins', async () => {
+        let resolveSave: ((response: Response) => void) | undefined
+        const saveResponse = new Promise<Response>((resolve) => {
+            resolveSave = resolve
+        })
+        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
+        const store = useOutreachStore()
+
+        store.begin(post.id)
+        const completedContact = store.applyTaskResult({
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her title aligns with the role.',
+            draftMessage: 'Initial draft',
+        })
+        store.beginDraft()
+        resolveSave?.(jsonResponse({ error: 'Previous save failed' }, 500))
+
+        await expect(completedContact).resolves.toBeNull()
+        expect(store.discovering).toBe(false)
+        expect(store.resultError).toBeNull()
+    })
 })
