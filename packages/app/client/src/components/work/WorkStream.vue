@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { WorkActionDecision } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
+import { computed, nextTick, shallowRef, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
@@ -11,14 +11,8 @@ import { useWorkStore } from '@/stores/work.store'
 const props = defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
-const {
-    actionNeedsAttention,
-    actionSubmitting,
-    alwaysAllowBrowserActions,
-    events,
-    pendingAction,
-    taskActive,
-} = storeToRefs(workStore)
+const { actionNeedsAttention, actionSubmitting, events, pendingAction, taskActive } =
+    storeToRefs(workStore)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -99,7 +93,10 @@ const scrollRevision = computed(() => [
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
 const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
+const alwaysAllowAction = useTemplateRef<HTMLButtonElement>('alwaysAllowAction')
+const alwaysAllowNo = useTemplateRef<HTMLButtonElement>('alwaysAllowNo')
 const issueMessage = useTemplateRef<HTMLElement>('issueMessage')
+const confirmingAlwaysAllow = shallowRef(false)
 const { followingLatest, handleScroll, resetFollowing } = useStickyBottomScroll(
     progress,
     scrollRevision,
@@ -116,7 +113,11 @@ watch(
 
 watch(
     visiblePendingAction,
-    (action) => {
+    (action, previousAction) => {
+        if (action?.id !== previousAction?.id) {
+            confirmingAlwaysAllow.value = false
+        }
+
         if (action !== null) {
             void nextTick(() => actionRequired.value?.focus())
         }
@@ -136,6 +137,20 @@ watch(
 
 function resolveAction(decision: WorkActionDecision) {
     void workStore.resolveAction(decision).catch(() => undefined)
+}
+
+function requestAlwaysAllowConfirmation() {
+    if (actionSubmitting.value) {
+        return
+    }
+
+    confirmingAlwaysAllow.value = true
+    void nextTick(() => alwaysAllowNo.value?.focus())
+}
+
+function cancelAlwaysAllowConfirmation() {
+    confirmingAlwaysAllow.value = false
+    void nextTick(() => alwaysAllowAction.value?.focus())
 }
 
 function allowBrowserActionsForTask() {
@@ -191,7 +206,42 @@ function allowBrowserActionsForTask() {
     </div>
 
     <section
-        v-if="visiblePendingAction"
+        v-if="visiblePendingAction && confirmingAlwaysAllow"
+        class="action-required"
+        role="alertdialog"
+        aria-labelledby="always-allow-title"
+        aria-describedby="always-allow-message"
+        @keydown.esc.stop="cancelAlwaysAllowConfirmation"
+    >
+        <span class="eyebrow">Confirm access</span>
+        <h3 id="always-allow-title" class="action-title">Always allow for this task?</h3>
+        <p id="always-allow-message" class="action-message">
+            Chrome will be allowed to access every website this task visits without asking again.
+        </p>
+
+        <div class="action-buttons confirmation-buttons">
+            <button
+                ref="alwaysAllowNo"
+                class="action-button"
+                type="button"
+                :disabled="actionSubmitting"
+                @click="cancelAlwaysAllowConfirmation"
+            >
+                No
+            </button>
+            <button
+                class="action-button action-button-primary"
+                type="button"
+                :disabled="actionSubmitting"
+                @click="allowBrowserActionsForTask"
+            >
+                Yes
+            </button>
+        </div>
+    </section>
+
+    <section
+        v-else-if="visiblePendingAction"
         ref="actionRequired"
         class="action-required"
         aria-labelledby="action-title"
@@ -202,16 +252,15 @@ function allowBrowserActionsForTask() {
         <p class="action-message">{{ visiblePendingAction.message }}</p>
 
         <div class="action-controls">
-            <label class="always-allow">
-                <input
-                    class="always-allow-checkbox"
-                    type="checkbox"
-                    :checked="alwaysAllowBrowserActions"
-                    :disabled="actionSubmitting"
-                    @change="allowBrowserActionsForTask"
-                />
-                <span>Always allow for this task</span>
-            </label>
+            <button
+                ref="alwaysAllowAction"
+                class="action-button"
+                type="button"
+                :disabled="actionSubmitting"
+                @click="requestAlwaysAllowConfirmation"
+            >
+                Always allow for this task
+            </button>
 
             <div class="action-buttons">
                 <button
@@ -228,7 +277,7 @@ function allowBrowserActionsForTask() {
                     :disabled="actionSubmitting"
                     @click="resolveAction('approve')"
                 >
-                    Allow for this task
+                    Allow
                 </button>
             </div>
         </div>
@@ -404,33 +453,16 @@ function allowBrowserActionsForTask() {
     margin-top: $space-3;
 }
 
-.always-allow {
-    display: inline-flex;
-    gap: $space-2;
-    align-items: center;
-    color: $color-ink-secondary;
-    font-size: 0.8125rem;
-    cursor: pointer;
-}
-
-.always-allow-checkbox {
-    width: 1rem;
-    height: 1rem;
-    margin: 0;
-    cursor: pointer;
-    accent-color: $color-signal-light;
-
-    &:disabled {
-        cursor: wait;
-    }
-}
-
 .action-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
     justify-content: flex-end;
     margin-left: auto;
+}
+
+.confirmation-buttons {
+    margin-top: $space-3;
 }
 
 .action-button {

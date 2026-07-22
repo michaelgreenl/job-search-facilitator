@@ -799,7 +799,10 @@ describe('apply view', () => {
             expect(root.querySelector('.action-required')).toBe(document.activeElement)
         })
 
-        findButton(root, 'Allow for this task').click()
+        const allowButton = findButton(root, 'Allow')
+
+        expect(allowButton.textContent?.trim()).toBe('Allow')
+        allowButton.click()
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
@@ -849,22 +852,42 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(root.textContent).toContain(linkedInActionRequired.action.message)
         })
-        const alwaysAllow = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+        const alwaysAllow = findButton(root, 'Always allow for this task')
+        const decline = findButton(root, 'Decline')
+        const actionButtons = root.querySelector('.action-buttons')
 
-        if (alwaysAllow === null) {
-            throw new Error('Could not find Always allow checkbox')
-        }
-
-        const alwaysAllowLabel = alwaysAllow.closest('label')
-
-        expect(alwaysAllowLabel?.textContent).toContain('Always allow for this task')
-        expect(alwaysAllow.checked).toBe(false)
+        expect(alwaysAllow.classList.contains('action-button')).toBe(true)
+        expect(alwaysAllow.classList.contains('action-button-primary')).toBe(false)
+        expect(decline.classList.contains('action-button')).toBe(true)
         expect(alwaysAllow.disabled).toBe(false)
         expect(
-            (alwaysAllowLabel?.compareDocumentPosition(findButton(root, 'Decline')) ?? 0) &
+            alwaysAllow.compareDocumentPosition(actionButtons ?? document.body) &
                 Node.DOCUMENT_POSITION_FOLLOWING,
         ).not.toBe(0)
         alwaysAllow.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alertdialog"]')).not.toBeNull()
+            expect(root.textContent).toContain('Always allow for this task?')
+            expect(root.textContent).toContain(
+                'Chrome will be allowed to access every website this task visits without asking again.',
+            )
+            expect(root.textContent).not.toContain(linkedInActionRequired.action.message)
+            expect(findButton(root, 'No')).toBe(document.activeElement)
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(4)
+
+        findButton(root, 'No').click()
+
+        await vi.waitFor(() => {
+            expect(findButton(root, 'Always allow for this task')).toBe(document.activeElement)
+            expect(root.textContent).toContain(linkedInActionRequired.action.message)
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(4)
+
+        findButton(root, 'Always allow for this task').click()
+        await vi.waitFor(() => expect(findButton(root, 'No')).toBe(document.activeElement))
+        findButton(root, 'Yes').click()
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
@@ -926,13 +949,9 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(root.textContent).toContain(linkedInActionRequired.action.message)
         })
-        const alwaysAllow = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
-
-        if (alwaysAllow === null) {
-            throw new Error('Could not find Always allow checkbox')
-        }
-
-        alwaysAllow.click()
+        findButton(root, 'Always allow for this task').click()
+        await vi.waitFor(() => expect(findButton(root, 'No')).toBe(document.activeElement))
+        findButton(root, 'Yes').click()
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
         source.message({
             type: 'action-resolved',
@@ -957,11 +976,9 @@ describe('apply view', () => {
             )
         })
 
-        const restoredCheckbox = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
-
-        expect(restoredCheckbox?.checked).toBe(false)
+        expect(findButton(root, 'Always allow for this task').disabled).toBe(false)
         expect(findButton(root, 'Decline').disabled).toBe(false)
-        expect(findButton(root, 'Allow for this task').disabled).toBe(false)
+        expect(findButton(root, 'Allow').disabled).toBe(false)
     })
 
     it('returns to a website prompt when manual approval fails after navigating back', async () => {
@@ -990,7 +1007,7 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(root.textContent).toContain(linkedInActionRequired.action.message)
         })
-        findButton(root, 'Allow for this task').click()
+        findButton(root, 'Allow').click()
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
 
         await vi.waitFor(() => {
@@ -1007,7 +1024,7 @@ describe('apply view', () => {
             )
         })
         expect(findButton(root, 'Decline').disabled).toBe(false)
-        expect(findButton(root, 'Allow for this task').disabled).toBe(false)
+        expect(findButton(root, 'Allow').disabled).toBe(false)
     })
 
     it('keeps a pending outreach action available after the Apply view remounts', async () => {
