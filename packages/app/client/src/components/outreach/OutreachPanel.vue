@@ -49,7 +49,7 @@ const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(() => task.value?.status === 'running')
+const canCancel = computed(() => task.value?.status === 'running' && panelView.value === 'stream')
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
@@ -145,6 +145,10 @@ function showContacts() {
     panelView.value = 'contacts'
 }
 
+function showStream() {
+    panelView.value = 'stream'
+}
+
 function selectContact(selectedContact: OutreachContact) {
     outreachStore.selectContact(selectedContact)
     panelView.value = 'draft'
@@ -220,6 +224,7 @@ async function copyDraft() {
             :error="contactsError"
             :loading="contactsLoading"
             @select="selectContact"
+            @show-stream="showStream"
         />
 
         <template v-else-if="panelView === 'draft' && contact">

@@ -25,6 +25,17 @@ const emit = defineEmits<{
 const descriptionExpanded = shallowRef(false)
 const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.value)
 const rationaleId = useId()
+const selectionLabel = computed(() => {
+    if (!props.selectable) {
+        return null
+    }
+
+    if (props.loading) {
+        return 'View outreach progress'
+    }
+
+    return props.contact ? `Open outreach draft for ${props.contact.personName}` : null
+})
 
 watch([() => props.contact?.id, () => props.expanded], () => {
     descriptionExpanded.value = false
@@ -34,9 +45,17 @@ watch([() => props.contact?.id, () => props.expanded], () => {
 <template>
     <article
         class="contact-card"
-        :class="{ 'is-selectable': selectable && contact }"
+        :class="{ 'is-selectable': selectionLabel !== null }"
         :aria-busy="loading || undefined"
     >
+        <button
+            v-if="selectionLabel"
+            class="contact-select-button"
+            type="button"
+            :aria-label="selectionLabel"
+            @click="emit('select')"
+        ></button>
+
         <template v-if="loading">
             <span class="eyebrow">Relevant contact</span>
             <span class="loading-contact">
@@ -46,14 +65,6 @@ watch([() => props.contact?.id, () => props.expanded], () => {
         </template>
 
         <template v-else-if="contact">
-            <button
-                v-if="selectable"
-                class="contact-select-button"
-                type="button"
-                :aria-label="`Open outreach draft for ${contact.personName}`"
-                @click="emit('select')"
-            ></button>
-
             <div class="contact-labels">
                 <span class="eyebrow">Relevant contact</span>
                 <span v-if="contact.messaged" class="messaged-status">Messaged</span>

@@ -12,6 +12,7 @@ defineProps<{
 
 const emit = defineEmits<{
     select: [contact: OutreachContact]
+    showStream: []
 }>()
 </script>
 
@@ -26,7 +27,7 @@ const emit = defineEmits<{
 
         <ul v-if="discovering || contacts.length > 0" class="contact-list">
             <li v-if="discovering">
-                <OutreachContactCard loading />
+                <OutreachContactCard loading selectable @select="emit('showStream')" />
             </li>
             <li v-for="savedContact in contacts" :key="savedContact.id">
                 <OutreachContactCard

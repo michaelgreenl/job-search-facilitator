@@ -267,7 +267,7 @@ describe('apply view', () => {
         })
     })
 
-    it('returns from a running discovery to saved contacts without cancelling it', async () => {
+    it('navigates a running discovery with cancel available only in the stream', async () => {
         const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
         const fetchMock = vi.mocked(fetch).mockReset()
         fetchMock.mockImplementation((input, init) => {
@@ -323,9 +323,11 @@ describe('apply view', () => {
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
 
         await vi.waitFor(() => {
+            expect(root.querySelector('[aria-label="View outreach progress"]')).not.toBeNull()
             expect(
                 root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
             ).not.toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
             expect(root.querySelector('.contact-history')).not.toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelectorAll('.contact-spinner')).toHaveLength(1)
@@ -353,6 +355,23 @@ describe('apply view', () => {
         expect(draftSendButton?.getAttribute('aria-busy')).toBeNull()
         expect(draftSendButton?.querySelector('.loading-spinner')).toBeNull()
         expect(draftSendButton?.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
+        expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(root.querySelector('[aria-label="View outreach progress"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="View outreach progress"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.work-updates')).not.toBeNull()
+            expect(root.querySelector('.contact-history')).toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
+        })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
 
@@ -361,7 +380,7 @@ describe('apply view', () => {
                 fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel')),
             ).toBe(true)
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-            expect(root.textContent).toContain('Grace Hopper')
+            expect(root.querySelector('.contact-history')).toBeNull()
         })
     })
 
