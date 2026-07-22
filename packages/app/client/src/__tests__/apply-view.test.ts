@@ -320,6 +320,79 @@ describe('apply view', () => {
         expect(fetchMock).toHaveBeenCalledTimes(3)
     })
 
+    it('navigates back from an expanded draft through contacts to the job post', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+            ).not.toBeNull()
+        })
+
+        root.querySelector<HTMLButtonElement>(
+            '[aria-label="Open outreach draft for Grace Hopper"]',
+        )?.click()
+
+        await vi.waitFor(() => {
+            const outreachPanel = root.querySelector('section[aria-label="Outreach"]')
+
+            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Show selected job post"]')).toBeNull()
+            expect(outreachPanel?.querySelectorAll('.back-button')).toHaveLength(1)
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(false)
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
+            ).toBe(true)
+            expect(root.querySelector('[aria-label="Expand panel"]')).toBeNull()
+            expect(root.querySelector('[aria-label="Collapse panel"]')).toBeNull()
+        })
+
+        const backToJobPost = root.querySelector<HTMLButtonElement>(
+            '[aria-label="Back to job post"]',
+        )
+
+        expect(backToJobPost?.closest('.back-button-mobile-only')).not.toBeNull()
+        expect(backToJobPost?.classList.contains('back-button')).toBe(true)
+        expect(backToJobPost?.querySelector('.back-button-icon')).not.toBeNull()
+        expect(root.querySelector('[aria-label="Back to saved contacts"]')).toBeNull()
+        expect(root.querySelector('[aria-label="Show selected job post"]')).toBeNull()
+        expectButtonTooltip(root, 'Back to job post')
+        backToJobPost?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                false,
+            )
+        })
+    })
+
     it('starts another discovery from the saved contact list', async () => {
         let resolveContactSave: ((response: Response) => void) | undefined
         const contactSaveResponse = new Promise<Response>((resolve) => {
@@ -631,6 +704,29 @@ describe('apply view', () => {
         expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel'))).toBe(
             false,
         )
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to job post"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
+            ).toBe(true)
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                false,
+            )
+            expect(discoverButton.disabled).toBe(false)
+        })
+
+        discoverButton.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
+                true,
+            )
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(4)
+        expect(FakeEventSource.instances).toHaveLength(1)
 
         root.querySelector<HTMLButtonElement>('[aria-label="View outreach progress"]')?.click()
 
@@ -972,7 +1068,12 @@ describe('apply view', () => {
             )
             expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
             expect(root.querySelector('[aria-label="Collapse panel"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Show selected job post"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Show selected job post"]')).toBeNull()
+            expect(
+                root
+                    .querySelector('section[aria-label="Outreach"]')
+                    ?.querySelectorAll('.back-button'),
+            ).toHaveLength(1)
             expect(root.querySelector('.rationale-toggle')).toBeNull()
             expect(
                 root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
@@ -1007,7 +1108,15 @@ describe('apply view', () => {
             ).toBe(true)
         })
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Show selected job post"]')?.click()
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Back to job post"]')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Back to saved contacts"]')).toBeNull()
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to job post"]')?.click()
 
         await vi.waitFor(() => {
             const backToJobPosts = root.querySelector('[aria-label="Back to job posts"]')
@@ -1016,13 +1125,13 @@ describe('apply view', () => {
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
             ).toBe(true)
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-adjacent')).toBe(
-                true,
-            )
-            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
                 false,
             )
+            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
+                true,
+            )
             expect(backToJobPosts).not.toBeNull()
-            expect(backToJobPosts?.closest('.back-button-mobile-only')).toBeNull()
+            expect(backToJobPosts?.closest('.back-button-mobile-only')).not.toBeNull()
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()

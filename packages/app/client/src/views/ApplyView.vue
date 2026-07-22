@@ -81,6 +81,13 @@ const selectedPost = computed(
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
+const outreachActionDisabled = computed(
+    () =>
+        contactsLoading.value ||
+        contactSaving.value ||
+        (workStore.taskActive &&
+            (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
+)
 watch(
     filteredPosts,
     (posts) => {
@@ -178,7 +185,16 @@ function discoverAnotherContact() {
 async function openOutreach() {
     const post = selectedPost.value
 
-    if (post === null || workStore.taskActive || contactSaving.value || contactsLoading.value) {
+    if (post === null || contactSaving.value || contactsLoading.value) {
+        return
+    }
+
+    if (workStore.taskActive) {
+        if (outreachStore.postId === post.id) {
+            outreachExpanded.value = false
+            activePanel.value = 'outreach'
+        }
+
         return
     }
 
@@ -354,7 +370,7 @@ onMounted(() => {
                     "
                     :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                     show-outreach-action
-                    :outreach-disabled="workStore.taskActive || contactsLoading || contactSaving"
+                    :outreach-disabled="outreachActionDisabled"
                     show-applied-option
                     @back="showPosts"
                     @update-label="updateUserLabel"

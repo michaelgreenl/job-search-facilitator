@@ -4,7 +4,6 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
-import ChevronRightIcon from '@/components/svgs/ChevronRightIcon.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
@@ -153,6 +152,10 @@ function toggleExpanded() {
 function showContacts() {
     outreachStore.clearContact()
     panelView.value = 'contacts'
+
+    if (props.expanded) {
+        emit('collapse')
+    }
 }
 
 function showStream() {
@@ -190,18 +193,12 @@ async function copyDraft() {
             <div class="outreach-heading-copy">
                 <div class="panel-navigation">
                     <PanelBackButton
-                        v-if="panelView !== 'contacts'"
-                        label="Back to saved contacts"
-                        @back="showContacts"
+                        v-if="panelView === 'contacts'"
+                        label="Back to job post"
+                        mobile-only
+                        @back="emit('showViewer')"
                     />
-                    <button
-                        class="panel-control panel-control-mobile-only"
-                        type="button"
-                        aria-label="Show selected job post"
-                        @click="emit('showViewer')"
-                    >
-                        <ChevronRightIcon class="panel-control-icon" />
-                    </button>
+                    <PanelBackButton v-else label="Back to saved contacts" @back="showContacts" />
 
                     <ButtonTooltip
                         v-if="panelView === 'draft'"
@@ -394,12 +391,6 @@ async function copyDraft() {
     &:focus-visible {
         color: $color-ink;
         background: $color-signal;
-    }
-
-    &-mobile-only {
-        @include bp-md-tablet {
-            display: none;
-        }
     }
 
     &-expand {
