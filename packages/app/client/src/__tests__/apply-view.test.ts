@@ -257,6 +257,7 @@ describe('apply view', () => {
             expect(viewer?.classList.contains('is-active')).toBe(true)
             expect(viewer?.classList.contains('is-adjacent')).toBe(false)
         })
+        expect(findButton(root, "Discover contact's")).not.toBeNull()
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
 
@@ -268,8 +269,57 @@ describe('apply view', () => {
         })
     })
 
-    it('navigates a running discovery with cancel available only in the stream', async () => {
-        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+    it('opens saved contacts without starting another discovery', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(
+                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+            ).not.toBeNull()
+            expect(root.querySelector('.work-updates')).toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+        })
+        expect(FakeEventSource.instances).toHaveLength(0)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+
+        root.querySelector<HTMLButtonElement>(
+            '[aria-label="Open outreach draft for Grace Hopper"]',
+        )?.click()
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('Messaged')
+            expect(
+                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
+            ).toBe(savedContact.draftMessage)
+        })
+
+        findButton(root, "Discover contact's").click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+        })
+        expect(FakeEventSource.instances).toHaveLength(0)
+        expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
+
+    it('does not start discovery after leaving the apply view', async () => {
+        let resolveContacts: ((response: Response) => void) | undefined
+        const contactsResponse = new Promise<Response>((resolve) => {
+            resolveContacts = resolve
+        })
         const fetchMock = vi.mocked(fetch).mockReset()
         fetchMock.mockImplementation((input, init) => {
             const url = fetchUrl(input)
@@ -279,7 +329,151 @@ describe('apply view', () => {
             }
 
             if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
-                return Promise.resolve(jsonResponse([savedContact]))
+                return contactsResponse
+            }
+
+            if (url.endsWith('/health')) {
+                return Promise.resolve(
+                    jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                )
+            }
+
+            if (url.endsWith('/tasks') && init?.method === 'POST') {
+                return Promise.resolve(jsonResponse(runningWorkTask, 202))
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+        const mounted = mountedApps.pop()
+
+        if (mounted === undefined) {
+            throw new Error('Could not find mounted apply view')
+        }
+
+        mounted.app.unmount()
+        mounted.root.remove()
+        resolveContacts?.(jsonResponse([]))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/health'))).toBe(
+            false,
+        )
+        expect(FakeEventSource.instances).toHaveLength(0)
+    })
+
+    it('ignores stale contact lookups when returning to the same post', async () => {
+        const pendingLookups: Array<{
+            postId: string
+            resolve: (response: Response) => void
+        }> = []
+        const fetchMock = vi.mocked(fetch).mockReset()
+        fetchMock.mockImplementation((input, init) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/labeled')) {
+                return Promise.resolve(jsonResponse(posts))
+            }
+
+            const post = posts.find(({ id }) =>
+                url.endsWith(`/api/job-posts/${id}/outreach-contacts`),
+            )
+
+            if (post !== undefined) {
+                return new Promise<Response>((resolve) => {
+                    pendingLookups.push({ postId: post.id, resolve })
+                })
+            }
+
+            if (url.endsWith('/health')) {
+                return Promise.resolve(
+                    jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                )
+            }
+
+            if (url.endsWith('/tasks') && init?.method === 'POST') {
+                return Promise.resolve(jsonResponse(runningWorkTask, 202))
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+        await vi.waitFor(() => expect(pendingLookups).toHaveLength(1))
+
+        findButton(root, 'P2 Engineer').click()
+        await nextTick()
+        findButton(root, "Discover contact's").click()
+        await vi.waitFor(() => expect(pendingLookups).toHaveLength(2))
+
+        findButton(root, 'P1 Engineer').click()
+        await nextTick()
+        findButton(root, "Discover contact's").click()
+        await vi.waitFor(() => expect(pendingLookups).toHaveLength(3))
+
+        expect(pendingLookups.map(({ postId }) => postId)).toEqual([
+            posts[0]!.id,
+            posts[1]!.id,
+            posts[0]!.id,
+        ])
+
+        pendingLookups[0]!.resolve(jsonResponse([]))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/health'))).toBe(
+            false,
+        )
+        expect(FakeEventSource.instances).toHaveLength(0)
+        expect(findButton(root, "Discover contact's").disabled).toBe(true)
+
+        pendingLookups[2]!.resolve(jsonResponse([savedContact]))
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+            ).not.toBeNull()
+        })
+        expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/health'))).toBe(
+            false,
+        )
+        expect(FakeEventSource.instances).toHaveLength(0)
+
+        pendingLookups[1]!.resolve(jsonResponse([]))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(
+            root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+        ).not.toBeNull()
+        expect(FakeEventSource.instances).toHaveLength(0)
+    })
+
+    it('navigates a first discovery with cancel available only in the stream', async () => {
+        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+        let resolveContacts: ((response: Response) => void) | undefined
+        const contactsResponse = new Promise<Response>((resolve) => {
+            resolveContacts = resolve
+        })
+        const fetchMock = vi.mocked(fetch).mockReset()
+        fetchMock.mockImplementation((input, init) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/labeled')) {
+                return Promise.resolve(jsonResponse(posts))
+            }
+
+            if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
+                return contactsResponse
             }
 
             if (url.endsWith('/health')) {
@@ -303,8 +497,23 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        const discoverButton = findButton(root, 'Discover outreach')
+        const discoverButton = findButton(root, "Discover contact's")
         discoverButton.click()
+
+        await vi.waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    fetchUrl(input).endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`),
+                ),
+            ).toBe(true)
+        })
+
+        expect(root.querySelector('.apply-job-post-view')?.classList.contains('is-active')).toBe(
+            true,
+        )
+        expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(false)
+
+        resolveContacts?.(jsonResponse([]))
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(1)
@@ -325,9 +534,6 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(root.querySelector('[aria-label="View outreach progress"]')).not.toBeNull()
-            expect(
-                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
-            ).not.toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
             expect(root.querySelector('.contact-history')).not.toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
@@ -336,35 +542,6 @@ describe('apply view', () => {
         expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel'))).toBe(
             false,
         )
-
-        root.querySelector<HTMLButtonElement>(
-            '[aria-label="Open outreach draft for Grace Hopper"]',
-        )?.click()
-
-        await vi.waitFor(() => {
-            expect(root.textContent).toContain('Messaged')
-            expect(
-                root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
-            ).toBe(savedContact.draftMessage)
-        })
-
-        const draftSendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
-
-        expect(
-            root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.disabled,
-        ).toBe(true)
-        expect(draftSendButton?.getAttribute('aria-busy')).toBeNull()
-        expect(draftSendButton?.querySelector('.loading-spinner')).toBeNull()
-        expect(draftSendButton?.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
-        expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('.contact-history')).not.toBeNull()
-            expect(root.querySelector('[aria-label="View outreach progress"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-        })
 
         root.querySelector<HTMLButtonElement>('[aria-label="View outreach progress"]')?.click()
 
@@ -404,7 +581,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P2 Engineer').click()
-        const discoverButton = findButton(root, 'Discover outreach')
+        const discoverButton = findButton(root, "Discover contact's")
         discoverButton.click()
 
         await vi.waitFor(() => {
@@ -782,7 +959,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         expect(root.textContent).not.toContain('Message draft')
@@ -817,7 +994,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
@@ -848,7 +1025,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -906,7 +1083,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -993,7 +1170,7 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
@@ -1003,7 +1180,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -1053,7 +1230,7 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
             .mockReturnValueOnce(actionResponse)
@@ -1062,7 +1239,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)
@@ -1105,7 +1282,7 @@ describe('apply view', () => {
         const root = await mountApplyView(pinia)
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
+        findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)

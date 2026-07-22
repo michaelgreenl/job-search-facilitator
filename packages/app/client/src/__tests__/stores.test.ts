@@ -190,7 +190,7 @@ describe('outreach store', () => {
             }),
         )
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         await store.applyTaskResult(output)
         store.draft = 'Edited draft'
         await store.applyTaskResult(output)
@@ -217,7 +217,7 @@ describe('outreach store', () => {
             .mockResolvedValueOnce(jsonResponse(savedContact, 201))
         const store = useOutreachStore()
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         await store.fetchContacts(post.id)
         const completedContact = await store.applyTaskResult({
             personName: savedContact.personName,
@@ -272,7 +272,7 @@ describe('outreach store', () => {
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         const completedContact = store.applyTaskResult({
             personName: savedContact.personName,
             personTitle: savedContact.personTitle,
@@ -280,7 +280,7 @@ describe('outreach store', () => {
             relevanceRationale: savedContact.relevanceRationale,
             draftMessage: savedContact.draftMessage,
         })
-        store.begin(nextPostId)
+        store.beginDiscovery(nextPostId)
         resolveSave?.(jsonResponse(savedContact, 201))
 
         await expect(completedContact).resolves.toBeNull()
@@ -297,7 +297,7 @@ describe('outreach store', () => {
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         const completedContact = store.applyTaskResult({
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',
@@ -305,7 +305,7 @@ describe('outreach store', () => {
             relevanceRationale: 'Her title aligns with the role.',
             draftMessage: 'Initial draft',
         })
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         resolveSave?.(jsonResponse({ error: 'Previous save failed' }, 500))
 
         await expect(completedContact).resolves.toBeNull()
@@ -334,7 +334,7 @@ describe('outreach store', () => {
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         const completedContact = store.applyTaskResult({
             personName: savedContact.personName,
             personTitle: savedContact.personTitle,
@@ -342,7 +342,7 @@ describe('outreach store', () => {
             relevanceRationale: savedContact.relevanceRationale,
             draftMessage: savedContact.draftMessage,
         })
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         resolveSave?.(jsonResponse(savedContact, 201))
 
         await expect(completedContact).resolves.toBeNull()
@@ -359,7 +359,7 @@ describe('outreach store', () => {
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
 
-        store.begin(post.id)
+        store.beginDiscovery(post.id)
         const completedContact = store.applyTaskResult({
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',

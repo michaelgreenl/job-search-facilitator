@@ -47,9 +47,13 @@ export const useOutreachStore = defineStore('outreach', () => {
     const discovering = computed(() => taskKind.value === 'contact')
     const drafting = computed(() => taskKind.value === 'draft')
     let resultRevision = 0
+    let contactRequestRevision = 0
 
-    function begin(post: string) {
+    function openForPost(post: string) {
         resultRevision += 1
+        contactRequestRevision += 1
+        contactsLoading.value = false
+        contactsError.value = null
 
         if (postId.value !== post) {
             contacts.value = []
@@ -59,11 +63,17 @@ export const useOutreachStore = defineStore('outreach', () => {
         contact.value = null
         draft.value = ''
         assistantReply.value = null
-        taskKind.value = 'contact'
+        taskKind.value = null
         resultError.value = null
     }
 
+    function beginDiscovery(post: string) {
+        openForPost(post)
+        taskKind.value = 'contact'
+    }
+
     async function fetchContacts(post: string) {
+        const requestRevision = ++contactRequestRevision
         contactsLoading.value = true
         contactsError.value = null
 
@@ -72,18 +82,22 @@ export const useOutreachStore = defineStore('outreach', () => {
                 `/job-posts/${encodeURIComponent(post)}/outreach-contacts`,
             )
 
-            if (postId.value === post) {
-                contacts.value = savedContacts
-            }
-        } catch (error) {
-            if (postId.value === post) {
-                contactsError.value =
-                    error instanceof Error ? error.message : 'Could not load outreach contacts'
+            if (postId.value !== post || contactRequestRevision !== requestRevision) {
+                return null
             }
 
+            contacts.value = savedContacts
+            return savedContacts
+        } catch (error) {
+            if (postId.value !== post || contactRequestRevision !== requestRevision) {
+                return null
+            }
+
+            contactsError.value =
+                error instanceof Error ? error.message : 'Could not load outreach contacts'
             throw error
         } finally {
-            if (postId.value === post) {
+            if (postId.value === post && contactRequestRevision === requestRevision) {
                 contactsLoading.value = false
             }
         }
@@ -206,6 +220,7 @@ export const useOutreachStore = defineStore('outreach', () => {
 
     function reset() {
         resultRevision += 1
+        contactRequestRevision += 1
         postId.value = null
         contacts.value = []
         contact.value = null
@@ -228,7 +243,8 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsError,
         discovering,
         drafting,
-        begin,
+        openForPost,
+        beginDiscovery,
         fetchContacts,
         selectContact,
         clearContact,

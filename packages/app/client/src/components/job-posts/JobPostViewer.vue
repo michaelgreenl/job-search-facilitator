@@ -33,7 +33,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
-    startOutreach: []
+    openOutreach: []
     markApplied: []
     back: []
 }>()
@@ -157,9 +157,9 @@ function selectLabel(value: string) {
                 class="post-action-button"
                 type="button"
                 :disabled="outreachDisabled"
-                @click="emit('startOutreach')"
+                @click="emit('openOutreach')"
             >
-                Discover outreach
+                Discover contact's
             </button>
         </div>
     </section>

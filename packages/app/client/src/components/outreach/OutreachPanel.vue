@@ -44,7 +44,9 @@ const {
     draft,
     resultError,
 } = storeToRefs(outreachStore)
-const panelView = shallowRef<PanelView>(contact.value === null ? 'stream' : 'draft')
+const panelView = shallowRef<PanelView>(
+    contact.value !== null ? 'draft' : discovering.value ? 'stream' : 'contacts',
+)
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -80,7 +82,7 @@ watch(
 watch(
     () => props.post.id,
     () => {
-        panelView.value = 'stream'
+        panelView.value = discovering.value ? 'stream' : 'contacts'
     },
 )
 
@@ -93,6 +95,12 @@ watch(
     },
     { immediate: true },
 )
+
+watch(contact, (selectedContact) => {
+    if (selectedContact === null && !discovering.value) {
+        panelView.value = 'contacts'
+    }
+})
 
 watch(
     [actionNeedsAttention, actionSubmitting],

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -32,7 +32,11 @@ const isPostFilter = (value: string): value is PostFilter =>
 const postStore = usePostStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { postId: outreachPostId, contact: outreachContact } = storeToRefs(outreachStore)
+const {
+    postId: outreachPostId,
+    contact: outreachContact,
+    contactsLoading,
+} = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
@@ -46,6 +50,11 @@ const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
 const retainedAppliedPostIds = reactive(new Set<string>())
+let viewMounted = true
+
+onBeforeUnmount(() => {
+    viewMounted = false
+})
 
 const actionablePosts = computed(() =>
     postStore.posts.filter(
@@ -132,16 +141,43 @@ function showViewer() {
     activePanel.value = 'viewer'
 }
 
-function startOutreach() {
-    if (selectedPost.value === null || workStore.taskActive) {
+async function openOutreach() {
+    const post = selectedPost.value
+
+    if (post === null || workStore.taskActive || contactsLoading.value) {
         return
     }
 
-    outreachStore.begin(selectedPost.value.id)
+    outreachStore.openForPost(post.id)
     outreachExpanded.value = false
-    activePanel.value = 'outreach'
-    void outreachStore.fetchContacts(selectedPost.value.id).catch(() => undefined)
-    void workStore.startTask(createOutreachTask(selectedPost.value)).catch(() => undefined)
+
+    try {
+        const savedContacts = await outreachStore.fetchContacts(post.id)
+
+        if (
+            !viewMounted ||
+            workStore.taskActive ||
+            savedContacts === null ||
+            outreachStore.postId !== post.id ||
+            selectedPostId.value !== post.id
+        ) {
+            return
+        }
+
+        if (savedContacts.length > 0) {
+            activePanel.value = 'outreach'
+            return
+        }
+
+        outreachStore.beginDiscovery(post.id)
+        activePanel.value = 'outreach'
+        await workStore.startTask(createOutreachTask(post))
+    } catch {
+        if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
+            outreachStore.cancelTask()
+            activePanel.value = 'outreach'
+        }
+    }
 }
 
 async function cancelOutreach() {
@@ -282,11 +318,11 @@ onMounted(() => {
                     :back-label="workStore.taskActive ? null : 'Back to job posts'"
                     :back-mobile-only="outreachPostId === null"
                     show-outreach-action
-                    :outreach-disabled="workStore.taskActive"
+                    :outreach-disabled="workStore.taskActive || contactsLoading"
                     show-applied-option
                     @back="showPosts"
                     @update-label="updateUserLabel"
-                    @start-outreach="startOutreach"
+                    @open-outreach="openOutreach"
                     @mark-applied="markApplied"
                 />
             </FlowPanel>
