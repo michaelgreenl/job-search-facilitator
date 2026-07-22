@@ -60,6 +60,24 @@ function hide() {
     visible.value = false
 }
 
+function isInsideTrigger(target: EventTarget | null) {
+    const element = triggerElement()
+
+    return element !== null && target instanceof Node && element.contains(target)
+}
+
+function handleMouseOver(event: MouseEvent) {
+    if (isInsideTrigger(event.target)) {
+        show()
+    }
+}
+
+function handleMouseOut(event: MouseEvent) {
+    if (!isInsideTrigger(event.relatedTarget)) {
+        hide()
+    }
+}
+
 function handleViewportChange() {
     if (visible.value) {
         updatePosition()
@@ -81,8 +99,8 @@ onBeforeUnmount(() => {
     <span
         ref="container"
         class="button-tooltip"
-        @mouseenter="show"
-        @mouseleave="hide"
+        @mouseover="handleMouseOver"
+        @mouseout="handleMouseOut"
         @focusin="show"
         @focusout="hide"
         @keydown.esc.stop="hide"

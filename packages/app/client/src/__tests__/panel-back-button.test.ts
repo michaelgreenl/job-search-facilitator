@@ -84,7 +84,11 @@ describe('panel back button tooltip', () => {
             makeRect({ height: 32, left: 0, top: 0, width: 200 }),
         )
 
-        trigger.dispatchEvent(new MouseEvent('mouseenter'))
+        trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+        await flushPosition()
+        expect(tooltip.classList.contains('is-visible')).toBe(false)
+
+        button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         await flushPosition()
 
         expect(button.getAttribute('aria-describedby')).toBe(tooltipId)
@@ -99,7 +103,7 @@ describe('panel back button tooltip', () => {
         await nextTick()
         expect(tooltip.classList.contains('is-visible')).toBe(false)
 
-        trigger.dispatchEvent(new MouseEvent('mouseenter'))
+        button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         await flushPosition()
         expect(tooltip.classList.contains('is-visible')).toBe(true)
     })
@@ -144,11 +148,13 @@ describe('panel back button tooltip', () => {
         await nextTick()
         expect(tooltip.classList.contains('is-visible')).toBe(false)
 
-        trigger.dispatchEvent(new MouseEvent('mouseenter'))
+        button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         await flushPosition()
         expect(tooltip.classList.contains('is-visible')).toBe(true)
 
-        trigger.dispatchEvent(new MouseEvent('mouseleave'))
+        button.dispatchEvent(
+            new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }),
+        )
         await vi.waitFor(() => expect(tooltip.classList.contains('is-visible')).toBe(false))
     })
 
@@ -159,7 +165,7 @@ describe('panel back button tooltip', () => {
         vi.spyOn(button, 'getBoundingClientRect').mockImplementation(() => triggerRect)
         vi.spyOn(trigger, 'getBoundingClientRect').mockImplementation(() => triggerRect)
 
-        trigger.dispatchEvent(new MouseEvent('mouseenter'))
+        button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         await flushPosition()
         expect(tooltip.classList.contains('is-visible')).toBe(true)
 
