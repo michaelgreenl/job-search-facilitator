@@ -210,6 +210,7 @@ describe('apply view', () => {
         }
 
         expect(root.querySelector('select[aria-label="Filter job posts"]')).toBeNull()
+        expect(filter.closest('.post-filter-dropdown')).not.toBeNull()
         filter.click()
 
         await vi.waitFor(() => {

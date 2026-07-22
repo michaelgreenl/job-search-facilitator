@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
-import { USER_LABEL_ACTIONS } from './job-post-labels'
+import { USER_LABEL_OPTIONS } from './job-post-labels'
 
 const props = withDefaults(
     defineProps<{
@@ -60,8 +60,8 @@ const labelPrompt = computed(() => {
     return props.post.userLabel === null ? 'Add label' : 'Change label'
 })
 const postError = computed(() => props.applicationError ?? props.labelError)
-const labelActions = computed<ActionMenuItem[]>(() => [
-    ...USER_LABEL_ACTIONS,
+const labelOptions = computed<AppDropdownOption[]>(() => [
+    ...USER_LABEL_OPTIONS,
     ...(props.showAppliedOption
         ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
         : []),
@@ -133,11 +133,11 @@ function selectLabel(value: string) {
                 </a>
             </div>
 
-            <ActionMenu
-                class="label-picker-menu"
+            <AppDropdown
+                class="label-picker-dropdown"
                 button-label="Job post label"
                 :label="labelPrompt"
-                :items="labelActions"
+                :options="labelOptions"
                 :disabled="labelUpdating || applicationUpdating || applied"
                 @select="selectLabel"
             />
@@ -241,7 +241,7 @@ function selectLabel(value: string) {
     }
 }
 
-.label-picker-menu {
+.label-picker-dropdown {
     min-width: 9rem;
     font-size: 0.8125rem;
 }

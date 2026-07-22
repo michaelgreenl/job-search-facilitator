@@ -163,6 +163,7 @@ describe('review route selection', () => {
         })
 
         expect(root.querySelector('select')).toBeNull()
+        expect(filter.closest('.post-filter-dropdown')).not.toBeNull()
         filter.click()
 
         await vi.waitFor(() => {

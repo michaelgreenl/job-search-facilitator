@@ -2,7 +2,7 @@
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -16,14 +16,14 @@ import { usePostStore } from '@/stores/post.store'
 type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 
-const postFilterItems: ActionMenuItem[] = [
+const postFilterOptions: AppDropdownOption[] = [
     { value: 'all', label: 'All' },
     { value: 'labeled', label: 'Labeled' },
     { value: 'unreviewed', label: 'Unreviewed' },
     { value: 'forgone', label: 'Forgone', tone: 'muted' },
 ]
 const isPostFilter = (value: string): value is PostFilter =>
-    postFilterItems.some((item) => item.value === value)
+    postFilterOptions.some((option) => option.value === value)
 
 const bp = useBreakpoints()
 const route = useRoute()
@@ -135,7 +135,7 @@ const postCountLabel = computed(() => {
         : `${filteredResults.value.length} of ${total} posts`
 })
 const postFilterLabel = computed(
-    () => postFilterItems.find(({ value }) => value === postFilter.value)?.label ?? 'All',
+    () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
 )
 
 const filteredPosts = computed(() => filteredResults.value.map(({ post }) => post))
@@ -303,11 +303,11 @@ onMounted(() => {
 
                         <div class="post-filter">
                             <span>Filter</span>
-                            <ActionMenu
-                                class="post-filter-select"
+                            <AppDropdown
+                                class="post-filter-dropdown"
                                 button-label="Filter job posts"
                                 :disabled="selectedReport === null"
-                                :items="postFilterItems"
+                                :options="postFilterOptions"
                                 :label="postFilterLabel"
                                 @select="selectPostFilter"
                             />
@@ -378,7 +378,7 @@ onMounted(() => {
     color: $color-ink-muted;
     font-size: 0.75rem;
 
-    &-select {
+    &-dropdown {
         min-width: 6.5rem;
     }
 }

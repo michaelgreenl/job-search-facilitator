@@ -1,5 +1,5 @@
 <script lang="ts">
-export type ActionMenuTone =
+export type AppDropdownTone =
     | 'default'
     | 'muted'
     | 'priority-high'
@@ -7,10 +7,10 @@ export type ActionMenuTone =
     | 'quick'
     | 'success'
 
-export interface ActionMenuItem {
+export interface AppDropdownOption {
     value: string
     label: string
-    tone?: ActionMenuTone
+    tone?: AppDropdownTone
     separatorBefore?: boolean
 }
 </script>
@@ -22,7 +22,7 @@ import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 const props = defineProps<{
     buttonLabel: string
     disabled: boolean
-    items: ActionMenuItem[]
+    options: AppDropdownOption[]
     label: string
 }>()
 
@@ -36,12 +36,12 @@ const root = useTemplateRef<HTMLElement>('root')
 const trigger = useTemplateRef<HTMLButtonElement>('trigger')
 const menu = useTemplateRef<HTMLElement>('menu')
 
-const itemButtons = () => [
+const optionButtons = () => [
     ...(menu.value?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
 ]
 
-function focusItem(index: number) {
-    const buttons = itemButtons()
+function focusOption(index: number) {
+    const buttons = optionButtons()
     buttons.at(Math.max(0, Math.min(index, buttons.length - 1)))?.focus()
 }
 
@@ -52,7 +52,7 @@ async function showMenu(focus: 'first' | 'last' = 'first') {
 
     open.value = true
     await nextTick()
-    focusItem(focus === 'first' ? 0 : itemButtons().length - 1)
+    focusOption(focus === 'first' ? 0 : optionButtons().length - 1)
 }
 
 function hideMenu(restoreFocus = false) {
@@ -72,7 +72,7 @@ function toggleMenu() {
 }
 
 function moveFocus(offset: number) {
-    const buttons = itemButtons()
+    const buttons = optionButtons()
 
     if (buttons.length === 0) {
         return
@@ -83,7 +83,7 @@ function moveFocus(offset: number) {
     buttons[nextIndex]?.focus()
 }
 
-function selectItem(value: string) {
+function selectOption(value: string) {
     emit('select', value)
     hideMenu(true)
 }
@@ -108,10 +108,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 </script>
 
 <template>
-    <div ref="root" class="action-menu">
+    <div ref="root" class="app-dropdown">
         <button
             ref="trigger"
-            class="action-menu-trigger"
+            class="app-dropdown-trigger"
             type="button"
             aria-haspopup="menu"
             :aria-label="buttonLabel"
@@ -123,40 +123,40 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             @keydown.up.prevent="showMenu('last')"
         >
             <span>{{ label }}</span>
-            <ChevronDownIcon class="action-menu-chevron" />
+            <ChevronDownIcon class="app-dropdown-chevron" />
         </button>
 
         <ul
             v-if="open"
             :id="menuId"
             ref="menu"
-            class="action-menu-list glass-frame"
+            class="app-dropdown-list glass-frame"
             role="menu"
             :aria-label="buttonLabel"
             @keydown.down.prevent="moveFocus(1)"
             @keydown.up.prevent="moveFocus(-1)"
-            @keydown.home.prevent="focusItem(0)"
-            @keydown.end.prevent="focusItem(itemButtons().length - 1)"
+            @keydown.home.prevent="focusOption(0)"
+            @keydown.end.prevent="focusOption(optionButtons().length - 1)"
             @keydown.esc.prevent="hideMenu(true)"
             @keydown.tab="hideMenu()"
         >
             <li
-                v-for="item in items"
-                :key="item.value"
-                class="action-menu-option"
-                :class="{ 'has-separator': item.separatorBefore }"
+                v-for="option in options"
+                :key="option.value"
+                class="app-dropdown-option"
+                :class="{ 'has-separator': option.separatorBefore }"
                 role="none"
             >
                 <button
-                    class="action-menu-item"
-                    :class="`action-menu-item-${item.tone ?? 'default'}`"
+                    class="app-dropdown-item"
+                    :class="`app-dropdown-item-${option.tone ?? 'default'}`"
                     type="button"
                     role="menuitem"
                     tabindex="-1"
-                    @click="selectItem(item.value)"
+                    @click="selectOption(option.value)"
                 >
-                    <span class="action-menu-marker" aria-hidden="true"></span>
-                    <span>{{ item.label }}</span>
+                    <span class="app-dropdown-marker" aria-hidden="true"></span>
+                    <span>{{ option.label }}</span>
                 </button>
             </li>
         </ul>
@@ -164,12 +164,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 </template>
 
 <style scoped lang="scss">
-.action-menu {
+.app-dropdown {
     position: relative;
     display: inline-flex;
 }
 
-.action-menu-trigger {
+.app-dropdown-trigger {
     display: inline-flex;
     gap: $space-3;
     align-items: center;
@@ -197,7 +197,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.action-menu-chevron {
+.app-dropdown-chevron {
     width: 0.875rem;
     height: 0.875rem;
     fill: none;
@@ -212,7 +212,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.action-menu-list {
+.app-dropdown-list {
     position: absolute;
     top: calc(100% + $space-2);
     right: 0;
@@ -227,13 +227,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     border-radius: $radius-md;
 }
 
-.action-menu-option.has-separator {
+.app-dropdown-option.has-separator {
     padding-top: $space-2;
     margin-top: $space-1;
     border-top: 1px solid $color-ink-alpha-12;
 }
 
-.action-menu-item {
+.app-dropdown-item {
     display: grid;
     grid-template-columns: 0.625rem minmax(0, 1fr);
     gap: $space-3;
@@ -264,33 +264,33 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.action-menu-marker {
+.app-dropdown-marker {
     width: 0.5rem;
     height: 0.5rem;
     background: $color-ink-muted;
     border-radius: $radius-full;
 
-    .action-menu-item-priority-high & {
+    .app-dropdown-item-priority-high & {
         background: lighten-color($color-red-600, 25%);
         box-shadow: 0 0 0 3px $color-red-600-alpha-14;
     }
 
-    .action-menu-item-priority-medium & {
+    .app-dropdown-item-priority-medium & {
         background: $color-amber-500;
         box-shadow: 0 0 0 3px $color-amber-500-alpha-12;
     }
 
-    .action-menu-item-quick & {
+    .app-dropdown-item-quick & {
         background: $color-signal-light;
         box-shadow: 0 0 0 3px $color-signal-alpha-14;
     }
 
-    .action-menu-item-success & {
+    .app-dropdown-item-success & {
         background: lighten-color($color-green-600, 25%);
         box-shadow: 0 0 0 3px $color-green-600-alpha-16;
     }
 
-    .action-menu-item-muted & {
+    .app-dropdown-item-muted & {
         background: transparent;
         border: 1px solid $color-ink-muted;
     }

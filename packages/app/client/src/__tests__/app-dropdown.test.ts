@@ -2,9 +2,9 @@
 
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 
-const items: ActionMenuItem[] = [
+const options: AppDropdownOption[] = [
     { value: 'P1', label: 'P1', tone: 'priority-high' },
     { value: 'P2', label: 'P2', tone: 'priority-medium' },
     { value: 'applied', label: 'Applied', tone: 'success' },
@@ -13,14 +13,14 @@ const items: ActionMenuItem[] = [
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
-function mountActionMenu(onSelect = vi.fn()) {
+function mountAppDropdown(onSelect = vi.fn()) {
     const root = document.createElement('div')
     document.body.append(root)
 
-    const app = createApp(ActionMenu, {
+    const app = createApp(AppDropdown, {
         buttonLabel: 'Job post label',
         disabled: false,
-        items,
+        options,
         label: 'Change label',
         onSelect,
     })
@@ -37,19 +37,19 @@ afterEach(() => {
     }
 })
 
-describe('ActionMenu', () => {
+describe('AppDropdown', () => {
     it('supports menu-button keyboard navigation and selection', async () => {
-        const { onSelect, root } = mountActionMenu()
+        const { onSelect, root } = mountAppDropdown()
         const trigger = root.querySelector<HTMLButtonElement>('[aria-label="Job post label"]')
 
         if (trigger === null) {
-            throw new Error('Could not find action menu trigger')
+            throw new Error('Could not find dropdown trigger')
         }
 
         expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
         expect(trigger.getAttribute('aria-expanded')).toBe('false')
-        expect(trigger.querySelector('.action-menu-chevron')?.tagName.toLowerCase()).toBe('svg')
-        expect(trigger.querySelector('.action-menu-chevron path')?.getAttribute('d')).toBe(
+        expect(trigger.querySelector('.app-dropdown-chevron')?.tagName.toLowerCase()).toBe('svg')
+        expect(trigger.querySelector('.app-dropdown-chevron path')?.getAttribute('d')).toBe(
             'm4 6 4 4 4-4',
         )
 
@@ -87,7 +87,7 @@ describe('ActionMenu', () => {
             ({ textContent }) => textContent?.trim() === 'Applied',
         )
 
-        expect(applied?.classList.contains('action-menu-item-success')).toBe(true)
+        expect(applied?.classList.contains('app-dropdown-item-success')).toBe(true)
         applied?.click()
 
         await vi.waitFor(() => {

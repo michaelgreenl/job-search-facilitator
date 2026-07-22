@@ -2,7 +2,7 @@
 import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
-import ActionMenu, { type ActionMenuItem } from '@/components/app/ActionMenu.vue'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
@@ -19,7 +19,7 @@ type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
-const postFilterItems: ActionMenuItem[] = [
+const postFilterOptions: AppDropdownOption[] = [
     { value: 'all', label: 'All' },
     ...applyLabels.map((label) => ({
         value: label,
@@ -62,7 +62,7 @@ const filteredPosts = computed(() =>
         : actionablePosts.value.filter(({ userLabel }) => userLabel === postFilter.value),
 )
 const postFilterLabel = computed(
-    () => postFilterItems.find(({ value }) => value === postFilter.value)?.label ?? 'All',
+    () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
 )
 
 const selectedPost = computed(
@@ -241,11 +241,11 @@ onMounted(() => {
 
                         <div class="post-filter">
                             <span>Filter</span>
-                            <ActionMenu
-                                class="post-filter-select"
+                            <AppDropdown
+                                class="post-filter-dropdown"
                                 button-label="Filter job posts"
                                 :disabled="false"
-                                :items="postFilterItems"
+                                :options="postFilterOptions"
                                 :label="postFilterLabel"
                                 @select="selectPostFilter"
                             />
@@ -368,7 +368,7 @@ onMounted(() => {
     gap: $space-3;
     align-items: center;
 
-    &-select {
+    &-dropdown {
         min-width: 7rem;
     }
 }
