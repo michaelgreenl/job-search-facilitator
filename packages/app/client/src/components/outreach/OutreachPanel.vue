@@ -237,15 +237,18 @@ async function copyDraft() {
                 @show-stream="showStream"
             />
 
-            <button
-                class="discover-contact-button"
-                type="button"
-                aria-label="Discover another contact"
-                :disabled="taskActive || contactsLoading || contactSaving"
-                @click="emit('discover')"
-            >
-                <span aria-hidden="true">+</span>
-            </button>
+            <ButtonTooltip v-slot="{ tooltipId }" class="discover-contact-tooltip" label="Find new">
+                <button
+                    class="discover-contact-button"
+                    type="button"
+                    aria-label="Discover another contact"
+                    :aria-describedby="tooltipId"
+                    :disabled="taskActive || contactsLoading || contactSaving"
+                    @click="emit('discover')"
+                >
+                    <span aria-hidden="true">+</span>
+                </button>
+            </ButtonTooltip>
         </template>
 
         <template v-else-if="panelView === 'draft' && contact">
@@ -301,11 +304,14 @@ async function copyDraft() {
     align-items: center;
 }
 
+.discover-contact-tooltip {
+    align-self: flex-end;
+}
+
 .discover-contact-button {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    align-self: flex-end;
     justify-content: center;
     width: 2.25rem;
     height: 2.25rem;

@@ -347,8 +347,14 @@ describe('apply view', () => {
         const addContactButton = root.querySelector<HTMLButtonElement>(
             '[aria-label="Discover another contact"]',
         )
+        const addContactTooltipId = addContactButton?.getAttribute('aria-describedby')
+        const addContactTooltip = addContactTooltipId
+            ? document.getElementById(addContactTooltipId)
+            : null
 
         expect(addContactButton?.textContent?.trim()).toBe('+')
+        expect(addContactTooltip?.getAttribute('role')).toBe('tooltip')
+        expect(addContactTooltip?.textContent?.trim()).toBe('Find new')
         expect(addContactButton?.disabled).toBe(false)
         addContactButton?.click()
 
