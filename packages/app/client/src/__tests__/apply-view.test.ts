@@ -274,13 +274,23 @@ describe('apply view', () => {
         })
     })
 
-    it('opens saved contacts without starting another discovery', async () => {
+    it('opens and updates saved contacts without starting another discovery', async () => {
+        let resolveContactUpdate: ((response: Response) => void) | undefined
+        const contactUpdateResponse = new Promise<Response>((resolve) => {
+            resolveContactUpdate = resolve
+        })
+        const updatedContact = {
+            ...savedContact,
+            messaged: false,
+            updatedAt: '2026-07-22T12:00:00.000Z',
+        }
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockReturnValueOnce(contactUpdateResponse)
+            .mockResolvedValueOnce(jsonResponse([updatedContact]))
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -295,9 +305,31 @@ describe('apply view', () => {
             ).not.toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.querySelector('.contact-history input[type="checkbox"]')).toBeNull()
         })
         expect(FakeEventSource.instances).toHaveLength(0)
         expect(fetchMock).toHaveBeenCalledTimes(2)
+
+        const contactFilter = root.querySelector<HTMLButtonElement>(
+            'button[aria-label="Filter saved contacts"]',
+        )
+
+        if (contactFilter === null) {
+            throw new Error('Could not find saved contact filter')
+        }
+
+        contactFilter.click()
+        await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).not.toBeNull())
+        const messagedFilter = [
+            ...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+        ].find(({ textContent }) => textContent?.trim() === 'Messaged')
+
+        if (messagedFilter === undefined) {
+            throw new Error('Could not find Messaged contact filter')
+        }
+
+        messagedFilter.click()
+        await vi.waitFor(() => expect(contactFilter.textContent?.trim()).toBe('Messaged'))
 
         root.querySelector<HTMLButtonElement>(
             '[aria-label="Open outreach draft for Grace Hopper"]',
@@ -310,14 +342,131 @@ describe('apply view', () => {
             ).toBe(savedContact.draftMessage)
         })
 
+        const messagedCheckbox = root.querySelector<HTMLInputElement>(
+            '.draft-contact-card input[type="checkbox"]',
+        )
+
+        if (messagedCheckbox === null) {
+            throw new Error('Could not find draft contact messaged checkbox')
+        }
+
+        expect(messagedCheckbox.checked).toBe(true)
+        messagedCheckbox.checked = false
+        messagedCheckbox.dispatchEvent(new Event('change', { bubbles: true }))
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenCalledTimes(3)
+            expect(messagedCheckbox.checked).toBe(true)
+            expect(messagedCheckbox.disabled).toBe(true)
+            expect(findButton(root, "Discover contact's").disabled).toBe(true)
+        })
+
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+            expect(
+                root.querySelector<HTMLButtonElement>('[aria-label="Discover another contact"]')
+                    ?.disabled,
+            ).toBe(true)
+            expect(
+                root
+                    .querySelector<HTMLButtonElement>('button[aria-label="Filter saved contacts"]')
+                    ?.textContent?.trim(),
+            ).toBe('Messaged')
+        })
+
+        root.querySelector<HTMLButtonElement>(
+            '[aria-label="Open outreach draft for Grace Hopper"]',
+        )?.click()
+
+        const pendingCheckbox = await vi.waitFor(() => {
+            const checkbox = root.querySelector<HTMLInputElement>(
+                '.draft-contact-card input[type="checkbox"]',
+            )
+
+            if (checkbox === null) {
+                throw new Error('Could not find pending messaged checkbox')
+            }
+
+            expect(checkbox.disabled).toBe(true)
+            return checkbox
+        })
+
+        resolveContactUpdate?.(jsonResponse(updatedContact))
+
+        await vi.waitFor(() => {
+            expect(pendingCheckbox.checked).toBe(false)
+            expect(pendingCheckbox.disabled).toBe(false)
+            expect(findButton(root, "Discover contact's").disabled).toBe(false)
+        })
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            3,
+            `http://localhost:3000/api/job-posts/${savedContact.jobPostId}/outreach-contacts/${savedContact.id}`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messaged: false }),
+            },
+        )
+
         findButton(root, "Discover contact's").click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('.contact-history')).not.toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
+            expect(root.textContent).toContain('No contacts match this filter.')
+            expect(root.textContent).not.toContain('Grace Hopper')
+            expect(
+                root
+                    .querySelector<HTMLButtonElement>('button[aria-label="Filter saved contacts"]')
+                    ?.textContent?.trim(),
+            ).toBe('Messaged')
         })
         expect(FakeEventSource.instances).toHaveLength(0)
-        expect(fetchMock).toHaveBeenCalledTimes(3)
+        expect(fetchMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('shows a failed messaged update in the drafting card', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
+            ).not.toBeNull()
+        })
+        root.querySelector<HTMLButtonElement>(
+            '[aria-label="Open outreach draft for Grace Hopper"]',
+        )?.click()
+
+        const checkbox = await vi.waitFor(() => {
+            const control = root.querySelector<HTMLInputElement>(
+                '.draft-contact-card input[type="checkbox"]',
+            )
+
+            if (control === null) {
+                throw new Error('Could not find messaged checkbox')
+            }
+
+            return control
+        })
+        checkbox.checked = false
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+                'API request failed (500)',
+            )
+            expect(checkbox.checked).toBe(true)
+            expect(checkbox.disabled).toBe(false)
+        })
     })
 
     it('navigates back from an expanded draft through contacts to the job post', async () => {

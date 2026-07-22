@@ -2,6 +2,7 @@ import type {
     JsonObject,
     OutreachContact,
     OutreachContactInput,
+    UpdateOutreachContactInput,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef } from 'vue'
@@ -42,6 +43,8 @@ export const useOutreachStore = defineStore('outreach', () => {
     const assistantReply = shallowRef<string | null>(null)
     const taskKind = shallowRef<OutreachTaskKind | null>(null)
     const contactSaving = shallowRef(false)
+    const contactUpdating = shallowRef(false)
+    const contactUpdateError = shallowRef<string | null>(null)
     const resultError = shallowRef<string | null>(null)
     const contactsLoading = shallowRef(false)
     const contactsError = shallowRef<string | null>(null)
@@ -49,12 +52,16 @@ export const useOutreachStore = defineStore('outreach', () => {
     const drafting = computed(() => taskKind.value === 'draft')
     let resultRevision = 0
     let contactRequestRevision = 0
+    let contactUpdateRevision = 0
 
     function openForPost(post: string) {
         resultRevision += 1
         contactRequestRevision += 1
+        contactUpdateRevision += 1
         contactsLoading.value = false
         contactsError.value = null
+        contactUpdating.value = false
+        contactUpdateError.value = null
 
         if (postId.value !== post) {
             contacts.value = []
@@ -110,12 +117,67 @@ export const useOutreachStore = defineStore('outreach', () => {
         draft.value = selectedContact.draftMessage
         assistantReply.value = null
         resultError.value = null
+        contactUpdateError.value = null
     }
 
     function clearContact() {
         contact.value = null
         draft.value = ''
         assistantReply.value = null
+        contactUpdateError.value = null
+    }
+
+    async function updateContactMessaged(contactId: string, messaged: boolean) {
+        const activePostId = postId.value
+
+        if (activePostId === null || contactUpdating.value) {
+            return null
+        }
+
+        const updateRevision = ++contactUpdateRevision
+        const input: UpdateOutreachContactInput = { messaged }
+        contactUpdating.value = true
+        contactUpdateError.value = null
+
+        try {
+            const updatedContact = await request<OutreachContact>(
+                `/job-posts/${encodeURIComponent(activePostId)}/outreach-contacts/${encodeURIComponent(contactId)}`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(input),
+                },
+            )
+
+            if (postId.value !== activePostId || contactUpdateRevision !== updateRevision) {
+                return null
+            }
+
+            contacts.value = contacts.value.map((savedContact) =>
+                savedContact.id === updatedContact.id ? updatedContact : savedContact,
+            )
+
+            if (contact.value?.id === updatedContact.id) {
+                contact.value = updatedContact
+            }
+
+            return updatedContact
+        } catch (error) {
+            if (
+                postId.value === activePostId &&
+                contactUpdateRevision === updateRevision &&
+                contact.value?.id === contactId
+            ) {
+                contactUpdateError.value =
+                    error instanceof Error ? error.message : 'Could not update contact status'
+            }
+
+            throw error
+        } finally {
+            if (postId.value === activePostId && contactUpdateRevision === updateRevision) {
+                contactUpdating.value = false
+            }
+        }
     }
 
     function beginDraft() {
@@ -232,6 +294,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     function reset() {
         resultRevision += 1
         contactRequestRevision += 1
+        contactUpdateRevision += 1
         postId.value = null
         contacts.value = []
         contact.value = null
@@ -239,6 +302,8 @@ export const useOutreachStore = defineStore('outreach', () => {
         assistantReply.value = null
         taskKind.value = null
         contactSaving.value = false
+        contactUpdating.value = false
+        contactUpdateError.value = null
         resultError.value = null
         contactsLoading.value = false
         contactsError.value = null
@@ -251,6 +316,8 @@ export const useOutreachStore = defineStore('outreach', () => {
         draft,
         assistantReply,
         contactSaving,
+        contactUpdating,
+        contactUpdateError,
         resultError,
         contactsLoading,
         contactsError,
@@ -261,6 +328,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         fetchContacts,
         selectContact,
         clearContact,
+        updateContactMessaged,
         beginDraft,
         applyTaskResult,
         cancelTask,

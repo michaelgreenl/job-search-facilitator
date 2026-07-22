@@ -36,6 +36,7 @@ const {
     postId: outreachPostId,
     contact: outreachContact,
     contactSaving,
+    contactUpdating,
     contactsLoading,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
@@ -85,6 +86,7 @@ const outreachActionDisabled = computed(
     () =>
         contactsLoading.value ||
         contactSaving.value ||
+        contactUpdating.value ||
         (workStore.taskActive &&
             (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
 )
@@ -154,6 +156,7 @@ async function startContactDiscovery(post: JobPost) {
         !viewMounted ||
         workStore.taskActive ||
         contactSaving.value ||
+        contactUpdating.value ||
         contactsLoading.value ||
         outreachStore.postId !== post.id ||
         selectedPostId.value !== post.id
@@ -185,7 +188,7 @@ function discoverAnotherContact() {
 async function openOutreach() {
     const post = selectedPost.value
 
-    if (post === null || contactSaving.value || contactsLoading.value) {
+    if (post === null || contactSaving.value || contactUpdating.value || contactsLoading.value) {
         return
     }
 

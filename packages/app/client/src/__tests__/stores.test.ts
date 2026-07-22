@@ -24,6 +24,19 @@ const post: JobPost = {
     updatedAt: '2026-07-13T12:00:00.000Z',
 }
 
+const savedContact: OutreachContact = {
+    id: 'contact-1',
+    jobPostId: post.id,
+    personName: 'Ada Lovelace',
+    personTitle: 'Engineering Manager',
+    profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    relevanceRationale: 'Her title aligns with the role.',
+    draftMessage: 'Initial draft',
+    messaged: false,
+    createdAt: '2026-07-21T12:00:00.000Z',
+    updatedAt: '2026-07-21T12:00:00.000Z',
+}
+
 const report: JobSearchReport = {
     id: 'report-1',
     reportDate: '2026-07-13',
@@ -170,6 +183,78 @@ describe('outreach store', () => {
         vi.stubGlobal('fetch', vi.fn())
     })
 
+    it('updates the selected and saved contact from the messaged PATCH response', async () => {
+        const updatedContact = {
+            ...savedContact,
+            messaged: true,
+            updatedAt: '2026-07-22T12:00:00.000Z',
+        }
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(updatedContact))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+        store.draft = 'Locally edited draft'
+
+        const update = store.updateContactMessaged(savedContact.id, true)
+
+        expect(store.contactUpdating).toBe(true)
+        await expect(update).resolves.toEqual(updatedContact)
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts/${savedContact.id}`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messaged: true }),
+            },
+        )
+        expect(store.contact).toEqual(updatedContact)
+        expect(store.contacts).toEqual([updatedContact])
+        expect(store.draft).toBe('Locally edited draft')
+        expect(store.contactUpdating).toBe(false)
+        expect(store.contactUpdateError).toBeNull()
+    })
+
+    it('keeps the saved status and exposes an error when the messaged update fails', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+
+        await expect(store.updateContactMessaged(savedContact.id, true)).rejects.toThrow(
+            'API request failed (500)',
+        )
+
+        expect(store.contact).toEqual(savedContact)
+        expect(store.contacts).toEqual([savedContact])
+        expect(store.contactUpdating).toBe(false)
+        expect(store.contactUpdateError).toBe('API request failed (500)')
+    })
+
+    it('ignores a messaged update after outreach moves to another post', async () => {
+        let resolveUpdate: ((response: Response) => void) | undefined
+        const updateResponse = new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+        })
+        vi.mocked(fetch).mockReturnValueOnce(updateResponse)
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+
+        const update = store.updateContactMessaged(savedContact.id, true)
+        store.openForPost('post-2')
+        resolveUpdate?.(jsonResponse({ ...savedContact, messaged: true }))
+
+        await expect(update).resolves.toBeNull()
+        expect(store.postId).toBe('post-2')
+        expect(store.contact).toBeNull()
+        expect(store.contacts).toEqual([])
+        expect(store.contactUpdating).toBe(false)
+        expect(store.contactUpdateError).toBeNull()
+    })
+
     it('does not replace an edited draft with a completed task that was already applied', async () => {
         const store = useOutreachStore()
         const output = {
@@ -199,18 +284,6 @@ describe('outreach store', () => {
     })
 
     it('loads saved contacts and persists a completed discovery', async () => {
-        const savedContact: OutreachContact = {
-            id: 'contact-1',
-            jobPostId: post.id,
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
-            messaged: false,
-            createdAt: '2026-07-21T12:00:00.000Z',
-            updatedAt: '2026-07-21T12:00:00.000Z',
-        }
         const fetchMock = vi
             .mocked(fetch)
             .mockResolvedValueOnce(jsonResponse([savedContact]))
@@ -253,18 +326,6 @@ describe('outreach store', () => {
 
     it('ignores a completed discovery save after outreach moves to another post', async () => {
         const nextPostId = 'post-2'
-        const savedContact: OutreachContact = {
-            id: 'contact-1',
-            jobPostId: post.id,
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
-            messaged: false,
-            createdAt: '2026-07-21T12:00:00.000Z',
-            updatedAt: '2026-07-21T12:00:00.000Z',
-        }
         let resolveSave: ((response: Response) => void) | undefined
         const saveResponse = new Promise<Response>((resolve) => {
             resolveSave = resolve
@@ -315,18 +376,6 @@ describe('outreach store', () => {
     })
 
     it('ignores an earlier successful save after outreach restarts for the same post', async () => {
-        const savedContact: OutreachContact = {
-            id: 'contact-1',
-            jobPostId: post.id,
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
-            messaged: false,
-            createdAt: '2026-07-21T12:00:00.000Z',
-            updatedAt: '2026-07-21T12:00:00.000Z',
-        }
         let resolveSave: ((response: Response) => void) | undefined
         const saveResponse = new Promise<Response>((resolve) => {
             resolveSave = resolve

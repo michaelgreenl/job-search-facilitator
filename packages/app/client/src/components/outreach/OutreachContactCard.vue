@@ -19,18 +19,25 @@ const props = withDefaults(
         contact?: OutreachContact
         expanded?: boolean
         loading?: boolean
+        messagedError?: string | null
+        messagedUpdating?: boolean
         selectable?: boolean
+        showMessagedControl?: boolean
     }>(),
     {
         contact: undefined,
         expanded: false,
         loading: false,
+        messagedError: null,
+        messagedUpdating: false,
         selectable: false,
+        showMessagedControl: false,
     },
 )
 
 const emit = defineEmits<{
     select: []
+    updateMessaged: [messaged: boolean]
 }>()
 
 const descriptionExpanded = shallowRef(false)
@@ -79,6 +86,14 @@ function toggleRationale() {
     }
 }
 
+function updateMessaged(event: Event) {
+    const checkbox = event.currentTarget as HTMLInputElement
+    const messaged = checkbox.checked
+    // Keep the control aligned with persisted state until the PATCH response arrives.
+    checkbox.checked = props.contact?.messaged ?? false
+    emit('updateMessaged', messaged)
+}
+
 watch(
     [() => props.contact?.id, () => props.contact?.relevanceRationale, () => props.expanded],
     () => {
@@ -121,7 +136,7 @@ onBeforeUnmount(() => {
     <article
         class="contact-card"
         :class="{ 'is-selectable': selectionLabel !== null }"
-        :aria-busy="loading || undefined"
+        :aria-busy="loading || messagedUpdating || undefined"
     >
         <button
             v-if="selectionLabel"
@@ -142,7 +157,9 @@ onBeforeUnmount(() => {
         <template v-else-if="contact">
             <div class="contact-labels">
                 <span class="eyebrow">Relevant contact</span>
-                <span v-if="contact.messaged" class="messaged-status">Messaged</span>
+                <span v-if="contact.messaged && !showMessagedControl" class="messaged-status">
+                    Messaged
+                </span>
             </div>
             <a
                 class="person-name"
@@ -172,6 +189,20 @@ onBeforeUnmount(() => {
                 >
                     {{ descriptionExpanded ? 'Show less' : 'Show more' }}
                 </button>
+            </div>
+            <div v-if="showMessagedControl" class="messaged-control">
+                <label class="messaged-checkbox" :class="{ 'is-updating': messagedUpdating }">
+                    <input
+                        type="checkbox"
+                        :checked="contact.messaged"
+                        :disabled="messagedUpdating"
+                        @change="updateMessaged"
+                    />
+                    <span>Messaged</span>
+                </label>
+                <p v-if="messagedError" class="messaged-error" role="alert">
+                    {{ messagedError }}
+                </p>
             </div>
         </template>
     </article>
@@ -232,6 +263,44 @@ onBeforeUnmount(() => {
     background: $color-signal-light-alpha-18;
     border-radius: $radius-sm;
     text-transform: uppercase;
+}
+
+.messaged-control {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    align-items: flex-start;
+    margin-top: $space-2;
+}
+
+.messaged-checkbox {
+    display: inline-flex;
+    gap: $space-2;
+    align-items: center;
+    width: fit-content;
+    color: $color-ink-secondary;
+    font-size: 0.8125rem;
+    cursor: pointer;
+
+    input {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        accent-color: $color-action;
+    }
+
+    &.is-updating {
+        cursor: wait;
+        opacity: 0.55;
+    }
+}
+
+.messaged-error {
+    margin: 0;
+    color: lighten-color($color-red-600, 20%);
+    font-size: 0.75rem;
 }
 
 .person-name,

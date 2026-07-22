@@ -14,11 +14,14 @@ defineProps<{
     requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
     expanded: boolean
+    messagedError: string | null
+    messagedUpdating: boolean
 }>()
 
 const emit = defineEmits<{
     submit: []
     copy: []
+    updateMessaged: [messaged: boolean]
 }>()
 
 const draft = defineModel<string>('draft', { required: true })
@@ -29,7 +32,15 @@ const copyFeedbackId = useId()
 
 <template>
     <section class="draft-board" :class="{ 'is-expanded': expanded }" aria-label="Outreach draft">
-        <OutreachContactCard class="draft-contact-card" :contact="contact" :expanded="expanded" />
+        <OutreachContactCard
+            class="draft-contact-card"
+            :contact="contact"
+            :expanded="expanded"
+            :messaged-error="messagedError"
+            :messaged-updating="messagedUpdating"
+            show-messaged-control
+            @update-messaged="emit('updateMessaged', $event)"
+        />
 
         <div class="draft-workspace">
             <div class="draft-content">

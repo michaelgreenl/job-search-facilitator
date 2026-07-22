@@ -62,6 +62,33 @@ afterEach(() => {
 })
 
 describe('OutreachContactCard', () => {
+    it('shows an editable messaged checkbox only when requested', () => {
+        const root = document.createElement('div')
+        const onUpdateMessaged = vi.fn()
+        document.body.append(root)
+        const app = createApp(OutreachContactCard, {
+            contact,
+            showMessagedControl: true,
+            onUpdateMessaged,
+        })
+        app.mount(root)
+        mountedApps.push({ app, root })
+
+        const checkbox = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+
+        expect(checkbox?.checked).toBe(true)
+        expect(root.querySelector('.messaged-status')).toBeNull()
+
+        if (checkbox === null) {
+            throw new Error('Could not find messaged checkbox')
+        }
+
+        checkbox.checked = false
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+
+        expect(onUpdateMessaged).toHaveBeenCalledExactlyOnceWith(false)
+    })
+
     it('hides the rationale disclosure when the text fits within three lines', async () => {
         const root = document.createElement('div')
         document.body.append(root)
@@ -116,6 +143,7 @@ describe('OutreachContactCard', () => {
         mountedApps.push({ app, root })
 
         expect(root.textContent).toContain('Messaged')
+        expect(root.querySelector('input[type="checkbox"]')).toBeNull()
         const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
 
         if (rationale === null) {

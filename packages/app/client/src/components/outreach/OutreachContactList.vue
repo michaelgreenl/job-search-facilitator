@@ -1,9 +1,24 @@
+<script lang="ts">
+export type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
+</script>
+
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
+import { computed } from 'vue'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
-defineProps<{
+const contactFilterOptions: AppDropdownOption[] = [
+    { value: 'all', label: 'All' },
+    { value: 'messaged', label: 'Messaged' },
+    { value: 'not-messaged', label: 'Not Messaged' },
+]
+
+const isContactFilter = (value: string): value is OutreachContactFilter =>
+    contactFilterOptions.some((option) => option.value === value)
+
+const props = defineProps<{
     contacts: OutreachContact[]
     discovering: boolean
     error: string | null
@@ -14,22 +29,51 @@ const emit = defineEmits<{
     select: [contact: OutreachContact]
     showStream: []
 }>()
+
+const contactFilter = defineModel<OutreachContactFilter>('filter', { default: 'all' })
+const filteredContacts = computed(() => {
+    if (contactFilter.value === 'all') {
+        return props.contacts
+    }
+
+    const messaged = contactFilter.value === 'messaged'
+    return props.contacts.filter((contact) => contact.messaged === messaged)
+})
+const contactFilterLabel = computed(
+    () => contactFilterOptions.find(({ value }) => value === contactFilter.value)?.label ?? 'All',
+)
+
+function selectContactFilter(value: string) {
+    if (isContactFilter(value)) {
+        contactFilter.value = value
+    }
+}
 </script>
 
 <template>
     <section class="contact-history" aria-labelledby="contact-history-title">
         <div class="contact-history-heading">
-            <h2 id="contact-history-title" class="contact-history-title">Saved contacts</h2>
-            <span class="contact-history-count">{{ contacts.length }}</span>
+            <div class="contact-history-summary">
+                <h2 id="contact-history-title" class="contact-history-title">Saved contacts</h2>
+                <span class="contact-history-count">{{ filteredContacts.length }}</span>
+            </div>
+            <AppDropdown
+                class="contact-filter-dropdown"
+                button-label="Filter saved contacts"
+                :disabled="loading || contacts.length === 0"
+                :options="contactFilterOptions"
+                :label="contactFilterLabel"
+                @select="selectContactFilter"
+            />
         </div>
 
         <p v-if="error" class="contact-history-error" role="alert">{{ error }}</p>
 
-        <ul v-if="discovering || contacts.length > 0" class="contact-list">
+        <ul v-if="discovering || filteredContacts.length > 0" class="contact-list">
             <li v-if="discovering">
                 <OutreachContactCard loading selectable @select="emit('showStream')" />
             </li>
-            <li v-for="savedContact in contacts" :key="savedContact.id">
+            <li v-for="savedContact in filteredContacts" :key="savedContact.id">
                 <OutreachContactCard
                     :contact="savedContact"
                     selectable
@@ -39,6 +83,9 @@ const emit = defineEmits<{
         </ul>
 
         <p v-else-if="loading" class="contact-history-empty">Loading saved contacts…</p>
+        <p v-else-if="contacts.length > 0" class="contact-history-empty">
+            No contacts match this filter.
+        </p>
         <p v-else class="contact-history-empty">No saved contacts yet.</p>
     </section>
 </template>
@@ -54,8 +101,16 @@ const emit = defineEmits<{
 
 .contact-history-heading {
     display: flex;
-    align-items: baseline;
+    flex-wrap: wrap;
+    gap: $space-3;
+    align-items: center;
     justify-content: space-between;
+}
+
+.contact-history-summary {
+    display: flex;
+    gap: $space-2;
+    align-items: baseline;
 }
 
 .contact-history-title {
@@ -66,6 +121,11 @@ const emit = defineEmits<{
 .contact-history-count {
     color: $color-ink-muted;
     font-size: 0.75rem;
+}
+
+.contact-filter-dropdown {
+    min-width: 9.5rem;
+    margin-left: auto;
 }
 
 .contact-list {

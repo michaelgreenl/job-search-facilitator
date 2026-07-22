@@ -11,7 +11,7 @@ import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
 import { createDraftTask } from '@/work-tasks'
 
-import OutreachContactList from './OutreachContactList.vue'
+import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
 
 type PanelView = 'contacts' | 'draft' | 'stream'
@@ -37,6 +37,8 @@ const {
     assistantReply,
     contact,
     contactSaving,
+    contactUpdateError,
+    contactUpdating,
     contacts,
     contactsError,
     contactsLoading,
@@ -48,6 +50,7 @@ const {
 const panelView = shallowRef<PanelView>(
     contact.value !== null ? 'draft' : discovering.value ? 'stream' : 'contacts',
 )
+const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -83,6 +86,7 @@ watch(
 watch(
     () => props.post.id,
     () => {
+        contactFilter.value = 'all'
         panelView.value = discovering.value ? 'stream' : 'contacts'
     },
 )
@@ -167,6 +171,12 @@ function selectContact(selectedContact: OutreachContact) {
     panelView.value = 'draft'
 }
 
+function updateMessaged(messaged: boolean) {
+    if (contact.value !== null) {
+        void outreachStore.updateContactMessaged(contact.value.id, messaged).catch(() => undefined)
+    }
+}
+
 async function copyDraft() {
     if (!draft.value.trim()) {
         return
@@ -226,6 +236,7 @@ async function copyDraft() {
 
         <template v-if="panelView === 'contacts'">
             <OutreachContactList
+                v-model:filter="contactFilter"
                 :contacts="contacts"
                 :discovering="discovering && taskActive"
                 :error="contactsError"
@@ -240,7 +251,7 @@ async function copyDraft() {
                     type="button"
                     aria-label="Discover another contact"
                     :aria-describedby="tooltipId"
-                    :disabled="taskActive || contactsLoading || contactSaving"
+                    :disabled="taskActive || contactsLoading || contactSaving || contactUpdating"
                     @click="emit('discover')"
                 >
                     <span aria-hidden="true">+</span>
@@ -258,8 +269,11 @@ async function copyDraft() {
                 :requesting-changes="drafting && taskActive"
                 :copy-state="copyState"
                 :expanded="expanded"
+                :messaged-error="contactUpdateError"
+                :messaged-updating="contactUpdating"
                 @submit="submitDraftRequest"
                 @copy="copyDraft"
+                @update-messaged="updateMessaged"
             />
         </template>
 
