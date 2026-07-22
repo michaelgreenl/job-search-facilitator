@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed, useId } from 'vue'
+import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
 
@@ -10,6 +11,7 @@ defineProps<{
     contact: OutreachContact
     assistantReply: string | null
     running: boolean
+    requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
     expanded: boolean
 }>()
@@ -87,9 +89,11 @@ const copyFeedbackId = useId()
                         class="field-action send-button"
                         type="submit"
                         aria-label="Send request"
+                        :aria-busy="requestingChanges || undefined"
                         :disabled="running || !canSubmit"
                     >
-                        <ArrowUpIcon class="send-icon" />
+                        <LoadingSpinner v-if="requestingChanges" />
+                        <ArrowUpIcon v-else class="send-icon" />
                     </button>
                 </div>
             </form>
@@ -223,6 +227,11 @@ const copyFeedbackId = useId()
     padding: $space-2 0;
     line-height: 1;
     transform: translateY(-50%);
+
+    &[aria-busy='true'] {
+        cursor: wait;
+        opacity: 1;
+    }
 }
 
 .send-icon {

@@ -45,6 +45,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     const contactsLoading = shallowRef(false)
     const contactsError = shallowRef<string | null>(null)
     const discovering = computed(() => taskKind.value === 'contact')
+    const drafting = computed(() => taskKind.value === 'draft')
     let resultRevision = 0
 
     function begin(post: string) {
@@ -226,6 +227,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsLoading,
         contactsError,
         discovering,
+        drafting,
         begin,
         fetchContacts,
         selectContact,

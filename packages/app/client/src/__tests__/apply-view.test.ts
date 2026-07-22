@@ -335,6 +335,15 @@ describe('apply view', () => {
             ).toBe(savedContact.draftMessage)
         })
 
+        const draftSendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
+
+        expect(
+            root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.disabled,
+        ).toBe(true)
+        expect(draftSendButton?.getAttribute('aria-busy')).toBeNull()
+        expect(draftSendButton?.querySelector('.loading-spinner')).toBeNull()
+        expect(draftSendButton?.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
+
         root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
 
         await vi.waitFor(() => {
@@ -592,9 +601,16 @@ describe('apply view', () => {
         await vi.waitFor(() => expect(sendButton.disabled).toBe(false))
         expect(sendButton.closest('.request-field')).not.toBeNull()
         expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
+        expect(sendButton.querySelector('.loading-spinner')).toBeNull()
         sendButton.click()
 
-        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+        await vi.waitFor(() => {
+            expect(FakeEventSource.instances).toHaveLength(2)
+            expect(sendButton.disabled).toBe(true)
+            expect(sendButton.getAttribute('aria-busy')).toBe('true')
+            expect(sendButton.querySelector('.send-icon')).toBeNull()
+            expect(sendButton.querySelector('.loading-spinner')).not.toBeNull()
+        })
         const revisionRequest = fetchMock.mock.calls[6]
         const revisionBody = (revisionRequest?.[1] as RequestInit | undefined)?.body
 
@@ -630,6 +646,9 @@ describe('apply view', () => {
             expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
             expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
             expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
+            expect(sendButton.getAttribute('aria-busy')).toBeNull()
+            expect(sendButton.querySelector('.loading-spinner')).toBeNull()
+            expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')?.click()

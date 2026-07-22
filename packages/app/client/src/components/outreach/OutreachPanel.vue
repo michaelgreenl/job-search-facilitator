@@ -39,6 +39,7 @@ const {
     contactsError,
     contactsLoading,
     discovering,
+    drafting,
     draft,
     resultError,
 } = storeToRefs(outreachStore)
@@ -237,6 +238,7 @@ async function copyDraft() {
                 :contact="contact"
                 :assistant-reply="assistantReply"
                 :running="taskActive"
+                :requesting-changes="drafting && taskActive"
                 :copy-state="copyState"
                 :expanded="expanded"
                 @submit="submitDraftRequest"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed, shallowRef, useId, watch } from 'vue'
+import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
 
 const props = withDefaults(
     defineProps<{
@@ -39,7 +40,7 @@ watch([() => props.contact?.id, () => props.expanded], () => {
         <template v-if="loading">
             <span class="eyebrow">Relevant contact</span>
             <span class="loading-contact">
-                <span class="contact-spinner" aria-hidden="true"></span>
+                <LoadingSpinner class="contact-spinner" />
                 Discovering contact…
             </span>
         </template>
@@ -214,20 +215,5 @@ watch([() => props.contact?.id, () => props.expanded], () => {
     align-items: center;
     min-height: 2rem;
     color: $color-ink-secondary;
-}
-
-.contact-spinner {
-    width: 0.875rem;
-    height: 0.875rem;
-    border: 2px solid $color-ink-alpha-50;
-    border-top-color: $color-ink;
-    border-radius: 50%;
-    animation: contact-spin 0.8s linear infinite;
-}
-
-@keyframes contact-spin {
-    to {
-        transform: rotate(1turn);
-    }
 }
 </style>
