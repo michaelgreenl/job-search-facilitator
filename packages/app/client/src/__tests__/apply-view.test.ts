@@ -904,16 +904,26 @@ describe('apply view', () => {
             },
         )
 
+        const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
+
+        if (rationale === null) {
+            throw new Error('Could not find contact rationale')
+        }
+
+        Object.defineProperties(rationale, {
+            clientHeight: { configurable: true, value: 48 },
+            scrollHeight: { configurable: true, value: 96 },
+        })
         Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
         window.dispatchEvent(new Event('resize'))
+        await vi.waitFor(() => expect(root.textContent).toContain('Show more'))
         expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
         expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
 
-        const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
         const rationaleToggle = findButton(root, 'Show more')
         const expandControl = root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')
 
-        expect(rationale?.classList.contains('is-clamped')).toBe(true)
+        expect(rationale.classList.contains('is-clamped')).toBe(true)
         expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
         expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
         expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)

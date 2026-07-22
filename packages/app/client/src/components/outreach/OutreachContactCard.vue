@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { computed, shallowRef, useId, watch } from 'vue'
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    shallowRef,
+    useId,
+    useTemplateRef,
+    watch,
+} from 'vue'
 import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
+
+const OVERFLOW_TOLERANCE_PX = 1
 
 const props = withDefaults(
     defineProps<{
@@ -25,6 +36,9 @@ const emit = defineEmits<{
 const descriptionExpanded = shallowRef(false)
 const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.value)
 const rationaleId = useId()
+const rationaleElement = useTemplateRef<HTMLElement>('rationale')
+const rationaleOverflowing = shallowRef(false)
+let rationaleResizeObserver: ResizeObserver | null = null
 const selectionLabel = computed(() => {
     if (!props.selectable) {
         return null
@@ -37,8 +51,69 @@ const selectionLabel = computed(() => {
     return props.contact ? `Open outreach draft for ${props.contact.personName}` : null
 })
 
-watch([() => props.contact?.id, () => props.expanded], () => {
-    descriptionExpanded.value = false
+function updateRationaleOverflow() {
+    const element = rationaleElement.value
+
+    if (element === null) {
+        rationaleOverflowing.value = false
+        return
+    }
+
+    if (rationaleExpanded.value) {
+        return
+    }
+
+    rationaleOverflowing.value = element.scrollHeight - element.clientHeight > OVERFLOW_TOLERANCE_PX
+}
+
+async function updateRationaleOverflowAfterRender() {
+    await nextTick()
+    updateRationaleOverflow()
+}
+
+function toggleRationale() {
+    descriptionExpanded.value = !descriptionExpanded.value
+
+    if (!descriptionExpanded.value) {
+        void updateRationaleOverflowAfterRender()
+    }
+}
+
+watch(
+    [() => props.contact?.id, () => props.contact?.relevanceRationale, () => props.expanded],
+    () => {
+        descriptionExpanded.value = false
+        rationaleOverflowing.value = false
+        void updateRationaleOverflowAfterRender()
+    },
+)
+
+watch(
+    rationaleElement,
+    (element) => {
+        rationaleResizeObserver?.disconnect()
+        rationaleResizeObserver = null
+        rationaleOverflowing.value = false
+
+        if (typeof ResizeObserver !== 'undefined' && element !== null) {
+            rationaleResizeObserver = new ResizeObserver(updateRationaleOverflow)
+            rationaleResizeObserver.observe(element)
+        }
+
+        void updateRationaleOverflowAfterRender()
+    },
+    { flush: 'post' },
+)
+
+onMounted(() => {
+    if (typeof ResizeObserver === 'undefined') {
+        window.addEventListener('resize', updateRationaleOverflow)
+    }
+})
+
+onBeforeUnmount(() => {
+    rationaleResizeObserver?.disconnect()
+    window.removeEventListener('resize', updateRationaleOverflow)
 })
 </script>
 
@@ -81,18 +156,19 @@ watch([() => props.contact?.id, () => props.expanded], () => {
             <div class="rationale-copy">
                 <p
                     :id="rationaleId"
+                    ref="rationale"
                     class="relevance-rationale"
                     :class="{ 'is-clamped': !rationaleExpanded }"
                 >
                     {{ contact.relevanceRationale }}
                 </p>
                 <button
-                    v-if="!expanded"
+                    v-if="!expanded && rationaleOverflowing"
                     class="rationale-toggle"
                     type="button"
                     :aria-controls="rationaleId"
                     :aria-expanded="descriptionExpanded"
-                    @click="descriptionExpanded = !descriptionExpanded"
+                    @click="toggleRationale"
                 >
                     {{ descriptionExpanded ? 'Show less' : 'Show more' }}
                 </button>
