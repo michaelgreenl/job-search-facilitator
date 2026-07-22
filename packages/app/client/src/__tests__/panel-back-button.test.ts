@@ -75,7 +75,13 @@ describe('panel back button tooltip', () => {
         setViewport(1000, 800)
         const { button, tooltip, tooltipId, trigger } = mountBackButton()
         vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(
+            makeRect({ height: 32, left: 0, top: 100, width: 600 }),
+        )
+        vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(
             makeRect({ height: 32, left: 100, top: 100, width: 40 }),
+        )
+        vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(
+            makeRect({ height: 32, left: 0, top: 0, width: 200 }),
         )
 
         trigger.dispatchEvent(new MouseEvent('mouseenter'))
@@ -101,9 +107,9 @@ describe('panel back button tooltip', () => {
     it('centers the tooltip above a bottom-half button and updates on resize', async () => {
         setViewport(1000, 800)
         const { button, tooltip, trigger } = mountBackButton('Back to job posts')
-        vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(
-            makeRect({ height: 32, left: 100, top: 600, width: 40 }),
-        )
+        const triggerRect = makeRect({ height: 32, left: 100, top: 600, width: 40 })
+        vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(triggerRect)
+        vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(triggerRect)
 
         button.focus()
         await flushPosition()
@@ -125,32 +131,32 @@ describe('panel back button tooltip', () => {
         expect(tooltip.classList.contains('is-visible')).toBe(false)
     })
 
-    it('stays visible while the pointer moves from the button to the tooltip', async () => {
-        vi.useFakeTimers()
+    it('hides after leaving a hovered button that was previously clicked', async () => {
         setViewport(1000, 800)
-        const { tooltip, trigger } = mountBackButton()
-        vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(
-            makeRect({ height: 32, left: 100, top: 100, width: 40 }),
-        )
+        const { button, tooltip, trigger } = mountBackButton()
+        const triggerRect = makeRect({ height: 32, left: 100, top: 100, width: 40 })
+        vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(triggerRect)
+        vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(triggerRect)
+
+        button.focus()
+        await flushPosition()
+        button.click()
+        await nextTick()
+        expect(tooltip.classList.contains('is-visible')).toBe(false)
 
         trigger.dispatchEvent(new MouseEvent('mouseenter'))
         await flushPosition()
-        trigger.dispatchEvent(new MouseEvent('mouseleave'))
-        tooltip.dispatchEvent(new MouseEvent('mouseenter'))
-        vi.advanceTimersByTime(100)
-        await nextTick()
-
         expect(tooltip.classList.contains('is-visible')).toBe(true)
 
-        tooltip.dispatchEvent(new MouseEvent('mouseleave'))
-        await nextTick()
-        expect(tooltip.classList.contains('is-visible')).toBe(false)
+        trigger.dispatchEvent(new MouseEvent('mouseleave'))
+        await vi.waitFor(() => expect(tooltip.classList.contains('is-visible')).toBe(false))
     })
 
     it('dismisses an active tooltip when a responsive breakpoint hides its button', async () => {
         setViewport(1000, 800)
-        const { tooltip, trigger } = mountBackButton()
+        const { button, tooltip, trigger } = mountBackButton()
         let triggerRect = makeRect({ height: 32, left: 100, top: 100, width: 40 })
+        vi.spyOn(button, 'getBoundingClientRect').mockImplementation(() => triggerRect)
         vi.spyOn(trigger, 'getBoundingClientRect').mockImplementation(() => triggerRect)
 
         trigger.dispatchEvent(new MouseEvent('mouseenter'))

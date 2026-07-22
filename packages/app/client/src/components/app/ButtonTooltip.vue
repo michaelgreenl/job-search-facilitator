@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, useId, watch } from 'vue'
+import type { CSSProperties } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef, useId, useTemplateRef } from 'vue'
 
 type TooltipPlacement = 'top' | 'bottom'
 
-const props = defineProps<{
+defineProps<{
     label: string
 }>()
 
@@ -12,96 +13,51 @@ defineSlots<{
 }>()
 
 const tooltipId = `button-tooltip-${useId()}`
-const trigger = shallowRef<HTMLElement | null>(null)
-const tooltip = shallowRef<HTMLElement | null>(null)
-const triggerHovered = shallowRef(false)
-const triggerFocused = shallowRef(false)
-const tooltipHovered = shallowRef(false)
-const dismissed = shallowRef(false)
+const container = useTemplateRef<HTMLElement>('container')
+const visible = shallowRef(false)
 const placement = shallowRef<TooltipPlacement>('bottom')
-const left = shallowRef(0)
-const top = shallowRef(0)
-let hideTimer: ReturnType<typeof setTimeout> | null = null
+const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
 
-const visible = computed(
-    () =>
-        !dismissed.value && (triggerHovered.value || triggerFocused.value || tooltipHovered.value),
-)
-const position = computed(() => ({
-    left: `${left.value}px`,
-    top: `${top.value}px`,
-}))
+function triggerElement() {
+    const element = container.value?.firstElementChild
 
-function clearHideTimer() {
-    if (hideTimer !== null) {
-        clearTimeout(hideTimer)
-        hideTimer = null
-    }
+    return element instanceof HTMLElement ? element : null
 }
 
 function updatePosition() {
-    if (trigger.value === null || tooltip.value === null) {
+    const element = triggerElement()
+
+    if (element === null) {
         return
     }
 
-    const triggerRect = trigger.value.getBoundingClientRect()
+    const triggerRect = element.getBoundingClientRect()
 
     if (triggerRect.width <= 0 || triggerRect.height <= 0) {
-        dismiss()
+        hide()
         return
     }
 
-    const tooltipRect = tooltip.value.getBoundingClientRect()
-    const viewportGutter = 12
     const verticalGap = 8
-    const triggerCenter = triggerRect.left + triggerRect.width / 2
-    const minimumCenter = viewportGutter + tooltipRect.width / 2
-    const maximumCenter = window.innerWidth - viewportGutter - tooltipRect.width / 2
-
-    left.value =
-        minimumCenter > maximumCenter
-            ? window.innerWidth / 2
-            : Math.min(Math.max(triggerCenter, minimumCenter), maximumCenter)
     placement.value =
         triggerRect.top + triggerRect.height / 2 <= window.innerHeight / 2 ? 'bottom' : 'top'
-    top.value =
-        placement.value === 'bottom'
-            ? triggerRect.bottom + verticalGap
-            : triggerRect.top - verticalGap
-}
-
-function showFromTrigger(source: 'hover' | 'focus') {
-    clearHideTimer()
-    dismissed.value = false
-
-    if (source === 'hover') {
-        triggerHovered.value = true
-    } else {
-        triggerFocused.value = true
+    position.value = {
+        left: `${triggerRect.left + triggerRect.width / 2}px`,
+        top: `${
+            placement.value === 'bottom'
+                ? triggerRect.bottom + verticalGap
+                : triggerRect.top - verticalGap
+        }px`,
     }
-
-    void nextTick(updatePosition)
 }
 
-function hideAfterPointerLeaves() {
-    clearHideTimer()
-    hideTimer = setTimeout(() => {
-        triggerHovered.value = false
-        hideTimer = null
-    }, 100)
+function show() {
+    visible.value = true
+    updatePosition()
 }
 
-function keepOpenFromTooltip() {
-    clearHideTimer()
-    tooltipHovered.value = true
-    triggerHovered.value = false
-}
-
-function dismiss() {
-    clearHideTimer()
-    dismissed.value = true
-    triggerHovered.value = false
-    tooltipHovered.value = false
+function hide() {
+    visible.value = false
 }
 
 function handleViewportChange() {
@@ -110,22 +66,12 @@ function handleViewportChange() {
     }
 }
 
-watch(
-    () => props.label,
-    () => {
-        if (visible.value) {
-            void nextTick(updatePosition)
-        }
-    },
-)
-
 onMounted(() => {
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, true)
 })
 
 onBeforeUnmount(() => {
-    clearHideTimer()
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange, true)
 })
@@ -133,26 +79,23 @@ onBeforeUnmount(() => {
 
 <template>
     <span
-        ref="trigger"
+        ref="container"
         class="button-tooltip"
-        @mouseenter="showFromTrigger('hover')"
-        @mouseleave="hideAfterPointerLeaves"
-        @focusin="showFromTrigger('focus')"
-        @focusout="triggerFocused = false"
-        @keydown.esc.stop="dismiss"
-        @click="dismiss"
+        @mouseenter="show"
+        @mouseleave="hide"
+        @focusin="show"
+        @focusout="hide"
+        @keydown.esc.stop="hide"
+        @click="hide"
     >
         <slot :tooltip-id="tooltipId"></slot>
         <Teleport to="body">
             <span
                 :id="tooltipId"
-                ref="tooltip"
                 class="button-tooltip-content tooltip-surface"
                 :class="[`is-${placement}`, { 'is-visible': visible }]"
                 :style="position"
                 role="tooltip"
-                @mouseenter="keepOpenFromTooltip"
-                @mouseleave="tooltipHovered = false"
             >
                 {{ label }}
             </span>
@@ -163,6 +106,7 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .button-tooltip {
     display: inline-flex;
+    width: fit-content;
 }
 
 .button-tooltip-content.tooltip-surface {
@@ -175,8 +119,7 @@ onBeforeUnmount(() => {
     opacity: 0;
     transition:
         opacity 150ms ease,
-        transform 150ms ease,
-        visibility 150ms ease;
+        transform 150ms ease;
 
     &.is-bottom {
         transform: translate(-50%, -$space-1);
@@ -189,7 +132,6 @@ onBeforeUnmount(() => {
     }
 
     &.is-visible {
-        pointer-events: auto;
         visibility: visible;
         opacity: 1;
 
