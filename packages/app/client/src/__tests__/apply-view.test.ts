@@ -105,10 +105,8 @@ const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
 class FakeEventSource {
     static instances: FakeEventSource[] = []
-    static readonly CLOSED = 2
 
     readonly close = vi.fn()
-    readonly readyState = FakeEventSource.CLOSED
     onopen: (() => void) | null = null
     onmessage: ((event: { data: string }) => void) | null = null
     onerror: (() => void) | null = null
@@ -259,150 +257,6 @@ describe('apply view', () => {
         })
     })
 
-    it('opens a loading message draft beside the running outreach stream', async () => {
-        const fetchMock = vi.mocked(fetch)
-        fetchMock
-            .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([]))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockResolvedValueOnce(jsonResponse(discoveredContact, 201))
-        FakeEventSource.instances = []
-        vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
-
-        expect(root.textContent).not.toContain('Message draft')
-        findButton(root, 'P2 Engineer').click()
-        findButton(root, 'Discover outreach').click()
-
-        await vi.waitFor(() => {
-            expect(FakeEventSource.instances).toHaveLength(1)
-            expect(root.querySelector('.work-updates')).not.toBeNull()
-            expect(root.querySelector('.contact-card')).toBeNull()
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
-            expect(root.querySelector('.message-draft-action')).not.toBeNull()
-        })
-
-        const cancelButton = root.querySelector<HTMLButtonElement>(
-            '[aria-label="Cancel outreach task"]',
-        )
-        const messageDraftButton = findButton(root, 'Message draft')
-        const actionRow = root.querySelector('.outreach-actions')
-
-        expect(cancelButton?.parentElement).toBe(actionRow)
-        expect(messageDraftButton.parentElement).toBe(actionRow)
-        expect(
-            (cancelButton?.compareDocumentPosition(messageDraftButton) ?? 0) &
-                Node.DOCUMENT_POSITION_FOLLOWING,
-        ).not.toBe(0)
-        expect(actionRow?.parentElement?.lastElementChild).toBe(actionRow)
-        messageDraftButton.click()
-
-        await vi.waitFor(() => {
-            const streamPanel = root.querySelector('.apply-outreach')
-            const draftPanel = root.querySelector('.apply-outreach-draft')
-
-            expect(streamPanel?.classList.contains('is-active')).toBe(false)
-            expect(streamPanel?.classList.contains('is-adjacent')).toBe(true)
-            expect(draftPanel?.classList.contains('is-active')).toBe(true)
-            expect(draftPanel?.querySelector('.outreach-draft-panel')).toBe(document.activeElement)
-            expect(
-                (streamPanel?.compareDocumentPosition(draftPanel ?? document.body) ?? 0) &
-                    Node.DOCUMENT_POSITION_FOLLOWING,
-            ).not.toBe(0)
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
-            ).toBe(false)
-            expect(root.querySelector('.work-updates')).not.toBeNull()
-            expect(draftPanel?.querySelector('section[aria-label="Outreach draft"]')).not.toBeNull()
-            expect(draftPanel?.querySelector('[aria-label="Show selected job post"]')).toBeNull()
-            expect(draftPanel?.querySelector('.contact-card')?.getAttribute('aria-busy')).toBe(
-                'true',
-            )
-            expect(draftPanel?.textContent).toContain('Discovering contact…')
-            expect(draftPanel?.querySelectorAll('.contact-spinner')).toHaveLength(1)
-            expect(draftPanel?.querySelector('.draft-contact-announcement')?.textContent).toContain(
-                'Discovering contact…',
-            )
-            expect(draftPanel?.querySelector('.contact-card [role="status"]')).toBeNull()
-            expect(
-                draftPanel?.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
-                    ?.value,
-            ).toBe('')
-            expect(
-                draftPanel?.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
-                    ?.disabled,
-            ).toBe(true)
-        })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to outreach progress"]')?.click()
-
-        await vi.waitFor(() => {
-            const messageDraftButton = findButton(root, 'Message draft')
-
-            expect(root.querySelector('.apply-outreach-draft')).toBeNull()
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(document.activeElement).toBe(messageDraftButton)
-        })
-
-        findButton(root, 'Message draft').click()
-        await vi.waitFor(() => {
-            expect(root.querySelector('.apply-outreach-draft .outreach-draft-panel')).toBe(
-                document.activeElement,
-            )
-        })
-        const contactAnnouncement = root.querySelector(
-            '.apply-outreach-draft .draft-contact-announcement',
-        )
-
-        expect(contactAnnouncement?.textContent).toContain('Discovering contact…')
-        expect(fetchMock).toHaveBeenCalledTimes(4)
-        expect(FakeEventSource.instances).toHaveLength(1)
-
-        FakeEventSource.instances[0]!.message({
-            type: 'completed',
-            output: {
-                personName: discoveredContact.personName,
-                personTitle: discoveredContact.personTitle,
-                profileUrl: discoveredContact.profileUrl,
-                relevanceRationale: discoveredContact.relevanceRationale,
-                draftMessage: discoveredContact.draftMessage,
-            },
-            createdAt: '2026-07-18T12:00:01.000Z',
-        })
-
-        await vi.waitFor(() => {
-            const draftPanel = root.querySelector('.apply-outreach-draft')
-
-            expect(fetchMock).toHaveBeenCalledTimes(5)
-            expect(draftPanel?.classList.contains('is-active')).toBe(true)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-adjacent')).toBe(
-                true,
-            )
-            expect(draftPanel?.querySelector('.contact-spinner')).toBeNull()
-            expect(draftPanel?.textContent).toContain(discoveredContact.personName)
-            expect(draftPanel?.querySelector('.draft-contact-announcement')).toBe(
-                contactAnnouncement,
-            )
-            expect(draftPanel?.querySelector('.draft-contact-announcement')?.textContent).toContain(
-                `Contact found: ${discoveredContact.personName}`,
-            )
-            expect(
-                draftPanel?.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
-                    ?.value,
-            ).toBe(discoveredContact.draftMessage)
-            expect(
-                draftPanel?.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
-                    ?.disabled,
-            ).toBe(false)
-            expect(root.querySelector('.work-updates')).not.toBeNull()
-            expect(root.textContent).not.toContain('Message draft')
-        })
-    })
-
     it('returns from a running discovery to saved contacts without cancelling it', async () => {
         const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
         const fetchMock = vi.mocked(fetch).mockReset()
@@ -452,10 +306,9 @@ describe('apply view', () => {
         expect(discoverButton.querySelector('.outreach-spinner')).toBeNull()
         const outreachPanel = root.querySelector('section[aria-label="Outreach"]')
         const cancelButton = root.querySelector('[aria-label="Cancel outreach task"]')
-        const actionRow = root.querySelector('.outreach-actions')
 
-        expect(cancelButton?.parentElement).toBe(actionRow)
-        expect(outreachPanel?.lastElementChild).toBe(actionRow)
+        expect(cancelButton?.parentElement).toBe(outreachPanel)
+        expect(outreachPanel?.lastElementChild).toBe(cancelButton)
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
 
@@ -869,12 +722,7 @@ describe('apply view', () => {
         findButton(root, 'Discover outreach').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
-        findButton(root, 'Message draft').click()
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector('.apply-outreach-draft')?.classList.contains('is-active'),
-            ).toBe(true)
-        })
+        expect(root.textContent).not.toContain('Message draft')
         root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
 
         await vi.waitFor(() => {
@@ -888,47 +736,9 @@ describe('apply view', () => {
             )
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
             expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
-            expect(root.querySelector('.apply-outreach-draft')).toBeNull()
-            expect(root.querySelector('.outreach-panel')).toBe(document.activeElement)
         })
 
         expect(FakeEventSource.instances[0]!.close).toHaveBeenCalledOnce()
-    })
-
-    it('returns to the outreach stream when the connection fails during a draft preview', async () => {
-        vi.mocked(fetch)
-            .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([]))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-        FakeEventSource.instances = []
-        vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
-
-        findButton(root, 'P1 Engineer').click()
-        findButton(root, 'Discover outreach').click()
-
-        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
-        findButton(root, 'Message draft').click()
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector('.apply-outreach-draft')?.classList.contains('is-active'),
-            ).toBe(true)
-        })
-
-        FakeEventSource.instances[0]!.onerror?.()
-
-        await vi.waitFor(() => {
-            const issue = root.querySelector('.work-error')
-
-            expect(issue?.textContent).toBe('Work stream closed before the task finished')
-            expect(root.querySelector('.apply-outreach-draft')).toBeNull()
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(issue).toBe(document.activeElement)
-        })
     })
 
     it('keeps an active outreach task visible when cancellation fails', async () => {
@@ -950,13 +760,14 @@ describe('apply view', () => {
         root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
 
         await vi.waitFor(() => {
-            expect(root.querySelector('[role="alert"]')?.textContent).toBe(
-                'Work request failed (500)',
-            )
+            const issue = root.querySelector('[role="alert"]')
+
+            expect(issue?.textContent).toBe('Work request failed (500)')
             expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
                 true,
             )
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
+            expect(issue).toBe(document.activeElement)
         })
     })
 
@@ -977,25 +788,14 @@ describe('apply view', () => {
         findButton(root, 'Discover outreach').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
-        findButton(root, 'Message draft').click()
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector('.apply-outreach-draft')?.classList.contains('is-active'),
-            ).toBe(true)
-        })
         const source = FakeEventSource.instances[0]!
         source.message(linkedInActionRequired)
 
         await vi.waitFor(() => {
             expect(root.textContent).toContain('Action required')
             expect(root.textContent).toContain('Allow Chrome to access https://www.linkedin.com?')
-            expect(root.textContent).not.toContain('Message draft')
             expect(root.querySelector('textarea')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(root.querySelector('.apply-outreach-draft')).toBeNull()
             expect(root.querySelector('.action-required')).toBe(document.activeElement)
         })
 
