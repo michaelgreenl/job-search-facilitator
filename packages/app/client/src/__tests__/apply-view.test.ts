@@ -257,6 +257,11 @@ describe('apply view', () => {
             expect(viewer?.classList.contains('is-active')).toBe(true)
             expect(viewer?.classList.contains('is-adjacent')).toBe(false)
         })
+        expect(
+            root
+                .querySelector('[aria-label="Back to job posts"]')
+                ?.closest('.back-button-mobile-only'),
+        ).not.toBeNull()
         expect(findButton(root, "Discover contact's")).not.toBeNull()
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
@@ -921,6 +926,8 @@ describe('apply view', () => {
         root.querySelector<HTMLButtonElement>('[aria-label="Show selected job post"]')?.click()
 
         await vi.waitFor(() => {
+            const backToJobPosts = root.querySelector('[aria-label="Back to job posts"]')
+
             expect(
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
             ).toBe(true)
@@ -930,6 +937,8 @@ describe('apply view', () => {
             expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
                 false,
             )
+            expect(backToJobPosts).not.toBeNull()
+            expect(backToJobPosts?.closest('.back-button-mobile-only')).toBeNull()
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
@@ -941,6 +950,7 @@ describe('apply view', () => {
             expect(
                 root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
             ).toBe(true)
+            expect(root.querySelector('[aria-label="Back to job posts"]')).toBeNull()
         })
     })
 

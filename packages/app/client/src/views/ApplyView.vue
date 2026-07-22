@@ -315,8 +315,12 @@ onMounted(() => {
                     :label-error="labelError"
                     :application-updating="applicationUpdating"
                     :application-error="applicationError"
-                    :back-label="workStore.taskActive ? null : 'Back to job posts'"
-                    :back-mobile-only="outreachPostId === null"
+                    :back-label="
+                        !workStore.taskActive && activePanel !== 'posts'
+                            ? 'Back to job posts'
+                            : null
+                    "
+                    :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                     show-outreach-action
                     :outreach-disabled="workStore.taskActive || contactsLoading"
                     show-applied-option
