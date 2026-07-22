@@ -146,6 +146,16 @@ const findButton = (root: HTMLElement, text: string) => {
     return button
 }
 
+const expectButtonTooltip = (root: HTMLElement, label: string) => {
+    const button = root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
+    const tooltipId = button?.getAttribute('aria-describedby')
+    const tooltip = tooltipId ? document.getElementById(tooltipId) : null
+
+    expect(button).not.toBeNull()
+    expect(tooltip?.getAttribute('role')).toBe('tooltip')
+    expect(tooltip?.textContent?.trim()).toBe(label)
+}
+
 const openJobPostActions = async (root: HTMLElement) => {
     const trigger = root.querySelector<HTMLButtonElement>('button[aria-label="Job post label"]')
 
@@ -479,6 +489,8 @@ describe('apply view', () => {
             expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Back to job posts"]')).not.toBeNull()
+            expectButtonTooltip(root, 'Back to saved contacts')
+            expectButtonTooltip(root, 'Back to job posts')
             expect(
                 root.querySelector('[aria-label="Back to job posts"] .back-button-icon'),
             ).not.toBeNull()

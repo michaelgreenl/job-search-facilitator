@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 
 withDefaults(
@@ -19,16 +20,22 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <button
-        class="back-button"
+    <ButtonTooltip
+        v-slot="{ tooltipId }"
+        :label="label"
         :class="{ 'back-button-mobile-only': mobileOnly }"
-        type="button"
-        :aria-label="label"
-        :disabled="disabled"
-        @click="emit('back')"
     >
-        <ArrowLeftIcon class="back-button-icon" />
-    </button>
+        <button
+            class="back-button"
+            type="button"
+            :aria-label="label"
+            :aria-describedby="tooltipId"
+            :disabled="disabled"
+            @click="emit('back')"
+        >
+            <ArrowLeftIcon class="back-button-icon" />
+        </button>
+    </ButtonTooltip>
 </template>
 
 <style scoped lang="scss">

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, shallowRef, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import ChevronRightIcon from '@/components/svgs/ChevronRightIcon.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
@@ -46,8 +47,6 @@ const {
 const panelView = shallowRef<PanelView>(contact.value === null ? 'stream' : 'draft')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
-const resizeTooltipDismissed = shallowRef(false)
-const resizeTooltipId = useId()
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => task.value?.status === 'running')
@@ -190,32 +189,24 @@ async function copyDraft() {
                         <ChevronRightIcon class="panel-control-icon" />
                     </button>
 
-                    <button
+                    <ButtonTooltip
                         v-if="panelView === 'draft'"
-                        class="panel-control panel-control-expand panel-control-desktop"
-                        type="button"
-                        :aria-label="resizeLabel"
-                        :aria-describedby="resizeTooltipId"
-                        :aria-expanded="expanded"
-                        @mouseenter="resizeTooltipDismissed = false"
-                        @mouseleave="resizeTooltipDismissed = false"
-                        @focus="resizeTooltipDismissed = false"
-                        @blur="resizeTooltipDismissed = false"
-                        @keydown.esc.stop="resizeTooltipDismissed = true"
-                        @click="toggleExpanded"
+                        v-slot="{ tooltipId }"
+                        class="panel-control-desktop"
+                        :label="resizeLabel"
                     >
-                        <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                        <ExpandIcon v-else class="panel-control-icon" />
-                    </button>
-                    <span
-                        v-if="panelView === 'draft'"
-                        :id="resizeTooltipId"
-                        class="panel-control-tooltip tooltip-surface"
-                        :class="{ 'is-dismissed': resizeTooltipDismissed }"
-                        role="tooltip"
-                    >
-                        {{ resizeLabel }}
-                    </span>
+                        <button
+                            class="panel-control panel-control-expand"
+                            type="button"
+                            :aria-label="resizeLabel"
+                            :aria-describedby="tooltipId"
+                            :aria-expanded="expanded"
+                            @click="toggleExpanded"
+                        >
+                            <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                            <ExpandIcon v-else class="panel-control-icon" />
+                        </button>
+                    </ButtonTooltip>
                 </div>
 
                 <span class="eyebrow">Outreach</span>
@@ -307,52 +298,6 @@ async function copyDraft() {
     }
 }
 
-.panel-control-tooltip {
-    position: absolute;
-    top: calc(2rem + $space-1);
-    left: -1rem;
-    z-index: 10;
-    opacity: 0;
-    pointer-events: none;
-    visibility: hidden;
-    transform: translateY(-$space-1);
-    transition:
-        opacity 150ms ease,
-        transform 150ms ease,
-        visibility 150ms ease;
-
-    &::before {
-        position: absolute;
-        right: 0;
-        bottom: 100%;
-        left: 0;
-        height: $space-2;
-        content: '';
-    }
-
-    &:hover {
-        opacity: 1;
-        pointer-events: auto;
-        visibility: visible;
-        transform: translateY(0);
-    }
-
-    &.is-dismissed {
-        opacity: 0;
-        pointer-events: none;
-        visibility: hidden;
-        transform: translateY(-$space-1);
-    }
-}
-
-.panel-control-expand:hover + .panel-control-tooltip:not(.is-dismissed),
-.panel-control-expand:focus-visible + .panel-control-tooltip:not(.is-dismissed) {
-    opacity: 1;
-    pointer-events: auto;
-    visibility: visible;
-    transform: translateY(0);
-}
-
 .eyebrow {
     color: $color-signal-light;
     font-family: $font-family-mono;
@@ -360,6 +305,14 @@ async function copyDraft() {
     font-weight: 650;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.panel-navigation > .panel-control-desktop {
+    display: none;
+
+    @include bp-md-tablet {
+        display: inline-flex;
+    }
 }
 
 .panel-control {
@@ -379,14 +332,6 @@ async function copyDraft() {
     &:focus-visible {
         color: $color-ink;
         background: $color-signal;
-    }
-
-    &-desktop {
-        display: none;
-
-        @include bp-md-tablet {
-            display: inline-flex;
-        }
     }
 
     &-mobile-only {
