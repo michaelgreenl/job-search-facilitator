@@ -8,8 +8,8 @@
     flex: none;
     width: 0.875rem;
     height: 0.875rem;
-    border: 2px solid $color-ink-alpha-50;
-    border-top-color: $color-ink;
+    border: 2px solid currentcolor;
+    border-top-color: transparent;
     border-radius: 50%;
     animation: loading-spin 0.8s linear infinite;
 }

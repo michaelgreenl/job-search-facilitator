@@ -92,7 +92,7 @@ const copyFeedbackId = useId()
                         :aria-busy="requestingChanges || undefined"
                         :disabled="running || !canSubmit"
                     >
-                        <LoadingSpinner v-if="requestingChanges" />
+                        <LoadingSpinner v-if="requestingChanges" class="send-spinner" />
                         <ArrowUpIcon v-else class="send-icon" />
                     </button>
                 </div>
@@ -242,6 +242,10 @@ const copyFeedbackId = useId()
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.75;
+}
+
+.send-spinner {
+    color: $color-night;
 }
 
 .copy-button {

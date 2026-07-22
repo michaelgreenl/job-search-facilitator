@@ -7,7 +7,7 @@ import type {
     WorkTaskEvent,
 } from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
-import { createApp, type App } from 'vue'
+import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ApplyView from '../views/ApplyView.vue'
 
@@ -619,8 +619,12 @@ describe('apply view', () => {
             threadId: 'revision-thread-id',
             turnId: 'revision-turn-id',
         }
+        let resolveRevisionHealth: ((response: Response) => void) | undefined
+        const revisionHealth = new Promise<Response>((resolve) => {
+            resolveRevisionHealth = resolve
+        })
         fetchMock
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockReturnValueOnce(revisionHealth)
             .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
 
         const sendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
@@ -634,6 +638,14 @@ describe('apply view', () => {
         expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
         expect(sendButton.querySelector('.loading-spinner')).toBeNull()
         sendButton.click()
+        await nextTick()
+
+        expect(sendButton.disabled).toBe(true)
+        expect(sendButton.getAttribute('aria-busy')).toBe('true')
+        expect(sendButton.querySelector('.send-icon')).toBeNull()
+        expect(sendButton.querySelector('.send-spinner')).not.toBeNull()
+
+        resolveRevisionHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(2)
