@@ -320,6 +320,78 @@ describe('apply view', () => {
         expect(fetchMock).toHaveBeenCalledTimes(3)
     })
 
+    it('starts another discovery from the saved contact list', async () => {
+        let resolveContactSave: ((response: Response) => void) | undefined
+        const contactSaveResponse = new Promise<Response>((resolve) => {
+            resolveContactSave = resolve
+        })
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockReturnValueOnce(contactSaveResponse)
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        findButton(root, 'P1 Engineer').click()
+        findButton(root, "Discover contact's").click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('.contact-history')).not.toBeNull()
+        })
+
+        const addContactButton = root.querySelector<HTMLButtonElement>(
+            '[aria-label="Discover another contact"]',
+        )
+
+        expect(addContactButton?.textContent?.trim()).toBe('+')
+        expect(addContactButton?.disabled).toBe(false)
+        addContactButton?.click()
+
+        await vi.waitFor(() => {
+            expect(FakeEventSource.instances).toHaveLength(1)
+            expect(root.querySelector('.work-updates')).not.toBeNull()
+            expect(root.querySelector('.contact-history')).toBeNull()
+            expect(root.querySelector('[aria-label="Discover another contact"]')).toBeNull()
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(4)
+
+        FakeEventSource.instances[0]!.message({
+            type: 'completed',
+            output: {
+                personName: savedContact.personName,
+                personTitle: savedContact.personTitle,
+                profileUrl: savedContact.profileUrl,
+                relevanceRationale: savedContact.relevanceRationale,
+                draftMessage: savedContact.draftMessage,
+            },
+            createdAt: '2026-07-22T00:00:00.000Z',
+        })
+
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
+        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector<HTMLButtonElement>('[aria-label="Discover another contact"]')
+                    ?.disabled,
+            ).toBe(true)
+        })
+
+        resolveContactSave?.(jsonResponse(savedContact, 201))
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector<HTMLButtonElement>('[aria-label="Discover another contact"]')
+                    ?.disabled,
+            ).toBe(false)
+        })
+    })
+
     it('does not start discovery after leaving the apply view', async () => {
         let resolveContacts: ((response: Response) => void) | undefined
         const contactsResponse = new Promise<Response>((resolve) => {
@@ -538,11 +610,17 @@ describe('apply view', () => {
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
 
         await vi.waitFor(() => {
+            const addContactButton = root.querySelector<HTMLButtonElement>(
+                '[aria-label="Discover another contact"]',
+            )
+
             expect(root.querySelector('[aria-label="View outreach progress"]')).not.toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
             expect(root.querySelector('.contact-history')).not.toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
             expect(root.querySelectorAll('.contact-spinner')).toHaveLength(1)
+            expect(addContactButton?.textContent?.trim()).toBe('+')
+            expect(addContactButton?.disabled).toBe(true)
         })
         expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel'))).toBe(
             false,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
+import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
@@ -35,6 +35,7 @@ const outreachStore = useOutreachStore()
 const {
     postId: outreachPostId,
     contact: outreachContact,
+    contactSaving,
     contactsLoading,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
@@ -141,10 +142,43 @@ function showViewer() {
     activePanel.value = 'viewer'
 }
 
+async function startContactDiscovery(post: JobPost) {
+    if (
+        !viewMounted ||
+        workStore.taskActive ||
+        contactSaving.value ||
+        contactsLoading.value ||
+        outreachStore.postId !== post.id ||
+        selectedPostId.value !== post.id
+    ) {
+        return
+    }
+
+    outreachStore.beginDiscovery(post.id)
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+
+    try {
+        await workStore.startTask(createOutreachTask(post))
+    } catch {
+        if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
+            outreachStore.cancelTask()
+        }
+    }
+}
+
+function discoverAnotherContact() {
+    const post = outreachPost.value
+
+    if (post !== null) {
+        void startContactDiscovery(post)
+    }
+}
+
 async function openOutreach() {
     const post = selectedPost.value
 
-    if (post === null || workStore.taskActive || contactsLoading.value) {
+    if (post === null || workStore.taskActive || contactSaving.value || contactsLoading.value) {
         return
     }
 
@@ -169,9 +203,7 @@ async function openOutreach() {
             return
         }
 
-        outreachStore.beginDiscovery(post.id)
-        activePanel.value = 'outreach'
-        await workStore.startTask(createOutreachTask(post))
+        await startContactDiscovery(post)
     } catch {
         if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
             outreachStore.cancelTask()
@@ -322,7 +354,7 @@ onMounted(() => {
                     "
                     :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                     show-outreach-action
-                    :outreach-disabled="workStore.taskActive || contactsLoading"
+                    :outreach-disabled="workStore.taskActive || contactsLoading || contactSaving"
                     show-applied-option
                     @back="showPosts"
                     @update-label="updateUserLabel"
@@ -348,6 +380,7 @@ onMounted(() => {
                     :expanded="outreachExpanded"
                     @cancel="cancelOutreach"
                     @collapse="collapseOutreach"
+                    @discover="discoverAnotherContact"
                     @expand="expandOutreach"
                     @show-viewer="showViewer"
                 />

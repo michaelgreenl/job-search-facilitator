@@ -41,6 +41,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     const draft = shallowRef('')
     const assistantReply = shallowRef<string | null>(null)
     const taskKind = shallowRef<OutreachTaskKind | null>(null)
+    const contactSaving = shallowRef(false)
     const resultError = shallowRef<string | null>(null)
     const contactsLoading = shallowRef(false)
     const contactsError = shallowRef<string | null>(null)
@@ -64,6 +65,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         draft.value = ''
         assistantReply.value = null
         taskKind.value = null
+        contactSaving.value = false
         resultError.value = null
     }
 
@@ -120,6 +122,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         resultRevision += 1
         assistantReply.value = null
         taskKind.value = 'draft'
+        contactSaving.value = false
         resultError.value = null
     }
 
@@ -158,6 +161,8 @@ export const useOutreachStore = defineStore('outreach', () => {
                 return null
             }
 
+            contactSaving.value = true
+
             try {
                 const savedContact = await request<OutreachContact>(
                     `/job-posts/${encodeURIComponent(activePostId)}/outreach-contacts`,
@@ -186,6 +191,10 @@ export const useOutreachStore = defineStore('outreach', () => {
                 }
 
                 return null
+            } finally {
+                if (postId.value === activePostId && resultRevision === activeResultRevision) {
+                    contactSaving.value = false
+                }
             }
         } else if (taskKind.value === 'draft') {
             const draftMessage = outputText(output, 'draftMessage')
@@ -209,12 +218,14 @@ export const useOutreachStore = defineStore('outreach', () => {
 
     function failResult(message: string) {
         taskKind.value = null
+        contactSaving.value = false
         resultError.value = message
     }
 
     function cancelTask() {
         resultRevision += 1
         taskKind.value = null
+        contactSaving.value = false
         resultError.value = null
     }
 
@@ -227,6 +238,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         draft.value = ''
         assistantReply.value = null
         taskKind.value = null
+        contactSaving.value = false
         resultError.value = null
         contactsLoading.value = false
         contactsError.value = null
@@ -238,6 +250,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         contact,
         draft,
         assistantReply,
+        contactSaving,
         resultError,
         contactsLoading,
         contactsError,

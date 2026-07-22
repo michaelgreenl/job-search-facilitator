@@ -25,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     cancel: []
     collapse: []
+    discover: []
     expand: []
     showViewer: []
 }>()
@@ -36,6 +37,7 @@ const { actionNeedsAttention, actionSubmitting, cancelling, error, task, taskAct
 const {
     assistantReply,
     contact,
+    contactSaving,
     contacts,
     contactsError,
     contactsLoading,
@@ -225,15 +227,26 @@ async function copyDraft() {
             </div>
         </header>
 
-        <OutreachContactList
-            v-if="panelView === 'contacts'"
-            :contacts="contacts"
-            :discovering="discovering && taskActive"
-            :error="contactsError"
-            :loading="contactsLoading"
-            @select="selectContact"
-            @show-stream="showStream"
-        />
+        <template v-if="panelView === 'contacts'">
+            <OutreachContactList
+                :contacts="contacts"
+                :discovering="discovering && taskActive"
+                :error="contactsError"
+                :loading="contactsLoading"
+                @select="selectContact"
+                @show-stream="showStream"
+            />
+
+            <button
+                class="discover-contact-button"
+                type="button"
+                aria-label="Discover another contact"
+                :disabled="taskActive || contactsLoading || contactSaving"
+                @click="emit('discover')"
+            >
+                <span aria-hidden="true">+</span>
+            </button>
+        </template>
 
         <template v-else-if="panelView === 'draft' && contact">
             <OutreachDraft
@@ -286,6 +299,36 @@ async function copyDraft() {
     display: flex;
     gap: $space-3;
     align-items: center;
+}
+
+.discover-contact-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    align-self: flex-end;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    color: $color-ink;
+    font: inherit;
+    font-size: 1.25rem;
+    font-weight: 650;
+    line-height: 1;
+    cursor: pointer;
+    background: $color-action;
+    border: 0;
+    border-radius: $radius-md;
+
+    &:hover,
+    &:focus-visible {
+        background: $color-signal;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.55;
+    }
 }
 
 .cancel-action {
