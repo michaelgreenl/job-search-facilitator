@@ -1,4 +1,8 @@
-import type { OutreachContact, OutreachContactInput } from '@job-search-facilitator/core'
+import type {
+    OutreachContact,
+    OutreachContactInput,
+    UpdateOutreachContactInput,
+} from '@job-search-facilitator/core'
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
@@ -43,9 +47,21 @@ const createFakeRepository = () => {
         }),
     )
     const findByJobPostId = vi.fn(async () => [existingContact])
-    const repository: OutreachContactRepository = { create, findByJobPostId }
+    const update = vi.fn(
+        async (
+            postId: string,
+            contactId: string,
+            input: UpdateOutreachContactInput,
+        ): Promise<OutreachContact | null> => ({
+            ...existingContact,
+            ...input,
+            id: contactId,
+            jobPostId: postId,
+        }),
+    )
+    const repository = { create, findByJobPostId, update }
 
-    return { create, findByJobPostId, repository }
+    return { create, findByJobPostId, repository, update }
 }
 
 describe('outreach contact routes', () => {
@@ -70,6 +86,46 @@ describe('outreach contact routes', () => {
         expect(create).toHaveBeenCalledExactlyOnceWith(jobPostId, contactInput)
     })
 
+    it.each([true, false])('updates a saved contact messaged status to %s', async (messaged) => {
+        const { repository, update } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .patch(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .send({ messaged })
+            .expect(200, { ...existingContact, messaged })
+
+        expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
+            messaged,
+        })
+    })
+
+    it.each([
+        ['an invalid job post id', 'invalid-id', existingContact.id, { messaged: true }],
+        ['an invalid contact id', jobPostId, 'invalid-id', { messaged: true }],
+        ['a non-boolean status', jobPostId, existingContact.id, { messaged: 'yes' }],
+        ['an extra field', jobPostId, existingContact.id, { messaged: true, personName: 'Grace' }],
+        ['an empty body', jobPostId, existingContact.id, {}],
+    ])('rejects an update with %s', async (_description, postId, contactId, input) => {
+        const { repository, update } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .patch(`/job-posts/${postId}/outreach-contacts/${contactId}`)
+            .send(input)
+            .expect(400, { error: 'Invalid request' })
+
+        expect(update).not.toHaveBeenCalled()
+    })
+
+    it('returns 404 when updating a missing outreach contact', async () => {
+        const { repository, update } = createFakeRepository()
+        update.mockResolvedValueOnce(null)
+
+        await request(createTestApp(repository))
+            .patch(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .send({ messaged: true })
+            .expect(404, { error: 'Outreach contact not found' })
+    })
+
     it.each([
         ['an invalid job post id', 'invalid-id', contactInput],
         [
@@ -90,8 +146,8 @@ describe('outreach contact routes', () => {
     })
 
     it('returns 404 when saving against a missing job post', async () => {
-        const { repository } = createFakeRepository()
-        repository.create = async () => null
+        const { create, repository } = createFakeRepository()
+        create.mockResolvedValueOnce(null)
 
         await request(createTestApp(repository))
             .post(`/job-posts/${jobPostId}/outreach-contacts`)

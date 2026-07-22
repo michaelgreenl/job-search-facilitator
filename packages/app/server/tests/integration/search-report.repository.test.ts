@@ -158,7 +158,7 @@ describe('outreach run repository', () => {
 })
 
 describe('outreach contact repository', () => {
-    it('stores job-post contacts with an unmessaged default and lists newest first', async () => {
+    it('stores, updates, and lists job-post contacts', async () => {
         const report = await searchReportRepository.upsertById(
             '11111111-1111-4111-8111-111111111111',
             '2026-07-21',
@@ -180,14 +180,29 @@ describe('outreach contact repository', () => {
             draftMessage: 'Hi Grace, I would value your perspective on the team.',
         })
 
+        if (first === null) {
+            throw new Error('Could not create the first outreach contact')
+        }
+
+        const wrongPostUpdate = await outreachContactRepository.update(
+            '22222222-2222-4222-8222-222222222222',
+            first.id,
+            { messaged: true },
+        )
+        const updatedFirst = await outreachContactRepository.update(jobPostId, first.id, {
+            messaged: true,
+        })
+
         const contacts = await outreachContactRepository.findByJobPostId(jobPostId)
 
-        expect(first).toMatchObject({ jobPostId, messaged: false })
+        expect(wrongPostUpdate).toBeNull()
+        expect(updatedFirst).toMatchObject({ id: first.id, jobPostId, messaged: true })
         expect(second).toMatchObject({ jobPostId, messaged: false })
         expect(contacts.map(({ personName }) => personName)).toEqual([
             'Grace Hopper',
             'Ada Lovelace',
         ])
+        expect(contacts.find(({ id }) => id === first.id)?.messaged).toBe(true)
     })
 })
 

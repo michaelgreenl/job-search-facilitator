@@ -1,4 +1,8 @@
-import type { OutreachContact, OutreachContactInput } from '@job-search-facilitator/core'
+import type {
+    OutreachContact,
+    OutreachContactInput,
+    UpdateOutreachContactInput,
+} from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import { prisma } from '../prisma.ts'
 
@@ -20,6 +24,11 @@ const toOutreachContact = (contact: PrismaOutreachContact): OutreachContact => (
 export interface OutreachContactRepository {
     create(jobPostId: string, input: OutreachContactInput): Promise<OutreachContact | null>
     findByJobPostId(jobPostId: string): Promise<OutreachContact[]>
+    update(
+        jobPostId: string,
+        contactId: string,
+        input: UpdateOutreachContactInput,
+    ): Promise<OutreachContact | null>
 }
 
 export const outreachContactRepository: OutreachContactRepository = {
@@ -46,5 +55,22 @@ export const outreachContactRepository: OutreachContactRepository = {
         })
 
         return contacts.map(toOutreachContact)
+    },
+
+    async update(jobPostId, contactId, input) {
+        try {
+            const contact = await prisma.outreachContact.update({
+                where: { id: contactId, jobPostId },
+                data: input,
+            })
+
+            return toOutreachContact(contact)
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+                return null
+            }
+
+            throw error
+        }
     },
 }

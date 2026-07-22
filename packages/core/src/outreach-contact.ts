@@ -17,3 +17,5 @@ export type OutreachContactInput = Pick<
     OutreachContact,
     'personName' | 'personTitle' | 'profileUrl' | 'relevanceRationale' | 'draftMessage'
 >
+
+export type UpdateOutreachContactInput = Pick<OutreachContact, 'messaged'>

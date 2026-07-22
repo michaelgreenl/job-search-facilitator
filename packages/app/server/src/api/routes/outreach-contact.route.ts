@@ -8,6 +8,7 @@ export const createOutreachContactRouter = (repository: OutreachContactRepositor
 
     router.post('/', controller.create)
     router.get('/', controller.listByJobPost)
+    router.patch('/:contactId', controller.updateById)
 
     return router
 }

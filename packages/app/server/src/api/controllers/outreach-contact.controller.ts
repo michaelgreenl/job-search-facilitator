@@ -4,10 +4,13 @@ import type { OutreachContactRepository } from '../../db/repositories/outreach-c
 import {
     outreachContactInputSchema,
     outreachContactJobPostParamsSchema,
+    outreachContactParamsSchema,
+    updateOutreachContactInputSchema,
 } from '../schemas/outreach-contact.schema.ts'
 
 const invalidRequest = { error: 'Invalid request' }
 const jobPostNotFound = { error: 'Job post not found' }
+const outreachContactNotFound = { error: 'Outreach contact not found' }
 
 export const createOutreachContactController = (repository: OutreachContactRepository) => ({
     create: async (request: Request, response: Response): Promise<void> => {
@@ -38,5 +41,28 @@ export const createOutreachContactController = (repository: OutreachContactRepos
         }
 
         response.json(await repository.findByJobPostId(params.data.jobPostId))
+    },
+
+    updateById: async (request: Request, response: Response): Promise<void> => {
+        const params = outreachContactParamsSchema.safeParse(request.params)
+        const input = updateOutreachContactInputSchema.safeParse(request.body)
+
+        if (!params.success || !input.success) {
+            response.status(BAD_REQUEST).json(invalidRequest)
+            return
+        }
+
+        const contact = await repository.update(
+            params.data.jobPostId,
+            params.data.contactId,
+            input.data,
+        )
+
+        if (contact === null) {
+            response.status(NOT_FOUND).json(outreachContactNotFound)
+            return
+        }
+
+        response.json(contact)
     },
 })
