@@ -14,6 +14,7 @@ defineSlots<{
 
 const tooltipId = `button-tooltip-${useId()}`
 const container = useTemplateRef<HTMLElement>('container')
+const tooltip = useTemplateRef<HTMLElement>('tooltip')
 const visible = shallowRef(false)
 const placement = shallowRef<TooltipPlacement>('bottom')
 const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
@@ -26,12 +27,14 @@ function triggerElement() {
 
 function updatePosition() {
     const element = triggerElement()
+    const tooltipElement = tooltip.value
 
-    if (element === null) {
+    if (element === null || tooltipElement === null) {
         return
     }
 
     const triggerRect = element.getBoundingClientRect()
+    const tooltipRect = tooltipElement.getBoundingClientRect()
 
     if (triggerRect.width <= 0 || triggerRect.height <= 0) {
         hide()
@@ -39,10 +42,19 @@ function updatePosition() {
     }
 
     const verticalGap = 8
+    const viewportGutter = 12
+    const triggerCenter = triggerRect.left + triggerRect.width / 2
+    const tooltipHalfWidth = tooltipRect.width / 2
+    const minimumCenter = viewportGutter + tooltipHalfWidth
+    const maximumCenter = window.innerWidth - viewportGutter - tooltipHalfWidth
+    const horizontalCenter =
+        minimumCenter <= maximumCenter
+            ? Math.min(Math.max(triggerCenter, minimumCenter), maximumCenter)
+            : window.innerWidth / 2
     placement.value =
         triggerRect.top + triggerRect.height / 2 <= window.innerHeight / 2 ? 'bottom' : 'top'
     position.value = {
-        left: `${triggerRect.left + triggerRect.width / 2}px`,
+        left: `${horizontalCenter}px`,
         top: `${
             placement.value === 'bottom'
                 ? triggerRect.bottom + verticalGap
@@ -109,6 +121,7 @@ onBeforeUnmount(() => {
         <slot :tooltip-id="tooltipId"></slot>
         <Teleport to="body">
             <span
+                ref="tooltip"
                 :id="tooltipId"
                 class="button-tooltip-content tooltip-surface"
                 :class="[`is-${placement}`, { 'is-visible': visible }]"

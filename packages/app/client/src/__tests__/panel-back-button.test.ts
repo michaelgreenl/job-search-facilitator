@@ -135,6 +135,36 @@ describe('panel back button tooltip', () => {
         expect(tooltip.classList.contains('is-visible')).toBe(false)
     })
 
+    it('keeps the tooltip within the horizontal viewport edges', async () => {
+        setViewport(320, 800)
+        const { button, tooltip } = mountBackButton()
+        const tooltipWidth = 200
+        const viewportGutter = 12
+        let buttonRect = makeRect({ height: 32, left: 0, top: 100, width: 40 })
+        vi.spyOn(button, 'getBoundingClientRect').mockImplementation(() => buttonRect)
+        vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(
+            makeRect({ height: 32, left: 0, top: 0, width: tooltipWidth }),
+        )
+
+        const expectTooltipInView = () => {
+            const tooltipCenter = Number.parseFloat(tooltip.style.left)
+
+            expect(tooltipCenter - tooltipWidth / 2).toBeGreaterThanOrEqual(viewportGutter)
+            expect(tooltipCenter + tooltipWidth / 2).toBeLessThanOrEqual(
+                window.innerWidth - viewportGutter,
+            )
+        }
+
+        button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+        await flushPosition()
+        expectTooltipInView()
+
+        buttonRect = makeRect({ height: 32, left: 280, top: 100, width: 40 })
+        window.dispatchEvent(new Event('resize'))
+        await flushPosition()
+        expectTooltipInView()
+    })
+
     it('hides after leaving a hovered button that was previously clicked', async () => {
         setViewport(1000, 800)
         const { button, tooltip, trigger } = mountBackButton()
