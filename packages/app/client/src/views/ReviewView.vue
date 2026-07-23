@@ -33,6 +33,8 @@ const reportStore = useReportStore()
 const postStore = usePostStore()
 const activePanel = shallowRef<ActivePanel>('reports')
 const postFilter = shallowRef<PostFilter>('all')
+const reportDateFrom = shallowRef('')
+const reportDateTo = shallowRef('')
 const selectedReport = shallowRef<JobSearchReport | null>(null)
 const selectedResult = shallowRef<JobSearchResult | null>(null)
 const labelUpdating = shallowRef(false)
@@ -127,6 +129,56 @@ const filteredResults = computed(() => {
     return results
 })
 
+const reportDateFilterActive = computed(
+    () => reportDateFrom.value !== '' || reportDateTo.value !== '',
+)
+const reportDateRangeInvalid = computed(
+    () =>
+        reportDateFrom.value !== '' &&
+        reportDateTo.value !== '' &&
+        reportDateFrom.value > reportDateTo.value,
+)
+const filteredReports = computed(() => {
+    if (reportDateRangeInvalid.value) {
+        return []
+    }
+
+    return reportStore.reports.filter(
+        ({ reportDate }) =>
+            (reportDateFrom.value === '' || reportDate >= reportDateFrom.value) &&
+            (reportDateTo.value === '' || reportDate <= reportDateTo.value),
+    )
+})
+const reportCountLabel = computed(() => {
+    const total = reportStore.reports.length
+
+    return reportDateFilterActive.value
+        ? `${filteredReports.value.length} of ${total} reports`
+        : `${total} reports`
+})
+const reportListEmptyMessage = computed(() => {
+    if (reportStore.reports.length === 0) {
+        return 'No search reports found.'
+    }
+
+    if (reportDateRangeInvalid.value) {
+        return 'From date must be on or before To date.'
+    }
+
+    if (reportDateFrom.value && reportDateTo.value) {
+        if (reportDateFrom.value === reportDateTo.value) {
+            return `No reports ran on ${reportDateFrom.value}.`
+        }
+
+        return `No reports ran from ${reportDateFrom.value} through ${reportDateTo.value}.`
+    }
+
+    if (reportDateFrom.value) {
+        return `No reports ran on or after ${reportDateFrom.value}.`
+    }
+
+    return `No reports ran on or before ${reportDateTo.value}.`
+})
 const postCountLabel = computed(() => {
     const total = selectedReport.value?.results.length ?? 0
 
@@ -211,6 +263,11 @@ function selectPostFilter(value: string) {
     }
 }
 
+function clearReportDateFilter() {
+    reportDateFrom.value = ''
+    reportDateTo.value = ''
+}
+
 function showReports() {
     activePanel.value = 'reports'
     selectedResult.value = null
@@ -266,7 +323,47 @@ onMounted(() => {
             >
                 <PanelHeading eyebrow="Job Search reports" title="Select report to review">
                     <template #controls>
-                        <span class="item-count">{{ reportStore.reports.length }} reports</span>
+                        <span class="item-count">{{ reportCountLabel }}</span>
+
+                        <fieldset class="report-date-filter">
+                            <legend class="report-date-legend">Run date</legend>
+                            <div class="report-date-fields">
+                                <label class="report-date-field">
+                                    <span>From</span>
+                                    <input
+                                        v-model="reportDateFrom"
+                                        class="report-date-input"
+                                        type="date"
+                                        aria-label="Reports from date"
+                                        :max="reportDateTo || undefined"
+                                        :disabled="
+                                            reportStore.loading || reportStore.reports.length === 0
+                                        "
+                                    />
+                                </label>
+                                <label class="report-date-field">
+                                    <span>To</span>
+                                    <input
+                                        v-model="reportDateTo"
+                                        class="report-date-input"
+                                        type="date"
+                                        aria-label="Reports through date"
+                                        :min="reportDateFrom || undefined"
+                                        :disabled="
+                                            reportStore.loading || reportStore.reports.length === 0
+                                        "
+                                    />
+                                </label>
+                                <button
+                                    v-if="reportDateFilterActive"
+                                    class="report-date-clear"
+                                    type="button"
+                                    @click="clearReportDateFilter"
+                                >
+                                    Clear dates
+                                </button>
+                            </div>
+                        </fieldset>
                     </template>
                 </PanelHeading>
 
@@ -274,8 +371,8 @@ onMounted(() => {
                 <p v-else-if="reportStore.error" class="list-message">
                     {{ reportStore.error }}
                 </p>
-                <ul v-else-if="reportStore.reports.length" class="card-list">
-                    <li v-for="report in reportStore.reports" :key="report.id">
+                <ul v-else-if="filteredReports.length" class="card-list">
+                    <li v-for="report in filteredReports" :key="report.id">
                         <SearchReportCard
                             :report="report"
                             :selected="selectedReport?.id === report.id"
@@ -283,7 +380,7 @@ onMounted(() => {
                         />
                     </li>
                 </ul>
-                <p v-else class="list-message">No search reports found.</p>
+                <p v-else class="list-message">{{ reportListEmptyMessage }}</p>
             </FlowPanel>
 
             <FlowPanel
@@ -369,6 +466,78 @@ onMounted(() => {
     background: transparent;
     border: 0;
     border-radius: 0;
+}
+
+.report-date-filter {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.report-date-legend {
+    width: 100%;
+    padding: 0;
+    margin-bottom: $space-1;
+    color: $color-ink-muted;
+    font-size: 0.75rem;
+    text-align: end;
+}
+
+.report-date-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    align-items: end;
+    justify-content: flex-end;
+}
+
+.report-date-field {
+    display: grid;
+    gap: $space-1;
+    color: $color-ink-muted;
+    font-size: 0.6875rem;
+    text-align: start;
+}
+
+.report-date-input {
+    width: 8.5rem;
+    min-height: 2rem;
+    padding: $space-1 $space-2;
+    color: $color-ink;
+    font: inherit;
+    color-scheme: dark;
+    background: $color-ink-alpha-6;
+    border: 1px solid $color-ink-alpha-16;
+    border-radius: $radius-sm;
+
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+    }
+
+    &:focus-visible,
+    &:hover:not(:disabled) {
+        border-color: $color-signal-light-alpha-50;
+    }
+}
+
+.report-date-clear {
+    min-height: 2rem;
+    padding: $space-1 0;
+    color: $color-signal-light;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-ink;
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
 }
 
 .post-filter {

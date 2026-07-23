@@ -26,12 +26,17 @@ const createPost = (id: string, roleTitle: string): JobPost => ({
     updatedAt: '2026-07-15T12:00:00.000Z',
 })
 
-const createReport = (id: string, summary: string, post: JobPost): JobSearchReport => ({
+const createReport = (
+    id: string,
+    reportDate: string,
+    summary: string,
+    post: JobPost,
+): JobSearchReport => ({
     id,
-    reportDate: '2026-07-15',
+    reportDate,
     summary,
-    createdAt: '2026-07-15T12:00:00.000Z',
-    updatedAt: '2026-07-15T12:00:00.000Z',
+    createdAt: `${reportDate}T12:00:00.000Z`,
+    updatedAt: `${reportDate}T12:00:00.000Z`,
     archivedAt: null,
     results: [
         {
@@ -50,9 +55,11 @@ const createReport = (id: string, summary: string, post: JobPost): JobSearchRepo
 
 const firstPost = createPost('post-1', 'Frontend Engineer')
 const secondPost = createPost('post-2', 'Backend Engineer')
-const firstReport = createReport('report-1', 'First report', firstPost)
-const secondReport = createReport('report-2', 'Second report', secondPost)
-const reports = [firstReport, secondReport]
+const thirdPost = createPost('post-3', 'Platform Engineer')
+const firstReport = createReport('report-1', '2026-07-10', 'First report', firstPost)
+const secondReport = createReport('report-2', '2026-07-15', 'Second report', secondPost)
+const thirdReport = createReport('report-3', '2026-07-15', 'Third report', thirdPost)
+const reports = [firstReport, secondReport, thirdReport]
 
 const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -78,6 +85,22 @@ const findButton = (root: HTMLElement, text: string) => {
     }
 
     return button
+}
+
+const getReportDateInputs = (root: HTMLElement) => {
+    const from = root.querySelector<HTMLInputElement>('input[aria-label="Reports from date"]')
+    const to = root.querySelector<HTMLInputElement>('input[aria-label="Reports through date"]')
+
+    if (from === null || to === null) {
+        throw new Error('Could not find report date range inputs')
+    }
+
+    return { from, to }
+}
+
+const setDateInput = (input: HTMLInputElement, value: string) => {
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
@@ -172,6 +195,89 @@ describe('review route selection', () => {
                     item.textContent?.trim(),
                 ),
             ).toEqual(['All', 'Labeled', 'Unreviewed', 'Forgone'])
+        })
+    })
+
+    it('filters reports by an inclusive open-ended date range and clears it', async () => {
+        const { root } = await mountReview()
+        const { from, to } = getReportDateInputs(root)
+
+        expect(from.value).toBe('')
+        expect(to.value).toBe('')
+        expect(root.textContent).toContain('3 reports')
+
+        setDateInput(from, '2026-07-15')
+
+        await vi.waitFor(() => {
+            expect(root.textContent).not.toContain(firstReport.summary)
+            expect(root.textContent).toContain(secondReport.summary)
+            expect(root.textContent).toContain(thirdReport.summary)
+            expect(root.textContent).toContain('2 of 3 reports')
+            expect(to.min).toBe('2026-07-15')
+        })
+
+        setDateInput(to, '2026-07-15')
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(secondReport.summary)
+            expect(root.textContent).toContain(thirdReport.summary)
+            expect(from.max).toBe('2026-07-15')
+        })
+
+        setDateInput(from, '')
+        setDateInput(to, '2026-07-10')
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(firstReport.summary)
+            expect(root.textContent).not.toContain(secondReport.summary)
+            expect(root.textContent).not.toContain(thirdReport.summary)
+            expect(root.textContent).toContain('1 of 3 reports')
+        })
+
+        findButton(root, 'Clear dates').click()
+
+        await vi.waitFor(() => {
+            expect(from.value).toBe('')
+            expect(to.value).toBe('')
+            expect(root.textContent).toContain(firstReport.summary)
+            expect(root.textContent).toContain(secondReport.summary)
+            expect(root.textContent).toContain(thirdReport.summary)
+            expect(root.textContent).toContain('3 reports')
+            expect(root.textContent).not.toContain('of 3 reports')
+        })
+    })
+
+    it('explains when no reports fall within the selected date range', async () => {
+        const { root } = await mountReview()
+        const { from, to } = getReportDateInputs(root)
+
+        setDateInput(from, '2026-07-11')
+        setDateInput(to, '2026-07-14')
+
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain('No reports ran from 2026-07-11 through 2026-07-14.')
+            expect(root.textContent).toContain('0 of 3 reports')
+            expect(root.textContent).not.toContain('No search reports found.')
+        })
+    })
+
+    it('keeps the selected report open when the range excludes its card', async () => {
+        const { root, router } = await mountReview()
+
+        findButton(root, secondReport.summary).click()
+        await vi.waitFor(() => {
+            expect(root.textContent).toContain(secondPost.roleTitle)
+            expect(router.options.history.state.reviewReportId).toBe(secondReport.id)
+        })
+
+        const { to } = getReportDateInputs(root)
+
+        setDateInput(to, '2026-07-10')
+
+        await vi.waitFor(() => {
+            expect(root.textContent).not.toContain(secondReport.summary)
+            expect(root.textContent).toContain(secondPost.roleTitle)
+            expect(router.options.history.state.reviewReportId).toBe(secondReport.id)
         })
     })
 
