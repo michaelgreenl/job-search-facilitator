@@ -225,6 +225,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     padding: $space-2;
     list-style: none;
     border-radius: $radius-md;
+    backdrop-filter: blur(24px) saturate(130%);
 }
 
 .app-dropdown-option.has-separator {
