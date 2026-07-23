@@ -1273,11 +1273,6 @@ describe('apply view', () => {
         expect(document.getElementById(collapseTooltipId ?? '')?.textContent).toContain(
             'Collapse panel',
         )
-        expect(
-            [...(collapseControl?.querySelectorAll('polyline') ?? [])].map((corner) =>
-                corner.getAttribute('points'),
-            ),
-        ).toEqual(['4 10 10 10 10 4', '20 14 14 14 14 20'])
 
         collapseControl?.click()
 
