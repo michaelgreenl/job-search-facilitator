@@ -199,6 +199,29 @@ describe('apply view', () => {
         vi.unstubAllGlobals()
     })
 
+    it('shows post and application actions for a shared destination', async () => {
+        const sharedDestinationPost = {
+            ...posts[0]!,
+            applicationUrl: posts[0]!.postUrl,
+        }
+        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([sharedDestinationPost]))
+        const root = await mountApplyView()
+
+        findButton(root, sharedDestinationPost.roleTitle).click()
+        await nextTick()
+
+        const applicationLink = root.querySelector<HTMLAnchorElement>(
+            `a[aria-label="Open application for ${sharedDestinationPost.roleTitle} in a new tab"]`,
+        )
+
+        expect(applicationLink?.href).toBe(sharedDestinationPost.applicationUrl)
+        expect(
+            root.querySelector<HTMLAnchorElement>(
+                `a[aria-label="Open ${sharedDestinationPost.roleTitle} in a new tab"]`,
+            )?.href,
+        ).toBe(sharedDestinationPost.postUrl)
+    })
+
     it('filters application candidates by user label', async () => {
         const root = await mountApplyView()
         const filter = root.querySelector<HTMLButtonElement>(

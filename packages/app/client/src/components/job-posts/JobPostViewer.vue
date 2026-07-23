@@ -19,6 +19,7 @@ const props = withDefaults(
         applicationError?: string | null
         backLabel?: string | null
         backMobileOnly?: boolean
+        alwaysShowApplicationAction?: boolean
     }>(),
     {
         showOutreachAction: false,
@@ -28,6 +29,7 @@ const props = withDefaults(
         applicationError: null,
         backLabel: null,
         backMobileOnly: false,
+        alwaysShowApplicationAction: false,
     },
 )
 
@@ -48,10 +50,12 @@ const toHttpUrl = (value: string) => {
     }
 }
 const postUrl = computed(() => toHttpUrl(props.post.postUrl))
-const applicationUrl = computed(() => {
-    const url = toHttpUrl(props.post.applicationUrl)
-    return url !== postUrl.value ? url : null
-})
+const applicationUrl = computed(() => toHttpUrl(props.post.applicationUrl))
+const applicationActionUrl = computed(() =>
+    props.alwaysShowApplicationAction || applicationUrl.value !== postUrl.value
+        ? applicationUrl.value
+        : null,
+)
 const labelPrompt = computed(() => {
     if (applied.value) {
         return 'Applied'
@@ -126,9 +130,9 @@ function selectLabel(value: string) {
                     Open post ↗
                 </a>
                 <a
-                    v-if="applicationUrl"
+                    v-if="applicationActionUrl"
                     class="post-action-button"
-                    :href="applicationUrl"
+                    :href="applicationActionUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                     :aria-label="`Open application for ${post.roleTitle} in a new tab`"

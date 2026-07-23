@@ -26,7 +26,10 @@ const post = {
 
 const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
-function mountViewer(overrides: Partial<JobPost> = {}) {
+function mountViewer(
+    overrides: Partial<JobPost> = {},
+    options: { alwaysShowApplicationAction?: boolean } = {},
+) {
     const root = document.createElement('div')
     document.body.append(root)
 
@@ -34,6 +37,7 @@ function mountViewer(overrides: Partial<JobPost> = {}) {
         post: { ...post, ...overrides },
         labelUpdating: false,
         labelError: null,
+        alwaysShowApplicationAction: options.alwaysShowApplicationAction,
     })
     app.mount(root)
     mountedApps.push({ app, root })
@@ -81,6 +85,20 @@ describe('JobPostViewer', () => {
         expect(links[1]?.getAttribute('aria-label')).toBe(
             `Open application for ${post.roleTitle} in a new tab`,
         )
+    })
+
+    it('includes a shared application destination when requested', () => {
+        const root = mountViewer(
+            { applicationUrl: post.postUrl },
+            { alwaysShowApplicationAction: true },
+        )
+        const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
+
+        expect(links.map(({ textContent }) => textContent?.trim())).toEqual([
+            'Open post ↗',
+            'Open application ↗',
+        ])
+        expect(links.map(({ href }) => href)).toEqual([post.postUrl, post.postUrl])
     })
 
     it('does not repeat a shared post and application destination', () => {

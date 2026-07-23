@@ -366,6 +366,7 @@ onMounted(() => {
                     :label-error="labelError"
                     :application-updating="applicationUpdating"
                     :application-error="applicationError"
+                    always-show-application-action
                     :back-label="
                         !workStore.taskActive && activePanel !== 'posts'
                             ? 'Back to job posts'
