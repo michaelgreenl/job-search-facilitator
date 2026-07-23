@@ -513,6 +513,7 @@ onMounted(() => {
     padding: $space-1 $space-2;
     color: $color-ink;
     font: inherit;
+    font-size: 0.6875rem;
     color-scheme: dark;
     background: $color-ink-alpha-6;
     border: 1px solid $color-ink-alpha-16;
@@ -531,6 +532,7 @@ onMounted(() => {
 
 .report-date-clear {
     flex: 0 0 auto;
+    order: -1;
     padding: $space-1 0;
     color: $color-signal-light;
     font: inherit;
@@ -566,6 +568,10 @@ onMounted(() => {
 
     .report-date-filter {
         justify-self: start;
+    }
+
+    .report-date-clear {
+        order: 0;
     }
 }
 
