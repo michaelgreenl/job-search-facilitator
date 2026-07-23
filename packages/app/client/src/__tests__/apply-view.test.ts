@@ -1105,10 +1105,10 @@ describe('apply view', () => {
         expect(expandTooltip?.getAttribute('role')).toBe('tooltip')
         expect(expandTooltip?.textContent).toContain('Expand panel')
         expect(
-            [...(expandControl?.querySelectorAll('polyline') ?? [])].map((chevron) =>
-                chevron.getAttribute('points'),
+            [...(expandControl?.querySelectorAll('polyline') ?? [])].map((corner) =>
+                corner.getAttribute('points'),
             ),
-        ).toEqual(['11 7 5 5 7 11', '13 17 19 19 17 13'])
+        ).toEqual(['11 5 5 5 5 11', '13 19 19 19 19 13'])
         rationaleToggle.click()
 
         await vi.waitFor(() => {
@@ -1270,6 +1270,11 @@ describe('apply view', () => {
         expect(document.getElementById(collapseTooltipId ?? '')?.textContent).toContain(
             'Collapse panel',
         )
+        expect(
+            [...(collapseControl?.querySelectorAll('polyline') ?? [])].map((corner) =>
+                corner.getAttribute('points'),
+            ),
+        ).toEqual(['4 10 10 10 10 4', '20 14 14 14 14 20'])
 
         collapseControl?.click()
 
