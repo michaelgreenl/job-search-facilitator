@@ -2,7 +2,7 @@
 
 import type { JobPost } from '@job-search-facilitator/core'
 import { createApp } from 'vue'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
 
 const post = {
@@ -39,6 +39,21 @@ function mountViewer(overrides: Partial<JobPost> = {}) {
     mountedApps.push({ app, root })
 
     return root
+}
+
+async function openLabelOptions(root: HTMLElement) {
+    const trigger = root.querySelector<HTMLButtonElement>('[aria-label="Job post label"]')
+
+    if (trigger === null) {
+        throw new Error('Could not find label dropdown trigger')
+    }
+
+    trigger.click()
+    await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).not.toBeNull())
+
+    return [...root.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(({ textContent }) =>
+        textContent?.trim(),
+    )
 }
 
 describe('JobPostViewer', () => {
@@ -82,5 +97,17 @@ describe('JobPostViewer', () => {
         })
 
         expect(root.querySelector('.post-action-button')).toBeNull()
+    })
+
+    it('omits the clear-label option when the post has no label', async () => {
+        const root = mountViewer({ userLabel: null })
+
+        expect(await openLabelOptions(root)).not.toContain('Clear label')
+    })
+
+    it('keeps the clear-label option for a labeled post', async () => {
+        const root = mountViewer()
+
+        expect(await openLabelOptions(root)).toContain('Clear label')
     })
 })

@@ -65,12 +65,16 @@ const labelOptions = computed<AppDropdownOption[]>(() => [
     ...(props.showAppliedOption
         ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
         : []),
-    {
-        value: 'clear',
-        label: 'Clear label',
-        tone: 'muted' as const,
-        separatorBefore: true,
-    },
+    ...(props.post.userLabel !== null
+        ? [
+              {
+                  value: 'clear',
+                  label: 'Clear label',
+                  tone: 'muted' as const,
+                  separatorBefore: true,
+              },
+          ]
+        : []),
 ])
 
 const isUserLabel = (value: string): value is UserLabel =>
