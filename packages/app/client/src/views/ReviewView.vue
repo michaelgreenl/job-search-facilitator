@@ -316,42 +316,37 @@ onMounted(() => {
     <section class="layout-draft" aria-label="Job search review">
         <div class="layout-panels">
             <FlowPanel
-                class="glass-frame"
+                class="report-list-panel glass-frame"
                 :active="activePanel === 'reports'"
                 :adjacent="false"
                 aria-label="Search reports"
             >
-                <PanelHeading eyebrow="Job Search reports" title="Select report to review" />
+                <div class="report-list-heading">
+                    <PanelHeading
+                        class="report-list-title"
+                        eyebrow="Job Search reports"
+                        title="Select report to review"
+                    />
 
-                <div class="report-list-toolbar">
                     <fieldset class="report-date-filter" aria-label="Filter reports by date">
                         <div class="report-date-fields">
-                            <label class="report-date-field">
-                                <span>From</span>
-                                <input
-                                    v-model="reportDateFrom"
-                                    class="report-date-input"
-                                    type="date"
-                                    aria-label="Reports from date"
-                                    :max="reportDateTo || undefined"
-                                    :disabled="
-                                        reportStore.loading || reportStore.reports.length === 0
-                                    "
-                                />
-                            </label>
-                            <label class="report-date-field">
-                                <span>To</span>
-                                <input
-                                    v-model="reportDateTo"
-                                    class="report-date-input"
-                                    type="date"
-                                    aria-label="Reports through date"
-                                    :min="reportDateFrom || undefined"
-                                    :disabled="
-                                        reportStore.loading || reportStore.reports.length === 0
-                                    "
-                                />
-                            </label>
+                            <input
+                                v-model="reportDateFrom"
+                                class="report-date-input"
+                                type="date"
+                                aria-label="Reports from date"
+                                :max="reportDateTo || undefined"
+                                :disabled="reportStore.loading || reportStore.reports.length === 0"
+                            />
+                            <span class="report-date-separator" aria-hidden="true">–</span>
+                            <input
+                                v-model="reportDateTo"
+                                class="report-date-input"
+                                type="date"
+                                aria-label="Reports through date"
+                                :min="reportDateFrom || undefined"
+                                :disabled="reportStore.loading || reportStore.reports.length === 0"
+                            />
                             <button
                                 class="report-date-clear"
                                 :class="{ 'is-hidden': !reportDateFilterActive }"
@@ -469,15 +464,28 @@ onMounted(() => {
     border-radius: 0;
 }
 
-.report-list-toolbar {
-    display: flex;
-    flex-wrap: wrap;
+.report-list-panel {
+    container-name: report-list;
+    container-type: inline-size;
+}
+
+.report-list-heading {
+    display: grid;
+    grid-template-areas:
+        'title count'
+        'title dates';
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: $space-2 $space-4;
-    align-items: flex-end;
-    justify-content: space-between;
+    align-items: end;
+}
+
+.report-list-title {
+    grid-area: title;
 }
 
 .report-date-filter {
+    grid-area: dates;
+    justify-self: end;
     width: min(100%, 21rem);
     min-width: 0;
     margin: 0;
@@ -488,22 +496,18 @@ onMounted(() => {
 .report-date-fields {
     display: flex;
     gap: $space-2;
-    align-items: end;
+    align-items: center;
     justify-content: flex-start;
 }
 
-.report-date-field {
-    display: grid;
-    flex: 1 1 0;
-    gap: $space-1;
-    min-width: 0;
+.report-date-separator {
+    flex: 0 0 auto;
     color: $color-ink-muted;
-    font-size: 0.6875rem;
-    text-align: start;
 }
 
 .report-date-input {
-    width: 100%;
+    flex: 1 1 0;
+    width: auto;
     min-width: 0;
     min-height: 2rem;
     padding: $space-1 $space-2;
@@ -526,9 +530,7 @@ onMounted(() => {
 }
 
 .report-date-clear {
-    flex: 0 0 3rem;
-    width: 3rem;
-    min-height: 2rem;
+    flex: 0 0 auto;
     padding: $space-1 0;
     color: $color-signal-light;
     font: inherit;
@@ -550,7 +552,35 @@ onMounted(() => {
 }
 
 .report-count {
-    margin-inline-start: auto;
+    grid-area: count;
+    justify-self: end;
+}
+
+@container report-list (max-width: 38rem) {
+    .report-list-heading {
+        grid-template-areas:
+            'title title'
+            'dates count';
+        row-gap: $space-4;
+    }
+
+    .report-date-filter {
+        justify-self: start;
+    }
+}
+
+@container report-list (max-width: 24rem) {
+    .report-list-heading {
+        grid-template-areas:
+            'title'
+            'dates'
+            'count';
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .report-date-filter {
+        width: 100%;
+    }
 }
 
 .post-filter {

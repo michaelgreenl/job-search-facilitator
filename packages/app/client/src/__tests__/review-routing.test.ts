@@ -198,7 +198,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('places the date filters and report count in a stable row below the header', async () => {
+    it('groups the date range and report count in the responsive report heading', async () => {
         const { root } = await mountReview()
         const reportPanel = root.querySelector<HTMLElement>('[aria-label="Search reports"]')
 
@@ -206,19 +206,20 @@ describe('review route selection', () => {
             throw new Error('Could not find the search reports panel')
         }
 
-        const reportHeading = reportPanel.querySelector('header')
-        const reportToolbar = reportPanel.querySelector('.report-list-toolbar')
-        const reportCount = reportToolbar?.querySelector('.report-count')
+        const reportHeading = reportPanel.querySelector('.report-list-heading')
+        const dateFilter = reportHeading?.querySelector(
+            'fieldset[aria-label="Filter reports by date"]',
+        )
+        const reportCount = reportHeading?.querySelector('.report-count')
         const reportList = reportPanel.querySelector('.card-list')
-        const clearDates = reportToolbar?.querySelector<HTMLButtonElement>(
+        const clearDates = reportHeading?.querySelector<HTMLButtonElement>(
             'button[aria-label="Clear report dates"]',
         )
 
-        expect(reportToolbar?.previousElementSibling).toBe(reportHeading)
-        expect(
-            reportToolbar?.querySelector('fieldset[aria-label="Filter reports by date"]'),
-        ).not.toBeNull()
-        expect(reportHeading?.textContent).not.toContain('Run date')
+        expect(reportHeading?.querySelector('header')).not.toBeNull()
+        expect(dateFilter?.textContent).toContain('–')
+        expect(dateFilter?.textContent).not.toContain('From')
+        expect(dateFilter?.textContent).not.toContain('To')
         expect(reportCount?.textContent).toBe('3 reports')
         expect(clearDates?.disabled).toBe(true)
 
