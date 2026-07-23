@@ -45,6 +45,7 @@ const rationaleExpanded = computed(() => props.expanded || descriptionExpanded.v
 const rationaleId = useId()
 const rationaleElement = useTemplateRef<HTMLElement>('rationale')
 const rationaleOverflowing = shallowRef(false)
+const showRationaleToggle = computed(() => !props.expanded && rationaleOverflowing.value)
 let rationaleResizeObserver: ResizeObserver | null = null
 const selectionLabel = computed(() => {
     if (!props.selectable) {
@@ -179,28 +180,32 @@ onBeforeUnmount(() => {
                 >
                     {{ contact.relevanceRationale }}
                 </p>
-                <button
-                    v-if="!expanded && rationaleOverflowing"
-                    class="rationale-toggle"
-                    type="button"
-                    :aria-controls="rationaleId"
-                    :aria-expanded="descriptionExpanded"
-                    @click="toggleRationale"
-                >
-                    {{ descriptionExpanded ? 'Show less' : 'Show more' }}
-                </button>
-            </div>
-            <div v-if="showMessagedControl" class="messaged-control">
-                <label class="messaged-checkbox" :class="{ 'is-updating': messagedUpdating }">
-                    <input
-                        type="checkbox"
-                        :checked="contact.messaged"
-                        :disabled="messagedUpdating"
-                        @change="updateMessaged"
-                    />
-                    <span>Messaged</span>
-                </label>
-                <p v-if="messagedError" class="messaged-error" role="alert">
+                <div v-if="showMessagedControl || showRationaleToggle" class="contact-actions">
+                    <label
+                        v-if="showMessagedControl"
+                        class="messaged-checkbox"
+                        :class="{ 'is-updating': messagedUpdating }"
+                    >
+                        <input
+                            type="checkbox"
+                            :checked="contact.messaged"
+                            :disabled="messagedUpdating"
+                            @change="updateMessaged"
+                        />
+                        <span>Messaged</span>
+                    </label>
+                    <button
+                        v-if="showRationaleToggle"
+                        class="rationale-toggle"
+                        type="button"
+                        :aria-controls="rationaleId"
+                        :aria-expanded="descriptionExpanded"
+                        @click="toggleRationale"
+                    >
+                        {{ descriptionExpanded ? 'Show less' : 'Show more' }}
+                    </button>
+                </div>
+                <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
                     {{ messagedError }}
                 </p>
             </div>
@@ -265,13 +270,13 @@ onBeforeUnmount(() => {
     text-transform: uppercase;
 }
 
-.messaged-control {
+.contact-actions {
     position: relative;
     z-index: 2;
     display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    align-items: flex-start;
+    gap: $space-2;
+    align-items: center;
+    min-width: 0;
     margin-top: $space-2;
 }
 
@@ -298,7 +303,9 @@ onBeforeUnmount(() => {
 }
 
 .messaged-error {
-    margin: 0;
+    position: relative;
+    z-index: 2;
+    margin: $space-1 0 0;
     color: lighten-color($color-red-600, 20%);
     font-size: 0.75rem;
 }

@@ -89,6 +89,37 @@ describe('OutreachContactCard', () => {
         expect(onUpdateMessaged).toHaveBeenCalledExactlyOnceWith(false)
     })
 
+    it('keeps the messaged checkbox in the same action row as the rationale toggle', async () => {
+        const root = document.createElement('div')
+        document.body.append(root)
+        const app = createApp(OutreachContactCard, {
+            contact,
+            showMessagedControl: true,
+        })
+        app.mount(root)
+        mountedApps.push({ app, root })
+
+        const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
+
+        if (rationale === null) {
+            throw new Error('Could not find contact rationale')
+        }
+
+        Object.defineProperties(rationale, {
+            clientHeight: { configurable: true, value: 48 },
+            scrollHeight: { configurable: true, value: 96 },
+        })
+        await resizeRationale()
+
+        await vi.waitFor(() => {
+            const actionRow = root.querySelector('.contact-actions')
+
+            expect(actionRow).not.toBeNull()
+            expect(actionRow?.querySelector('.messaged-checkbox')).not.toBeNull()
+            expect(actionRow?.querySelector('.rationale-toggle')).not.toBeNull()
+        })
+    })
+
     it('hides the rationale disclosure when the text fits within three lines', async () => {
         const root = document.createElement('div')
         document.body.append(root)
