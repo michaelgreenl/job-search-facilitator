@@ -365,22 +365,24 @@ describe('apply view', () => {
             ).toBe(savedContact.draftMessage)
         })
 
-        const messagedCheckbox = root.querySelector<HTMLInputElement>(
-            '.draft-contact-card input[type="checkbox"]',
+        const messagedControl = root.querySelector<HTMLButtonElement>(
+            '.draft-contact-card button[aria-pressed]',
         )
 
-        if (messagedCheckbox === null) {
-            throw new Error('Could not find draft contact messaged checkbox')
+        if (messagedControl === null) {
+            throw new Error('Could not find draft contact messaged control')
         }
 
-        expect(messagedCheckbox.checked).toBe(true)
-        messagedCheckbox.checked = false
-        messagedCheckbox.dispatchEvent(new Event('change', { bubbles: true }))
+        expect(messagedControl.getAttribute('aria-pressed')).toBe('true')
+        expect(messagedControl.textContent).toContain('✓ Messaged')
+        messagedControl.click()
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenCalledTimes(3)
-            expect(messagedCheckbox.checked).toBe(true)
-            expect(messagedCheckbox.disabled).toBe(true)
+            expect(messagedControl.getAttribute('aria-pressed')).toBe('true')
+            expect(messagedControl.textContent).toContain('Saving…')
+            expect(messagedControl.querySelector('.loading-spinner')).not.toBeNull()
+            expect(messagedControl.disabled).toBe(true)
             expect(findButton(root, "Discover contact's").disabled).toBe(true)
         })
 
@@ -403,24 +405,25 @@ describe('apply view', () => {
             '[aria-label="Open outreach draft for Grace Hopper"]',
         )?.click()
 
-        const pendingCheckbox = await vi.waitFor(() => {
-            const checkbox = root.querySelector<HTMLInputElement>(
-                '.draft-contact-card input[type="checkbox"]',
+        const pendingMessagedControl = await vi.waitFor(() => {
+            const control = root.querySelector<HTMLButtonElement>(
+                '.draft-contact-card button[aria-pressed]',
             )
 
-            if (checkbox === null) {
-                throw new Error('Could not find pending messaged checkbox')
+            if (control === null) {
+                throw new Error('Could not find pending messaged control')
             }
 
-            expect(checkbox.disabled).toBe(true)
-            return checkbox
+            expect(control.disabled).toBe(true)
+            return control
         })
 
         resolveContactUpdate?.(jsonResponse(updatedContact))
 
         await vi.waitFor(() => {
-            expect(pendingCheckbox.checked).toBe(false)
-            expect(pendingCheckbox.disabled).toBe(false)
+            expect(pendingMessagedControl.getAttribute('aria-pressed')).toBe('false')
+            expect(pendingMessagedControl.textContent).toContain('Mark as messaged')
+            expect(pendingMessagedControl.disabled).toBe(false)
             expect(findButton(root, "Discover contact's").disabled).toBe(false)
         })
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -469,26 +472,26 @@ describe('apply view', () => {
             '[aria-label="Open outreach draft for Grace Hopper"]',
         )?.click()
 
-        const checkbox = await vi.waitFor(() => {
-            const control = root.querySelector<HTMLInputElement>(
-                '.draft-contact-card input[type="checkbox"]',
+        const messagedControl = await vi.waitFor(() => {
+            const control = root.querySelector<HTMLButtonElement>(
+                '.draft-contact-card button[aria-pressed]',
             )
 
             if (control === null) {
-                throw new Error('Could not find messaged checkbox')
+                throw new Error('Could not find messaged control')
             }
 
             return control
         })
-        checkbox.checked = false
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+        messagedControl.click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')?.textContent).toContain(
                 'API request failed (500)',
             )
-            expect(checkbox.checked).toBe(true)
-            expect(checkbox.disabled).toBe(false)
+            expect(messagedControl.getAttribute('aria-pressed')).toBe('true')
+            expect(messagedControl.textContent).toContain('✓ Messaged')
+            expect(messagedControl.disabled).toBe(false)
         })
     })
 

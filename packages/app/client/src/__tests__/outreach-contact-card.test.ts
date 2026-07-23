@@ -62,7 +62,7 @@ afterEach(() => {
 })
 
 describe('OutreachContactCard', () => {
-    it('shows an editable messaged checkbox only when requested', () => {
+    it('shows an interactive messaged status in the header only when requested', () => {
         const root = document.createElement('div')
         const onUpdateMessaged = vi.fn()
         document.body.append(root)
@@ -74,22 +74,70 @@ describe('OutreachContactCard', () => {
         app.mount(root)
         mountedApps.push({ app, root })
 
-        const checkbox = root.querySelector<HTMLInputElement>('input[type="checkbox"]')
+        const statusControl = root.querySelector<HTMLButtonElement>('button[aria-pressed]')
 
-        expect(checkbox?.checked).toBe(true)
+        expect(statusControl?.closest('.contact-labels')).not.toBeNull()
+        expect(statusControl?.getAttribute('aria-pressed')).toBe('true')
+        expect(statusControl?.textContent).toContain('✓ Messaged')
         expect(root.querySelector('.messaged-status')).toBeNull()
+        expect(root.querySelector('input[type="checkbox"]')).toBeNull()
 
-        if (checkbox === null) {
-            throw new Error('Could not find messaged checkbox')
+        if (statusControl === null) {
+            throw new Error('Could not find messaged status control')
         }
 
-        checkbox.checked = false
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+        statusControl.click()
 
         expect(onUpdateMessaged).toHaveBeenCalledExactlyOnceWith(false)
     })
 
-    it('keeps the messaged checkbox in the same action row as the rationale toggle', async () => {
+    it('marks an unmessaged contact from the header status control', () => {
+        const root = document.createElement('div')
+        const onUpdateMessaged = vi.fn()
+        document.body.append(root)
+        const app = createApp(OutreachContactCard, {
+            contact: { ...contact, messaged: false },
+            showMessagedControl: true,
+            onUpdateMessaged,
+        })
+        app.mount(root)
+        mountedApps.push({ app, root })
+
+        const statusControl = root.querySelector<HTMLButtonElement>('button[aria-pressed]')
+
+        expect(statusControl?.getAttribute('aria-pressed')).toBe('false')
+        expect(statusControl?.textContent?.trim()).toBe('Mark as messaged')
+
+        statusControl?.click()
+
+        expect(onUpdateMessaged).toHaveBeenCalledExactlyOnceWith(true)
+    })
+
+    it('disables the header status control and shows a spinner while saving', () => {
+        const root = document.createElement('div')
+        const onUpdateMessaged = vi.fn()
+        document.body.append(root)
+        const app = createApp(OutreachContactCard, {
+            contact,
+            showMessagedControl: true,
+            messagedUpdating: true,
+            onUpdateMessaged,
+        })
+        app.mount(root)
+        mountedApps.push({ app, root })
+
+        const statusControl = root.querySelector<HTMLButtonElement>('button[aria-pressed]')
+
+        expect(statusControl?.disabled).toBe(true)
+        expect(statusControl?.textContent?.trim()).toBe('Saving…')
+        expect(statusControl?.querySelector('.loading-spinner')).not.toBeNull()
+
+        statusControl?.click()
+
+        expect(onUpdateMessaged).not.toHaveBeenCalled()
+    })
+
+    it('keeps the rationale toggle by itself beneath the rationale', async () => {
         const root = document.createElement('div')
         document.body.append(root)
         const app = createApp(OutreachContactCard, {
@@ -115,8 +163,9 @@ describe('OutreachContactCard', () => {
             const actionRow = root.querySelector('.contact-actions')
 
             expect(actionRow).not.toBeNull()
-            expect(actionRow?.querySelector('.messaged-checkbox')).not.toBeNull()
             expect(actionRow?.querySelector('.rationale-toggle')).not.toBeNull()
+            expect(actionRow?.children).toHaveLength(1)
+            expect(actionRow?.querySelector('button[aria-pressed]')).toBeNull()
         })
     })
 

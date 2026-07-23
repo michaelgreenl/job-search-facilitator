@@ -87,12 +87,10 @@ function toggleRationale() {
     }
 }
 
-function updateMessaged(event: Event) {
-    const checkbox = event.currentTarget as HTMLInputElement
-    const messaged = checkbox.checked
-    // Keep the control aligned with persisted state until the PATCH response arrives.
-    checkbox.checked = props.contact?.messaged ?? false
-    emit('updateMessaged', messaged)
+function toggleMessaged() {
+    if (props.contact) {
+        emit('updateMessaged', !props.contact.messaged)
+    }
 }
 
 watch(
@@ -158,10 +156,31 @@ onBeforeUnmount(() => {
         <template v-else-if="contact">
             <div class="contact-labels">
                 <span class="eyebrow">Relevant contact</span>
-                <span v-if="contact.messaged && !showMessagedControl" class="messaged-status">
-                    Messaged
-                </span>
+                <button
+                    v-if="showMessagedControl"
+                    class="messaged-status-button"
+                    :class="{
+                        'is-messaged': contact.messaged,
+                        'is-updating': messagedUpdating,
+                    }"
+                    type="button"
+                    :aria-pressed="contact.messaged"
+                    :disabled="messagedUpdating"
+                    @click="toggleMessaged"
+                >
+                    <LoadingSpinner v-if="messagedUpdating" class="messaged-spinner" />
+                    <template v-if="messagedUpdating">Saving…</template>
+                    <template v-else-if="contact.messaged">
+                        <span aria-hidden="true">✓</span>
+                        Messaged
+                    </template>
+                    <template v-else>Mark as messaged</template>
+                </button>
+                <span v-else-if="contact.messaged" class="messaged-status"> Messaged </span>
             </div>
+            <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
+                {{ messagedError }}
+            </p>
             <a
                 class="person-name"
                 :href="contact.profileUrl"
@@ -180,22 +199,8 @@ onBeforeUnmount(() => {
                 >
                     {{ contact.relevanceRationale }}
                 </p>
-                <div v-if="showMessagedControl || showRationaleToggle" class="contact-actions">
-                    <label
-                        v-if="showMessagedControl"
-                        class="messaged-checkbox"
-                        :class="{ 'is-updating': messagedUpdating }"
-                    >
-                        <input
-                            type="checkbox"
-                            :checked="contact.messaged"
-                            :disabled="messagedUpdating"
-                            @change="updateMessaged"
-                        />
-                        <span>Messaged</span>
-                    </label>
+                <div v-if="showRationaleToggle" class="contact-actions">
                     <button
-                        v-if="showRationaleToggle"
                         class="rationale-toggle"
                         type="button"
                         :aria-controls="rationaleId"
@@ -205,9 +210,6 @@ onBeforeUnmount(() => {
                         {{ descriptionExpanded ? 'Show less' : 'Show more' }}
                     </button>
                 </div>
-                <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
-                    {{ messagedError }}
-                </p>
             </div>
         </template>
     </article>
@@ -259,18 +261,49 @@ onBeforeUnmount(() => {
     text-transform: uppercase;
 }
 
-.messaged-status {
+.messaged-status,
+.messaged-status-button {
     display: inline-flex;
     width: fit-content;
     gap: $space-1;
     align-items: center;
     padding: $space-1 $space-2;
-    color: lighten-color($color-green-600, 35%);
     font-family: $font-family-mono;
     font-size: 0.6875rem;
+    line-height: 1.25;
+    border-radius: $radius-full;
+}
+
+.messaged-status,
+.messaged-status-button.is-messaged {
+    color: lighten-color($color-green-600, 35%);
     background: $color-green-600-alpha-25;
     border: 1px solid $color-green-600-alpha-55;
-    border-radius: $radius-full;
+}
+
+.messaged-status-button {
+    position: relative;
+    z-index: 2;
+    color: $color-ink-secondary;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid $color-ink-alpha-50;
+
+    &:not(.is-messaged):hover:not(:disabled) {
+        color: $color-ink;
+        border-color: $color-signal-light-alpha-50;
+    }
+
+    &.is-updating {
+        cursor: wait;
+        opacity: 0.7;
+    }
+}
+
+.messaged-spinner {
+    width: 0.6875rem;
+    height: 0.6875rem;
+    border-width: 1.5px;
 }
 
 .contact-actions {
@@ -283,34 +316,15 @@ onBeforeUnmount(() => {
     margin-top: $space-2;
 }
 
-.messaged-checkbox {
-    display: inline-flex;
-    gap: $space-2;
-    align-items: center;
-    width: fit-content;
-    color: $color-ink-secondary;
-    font-size: 0.8125rem;
-    cursor: pointer;
-
-    input {
-        width: 1rem;
-        height: 1rem;
-        margin: 0;
-        accent-color: $color-action;
-    }
-
-    &.is-updating {
-        cursor: wait;
-        opacity: 0.55;
-    }
-}
-
 .messaged-error {
     position: relative;
     z-index: 2;
-    margin: $space-1 0 0;
+    justify-self: end;
+    max-width: 100%;
+    margin: 0;
     color: lighten-color($color-red-600, 20%);
     font-size: 0.75rem;
+    text-align: right;
 }
 
 .person-name,
