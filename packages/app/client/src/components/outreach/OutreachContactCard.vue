@@ -260,14 +260,17 @@ onBeforeUnmount(() => {
 }
 
 .messaged-status {
-    padding: 0.15rem $space-2;
-    color: $color-ink;
+    display: inline-flex;
+    width: fit-content;
+    gap: $space-1;
+    align-items: center;
+    padding: $space-1 $space-2;
+    color: lighten-color($color-green-600, 35%);
     font-family: $font-family-mono;
     font-size: 0.6875rem;
-    letter-spacing: 0.04em;
-    background: $color-signal-light-alpha-18;
-    border-radius: $radius-sm;
-    text-transform: uppercase;
+    background: $color-green-600-alpha-25;
+    border: 1px solid $color-green-600-alpha-55;
+    border-radius: $radius-full;
 }
 
 .contact-actions {

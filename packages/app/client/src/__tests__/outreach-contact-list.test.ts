@@ -49,6 +49,8 @@ const selectFilter = async (root: HTMLElement, label: string) => {
 
     option.click()
     await vi.waitFor(() => expect(trigger.textContent?.trim()).toBe(label))
+
+    return option
 }
 
 describe('OutreachContactList', () => {
@@ -72,13 +74,15 @@ describe('OutreachContactList', () => {
         expect(root.textContent).toContain('Ada Lovelace')
         expect(root.textContent).toContain('Grace Hopper')
 
-        await selectFilter(root, 'Messaged')
+        const messagedFilter = await selectFilter(root, 'Messaged')
+        expect(messagedFilter.classList.contains('app-dropdown-item-success')).toBe(true)
         expect(root.textContent).toContain('Ada Lovelace')
         expect(root.textContent).not.toContain('Grace Hopper')
         root.querySelector<HTMLButtonElement>('[aria-label="View outreach progress"]')?.click()
         expect(onShowStream).toHaveBeenCalledOnce()
 
-        await selectFilter(root, 'Not Messaged')
+        const notMessagedFilter = await selectFilter(root, 'Not Messaged')
+        expect(notMessagedFilter.classList.contains('app-dropdown-item-muted')).toBe(true)
         expect(root.textContent).not.toContain('Ada Lovelace')
         expect(root.textContent).toContain('Grace Hopper')
 

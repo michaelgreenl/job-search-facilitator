@@ -11,8 +11,8 @@ import OutreachContactCard from './OutreachContactCard.vue'
 
 const contactFilterOptions: AppDropdownOption[] = [
     { value: 'all', label: 'All' },
-    { value: 'messaged', label: 'Messaged' },
-    { value: 'not-messaged', label: 'Not Messaged' },
+    { value: 'messaged', label: 'Messaged', tone: 'success' },
+    { value: 'not-messaged', label: 'Not Messaged', tone: 'muted' },
 ]
 
 const isContactFilter = (value: string): value is OutreachContactFilter =>
@@ -124,8 +124,9 @@ function selectContactFilter(value: string) {
 }
 
 .contact-filter-dropdown {
-    min-width: 9.5rem;
+    min-width: 7rem;
     margin-left: auto;
+    font-size: 0.75rem;
 }
 
 .contact-list {
