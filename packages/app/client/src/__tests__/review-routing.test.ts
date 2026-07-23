@@ -198,6 +198,39 @@ describe('review route selection', () => {
         })
     })
 
+    it('places the date filters and report count in a stable row below the header', async () => {
+        const { root } = await mountReview()
+        const reportPanel = root.querySelector<HTMLElement>('[aria-label="Search reports"]')
+
+        if (reportPanel === null) {
+            throw new Error('Could not find the search reports panel')
+        }
+
+        const reportHeading = reportPanel.querySelector('header')
+        const reportToolbar = reportPanel.querySelector('.report-list-toolbar')
+        const reportCount = reportToolbar?.querySelector('.report-count')
+        const reportList = reportPanel.querySelector('.card-list')
+        const clearDates = reportToolbar?.querySelector<HTMLButtonElement>(
+            'button[aria-label="Clear report dates"]',
+        )
+
+        expect(reportToolbar?.previousElementSibling).toBe(reportHeading)
+        expect(
+            reportToolbar?.querySelector('fieldset[aria-label="Filter reports by date"]'),
+        ).not.toBeNull()
+        expect(reportHeading?.textContent).not.toContain('Run date')
+        expect(reportCount?.textContent).toBe('3 reports')
+        expect(clearDates?.disabled).toBe(true)
+
+        if (reportCount === null || reportCount === undefined || reportList === null) {
+            throw new Error('Could not find the report count or card list')
+        }
+
+        expect(
+            reportCount.compareDocumentPosition(reportList) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+    })
+
     it('filters reports by an inclusive open-ended date range and clears it', async () => {
         const { root } = await mountReview()
         const { from, to } = getReportDateInputs(root)
@@ -234,7 +267,7 @@ describe('review route selection', () => {
             expect(root.textContent).toContain('1 of 3 reports')
         })
 
-        findButton(root, 'Clear dates').click()
+        findButton(root, 'Clear').click()
 
         await vi.waitFor(() => {
             expect(from.value).toBe('')

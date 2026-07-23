@@ -321,51 +321,52 @@ onMounted(() => {
                 :adjacent="false"
                 aria-label="Search reports"
             >
-                <PanelHeading eyebrow="Job Search reports" title="Select report to review">
-                    <template #controls>
-                        <span class="item-count">{{ reportCountLabel }}</span>
+                <PanelHeading eyebrow="Job Search reports" title="Select report to review" />
 
-                        <fieldset class="report-date-filter">
-                            <legend class="report-date-legend">Run date</legend>
-                            <div class="report-date-fields">
-                                <label class="report-date-field">
-                                    <span>From</span>
-                                    <input
-                                        v-model="reportDateFrom"
-                                        class="report-date-input"
-                                        type="date"
-                                        aria-label="Reports from date"
-                                        :max="reportDateTo || undefined"
-                                        :disabled="
-                                            reportStore.loading || reportStore.reports.length === 0
-                                        "
-                                    />
-                                </label>
-                                <label class="report-date-field">
-                                    <span>To</span>
-                                    <input
-                                        v-model="reportDateTo"
-                                        class="report-date-input"
-                                        type="date"
-                                        aria-label="Reports through date"
-                                        :min="reportDateFrom || undefined"
-                                        :disabled="
-                                            reportStore.loading || reportStore.reports.length === 0
-                                        "
-                                    />
-                                </label>
-                                <button
-                                    v-if="reportDateFilterActive"
-                                    class="report-date-clear"
-                                    type="button"
-                                    @click="clearReportDateFilter"
-                                >
-                                    Clear dates
-                                </button>
-                            </div>
-                        </fieldset>
-                    </template>
-                </PanelHeading>
+                <div class="report-list-toolbar">
+                    <fieldset class="report-date-filter" aria-label="Filter reports by date">
+                        <div class="report-date-fields">
+                            <label class="report-date-field">
+                                <span>From</span>
+                                <input
+                                    v-model="reportDateFrom"
+                                    class="report-date-input"
+                                    type="date"
+                                    aria-label="Reports from date"
+                                    :max="reportDateTo || undefined"
+                                    :disabled="
+                                        reportStore.loading || reportStore.reports.length === 0
+                                    "
+                                />
+                            </label>
+                            <label class="report-date-field">
+                                <span>To</span>
+                                <input
+                                    v-model="reportDateTo"
+                                    class="report-date-input"
+                                    type="date"
+                                    aria-label="Reports through date"
+                                    :min="reportDateFrom || undefined"
+                                    :disabled="
+                                        reportStore.loading || reportStore.reports.length === 0
+                                    "
+                                />
+                            </label>
+                            <button
+                                class="report-date-clear"
+                                :class="{ 'is-hidden': !reportDateFilterActive }"
+                                type="button"
+                                aria-label="Clear report dates"
+                                :disabled="!reportDateFilterActive"
+                                @click="clearReportDateFilter"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </fieldset>
+
+                    <span class="item-count report-count">{{ reportCountLabel }}</span>
+                </div>
 
                 <p v-if="reportStore.loading" class="list-message">Loading search reports…</p>
                 <p v-else-if="reportStore.error" class="list-message">
@@ -468,40 +469,42 @@ onMounted(() => {
     border-radius: 0;
 }
 
+.report-list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2 $space-4;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
 .report-date-filter {
+    width: min(100%, 21rem);
     min-width: 0;
     margin: 0;
     padding: 0;
     border: 0;
 }
 
-.report-date-legend {
-    width: 100%;
-    padding: 0;
-    margin-bottom: $space-1;
-    color: $color-ink-muted;
-    font-size: 0.75rem;
-    text-align: end;
-}
-
 .report-date-fields {
     display: flex;
-    flex-wrap: wrap;
     gap: $space-2;
     align-items: end;
-    justify-content: flex-end;
+    justify-content: flex-start;
 }
 
 .report-date-field {
     display: grid;
+    flex: 1 1 0;
     gap: $space-1;
+    min-width: 0;
     color: $color-ink-muted;
     font-size: 0.6875rem;
     text-align: start;
 }
 
 .report-date-input {
-    width: 8.5rem;
+    width: 100%;
+    min-width: 0;
     min-height: 2rem;
     padding: $space-1 $space-2;
     color: $color-ink;
@@ -523,6 +526,8 @@ onMounted(() => {
 }
 
 .report-date-clear {
+    flex: 0 0 3rem;
+    width: 3rem;
     min-height: 2rem;
     padding: $space-1 0;
     color: $color-signal-light;
@@ -532,12 +537,20 @@ onMounted(() => {
     background: transparent;
     border: 0;
 
+    &.is-hidden {
+        visibility: hidden;
+    }
+
     &:hover,
     &:focus-visible {
         color: $color-ink;
         text-decoration: underline;
         text-underline-offset: 0.15em;
     }
+}
+
+.report-count {
+    margin-inline-start: auto;
 }
 
 .post-filter {
