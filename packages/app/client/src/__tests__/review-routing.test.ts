@@ -14,6 +14,7 @@ const createPost = (id: string, roleTitle: string): JobPost => ({
     company: 'Example Co',
     location: 'Remote',
     compensation: null,
+    techStack: 'TypeScript, Vue, Node.js',
     postSource: 'Greenhouse',
     postUrl: `https://example.com/jobs/${id}`,
     applicationUrl: `https://apply.example.com/jobs/${id}`,

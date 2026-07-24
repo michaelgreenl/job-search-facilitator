@@ -12,6 +12,7 @@ const existingPost: JobPost = {
     company: 'Example Company',
     location: 'Detroit, MI',
     compensation: '$120,000',
+    techStack: 'TypeScript, Vue, Node.js',
     postSource: 'Example Source',
     postUrl: 'https://example.com/jobs/123',
     applicationUrl: 'https://apply.example.com/jobs/123',

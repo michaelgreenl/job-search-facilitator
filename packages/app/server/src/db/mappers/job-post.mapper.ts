@@ -57,6 +57,7 @@ export const toJobPost = (post: PrismaJobPost): JobPost => ({
     company: post.company,
     location: post.location,
     compensation: post.compensation,
+    techStack: post.techStack,
     postSource: post.postSource,
     postUrl: post.postUrl,
     applicationUrl: post.applicationUrl,

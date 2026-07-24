@@ -22,6 +22,7 @@ export const jobPostInputSchema = z.strictObject({
     company: nonBlankString,
     location: nonBlankString.nullable(),
     compensation: nonBlankString.nullable(),
+    techStack: nonBlankString,
     postSource: nonBlankString,
     postUrl: httpUrl,
     applicationUrl: httpUrl,

@@ -121,6 +121,7 @@ export const searchReportRepository: SearchReportRepository = {
                     company: result.post.company,
                     location: result.post.location,
                     compensation: result.post.compensation,
+                    techStack: result.post.techStack,
                     postSource: result.post.postSource,
                     postUrl: result.post.postUrl,
                     applicationUrl: result.post.applicationUrl,

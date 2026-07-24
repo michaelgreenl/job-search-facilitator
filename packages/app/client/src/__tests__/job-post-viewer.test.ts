@@ -12,6 +12,7 @@ const post = {
     company: 'Example Company',
     location: 'Remote',
     compensation: '$120,000',
+    techStack: 'TypeScript, Vue, Node.js',
     postSource: 'Greenhouse',
     postUrl: 'https://example.com/jobs/post-id',
     applicationUrl: 'https://apply.example.com/jobs/post-id',

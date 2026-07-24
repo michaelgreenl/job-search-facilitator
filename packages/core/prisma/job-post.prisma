@@ -26,6 +26,7 @@ model JobPost {
   company           String
   location          String?
   compensation      String?
+  techStack         String
   postSource        String
   postUrl           String
   applicationUrl    String

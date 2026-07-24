@@ -25,6 +25,7 @@ export interface JobPost {
     company: string
     location: string | null
     compensation: string | null
+    techStack: string
     postSource: string
     postUrl: string
     applicationUrl: string
@@ -43,6 +44,7 @@ export interface JobPostInput {
     company: string
     location: string | null
     compensation: string | null
+    techStack: string
     postSource: string
     postUrl: string
     applicationUrl: string

@@ -1,0 +1,5 @@
+ALTER TABLE "JobPost"
+ADD COLUMN "techStack" TEXT NOT NULL DEFAULT 'Not recorded';
+
+ALTER TABLE "JobPost"
+ALTER COLUMN "techStack" DROP DEFAULT;
