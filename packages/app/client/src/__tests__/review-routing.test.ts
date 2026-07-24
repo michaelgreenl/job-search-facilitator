@@ -20,7 +20,6 @@ const createPost = (id: string, roleTitle: string): JobPost => ({
     applicationUrl: `https://apply.example.com/jobs/${id}`,
     postStatus: 'active',
     applicationStatus: 'not-applied',
-    userRank: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-15T12:00:00.000Z',

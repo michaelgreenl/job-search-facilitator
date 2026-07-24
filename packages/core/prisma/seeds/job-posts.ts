@@ -17,7 +17,6 @@ interface JobPostSeed {
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
-    userRank: number | null
     userLabel: UserLabel | null
     archivedAt: Date | null
 }
@@ -35,7 +34,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-northstar-frontend',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.INTERVIEWING,
-        userRank: 1,
         userLabel: UserLabel.P1,
         archivedAt: null,
     },
@@ -51,7 +49,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-copper-finch-full-stack',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.AWAITING_RESPONSE,
-        userRank: 2,
         userLabel: UserLabel.P2,
         archivedAt: null,
     },
@@ -67,7 +64,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-lakeview-backend',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: 3,
         userLabel: UserLabel.QUICK_APP,
         archivedAt: null,
     },
@@ -83,7 +79,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-juniper-ui-infrastructure',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.REJECTED,
-        userRank: null,
         userLabel: UserLabel.FORGO,
         archivedAt: null,
     },
@@ -99,7 +94,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-moonrise-developer-experience',
         postStatus: PostStatus.CLOSED,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: new Date('2026-06-15T12:00:00.000Z'),
     },
@@ -115,7 +109,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-emberline-product',
         postStatus: PostStatus.UNKNOWN,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },
@@ -131,7 +124,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-atlas-grove-node-api',
         postStatus: PostStatus.CLOSED,
         applicationStatus: ApplicationStatus.HIRED,
-        userRank: 1,
         userLabel: UserLabel.P1,
         archivedAt: null,
     },
@@ -147,7 +139,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-blue-heron-design-systems',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },
@@ -163,7 +154,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-cedar-signal-performance',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },
@@ -179,7 +169,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-great-lakes-internal-tools',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },
@@ -195,7 +184,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-lumen-harbor-accessibility',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },
@@ -211,7 +199,6 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
         applicationUrl: 'https://example.com/jobs/seed-paper-kite-typescript',
         postStatus: PostStatus.ACTIVE,
         applicationStatus: ApplicationStatus.NOT_APPLIED,
-        userRank: null,
         userLabel: null,
         archivedAt: null,
     },

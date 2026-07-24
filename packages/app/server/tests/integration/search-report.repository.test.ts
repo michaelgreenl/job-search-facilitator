@@ -298,7 +298,6 @@ describe('search report repository', () => {
         expect(postId).toBeDefined()
         await jobPostRepository.update(postId!, {
             applicationStatus: 'interviewing',
-            userRank: 1,
             userLabel: 'forgo',
             archivedAt,
         })
@@ -346,7 +345,6 @@ describe('search report repository', () => {
             applicationUrl: 'https://apply.example.com/jobs/updated',
             postStatus: 'closed',
             applicationStatus: 'interviewing',
-            userRank: 1,
             userLabel: 'forgo',
             archivedAt,
         })

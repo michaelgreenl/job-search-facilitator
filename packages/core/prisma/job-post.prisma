@@ -32,7 +32,6 @@ model JobPost {
   applicationUrl    String
   postStatus        PostStatus        @default(UNKNOWN)
   applicationStatus ApplicationStatus @default(NOT_APPLIED)
-  userRank          Int?
   userLabel         UserLabel?
   archivedAt        DateTime?         @db.Timestamptz(3)
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)

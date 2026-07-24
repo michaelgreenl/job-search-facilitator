@@ -15,7 +15,6 @@ const post: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/post-id',
     postStatus: 'active',
     applicationStatus: 'not-applied',
-    userRank: null,
     userLabel: 'P1',
     archivedAt: null,
     createdAt: '2026-07-20T12:00:00.000Z',

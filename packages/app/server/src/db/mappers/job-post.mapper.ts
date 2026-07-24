@@ -63,7 +63,6 @@ export const toJobPost = (post: PrismaJobPost): JobPost => ({
     applicationUrl: post.applicationUrl,
     postStatus: postStatusToApi[post.postStatus],
     applicationStatus: applicationStatusToApi[post.applicationStatus],
-    userRank: post.userRank,
     userLabel: post.userLabel === null ? null : userLabelToApi[post.userLabel],
     archivedAt: post.archivedAt?.toISOString() ?? null,
     createdAt: post.createdAt.toISOString(),

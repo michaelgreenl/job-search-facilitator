@@ -53,10 +53,6 @@ export const jobPostRepository: JobPostRepository = {
             data.postStatus = toPrismaPostStatus(input.postStatus)
         }
 
-        if (input.userRank !== undefined) {
-            data.userRank = input.userRank
-        }
-
         if (input.userLabel !== undefined) {
             data.userLabel = input.userLabel === null ? null : toPrismaUserLabel(input.userLabel)
         }

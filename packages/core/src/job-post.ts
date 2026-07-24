@@ -31,7 +31,6 @@ export interface JobPost {
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
-    userRank: number | null
     userLabel: UserLabel | null
     archivedAt: IsoDateTime | null
     createdAt: IsoDateTime
@@ -54,7 +53,6 @@ export interface JobPostInput {
 export interface UpdateJobPostInput {
     applicationStatus?: ApplicationStatus
     postStatus?: PostStatus
-    userRank?: number | null
     userLabel?: UserLabel | null
     archivedAt?: IsoDateTime | null
 }

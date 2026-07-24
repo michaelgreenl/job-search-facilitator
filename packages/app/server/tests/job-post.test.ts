@@ -18,7 +18,6 @@ const existingPost: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/123',
     postStatus: 'active',
     applicationStatus: 'not-applied',
-    userRank: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
@@ -93,7 +92,6 @@ describe('job post routes', () => {
         const input: UpdateJobPostInput = {
             applicationStatus: 'interviewing',
             postStatus: 'closed',
-            userRank: 1,
             userLabel: 'forgo',
             archivedAt: '2026-07-12T12:00:00.000Z',
         }
@@ -112,7 +110,7 @@ describe('job post routes', () => {
     })
 
     it.each([
-        ['an invalid field value', { userRank: 1.5 }],
+        ['an invalid field value', { archivedAt: 'not-a-date' }],
         ['an extra field', { roleTitle: 'Changed title' }],
         ['an empty body', {}],
     ])('rejects %s without updating', async (_description, input) => {
