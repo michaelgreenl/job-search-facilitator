@@ -18,7 +18,7 @@ export interface JobSearchReport {
     results: JobSearchResult[]
 }
 
-export interface JobSearchResult {
+export interface JobRecommendation {
     agentRank: number
     agentLabel: AgentLabel
     fitRationale: string
@@ -27,18 +27,18 @@ export interface JobSearchResult {
     recommendedResume: ResumeType
     recommendedAction: string
     legitimacyNotes: string | null
+}
+
+export interface JobRecommendationContext extends JobRecommendation {
+    reportId: string
+    reportDate: string
+}
+
+export interface JobSearchResult extends JobRecommendation {
     post: JobPost
 }
 
-export interface JobSearchResultInput {
-    agentRank: number
-    agentLabel: AgentLabel
-    fitRationale: string
-    applicationFlow: string
-    keyLegitimacySignals: string
-    recommendedResume: ResumeType
-    recommendedAction: string
-    legitimacyNotes: string | null
+export interface JobSearchResultInput extends JobRecommendation {
     post: JobPostInput
 }
 

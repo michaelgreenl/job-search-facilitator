@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
 
 import type {
+    ApplyQueueItem,
     JobPost,
+    JobRecommendationContext,
     JobSearchReport,
     OutreachContact,
     UserLabel,
@@ -11,7 +13,6 @@ import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePostStore } from '@/stores/post.store'
-import { useReportStore } from '@/stores/report.store'
 import ApplyView from '../views/ApplyView.vue'
 
 const createPost = (id: string, userLabel: UserLabel): JobPost => ({
@@ -57,6 +58,20 @@ const report: JobSearchReport = {
         post,
     })),
 }
+const applyQueueItems: ApplyQueueItem[] = report.results.map(({ post, ...recommendation }) => ({
+    post,
+    recommendationContext: {
+        reportId: report.id,
+        reportDate: report.reportDate,
+        ...recommendation,
+    },
+}))
+const createApplyQueueItem = (
+    post: JobPost,
+    recommendationContext: JobRecommendationContext | null = applyQueueItems.find(
+        (item) => item.post.id === post.id,
+    )?.recommendationContext ?? null,
+): ApplyQueueItem => ({ post, recommendationContext })
 
 const runningWorkTask = {
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -144,18 +159,10 @@ class FakeEventSource {
 
 const mountApplyView = async (
     pinia: Pinia = createPinia(),
-    {
-        seedReports = true,
-        waitForPosts = true,
-    }: { seedReports?: boolean; waitForPosts?: boolean } = {},
+    { waitForPosts = true }: { waitForPosts?: boolean } = {},
 ) => {
     const root = document.createElement('div')
     document.body.append(root)
-    const reportStore = useReportStore(pinia)
-
-    if (seedReports && reportStore.reports.length === 0) {
-        reportStore.reports = [report]
-    }
 
     const app = createApp(ApplyView)
     app.use(pinia)
@@ -221,7 +228,7 @@ const chooseJobPostAction = async (root: HTMLElement, label: string) => {
 
 describe('apply view', () => {
     beforeEach(() => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(posts)))
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(applyQueueItems)))
     })
 
     afterEach(() => {
@@ -239,7 +246,9 @@ describe('apply view', () => {
             ...posts[0]!,
             applicationUrl: posts[0]!.postUrl,
         }
-        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([sharedDestinationPost]))
+        vi.mocked(fetch).mockResolvedValueOnce(
+            jsonResponse([createApplyQueueItem(sharedDestinationPost)]),
+        )
         const root = await mountApplyView()
 
         findButton(root, sharedDestinationPost.roleTitle).click()
@@ -305,7 +314,7 @@ describe('apply view', () => {
         const pinia = createPinia()
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse(outsideQueuePost))
         const root = await mountApplyView(pinia)
 
@@ -316,6 +325,7 @@ describe('apply view', () => {
     })
 
     it('moves between the post list and viewer', async () => {
+        const fetchMock = vi.mocked(fetch)
         const root = await mountApplyView()
         const selectedPost = posts[1]
         const selectedResult = report.results[1]
@@ -330,6 +340,20 @@ describe('apply view', () => {
         expect(list?.classList.contains('is-adjacent')).toBe(false)
         expect(viewer?.classList.contains('is-active')).toBe(false)
         expect(viewer?.classList.contains('is-adjacent')).toBe(true)
+        expect(
+            [...(list?.querySelectorAll('.card-list > li') ?? [])].map(
+                (item) => posts.find(({ roleTitle }) => item.textContent?.includes(roleTitle))?.id,
+            ),
+        ).toEqual(applyQueueItems.map(({ post }) => post.id))
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:3000/api/job-posts/apply-queue',
+            undefined,
+        )
+        expect(
+            fetchMock.mock.calls.some(([input]) =>
+                fetchUrl(input).endsWith('/api/job-search-reports'),
+            ),
+        ).toBe(false)
 
         findButton(root, 'P2 Engineer').click()
 
@@ -367,62 +391,6 @@ describe('apply view', () => {
         })
     })
 
-    it('shows the selected recommendation without review-only legitimacy context', async () => {
-        const fetchMock = vi.mocked(fetch).mockImplementation((input) => {
-            const url = fetchUrl(input)
-
-            if (url.endsWith('/api/job-posts/apply-queue')) {
-                return Promise.resolve(jsonResponse(posts))
-            }
-
-            if (url.endsWith('/api/job-search-reports')) {
-                return Promise.resolve(jsonResponse([report]))
-            }
-
-            throw new Error(`Unexpected request: ${url}`)
-        })
-        const root = await mountApplyView(createPinia(), { seedReports: false })
-        const selected = report.results[1]
-
-        if (selected === undefined) {
-            throw new Error('Could not find the selected result fixture')
-        }
-
-        findButton(root, selected.post.roleTitle).click()
-        await nextTick()
-
-        const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
-
-        expect(viewerText).toContain('Recommended resume')
-        expect(viewerText).toContain('Backend / full-stack')
-        expect(viewerText).toContain(selected.recommendedAction)
-        expect(viewerText).toContain(selected.fitRationale)
-        expect(viewerText).not.toContain('Legitimacy')
-        expect(viewerText).not.toContain('Key signals')
-        expect(fetchMock).toHaveBeenCalledWith(
-            'http://localhost:3000/api/job-search-reports',
-            undefined,
-        )
-    })
-
-    it('keeps post facts available when no saved recommendation remains', async () => {
-        const selectedPost = posts[0]!
-        const pinia = createPinia()
-        useReportStore(pinia).reports = [{ ...report, results: report.results.slice(1) }]
-        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([selectedPost]))
-        const root = await mountApplyView(pinia, { seedReports: false })
-
-        findButton(root, selectedPost.roleTitle).click()
-        await nextTick()
-
-        const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
-
-        expect(viewerText).toContain('At a glance')
-        expect(viewerText).toContain(selectedPost.techStack)
-        expect(viewerText).not.toContain('Recommendation')
-        expect(viewerText).not.toContain('Legitimacy')
-    })
-
     it('opens and updates saved contacts without starting another discovery', async () => {
         let resolveContactUpdate: ((response: Response) => void) | undefined
         const contactUpdateResponse = new Promise<Response>((resolve) => {
@@ -436,7 +404,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockReturnValueOnce(contactUpdateResponse)
             .mockResolvedValueOnce(jsonResponse([updatedContact]))
@@ -582,7 +550,7 @@ describe('apply view', () => {
     it('shows a failed messaged update in the drafting card', async () => {
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const root = await mountApplyView()
@@ -624,7 +592,7 @@ describe('apply view', () => {
     it('navigates back from an expanded draft through contacts to the job post', async () => {
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
         const root = await mountApplyView()
 
@@ -698,7 +666,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -746,7 +714,7 @@ describe('apply view', () => {
             const url = fetchUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
-                return Promise.resolve(jsonResponse(posts))
+                return Promise.resolve(jsonResponse(applyQueueItems))
             }
 
             if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
@@ -800,7 +768,7 @@ describe('apply view', () => {
             const url = fetchUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
-                return Promise.resolve(jsonResponse(posts))
+                return Promise.resolve(jsonResponse(applyQueueItems))
             }
 
             const post = posts.find(({ id }) =>
@@ -889,7 +857,7 @@ describe('apply view', () => {
             const url = fetchUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
-                return Promise.resolve(jsonResponse(posts))
+                return Promise.resolve(jsonResponse(applyQueueItems))
             }
 
             if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
@@ -1001,7 +969,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1142,7 +1110,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1199,7 +1167,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1296,7 +1264,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1356,7 +1324,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1402,7 +1370,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
@@ -1430,7 +1398,7 @@ describe('apply view', () => {
         expect(labelPicker).not.toBeNull()
         expect(labelPicker?.disabled).toBe(true)
 
-        resolveQueueResponse?.(jsonResponse(posts))
+        resolveQueueResponse?.(jsonResponse(applyQueueItems))
 
         await vi.waitFor(() => {
             expect(remountedRoot.textContent).toContain('Allow Chrome to access')
@@ -1443,11 +1411,15 @@ describe('apply view', () => {
     })
 
     it('keeps a newly applied post visible for the current route visit', async () => {
-        const appliedPost = { ...posts[0]!, applicationStatus: 'awaiting-response' as const }
+        const appliedPost = {
+            ...posts[0]!,
+            applicationStatus: 'awaiting-response' as const,
+            updatedAt: '2026-07-16T12:00:01.000Z',
+        }
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(
                 jsonResponse({
                     post: appliedPost,
@@ -1492,7 +1464,7 @@ describe('apply view', () => {
     it('keeps an unapplied post available when its status update fails', async () => {
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse([posts[0]]))
+            .mockResolvedValueOnce(jsonResponse([createApplyQueueItem(posts[0]!)]))
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const root = await mountApplyView()
 
@@ -1512,7 +1484,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const root = await mountApplyView()
         await chooseJobPostAction(root, 'P2')
@@ -1527,10 +1499,14 @@ describe('apply view', () => {
     })
 
     it('removes a post from Apply after it is forgone', async () => {
-        const forgonePost = { ...posts[0]!, userLabel: 'forgo' as const }
+        const forgonePost = {
+            ...posts[0]!,
+            userLabel: 'forgo' as const,
+            updatedAt: '2026-07-16T12:00:01.000Z',
+        }
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse([posts[0]]))
+            .mockResolvedValueOnce(jsonResponse([createApplyQueueItem(posts[0]!)]))
             .mockResolvedValueOnce(
                 jsonResponse({
                     post: forgonePost,

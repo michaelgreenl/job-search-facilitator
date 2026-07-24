@@ -1,4 +1,10 @@
-import type { JobPost, UpdateJobPostInput, UpdateJobPostResult } from '@job-search-facilitator/core'
+import type {
+    ApplyQueueItem,
+    JobPost,
+    JobRecommendationContext,
+    UpdateJobPostInput,
+    UpdateJobPostResult,
+} from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import {
     toJobPost,
@@ -6,11 +12,12 @@ import {
     toPrismaPostStatus,
     toPrismaUserLabel,
 } from '../mappers/job-post.mapper.ts'
+import { toJobRecommendation } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
 
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
-    findApplyQueue(): Promise<JobPost[]>
+    findApplyQueue(): Promise<ApplyQueueItem[]>
     findById(id: string): Promise<JobPost | null>
     update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
 }
@@ -23,6 +30,39 @@ const applyQueueWhere = {
         notIn: ['FORGO'],
     },
 } satisfies Prisma.JobPostWhereInput
+
+// Archived reports remain eligible. Recency is report date, then creation time, then ID;
+// updating an older report does not make its recommendation current.
+const applyQueueInclude = {
+    results: {
+        take: 1,
+        orderBy: [
+            { report: { reportDate: 'desc' } },
+            { report: { createdAt: 'desc' } },
+            { reportId: 'asc' },
+        ],
+        include: {
+            report: {
+                select: {
+                    id: true,
+                    reportDate: true,
+                },
+            },
+        },
+    },
+} satisfies Prisma.JobPostInclude
+
+type PrismaApplyQueuePost = Prisma.JobPostGetPayload<{
+    include: typeof applyQueueInclude
+}>
+
+const toRecommendationContext = (
+    result: PrismaApplyQueuePost['results'][number],
+): JobRecommendationContext => ({
+    reportId: result.report.id,
+    reportDate: result.report.reportDate.toISOString().slice(0, 10),
+    ...toJobRecommendation(result),
+})
 
 export const jobPostRepository: JobPostRepository = {
     async findMany() {
@@ -37,9 +77,14 @@ export const jobPostRepository: JobPostRepository = {
         const posts = await prisma.jobPost.findMany({
             where: applyQueueWhere,
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+            include: applyQueueInclude,
         })
 
-        return posts.map(toJobPost)
+        return posts.map((post) => ({
+            post: toJobPost(post),
+            recommendationContext:
+                post.results[0] === undefined ? null : toRecommendationContext(post.results[0]),
+        }))
     },
 
     async findById(id) {

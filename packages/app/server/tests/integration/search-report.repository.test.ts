@@ -111,8 +111,8 @@ describe('job post repository', () => {
             applicationStatus: 'awaiting-response',
         })
 
-        const applyQueuePosts = await jobPostRepository.findApplyQueue()
-        const sourceKeys = applyQueuePosts.map(({ sourceKey }) => sourceKey)
+        const applyQueueItems = await jobPostRepository.findApplyQueue()
+        const sourceKeys = applyQueueItems.map(({ post }) => post.sourceKey)
 
         expect(labelUpdates.map((update) => update?.inApplyQueue)).toEqual([
             true,
@@ -127,6 +127,96 @@ describe('job post repository', () => {
         expect(sourceKeys).toEqual(
             expect.arrayContaining(['example-source:1', 'example-source:2', 'example-source:3']),
         )
+    })
+
+    it('selects one deterministic report recommendation for each Apply queue post', async () => {
+        const sourceKey = 'example-source:recommendation-context'
+        const reports = [
+            {
+                id: '11111111-1111-4111-8111-111111111111',
+                reportDate: '2026-07-20',
+                createdAt: '2026-07-30T12:00:00.000Z',
+                agentRank: 1,
+                recommendedAction: 'Ignore the older report date',
+            },
+            {
+                id: '22222222-2222-4222-8222-222222222222',
+                reportDate: '2026-07-21',
+                createdAt: '2026-07-21T11:00:00.000Z',
+                agentRank: 1,
+                recommendedAction: 'Ignore the earlier run on the same date',
+            },
+            {
+                id: '44444444-4444-4444-8444-444444444444',
+                reportDate: '2026-07-21',
+                createdAt: '2026-07-21T12:00:00.000Z',
+                agentRank: 1,
+                recommendedAction: 'Ignore the higher report ID',
+            },
+            {
+                id: '33333333-3333-4333-8333-333333333333',
+                reportDate: '2026-07-21',
+                createdAt: '2026-07-21T12:00:00.000Z',
+                agentRank: 9,
+                recommendedAction: 'Use the deterministic recommendation',
+            },
+        ] as const
+
+        for (const report of reports) {
+            await searchReportRepository.upsertById(
+                report.id,
+                report.reportDate,
+                createReportInput({
+                    results: [
+                        createResultInput({
+                            agentRank: report.agentRank,
+                            recommendedAction: report.recommendedAction,
+                            post: { sourceKey },
+                        }),
+                    ],
+                }),
+            )
+            await prisma.jobSearchReport.update({
+                where: { id: report.id },
+                data: { createdAt: new Date(report.createdAt) },
+            })
+        }
+
+        await prisma.jobSearchReport.update({
+            where: { id: reports[3].id },
+            data: { archivedAt: new Date('2026-07-22T00:00:00.000Z') },
+        })
+
+        const sharedPost = await prisma.jobPost.findUniqueOrThrow({ where: { sourceKey } })
+        await jobPostRepository.update(sharedPost.id, { userLabel: 'P1' })
+
+        const orphanPost = await prisma.jobPost.create({
+            data: {
+                sourceKey: 'example-source:orphan',
+                roleTitle: 'Orphaned recommendation',
+                company: 'Example Company',
+                location: null,
+                compensation: null,
+                techStack: 'TypeScript',
+                postSource: 'Example Source',
+                postUrl: 'https://example.com/jobs/orphan',
+                applicationUrl: 'https://apply.example.com/jobs/orphan',
+                postStatus: 'ACTIVE',
+                userLabel: 'P2',
+            },
+        })
+
+        const applyQueueItems = await jobPostRepository.findApplyQueue()
+        const selectedItem = applyQueueItems.find(({ post }) => post.id === sharedPost.id)
+        const orphanItem = applyQueueItems.find(({ post }) => post.id === orphanPost.id)
+
+        expect(selectedItem?.recommendationContext).toMatchObject({
+            reportId: reports[3].id,
+            reportDate: reports[3].reportDate,
+            agentRank: 9,
+            recommendedAction: 'Use the deterministic recommendation',
+        })
+        expect(orphanItem?.recommendationContext).toBeNull()
     })
 })
 
@@ -336,10 +426,12 @@ describe('search report repository', () => {
             }),
         )
         const refreshedPost = second.report.results[0]?.post
-        const [postCount, reportCount, membershipCount] = await Promise.all([
+        const [postCount, reportCount, membershipCount, firstRead, secondRead] = await Promise.all([
             prisma.jobPost.count(),
             prisma.jobSearchReport.count(),
             prisma.jobSearchResult.count({ where: { postId } }),
+            searchReportRepository.findById(first.report.id),
+            searchReportRepository.findById(second.report.id),
         ])
 
         expect(second.created).toBe(true)
@@ -362,6 +454,8 @@ describe('search report repository', () => {
         expect(postCount).toBe(1)
         expect(reportCount).toBe(2)
         expect(membershipCount).toBe(2)
+        expect(firstRead?.results[0]?.post).toEqual(refreshedPost)
+        expect(secondRead?.results[0]?.post).toEqual(refreshedPost)
     })
 
     it('rolls back a failed replacement after deleting prior joins', async () => {

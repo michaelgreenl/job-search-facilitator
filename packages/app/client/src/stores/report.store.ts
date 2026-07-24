@@ -1,12 +1,12 @@
 import {
     parseJobSearchReport,
     parseJobSearchReports,
-    type JobPost,
     type JobSearchReport,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { request } from '@/api'
+import { usePostStore } from '@/stores/post.store'
 
 const getJobSearchReports = () => request('/job-search-reports', parseJobSearchReports)
 
@@ -14,16 +14,25 @@ const getJobSearchReport = (reportId: string) =>
     request(`/job-search-reports/${encodeURIComponent(reportId)}`, parseJobSearchReport)
 
 export const useReportStore = defineStore('reports', () => {
+    const postStore = usePostStore()
     const reports = ref<JobSearchReport[]>([])
     const loading = shallowRef(false)
     const error = shallowRef<string | null>(null)
+
+    function canonicalizeReportPosts(report: JobSearchReport) {
+        for (const result of report.results) {
+            result.post = postStore.upsertPost(result.post)
+        }
+
+        return report
+    }
 
     async function fetchReports() {
         loading.value = true
         error.value = null
 
         try {
-            reports.value = await getJobSearchReports()
+            reports.value = (await getJobSearchReports()).map(canonicalizeReportPosts)
         } catch (requestError) {
             error.value = requestError instanceof Error ? requestError.message : 'Request failed'
             throw requestError
@@ -37,7 +46,7 @@ export const useReportStore = defineStore('reports', () => {
         error.value = null
 
         try {
-            const report = await getJobSearchReport(reportId)
+            const report = canonicalizeReportPosts(await getJobSearchReport(reportId))
             const index = reports.value.findIndex(({ id }) => id === report.id)
 
             if (index === -1) {
@@ -55,22 +64,11 @@ export const useReportStore = defineStore('reports', () => {
         }
     }
 
-    function replacePost(post: JobPost) {
-        for (const report of reports.value) {
-            const result = report.results.find(({ post: current }) => current.id === post.id)
-
-            if (result !== undefined) {
-                result.post = post
-            }
-        }
-    }
-
     return {
         reports,
         loading,
         error,
         fetchReports,
         fetchReport,
-        replacePost,
     }
 })

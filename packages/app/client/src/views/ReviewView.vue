@@ -426,7 +426,7 @@ onMounted(() => {
                 <PanelBackButton label="Back to job posts" mobile-only @back="showPosts" />
                 <JobPostViewer
                     :post="selectedResult.post"
-                    :result="selectedResult"
+                    :recommendation="selectedResult"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     @update-label="updateUserLabel"

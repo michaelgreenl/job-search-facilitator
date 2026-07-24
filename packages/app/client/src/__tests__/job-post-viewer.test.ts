@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost, JobSearchResult } from '@job-search-facilitator/core'
+import type { JobPost, JobRecommendation } from '@job-search-facilitator/core'
 import { createApp } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -24,7 +24,7 @@ const post = {
     updatedAt: '2026-07-20T00:00:00.000Z',
 } satisfies JobPost
 
-const result = {
+const recommendation = {
     agentRank: 1,
     agentLabel: 'target',
     fitRationale:
@@ -35,8 +35,7 @@ const result = {
     recommendedResume: 'backend-full-stack',
     recommendedAction: 'Apply with the backend/full-stack resume.',
     legitimacyNotes: 'The company and role details are consistent across both sources.',
-    post,
-} satisfies JobSearchResult
+} satisfies JobRecommendation
 
 const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
@@ -44,7 +43,7 @@ function mountViewer(
     overrides: Partial<JobPost> = {},
     options: {
         alwaysShowApplicationAction?: boolean
-        result?: JobSearchResult
+        recommendation?: JobRecommendation
         showLegitimacy?: boolean
     } = {},
 ) {
@@ -54,7 +53,7 @@ function mountViewer(
 
     const app = createApp(JobPostViewer, {
         post: selectedPost,
-        result: options.result ? { ...options.result, post: selectedPost } : undefined,
+        recommendation: options.recommendation,
         showLegitimacy: options.showLegitimacy,
         labelUpdating: false,
         labelError: null,
@@ -157,11 +156,11 @@ describe('JobPostViewer', () => {
     })
 
     it('lays out the complete search recommendation and legitimacy context', () => {
-        const root = mountViewer({}, { result })
+        const root = mountViewer({}, { recommendation })
         const text = root.textContent ?? ''
 
         expect(text).toContain('Recommended action')
-        expect(text).toContain(result.recommendedAction)
+        expect(text).toContain(recommendation.recommendedAction)
         expect(text).toContain('Recommended resume')
         expect(text).toContain('Backend / full-stack')
         expect(text).toContain('Tech stack')
@@ -171,28 +170,28 @@ describe('JobPostViewer', () => {
         expect(text).toContain('Source')
         expect(text).toContain(post.postSource)
         expect(text).toContain('Why it fits')
-        expect(text).toContain(result.fitRationale)
+        expect(text).toContain(recommendation.fitRationale)
         expect(text).toContain('Key signals')
-        expect(text).toContain(result.keyLegitimacySignals)
+        expect(text).toContain(recommendation.keyLegitimacySignals)
         expect(text).toContain('Notes')
-        expect(text).toContain(result.legitimacyNotes)
+        expect(text).toContain(recommendation.legitimacyNotes)
     })
 
     it('can show recommendation context without review-only legitimacy', () => {
-        const root = mountViewer({}, { result, showLegitimacy: false })
+        const root = mountViewer({}, { recommendation, showLegitimacy: false })
         const text = root.textContent ?? ''
 
         expect(text).toContain('Recommendation')
-        expect(text).toContain(result.recommendedAction)
-        expect(text).toContain(result.fitRationale)
+        expect(text).toContain(recommendation.recommendedAction)
+        expect(text).toContain(recommendation.fitRationale)
         expect(text).not.toContain('Legitimacy')
-        expect(text).not.toContain(result.keyLegitimacySignals)
-        expect(text).not.toContain(result.legitimacyNotes)
+        expect(text).not.toContain(recommendation.keyLegitimacySignals)
+        expect(text).not.toContain(recommendation.legitimacyNotes)
     })
 
     it('collapses absent AI content and nullable post facts without empty sections', () => {
-        const sparseResult = {
-            ...result,
+        const sparseRecommendation = {
+            ...recommendation,
             fitRationale: '',
             keyLegitimacySignals: '',
             recommendedAction: '',
@@ -204,7 +203,7 @@ describe('JobPostViewer', () => {
                 techStack: 'Not recorded',
                 postSource: '',
             },
-            { result: sparseResult },
+            { recommendation: sparseRecommendation },
         )
         const facts = [...root.querySelectorAll('.post-fact')].map((fact) => ({
             label: fact.querySelector('dt')?.textContent?.trim(),

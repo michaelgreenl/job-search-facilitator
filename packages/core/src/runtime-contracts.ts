@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ApplyQueueItem } from './apply-queue.ts'
 import {
     APPLICATION_STATUSES,
     POST_STATUSES,
@@ -14,6 +15,7 @@ import {
 import {
     AGENT_LABELS,
     RESUME_TYPES,
+    type JobRecommendationContext,
     type JobSearchReport,
     type JobSearchResult,
 } from './search-report.ts'
@@ -84,7 +86,7 @@ const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject(
     inApplyQueue: z.boolean(),
 })
 
-const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
+const jobRecommendationShape = {
     agentRank: z.number().int().positive(),
     agentLabel: z.enum(AGENT_LABELS),
     fitRationale: nonBlankStringSchema,
@@ -93,7 +95,22 @@ const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
     recommendedResume: z.enum(RESUME_TYPES),
     recommendedAction: nonBlankStringSchema,
     legitimacyNotes: nonBlankStringSchema.nullable(),
+}
+
+const jobRecommendationContextSchema: z.ZodType<JobRecommendationContext> = z.looseObject({
+    reportId: z.uuid(),
+    reportDate: z.iso.date(),
+    ...jobRecommendationShape,
+})
+
+const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
+    ...jobRecommendationShape,
     post: jobPostSchema,
+})
+
+const applyQueueItemSchema: z.ZodType<ApplyQueueItem> = z.looseObject({
+    post: jobPostSchema,
+    recommendationContext: jobRecommendationContextSchema.nullable(),
 })
 
 const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({
@@ -270,6 +287,7 @@ export const parseDraftRevisionResult = createParser(
 )
 export const parseJobPost = createParser('Job post', jobPostSchema)
 export const parseJobPosts = createParser('Job posts', z.array(jobPostSchema))
+export const parseApplyQueueItems = createParser('Apply queue', z.array(applyQueueItemSchema))
 export const parseUpdateJobPostResult = createParser(
     'Job post update result',
     updateJobPostResultSchema,

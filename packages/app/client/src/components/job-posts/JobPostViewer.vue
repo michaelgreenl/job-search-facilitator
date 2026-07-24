@@ -2,7 +2,7 @@
 import {
     USER_LABELS,
     type JobPost,
-    type JobSearchResult,
+    type JobRecommendation,
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -16,7 +16,7 @@ import { USER_LABEL_OPTIONS } from './job-post-labels'
 const props = withDefaults(
     defineProps<{
         post: JobPost
-        result?: JobSearchResult
+        recommendation?: JobRecommendation
         showLegitimacy?: boolean
         labelUpdating: boolean
         labelError: string | null
@@ -30,7 +30,7 @@ const props = withDefaults(
         alwaysShowApplicationAction?: boolean
     }>(),
     {
-        result: undefined,
+        recommendation: undefined,
         showLegitimacy: true,
         showOutreachAction: false,
         outreachDisabled: false,
@@ -163,7 +163,11 @@ function selectLabel(value: string) {
 
         <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
 
-        <JobPostContent :post="post" :result="result" :show-legitimacy="showLegitimacy" />
+        <JobPostContent
+            :post="post"
+            :recommendation="recommendation"
+            :show-legitimacy="showLegitimacy"
+        />
 
         <div v-if="showOutreachAction" class="primary-actions primary-actions-outreach">
             <button

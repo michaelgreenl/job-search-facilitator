@@ -1,4 +1,5 @@
 import type {
+    ApplyQueueItem,
     JobPost,
     JobSearchReport,
     OutreachContact,
@@ -124,7 +125,14 @@ describe('report store', () => {
             `http://localhost:3000/api/job-search-reports/${report.id}`,
             undefined,
         )
-        expect(store.reports).toEqual([refreshedReport, earlierReport])
+        expect(store.reports.map(({ id, summary }) => ({ id, summary }))).toEqual([
+            { id: refreshedReport.id, summary: refreshedReport.summary },
+            { id: earlierReport.id, summary: earlierReport.summary },
+        ])
+        expect(store.reports[0]!.results[0]!.post).toBe(store.reports[1]!.results[0]!.post)
+        expect(store.reports[0]!.results[0]!.post).toMatchObject({
+            sourceMetadata: { importedBy: 'agent' },
+        })
     })
 
     it('rejects an unsafe nested post link before changing report state', async () => {
@@ -168,46 +176,80 @@ describe('post store', () => {
         vi.stubGlobal('fetch', vi.fn())
     })
 
-    it('loads posts and keeps PATCH responses as the current post state', async () => {
+    it('keeps one canonical post across reports, reads, and PATCH responses', async () => {
         const secondPost = {
             ...post,
             id: '3f5dc4a4-7c98-4ef2-8947-cc2d78ab8a7a',
             sourceKey: 'example:post-2',
         }
+        const laterReport = {
+            ...report,
+            id: 'b98b98ea-70c0-4336-b597-f7eb77d55ad7',
+            reportDate: '2026-07-14',
+            results: [
+                {
+                    ...report.results[0]!,
+                    post: { ...post },
+                },
+            ],
+        }
+        const firstReport = {
+            ...report,
+            results: [
+                {
+                    ...report.results[0]!,
+                    post: { ...post },
+                },
+            ],
+        }
         const updatedPost = {
             ...post,
             applicationStatus: 'awaiting-response' as const,
             userLabel: 'forgo' as const,
+            updatedAt: '2026-07-14T12:00:00.000Z',
+        }
+        const stalePost = {
+            ...post,
+            roleTitle: 'Stale title',
+            updatedAt: updatedPost.updatedAt,
         }
         const fetchMock = vi.mocked(fetch)
         fetchMock
-            .mockResolvedValueOnce(jsonResponse([post]))
-            .mockResolvedValueOnce(jsonResponse(secondPost))
+            .mockResolvedValueOnce(jsonResponse([firstReport, laterReport]))
+            .mockResolvedValueOnce(jsonResponse([post, secondPost]))
             .mockResolvedValueOnce(
                 jsonResponse({
                     post: updatedPost,
                     inApplyQueue: false,
                 }),
             )
-        const store = usePostStore()
+            .mockResolvedValueOnce(jsonResponse(stalePost))
         const reportStore = useReportStore()
-        reportStore.reports = [report]
+        const store = usePostStore()
+
+        await reportStore.fetchReports()
+        const canonicalPost = store.findPost(post.id)
+
+        expect(canonicalPost).not.toBeNull()
+        expect(reportStore.reports[0]!.results[0]!.post).toBe(canonicalPost)
+        expect(reportStore.reports[1]!.results[0]!.post).toBe(canonicalPost)
 
         await store.fetchPosts()
-        await store.fetchPost(secondPost.id)
-        await store.updatePost(post.id, {
+        const unrelatedPost = store.findPost(secondPost.id)
+        const updateResult = await store.updatePost(post.id, {
             applicationStatus: 'awaiting-response',
             userLabel: 'forgo',
         })
+        const staleReadResult = await store.fetchPost(post.id)
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
-            'http://localhost:3000/api/job-posts',
+            'http://localhost:3000/api/job-search-reports',
             undefined,
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            `http://localhost:3000/api/job-posts/${secondPost.id}`,
+            'http://localhost:3000/api/job-posts',
             undefined,
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -222,22 +264,41 @@ describe('post store', () => {
                 }),
             },
         )
-        expect(store.posts).toEqual([updatedPost, secondPost])
-        expect(reportStore.reports[0]?.results[0]?.post).toEqual(updatedPost)
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            4,
+            `http://localhost:3000/api/job-posts/${post.id}`,
+            undefined,
+        )
+        expect(updateResult.post).toBe(canonicalPost)
+        expect(staleReadResult).toBe(canonicalPost)
+        expect(store.findPost(post.id)).toBe(canonicalPost)
+        expect(reportStore.reports[0]!.results[0]!.post).toBe(canonicalPost)
+        expect(reportStore.reports[1]!.results[0]!.post).toBe(canonicalPost)
+        expect(canonicalPost).toEqual(updatedPost)
+        expect(store.findPost(secondPost.id)).toBe(unrelatedPost)
+        expect(unrelatedPost).toEqual(secondPost)
     })
 
     it('loads the Apply queue from its endpoint', async () => {
         const applyQueuePost = { ...post, userLabel: 'P1' as const }
-        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([applyQueuePost]))
+        const applyQueueItems: ApplyQueueItem[] = [
+            {
+                post: applyQueuePost,
+                recommendationContext: null,
+            },
+        ]
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(applyQueueItems))
         const store = usePostStore()
 
-        await store.fetchApplyQueuePosts()
+        const items = await store.fetchApplyQueue()
 
         expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
             'http://localhost:3000/api/job-posts/apply-queue',
             undefined,
         )
         expect(store.posts).toEqual([applyQueuePost])
+        expect(items).toEqual(applyQueueItems)
+        expect(items[0]!.post).toBe(store.posts[0])
     })
 })
 

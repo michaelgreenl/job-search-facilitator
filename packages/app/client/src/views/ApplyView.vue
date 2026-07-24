@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
+import {
+    USER_LABELS,
+    type JobPost,
+    type JobRecommendationContext,
+    type UserLabel,
+} from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
@@ -11,7 +16,6 @@ import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
-import { useReportStore } from '@/stores/report.store'
 import { useWorkStore } from '@/stores/work.store'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
@@ -30,7 +34,6 @@ const postFilterOptions: AppDropdownOption[] = [
 const isPostFilter = (value: string): value is PostFilter =>
     value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
-const reportStore = useReportStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
 const {
@@ -52,7 +55,10 @@ const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
-const applyQueuePostIds = shallowRef<ReadonlySet<string> | null>(null)
+const applyQueuePostIds = shallowRef<readonly string[] | null>(null)
+const recommendationContextByPostId = shallowRef<
+    ReadonlyMap<string, JobRecommendationContext | null>
+>(new Map())
 let viewMounted = true
 
 onBeforeUnmount(() => {
@@ -63,7 +69,10 @@ onBeforeUnmount(() => {
 const currentVisitApplyQueue = computed(() =>
     applyQueuePostIds.value === null
         ? []
-        : postStore.posts.filter(({ id }) => applyQueuePostIds.value?.has(id)),
+        : applyQueuePostIds.value.flatMap((postId) => {
+              const post = postStore.findPost(postId)
+              return post === null ? [] : [post]
+          }),
 )
 
 const filteredPosts = computed(() =>
@@ -75,26 +84,16 @@ const postFilterLabel = computed(
     () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
 )
 
-const selectedPost = computed(
-    () => postStore.posts.find(({ id }) => id === selectedPostId.value) ?? null,
+const selectedPost = computed(() =>
+    selectedPostId.value === null ? null : postStore.findPost(selectedPostId.value),
 )
-const selectedResult = computed(() => {
-    if (selectedPostId.value === null) {
-        return null
-    }
-
-    for (const report of reportStore.reports) {
-        const result = report.results.find(({ post }) => post.id === selectedPostId.value)
-
-        if (result !== undefined) {
-            return result
-        }
-    }
-
-    return null
-})
-const outreachPost = computed(
-    () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
+const selectedRecommendationContext = computed(() =>
+    selectedPostId.value === null
+        ? null
+        : (recommendationContextByPostId.value.get(selectedPostId.value) ?? null),
+)
+const outreachPost = computed(() =>
+    outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
 )
 const outreachActionDisabled = computed(
     () =>
@@ -155,15 +154,14 @@ function updateApplyQueueMembership(postId: string, inApplyQueue: boolean) {
         return
     }
 
-    const postIds = new Set(applyQueuePostIds.value)
+    const postIds = applyQueuePostIds.value
+    const includesPost = postIds.includes(postId)
 
-    if (inApplyQueue) {
-        postIds.add(postId)
-    } else {
-        postIds.delete(postId)
+    if (inApplyQueue && !includesPost) {
+        applyQueuePostIds.value = [...postIds, postId]
+    } else if (!inApplyQueue && includesPost) {
+        applyQueuePostIds.value = postIds.filter((currentPostId) => currentPostId !== postId)
     }
-
-    applyQueuePostIds.value = postIds
 }
 
 function showPosts() {
@@ -325,8 +323,11 @@ async function markApplied() {
 
 async function loadApplyQueue() {
     try {
-        const posts = await postStore.fetchApplyQueuePosts()
-        applyQueuePostIds.value = new Set(posts.map(({ id }) => id))
+        const items = await postStore.fetchApplyQueue()
+        applyQueuePostIds.value = items.map(({ post }) => post.id)
+        recommendationContextByPostId.value = new Map(
+            items.map(({ post, recommendationContext }) => [post.id, recommendationContext]),
+        )
     } catch (error) {
         listError.value = error instanceof Error ? error.message : 'Could not load Apply queue'
     } finally {
@@ -336,10 +337,6 @@ async function loadApplyQueue() {
 
 onMounted(() => {
     void loadApplyQueue()
-
-    if (reportStore.reports.length === 0) {
-        void reportStore.fetchReports().catch(() => undefined)
-    }
 })
 </script>
 
@@ -392,7 +389,7 @@ onMounted(() => {
             >
                 <JobPostViewer
                     :post="selectedPost"
-                    :result="selectedResult ?? undefined"
+                    :recommendation="selectedRecommendationContext ?? undefined"
                     :show-legitimacy="false"
                     :label-updating="labelUpdating || applyQueuePostIds === null"
                     :label-error="labelError"

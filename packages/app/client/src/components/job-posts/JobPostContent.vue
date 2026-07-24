@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { JobPost, JobSearchResult, ResumeType } from '@job-search-facilitator/core'
+import type { JobPost, JobRecommendation, ResumeType } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 
 const props = withDefaults(
     defineProps<{
         post: JobPost
-        result?: JobSearchResult
+        recommendation?: JobRecommendation
         showLegitimacy?: boolean
     }>(),
     {
-        result: undefined,
+        recommendation: undefined,
         showLegitimacy: true,
     },
 )
@@ -30,14 +30,18 @@ const content = computed(() => {
 
     return {
         compensation: normalizeText(props.post.compensation),
-        fitRationale: normalizeText(props.result?.fitRationale),
+        fitRationale: normalizeText(props.recommendation?.fitRationale),
         keyLegitimacySignals: normalizeText(
-            props.showLegitimacy ? props.result?.keyLegitimacySignals : null,
+            props.showLegitimacy ? props.recommendation?.keyLegitimacySignals : null,
         ),
-        legitimacyNotes: normalizeText(props.showLegitimacy ? props.result?.legitimacyNotes : null),
+        legitimacyNotes: normalizeText(
+            props.showLegitimacy ? props.recommendation?.legitimacyNotes : null,
+        ),
         postSource: normalizeText(props.post.postSource),
-        recommendedAction: normalizeText(props.result?.recommendedAction),
-        recommendedResume: props.result ? RESUME_LABELS[props.result.recommendedResume] : null,
+        recommendedAction: normalizeText(props.recommendation?.recommendedAction),
+        recommendedResume: props.recommendation
+            ? RESUME_LABELS[props.recommendation.recommendedResume]
+            : null,
         techStack: techStack?.toLowerCase() === 'not recorded' ? null : techStack,
     }
 })

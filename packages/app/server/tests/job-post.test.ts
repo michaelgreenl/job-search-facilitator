@@ -1,4 +1,4 @@
-import type { JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
+import type { ApplyQueueItem, JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,7 @@ const existingPost: JobPost = {
 
 const missingPostId = '22222222-2222-4222-8222-222222222222'
 
-const createFakeRepository = (initialPosts: JobPost[], applyQueuePosts: JobPost[] = []) => {
+const createFakeRepository = (initialPosts: JobPost[], applyQueueItems: ApplyQueueItem[] = []) => {
     const posts = [...initialPosts]
     const update = vi.fn(async (id: string, input: UpdateJobPostInput) => {
         const index = posts.findIndex((post) => post.id === id)
@@ -49,7 +49,7 @@ const createFakeRepository = (initialPosts: JobPost[], applyQueuePosts: JobPost[
     })
     const repository: JobPostRepository = {
         findMany: async () => [...posts],
-        findApplyQueue: async () => [...applyQueuePosts],
+        findApplyQueue: async () => [...applyQueueItems],
         findById: async (id) => posts.find((post) => post.id === id) ?? null,
         update,
     }
@@ -73,11 +73,26 @@ describe('job post routes', () => {
 
     it('lists posts in the Apply queue', async () => {
         const applyQueuePost: JobPost = { ...existingPost, userLabel: 'P1' }
-        const { repository } = createFakeRepository([], [applyQueuePost])
+        const applyQueueItem: ApplyQueueItem = {
+            post: applyQueuePost,
+            recommendationContext: {
+                reportId: '33333333-3333-4333-8333-333333333333',
+                reportDate: '2026-07-12',
+                agentRank: 1,
+                agentLabel: 'target',
+                fitRationale: 'Strong match',
+                applicationFlow: 'Direct application',
+                keyLegitimacySignals: 'Company careers page',
+                recommendedResume: 'frontend',
+                recommendedAction: 'Apply',
+                legitimacyNotes: null,
+            },
+        }
+        const { repository } = createFakeRepository([], [applyQueueItem])
 
         await request(createTestApp(repository))
             .get('/job-posts/apply-queue')
-            .expect(200, [applyQueuePost])
+            .expect(200, [applyQueueItem])
     })
 
     it('forwards an allowed update and returns the updated post', async () => {
