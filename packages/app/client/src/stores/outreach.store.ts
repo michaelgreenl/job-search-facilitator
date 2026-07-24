@@ -1,11 +1,16 @@
-import type {
-    JobPost,
-    JsonObject,
-    OutreachContact,
-    OutreachContactInput,
-    StartWorkTaskInput,
-    UpdateOutreachContactInput,
-    WorkTask,
+import {
+    parseContactDiscoveryResult,
+    parseDraftRevisionResult,
+    parseOutreachContact,
+    parseOutreachContacts,
+    type ContactDiscoveryResult,
+    type DraftRevisionResult,
+    type JobPost,
+    type JsonObject,
+    type OutreachContact,
+    type StartWorkTaskInput,
+    type UpdateOutreachContactInput,
+    type WorkTask,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
@@ -23,31 +28,6 @@ interface ActiveOutreachTask {
     contactId: string | null
     taskId: string | null
     phase: OutreachTaskPhase
-}
-
-const outputText = (output: JsonObject, key: string) => {
-    const value = output[key]
-
-    return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-const profileUrl = (output: JsonObject) => {
-    const value = outputText(output, 'profileUrl')
-
-    if (value === null) {
-        return null
-    }
-
-    try {
-        const url = new URL(value)
-        const isLinkedIn = url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com')
-
-        return url.protocol === 'https:' && isLinkedIn && url.pathname.startsWith('/in/')
-            ? url.href
-            : null
-    } catch {
-        return null
-    }
 }
 
 export const useOutreachStore = defineStore('outreach', () => {
@@ -164,8 +144,9 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsError.value = null
 
         try {
-            const savedContacts = await request<OutreachContact[]>(
+            const savedContacts = await request(
                 `/job-posts/${encodeURIComponent(post)}/outreach-contacts`,
+                parseOutreachContacts,
             )
 
             if (postId.value !== post || contactRequestRevision !== requestRevision) {
@@ -217,8 +198,9 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactUpdateError.value = null
 
         try {
-            const updatedContact = await request<OutreachContact>(
+            const updatedContact = await request(
                 `/job-posts/${encodeURIComponent(activePostId)}/outreach-contacts/${encodeURIComponent(contactId)}`,
+                parseOutreachContact,
                 {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -292,29 +274,13 @@ export const useOutreachStore = defineStore('outreach', () => {
 
     async function applyTaskResult(task: ActiveOutreachTask, output: JsonObject) {
         if (task.kind === 'contact') {
-            const personName = outputText(output, 'personName')
-            const personTitle = outputText(output, 'personTitle')
-            const linkedInUrl = profileUrl(output)
-            const relevanceRationale = outputText(output, 'relevanceRationale')
-            const draftMessage = outputText(output, 'draftMessage')
+            let input: ContactDiscoveryResult
 
-            if (
-                personName === null ||
-                personTitle === null ||
-                linkedInUrl === null ||
-                relevanceRationale === null ||
-                draftMessage === null
-            ) {
+            try {
+                input = parseContactDiscoveryResult(output)
+            } catch {
                 failResult(task.revision, 'Work returned an invalid outreach result')
                 return
-            }
-
-            const input: OutreachContactInput = {
-                personName,
-                personTitle,
-                profileUrl: linkedInUrl,
-                relevanceRationale,
-                draftMessage,
             }
 
             if (postId.value !== task.postId) {
@@ -325,8 +291,9 @@ export const useOutreachStore = defineStore('outreach', () => {
             contactSaving.value = true
 
             try {
-                const savedContact = await request<OutreachContact>(
+                const savedContact = await request(
                     `/job-posts/${encodeURIComponent(task.postId)}/outreach-contacts`,
+                    parseOutreachContact,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -370,16 +337,17 @@ export const useOutreachStore = defineStore('outreach', () => {
                 return
             }
 
-            const draftMessage = outputText(output, 'draftMessage')
-            const response = outputText(output, 'response')
+            let result: DraftRevisionResult
 
-            if (draftMessage === null || response === null) {
+            try {
+                result = parseDraftRevisionResult(output)
+            } catch {
                 failResult(task.revision, 'Work returned an invalid draft result')
                 return
             }
 
-            draft.value = draftMessage
-            assistantReply.value = response
+            draft.value = result.draftMessage
+            assistantReply.value = result.response
             finishTask(task.revision)
             resultError.value = null
         }

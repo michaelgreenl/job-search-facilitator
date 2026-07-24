@@ -1,12 +1,17 @@
-import type { JobPost, JobSearchReport } from '@job-search-facilitator/core'
+import {
+    parseJobSearchReport,
+    parseJobSearchReports,
+    type JobPost,
+    type JobSearchReport,
+} from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { request } from '@/api'
 
-const getJobSearchReports = () => request<JobSearchReport[]>('/job-search-reports')
+const getJobSearchReports = () => request('/job-search-reports', parseJobSearchReports)
 
 const getJobSearchReport = (reportId: string) =>
-    request<JobSearchReport>(`/job-search-reports/${encodeURIComponent(reportId)}`)
+    request(`/job-search-reports/${encodeURIComponent(reportId)}`, parseJobSearchReport)
 
 export const useReportStore = defineStore('reports', () => {
     const reports = ref<JobSearchReport[]>([])

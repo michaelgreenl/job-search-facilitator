@@ -24,4 +24,6 @@ The bridge listens on `127.0.0.1:3001` by default. See `.env.example` for its op
 
 Task events and output are held in memory for the life of the bridge process. Durable workflow state belongs in the Docker API. The bridge is intentionally bound to loopback and starts Work tasks with a read-only sandbox and no approval escalation.
 
+Task output contracts are validated as synchronous JSON Schema draft-07 with an explicit object root. The public task contract omits dialect markers and `format` validators; use structural keywords such as `pattern` when a task needs a format constraint. Schemas containing `$schema`, `format`, asynchronous validation, or anything else the bridge cannot compile are rejected before a Work task starts.
+
 The bridge does not restart the Work runtime after an unexpected runtime error or exit. Existing task state remains available for inspection, but health and new task requests return `503` until the bridge process is restarted with `pnpm dev:work`. A bounded tail of runtime stderr is written to the bridge log on failure and is not exposed through task or health responses.

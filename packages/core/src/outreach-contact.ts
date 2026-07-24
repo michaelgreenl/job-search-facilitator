@@ -18,4 +18,11 @@ export type OutreachContactInput = Pick<
     'personName' | 'personTitle' | 'profileUrl' | 'relevanceRationale' | 'draftMessage'
 >
 
+export type ContactDiscoveryResult = OutreachContactInput
+
+export interface DraftRevisionResult {
+    draftMessage: string
+    response: string
+}
+
 export type UpdateOutreachContactInput = Pick<OutreachContact, 'messaged'>

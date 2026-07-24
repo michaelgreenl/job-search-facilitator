@@ -53,12 +53,27 @@ const createReport = (
     ],
 })
 
-const firstPost = createPost('post-1', 'Frontend Engineer')
-const secondPost = createPost('post-2', 'Backend Engineer')
-const thirdPost = createPost('post-3', 'Platform Engineer')
-const firstReport = createReport('report-1', '2026-07-10', 'First report', firstPost)
-const secondReport = createReport('report-2', '2026-07-15', 'Second report', secondPost)
-const thirdReport = createReport('report-3', '2026-07-15', 'Third report', thirdPost)
+const firstPost = createPost('10000000-0000-4000-8000-000000000001', 'Frontend Engineer')
+const secondPost = createPost('10000000-0000-4000-8000-000000000002', 'Backend Engineer')
+const thirdPost = createPost('10000000-0000-4000-8000-000000000003', 'Platform Engineer')
+const firstReport = createReport(
+    '20000000-0000-4000-8000-000000000001',
+    '2026-07-10',
+    'First report',
+    firstPost,
+)
+const secondReport = createReport(
+    '20000000-0000-4000-8000-000000000002',
+    '2026-07-15',
+    'Second report',
+    secondPost,
+)
+const thirdReport = createReport(
+    '20000000-0000-4000-8000-000000000003',
+    '2026-07-15',
+    'Third report',
+    thirdPost,
+)
 const reports = [firstReport, secondReport, thirdReport]
 
 const jsonResponse = (body: unknown) =>

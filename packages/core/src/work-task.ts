@@ -6,6 +6,17 @@ export type WorkCapability = (typeof WORK_CAPABILITIES)[number]
 
 export type JsonObject = Record<string, unknown>
 
+/**
+ * Work output uses the bridge's synchronous JSON Schema draft-07 subset with
+ * an object at its root. Dialect markers and format keywords are unsupported.
+ */
+export type WorkOutputSchema = {
+    [keyword: string]: unknown
+    type: 'object'
+    $async?: false
+    $schema?: never
+}
+
 export type WorkActionDecision = 'approve' | 'decline'
 
 export interface WorkActionRequired {
@@ -17,18 +28,28 @@ export interface WorkActionRequired {
 
 export interface StartWorkTaskInput {
     prompt: string
-    outputSchema: JsonObject
+    outputSchema: WorkOutputSchema
     capabilities: WorkCapability[]
 }
 
-export interface WorkTask {
+export interface WorkHealthResponse {
+    status: 'healthy'
+    capabilities: WorkCapability[]
+}
+
+interface WorkTaskIdentity {
     id: string
-    status: 'running' | 'completed' | 'failed' | 'cancelled'
     threadId: string
     turnId: string
-    output: JsonObject | null
-    error: string | null
 }
+
+export type WorkTask = WorkTaskIdentity &
+    (
+        | { status: 'running'; output: null; error: null }
+        | { status: 'completed'; output: JsonObject; error: null }
+        | { status: 'failed'; output: null; error: string }
+        | { status: 'cancelled'; output: null; error: null }
+    )
 
 export type WorkTaskEvent =
     | { type: 'activity'; message: string; createdAt: IsoDateTime }

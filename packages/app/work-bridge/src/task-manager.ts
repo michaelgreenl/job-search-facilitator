@@ -7,14 +7,22 @@ import type {
     WorkTask,
     WorkTaskEvent,
 } from '@job-search-facilitator/core'
+import { Ajv, type ValidateFunction } from 'ajv'
 import type { WorkRuntime, WorkRuntimeAction, WorkRuntimeEvent } from './app-server.ts'
 
-interface StoredTask extends WorkTask {
+interface StoredTask {
+    id: string
+    status: WorkTask['status']
+    threadId: string
+    turnId: string
+    output: JsonObject | null
+    error: string | null
     capabilities: StartWorkTaskInput['capabilities']
     cancellation: Promise<void> | null
     events: WorkTaskStreamEvent[]
     listeners: Set<(event: WorkTaskStreamEvent) => void>
     finalMessages: string[]
+    outputValidator: ValidateFunction<JsonObject>
     pendingAction: WorkActionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
 }
@@ -33,16 +41,69 @@ export interface WorkTaskStreamEvent {
 const isStructuredOutput = (value: unknown): value is JsonObject =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const publicTask = ({
-    capabilities: _capabilities,
-    cancellation: _cancellation,
-    events: _events,
-    listeners: _listeners,
-    finalMessages: _finalMessages,
-    pendingAction: _pendingAction,
-    reasoningSection: _reasoningSection,
-    ...task
-}: StoredTask): WorkTask => task
+const containsDialectMarker = (value: unknown): boolean =>
+    Array.isArray(value)
+        ? value.some(containsDialectMarker)
+        : isStructuredOutput(value) &&
+          ('$schema' in value || Object.values(value).some(containsDialectMarker))
+
+const outputSchemaValidator = new Ajv({ addUsedSchema: false, strict: true })
+
+export class InvalidWorkOutputSchemaError extends Error {
+    constructor() {
+        super('Invalid Work output schema')
+        this.name = 'InvalidWorkOutputSchemaError'
+    }
+}
+
+const compileOutputValidator = (schema: unknown): ValidateFunction<JsonObject> => {
+    if (
+        !isStructuredOutput(schema) ||
+        schema.type !== 'object' ||
+        schema.$async === true ||
+        containsDialectMarker(schema)
+    ) {
+        throw new InvalidWorkOutputSchemaError()
+    }
+
+    try {
+        const validator = outputSchemaValidator.compile<JsonObject>(schema)
+
+        if ('$async' in validator) {
+            throw new InvalidWorkOutputSchemaError()
+        }
+
+        return validator
+    } catch {
+        throw new InvalidWorkOutputSchemaError()
+    }
+}
+
+const publicTask = (task: StoredTask): WorkTask => {
+    const identity = {
+        id: task.id,
+        threadId: task.threadId,
+        turnId: task.turnId,
+    }
+
+    if (task.status === 'completed' && task.output !== null && task.error === null) {
+        return { ...identity, status: 'completed', output: task.output, error: null }
+    }
+
+    if (task.status === 'failed' && task.output === null && task.error !== null) {
+        return { ...identity, status: 'failed', output: null, error: task.error }
+    }
+
+    if (
+        (task.status === 'running' || task.status === 'cancelled') &&
+        task.output === null &&
+        task.error === null
+    ) {
+        return { ...identity, status: task.status, output: null, error: null }
+    }
+
+    throw new Error('Work task state is inconsistent')
+}
 
 export class WorkTaskManager {
     private readonly tasks = new Map<string, StoredTask>()
@@ -52,6 +113,7 @@ export class WorkTaskManager {
     }
 
     async start(input: StartWorkTaskInput): Promise<WorkTask> {
+        const outputValidator = compileOutputValidator(input.outputSchema)
         const id = randomUUID()
         const { threadId, turnId } = await this.runtime.startTask(id, input)
         const task: StoredTask = {
@@ -66,6 +128,7 @@ export class WorkTaskManager {
             events: [],
             listeners: new Set(),
             finalMessages: [],
+            outputValidator,
             pendingAction: null,
             reasoningSection: null,
         }
@@ -265,20 +328,29 @@ export class WorkTaskManager {
             return
         }
 
+        let output: unknown
+
         try {
-            const output: unknown = JSON.parse(finalMessage)
-
-            if (!isStructuredOutput(output)) {
-                throw new Error()
-            }
-
-            task.status = 'completed'
-            task.output = output
-            task.pendingAction = null
-            this.emit(task, { type: 'completed', output, createdAt: new Date().toISOString() })
+            output = JSON.parse(finalMessage)
         } catch {
             this.fail(task, 'Work task returned invalid structured output')
+            return
         }
+
+        if (!isStructuredOutput(output)) {
+            this.fail(task, 'Work task returned invalid structured output')
+            return
+        }
+
+        if (!task.outputValidator(output)) {
+            this.fail(task, 'Work task returned output that did not match its schema')
+            return
+        }
+
+        task.status = 'completed'
+        task.output = output
+        task.pendingAction = null
+        this.emit(task, { type: 'completed', output, createdAt: new Date().toISOString() })
     }
 
     private activity(task: StoredTask, message: string): void {

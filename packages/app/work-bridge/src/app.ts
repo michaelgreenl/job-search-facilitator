@@ -11,11 +11,18 @@ import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
 import type { WorkRuntime } from './app-server.ts'
-import type { WorkTaskManager, WorkTaskStreamEvent } from './task-manager.ts'
+import {
+    InvalidWorkOutputSchemaError,
+    type WorkTaskManager,
+    type WorkTaskStreamEvent,
+} from './task-manager.ts'
 
 const startWorkTaskInputSchema = z.strictObject({
     prompt: z.string().trim().min(1),
-    outputSchema: z.record(z.string(), z.unknown()),
+    outputSchema: z.looseObject({
+        type: z.literal('object'),
+        $async: z.literal(false).optional(),
+    }),
     capabilities: z.array(z.enum(WORK_CAPABILITIES)).default([]),
 })
 
@@ -67,6 +74,11 @@ export const createApp = (
         try {
             response.status(ACCEPTED).json(await taskManager.start(input.data))
         } catch (error) {
+            if (error instanceof InvalidWorkOutputSchemaError) {
+                response.status(BAD_REQUEST).json({ error: 'Invalid request' })
+                return
+            }
+
             const currentHealth = runtime.health
 
             if (currentHealth.status === 'unavailable') {

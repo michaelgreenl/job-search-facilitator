@@ -32,6 +32,10 @@ class FakeEventSource {
         this.onmessage?.({ data: JSON.stringify(event) })
     }
 
+    rawMessage(value: unknown) {
+        this.onmessage?.({ data: JSON.stringify(value) })
+    }
+
     disconnect(readyState = FakeEventSource.CONNECTING) {
         this.readyState = readyState
         this.onerror?.()
@@ -125,6 +129,63 @@ describe('work store', () => {
             output: { title: 'Example Domain' },
         })
         expect(store.events).toHaveLength(2)
+        expect(source.close).toHaveBeenCalledOnce()
+    })
+
+    it('rejects an invalid health response before creating a task or event stream', async () => {
+        const fetchMock = vi
+            .mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'ready', capabilities: ['chrome'] }))
+        const store = useWorkStore()
+
+        await expect(store.startTask(taskInput)).rejects.toThrow(
+            'Work /health returned invalid data',
+        )
+
+        expect(fetchMock).toHaveBeenCalledOnce()
+        expect(store.task).toBeNull()
+        expect(FakeEventSource.instances).toHaveLength(0)
+        expect(store.connectionState).toBe('disconnected')
+    })
+
+    it('rejects a contradictory task response before opening its event stream', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(
+                jsonResponse({ ...startedTask, status: 'completed', output: null }, 202),
+            )
+        const store = useWorkStore()
+
+        await expect(store.startTask(taskInput)).rejects.toThrow(
+            'Work /tasks returned invalid data',
+        )
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(store.task).toBeNull()
+        expect(FakeEventSource.instances).toHaveLength(0)
+        expect(store.connectionState).toBe('disconnected')
+    })
+
+    it('disconnects without mutating task state when the event stream violates its contract', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+        const store = useWorkStore()
+
+        await store.startTask(taskInput)
+        const source = FakeEventSource.instances[0]!
+        source.open()
+        source.rawMessage({
+            type: 'completed',
+            output: [],
+            createdAt: '2026-07-18T12:00:00.000Z',
+        })
+
+        expect(store.task).toEqual(startedTask)
+        expect(store.events).toEqual([])
+        expect(store.error).toBe('Work stream returned invalid data')
+        expect(store.connectionState).toBe('disconnected')
         expect(source.close).toHaveBeenCalledOnce()
     })
 

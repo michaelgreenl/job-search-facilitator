@@ -33,12 +33,12 @@ const createPost = (id: string, userLabel: UserLabel): JobPost => ({
 })
 
 const posts = [
-    createPost('post-p1', 'P1'),
-    createPost('post-p2', 'P2'),
-    createPost('post-quick-app', 'quick-app'),
+    createPost('30000000-0000-4000-8000-000000000001', 'P1'),
+    createPost('30000000-0000-4000-8000-000000000002', 'P2'),
+    createPost('30000000-0000-4000-8000-000000000003', 'quick-app'),
 ]
 const report: JobSearchReport = {
-    id: 'report-id',
+    id: '40000000-0000-4000-8000-000000000001',
     reportDate: '2026-07-16',
     summary: 'Three application candidates',
     createdAt: '2026-07-16T12:00:00.000Z',
@@ -66,7 +66,7 @@ const runningWorkTask = {
     error: null,
 }
 const savedContact: OutreachContact = {
-    id: 'contact-1',
+    id: '50000000-0000-4000-8000-000000000001',
     jobPostId: posts[0]!.id,
     personName: 'Grace Hopper',
     personTitle: 'Director of Engineering',
@@ -78,7 +78,7 @@ const savedContact: OutreachContact = {
     updatedAt: '2026-07-20T12:00:00.000Z',
 }
 const discoveredContact: OutreachContact = {
-    id: 'contact-2',
+    id: '50000000-0000-4000-8000-000000000002',
     jobPostId: posts[1]!.id,
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
@@ -1429,7 +1429,7 @@ describe('apply view', () => {
         })
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            'http://localhost:3000/api/job-posts/post-p1',
+            `http://localhost:3000/api/job-posts/${posts[0]!.id}`,
             {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },

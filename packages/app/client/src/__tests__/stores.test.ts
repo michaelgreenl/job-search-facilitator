@@ -13,7 +13,7 @@ import { useWorkStore } from '../stores/work.store'
 import { createContactDiscoveryTask, createDraftRevisionTask } from '../work-tasks'
 
 const post: JobPost = {
-    id: 'post-1',
+    id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',
     sourceKey: 'example:post-1',
     roleTitle: 'Software Engineer',
     company: 'Example Co',
@@ -32,7 +32,7 @@ const post: JobPost = {
 }
 
 const savedContact: OutreachContact = {
-    id: 'contact-1',
+    id: 'e0d9b035-4fe4-476a-8371-c664ee8e224f',
     jobPostId: post.id,
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
@@ -45,7 +45,7 @@ const savedContact: OutreachContact = {
 }
 
 const report: JobSearchReport = {
-    id: 'report-1',
+    id: 'cfe834bb-fef0-4276-8e37-7f0ab0fc67d7',
     reportDate: '2026-07-13',
     summary: 'One matching role',
     createdAt: '2026-07-13T12:00:00.000Z',
@@ -79,15 +79,39 @@ describe('report store', () => {
     })
 
     it('loads same-day reports and refreshes one by id', async () => {
-        const earlierReport = { ...report, id: 'report-2', summary: 'Earlier run' }
+        const reportWithAdditions = {
+            ...report,
+            scoringVersion: 2,
+            results: [
+                {
+                    ...report.results[0]!,
+                    modelNote: 'future result field',
+                    post: { ...post, sourceMetadata: { importedBy: 'agent' } },
+                },
+            ],
+        }
+        const earlierReport = {
+            ...report,
+            id: 'b98b98ea-70c0-4336-b597-f7eb77d55ad7',
+            summary: 'Earlier run',
+        }
         const refreshedReport = { ...report, summary: 'Updated summary' }
         const fetchMock = vi.mocked(fetch)
         fetchMock
-            .mockResolvedValueOnce(jsonResponse([report, earlierReport]))
+            .mockResolvedValueOnce(jsonResponse([reportWithAdditions, earlierReport]))
             .mockResolvedValueOnce(jsonResponse(refreshedReport))
         const store = useReportStore()
 
         await store.fetchReports()
+        expect(store.reports[0]).toMatchObject({
+            scoringVersion: 2,
+            results: [
+                {
+                    modelNote: 'future result field',
+                    post: { sourceMetadata: { importedBy: 'agent' } },
+                },
+            ],
+        })
         await store.fetchReport(report.id)
 
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -101,6 +125,30 @@ describe('report store', () => {
             undefined,
         )
         expect(store.reports).toEqual([refreshedReport, earlierReport])
+    })
+
+    it('rejects an unsafe nested post link before changing report state', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(
+            jsonResponse([
+                {
+                    ...report,
+                    results: [
+                        {
+                            ...report.results[0],
+                            post: { ...post, postUrl: 'javascript:alert(1)' },
+                        },
+                    ],
+                },
+            ]),
+        )
+        const store = useReportStore()
+
+        await expect(store.fetchReports()).rejects.toThrow(
+            'API /job-search-reports returned invalid data',
+        )
+
+        expect(store.reports).toEqual([])
+        expect(store.loading).toBe(false)
     })
 
     it('exposes failed requests to the UI', async () => {
@@ -121,7 +169,11 @@ describe('post store', () => {
     })
 
     it('loads posts and keeps PATCH responses as the current post state', async () => {
-        const secondPost = { ...post, id: 'post-2', sourceKey: 'example:post-2' }
+        const secondPost = {
+            ...post,
+            id: '3f5dc4a4-7c98-4ef2-8947-cc2d78ab8a7a',
+            sourceKey: 'example:post-2',
+        }
         const updatedPost = {
             ...post,
             applicationStatus: 'awaiting-response' as const,
@@ -222,6 +274,21 @@ describe('outreach store', () => {
         expect(store.contactUpdateError).toBeNull()
     })
 
+    it('rejects unsafe contact links before changing outreach state', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(
+            jsonResponse([{ ...savedContact, profileUrl: 'javascript:alert(1)' }]),
+        )
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+
+        await expect(store.fetchContacts(post.id)).rejects.toThrow(
+            `API /job-posts/${post.id}/outreach-contacts returned invalid data`,
+        )
+
+        expect(store.contacts).toEqual([])
+        expect(store.contactsLoading).toBe(false)
+    })
+
     it('keeps the saved status and exposes an error when the messaged update fails', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
         const store = useOutreachStore()
@@ -264,6 +331,13 @@ describe('outreach store', () => {
 
     it('persists and selects a discovered contact when Work completes without a mounted panel', async () => {
         const output = {
+            personName: ` ${savedContact.personName} `,
+            personTitle: savedContact.personTitle,
+            profileUrl: ` ${savedContact.profileUrl} `,
+            relevanceRationale: savedContact.relevanceRationale,
+            draftMessage: savedContact.draftMessage,
+        }
+        const contactInput = {
             personName: savedContact.personName,
             personTitle: savedContact.personTitle,
             profileUrl: savedContact.profileUrl,
@@ -302,7 +376,7 @@ describe('outreach store', () => {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(output),
+                body: JSON.stringify(contactInput),
             },
         )
         expect(store.contacts).toEqual([savedContact])

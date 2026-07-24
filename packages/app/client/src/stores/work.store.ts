@@ -1,14 +1,17 @@
-import type {
-    JsonObject,
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkActionRequired,
-    WorkCapability,
-    WorkTask,
-    WorkTaskEvent,
+import {
+    parseWorkHealth,
+    parseWorkTask,
+    parseWorkTaskEvent,
+    type RuntimeParser,
+    type StartWorkTaskInput,
+    type WorkActionDecision,
+    type WorkActionRequired,
+    type WorkTask,
+    type WorkTaskEvent,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
+import { parseJsonResponse } from '@/api'
 
 type WorkConnectionState =
     | 'idle'
@@ -18,67 +21,43 @@ type WorkConnectionState =
     | 'disconnected'
     | 'closed'
 
-interface WorkHealthResponse {
-    status: 'healthy'
-    capabilities: WorkCapability[]
-}
-
 const workBridgeUrl = (import.meta.env.VITE_WORK_BRIDGE_URL ?? 'http://localhost:3001').replace(
     /\/$/,
     '',
 )
 
-const isObject = (value: unknown): value is JsonObject =>
-    typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const isWorkAction = (value: unknown): value is WorkActionRequired =>
-    isObject(value) &&
-    typeof value.id === 'string' &&
-    value.kind === 'browser-origin' &&
-    typeof value.message === 'string' &&
-    typeof value.origin === 'string'
-
-const isWorkTaskEvent = (value: unknown): value is WorkTaskEvent => {
-    if (!isObject(value) || typeof value.createdAt !== 'string') {
-        return false
-    }
-
-    if (value.type === 'activity') {
-        return typeof value.message === 'string'
-    }
-
-    if (value.type === 'message') {
-        return typeof value.textDelta === 'string' && typeof value.startsNewStatement === 'boolean'
-    }
-
-    if (value.type === 'action-required') {
-        return isWorkAction(value.action)
-    }
-
-    if (value.type === 'action-resolved') {
-        return typeof value.actionId === 'string'
-    }
-
-    if (value.type === 'completed') {
-        return isObject(value.output)
-    }
-
-    return (
-        value.type === 'cancelled' || (value.type === 'failed' && typeof value.error === 'string')
-    )
-}
-
-const requestWork = async <T>(path: string, init?: RequestInit): Promise<T> => {
+const workResponse = async (path: string, init?: RequestInit) => {
     const response = await fetch(`${workBridgeUrl}${path}`, init)
 
     if (!response.ok) {
         const body: unknown = await response.json().catch(() => null)
-        const message = isObject(body) && typeof body.error === 'string' ? body.error : null
+        const message =
+            typeof body === 'object' &&
+            body !== null &&
+            !Array.isArray(body) &&
+            'error' in body &&
+            typeof body.error === 'string'
+                ? body.error
+                : null
 
         throw new Error(message ?? `Work request failed (${response.status})`)
     }
 
-    return response.json() as Promise<T>
+    return response
+}
+
+const requestWork = async <T>(
+    path: string,
+    parser: RuntimeParser<T>,
+    init?: RequestInit,
+): Promise<T> => {
+    const response = await workResponse(path, init)
+
+    return parseJsonResponse(response, parser, `Work ${path}`)
+}
+
+const sendWork = async (path: string, init?: RequestInit): Promise<void> => {
+    await workResponse(path, init)
 }
 
 export const useWorkStore = defineStore('work', () => {
@@ -137,15 +116,12 @@ export const useWorkStore = defineStore('work', () => {
                 }
 
                 const value: unknown = JSON.parse(data)
+                const event = parseWorkTaskEvent(value)
 
-                if (!isWorkTaskEvent(value)) {
-                    throw new Error()
-                }
+                events.value.push(event)
 
-                events.value.push(value)
-
-                if (value.type === 'action-required') {
-                    pendingAction.value = value.action
+                if (event.type === 'action-required') {
+                    pendingAction.value = event.action
                     actionSubmitting.value = false
                     error.value = null
 
@@ -153,17 +129,31 @@ export const useWorkStore = defineStore('work', () => {
                         void allowBrowserActionsForTask().catch(() => undefined)
                     }
                 } else if (
-                    value.type === 'action-resolved' &&
-                    pendingAction.value?.id === value.actionId
+                    event.type === 'action-resolved' &&
+                    pendingAction.value?.id === event.actionId
                 ) {
                     pendingAction.value = null
                     actionSubmitting.value = false
                     error.value = null
-                } else if (value.type === 'completed' && task.value !== null) {
-                    finishTask({ ...task.value, status: 'completed', output: value.output })
-                } else if (value.type === 'failed' && task.value !== null) {
-                    finishTask({ ...task.value, status: 'failed', error: value.error })
-                } else if (value.type === 'cancelled' && task.value !== null) {
+                } else if (event.type === 'completed' && task.value !== null) {
+                    finishTask({
+                        id: task.value.id,
+                        threadId: task.value.threadId,
+                        turnId: task.value.turnId,
+                        status: 'completed',
+                        output: event.output,
+                        error: null,
+                    })
+                } else if (event.type === 'failed' && task.value !== null) {
+                    finishTask({
+                        id: task.value.id,
+                        threadId: task.value.threadId,
+                        turnId: task.value.turnId,
+                        status: 'failed',
+                        output: null,
+                        error: event.error,
+                    })
+                } else if (event.type === 'cancelled' && task.value !== null) {
                     finishTask({
                         ...task.value,
                         status: 'cancelled',
@@ -202,7 +192,7 @@ export const useWorkStore = defineStore('work', () => {
         error.value = null
 
         try {
-            const health = await requestWork<WorkHealthResponse>('/health')
+            const health = await requestWork('/health', parseWorkHealth)
 
             const unavailableCapability = input.capabilities.find(
                 (capability) => !health.capabilities.includes(capability),
@@ -212,7 +202,7 @@ export const useWorkStore = defineStore('work', () => {
                 throw new Error(`Work capability is unavailable: ${unavailableCapability}`)
             }
 
-            task.value = await requestWork<WorkTask>('/tasks', {
+            task.value = await requestWork('/tasks', parseWorkTask, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(input),
@@ -240,7 +230,7 @@ export const useWorkStore = defineStore('work', () => {
         error.value = null
 
         try {
-            await requestWork(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
+            await sendWork(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ decision }),
@@ -293,7 +283,7 @@ export const useWorkStore = defineStore('work', () => {
         error.value = null
 
         try {
-            const currentTask = await requestWork<WorkTask>(`/tasks/${task.value.id}/cancel`, {
+            const currentTask = await requestWork(`/tasks/${task.value.id}/cancel`, parseWorkTask, {
                 method: 'POST',
             })
 

@@ -1,17 +1,22 @@
-import type { JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
+import {
+    parseJobPost,
+    parseJobPosts,
+    type JobPost,
+    type UpdateJobPostInput,
+} from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { request } from '@/api'
 import { useReportStore } from '@/stores/report.store'
 
-const getJobPosts = () => request<JobPost[]>('/job-posts')
+const getJobPosts = () => request('/job-posts', parseJobPosts)
 
-const getLabeledJobPosts = () => request<JobPost[]>('/job-posts/labeled')
+const getLabeledJobPosts = () => request('/job-posts/labeled', parseJobPosts)
 
-const getJobPost = (id: string) => request<JobPost>(`/job-posts/${encodeURIComponent(id)}`)
+const getJobPost = (id: string) => request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost)
 
 const patchJobPost = (id: string, input: UpdateJobPostInput) =>
-    request<JobPost>(`/job-posts/${encodeURIComponent(id)}`, {
+    request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),

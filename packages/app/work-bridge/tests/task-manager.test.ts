@@ -1,4 +1,9 @@
-import type { StartWorkTaskInput, WorkActionDecision } from '@job-search-facilitator/core'
+import {
+    createContactDiscoveryOutputSchema,
+    createDraftRevisionOutputSchema,
+    type StartWorkTaskInput,
+    type WorkActionDecision,
+} from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
 import type {
     StartedWorkTask,
@@ -50,7 +55,14 @@ class FakeRuntime implements WorkRuntime {
 
 const input: StartWorkTaskInput = {
     prompt: 'Find contacts',
-    outputSchema: { type: 'object' },
+    outputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            contacts: { type: 'array' },
+        },
+        required: ['contacts'],
+    },
     capabilities: ['chrome'],
 }
 
@@ -101,6 +113,56 @@ describe('Work task manager', () => {
         })
     })
 
+    it.each([
+        [
+            'contact discovery',
+            createContactDiscoveryOutputSchema,
+            {
+                personName: 'Ada Lovelace',
+                personTitle: 'Engineering Manager',
+                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                relevanceRationale: 'Her visible role aligns with the team.',
+                draftMessage: 'Hi Ada, could I ask about the team?',
+            },
+        ],
+        [
+            'draft revision',
+            createDraftRevisionOutputSchema,
+            {
+                draftMessage: 'Hi Ada, could I ask about the engineering team?',
+                response: 'I made the message more specific.',
+            },
+        ],
+    ] as const)(
+        'accepts output satisfying the generated %s contract',
+        async (_name, createOutputSchema, output) => {
+            const runtime = new FakeRuntime()
+            const manager = new WorkTaskManager(runtime)
+            const started = await manager.start({
+                ...input,
+                outputSchema: createOutputSchema(),
+            })
+
+            runtime.emit({
+                type: 'final-message',
+                ...eventIdentity,
+                text: JSON.stringify(output),
+            })
+            runtime.emit({
+                type: 'turn-completed',
+                ...eventIdentity,
+                status: 'completed',
+                error: null,
+            })
+
+            expect(manager.get(started.id)).toEqual({
+                ...started,
+                status: 'completed',
+                output,
+            })
+        },
+    )
+
     it('marks boundaries between fragmented reasoning summary sections', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
@@ -150,6 +212,31 @@ describe('Work task manager', () => {
             status: 'failed',
             error: 'Work task returned invalid structured output',
         })
+    })
+
+    it('fails a completed turn whose output does not match the requested schema', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        runtime.emit({ type: 'final-message', ...eventIdentity, text: '{"wrong":true}' })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'failed',
+            output: null,
+            error: 'Work task returned output that did not match its schema',
+        })
+        expect(
+            manager
+                .connect(started.id, () => {})
+                ?.events.some(({ event }) => event.type === 'completed'),
+        ).toBe(false)
     })
 
     it('preserves the runtime error when a turn fails', async () => {

@@ -138,6 +138,42 @@ describe('Work bridge routes', () => {
             .expect(400, { error: 'Invalid request' })
     })
 
+    it.each([
+        ['malformed', { type: 'not-a-json-schema-type' }],
+        ['asynchronous', { $async: true, type: 'object' }],
+        ['non-object', { type: 'array' }],
+        ['dialect-marker', { $schema: 'http://json-schema.org/draft-07/schema#', type: 'object' }],
+        [
+            'nested-dialect-marker',
+            {
+                type: 'object',
+                properties: {
+                    value: {
+                        $schema: 'http://json-schema.org/draft-07/schema#',
+                        type: 'string',
+                    },
+                },
+            },
+        ],
+        [
+            'unsupported-format',
+            {
+                type: 'object',
+                properties: { email: { type: 'string', format: 'email' } },
+            },
+        ],
+    ])('rejects the %s output schema before starting a task', async (_kind, outputSchema) => {
+        const runtime = new FakeRuntime()
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
+
+        await request(app)
+            .post('/tasks')
+            .send({ ...taskInput, outputSchema })
+            .expect(400, { error: 'Invalid request' })
+
+        expect(runtime.startAttempts).toBe(0)
+    })
+
     it('replays a completed task over the event stream', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
