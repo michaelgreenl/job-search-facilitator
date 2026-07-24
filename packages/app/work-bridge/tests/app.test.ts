@@ -1,27 +1,33 @@
-import type {
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkCapability,
-} from '@job-search-facilitator/core'
+import type { StartWorkTaskInput, WorkActionDecision } from '@job-search-facilitator/core'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.ts'
 import type {
-    AppServerNotification,
     StartedWorkTask,
     WorkRuntime,
-    WorkRuntimeAction,
+    WorkRuntimeEvent,
+    WorkRuntimeHealth,
 } from '../src/app-server.ts'
 import { WorkTaskManager } from '../src/task-manager.ts'
 
 class FakeRuntime implements WorkRuntime {
-    readonly capabilities: WorkCapability[] = ['chrome']
-    private readonly listeners = new Set<(notification: AppServerNotification) => void>()
-    private readonly actionListeners = new Set<(action: WorkRuntimeAction) => void>()
+    health: WorkRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
+    startAttempts = 0
+    private readonly eventListeners = new Set<(event: WorkRuntimeEvent) => void>()
+    private startError: Error | null = null
     readonly decisions: Array<{ actionId: string; decision: WorkActionDecision }> = []
     readonly interruptions: Array<{ threadId: string; turnId: string }> = []
 
     async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
+        this.startAttempts += 1
+
+        if (this.startError !== null) {
+            const error = this.startError
+            this.startError = null
+            this.fail(error)
+            throw error
+        }
+
         return { threadId: 'thread-id', turnId: 'turn-id' }
     }
 
@@ -34,30 +40,31 @@ class FakeRuntime implements WorkRuntime {
         return true
     }
 
-    onActionRequired(listener: (action: WorkRuntimeAction) => void): () => void {
-        this.actionListeners.add(listener)
-        return () => this.actionListeners.delete(listener)
+    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void {
+        this.eventListeners.add(listener)
+        return () => this.eventListeners.delete(listener)
     }
 
-    onNotification(listener: (notification: AppServerNotification) => void): () => void {
-        this.listeners.add(listener)
-        return () => this.listeners.delete(listener)
-    }
+    emit(event: WorkRuntimeEvent) {
+        if (event.type === 'runtime-failed') {
+            this.health = {
+                status: 'unavailable',
+                capabilities: [],
+                error: event.error.message,
+            }
+        }
 
-    onExit(_listener: (error: Error) => void): () => void {
-        return () => {}
-    }
-
-    notify(method: string, params: Record<string, unknown>) {
-        for (const listener of this.listeners) {
-            listener({ method, params })
+        for (const listener of this.eventListeners) {
+            listener(event)
         }
     }
 
-    requireAction(action: WorkRuntimeAction) {
-        for (const listener of this.actionListeners) {
-            listener(action)
-        }
+    fail(error: Error) {
+        this.emit({ type: 'runtime-failed', error })
+    }
+
+    failNextStart(error: Error) {
+        this.startError = error
     }
 }
 
@@ -70,11 +77,7 @@ const taskInput = {
 describe('Work bridge routes', () => {
     it('reports available capabilities and starts a task', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(
-            new WorkTaskManager(runtime),
-            runtime.capabilities,
-            'http://localhost',
-        )
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
 
         await request(app)
             .get('/health')
@@ -89,13 +92,45 @@ describe('Work bridge routes', () => {
         })
     })
 
+    it('reports runtime failure and refuses new tasks without hiding existing task state', async () => {
+        const runtime = new FakeRuntime()
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
+        const started = await request(app).post('/tasks').send(taskInput).expect(202)
+
+        runtime.fail(new Error('Work runtime exited (17)'))
+
+        await request(app).get('/health').expect(503, {
+            status: 'unavailable',
+            capabilities: [],
+            error: 'Work runtime exited (17)',
+        })
+        await request(app)
+            .post('/tasks')
+            .send(taskInput)
+            .expect(503, { error: 'Work runtime exited (17)' })
+        await request(app)
+            .get(`/tasks/${started.body.id}`)
+            .expect(200, {
+                ...started.body,
+                status: 'failed',
+                error: 'Work runtime exited (17)',
+            })
+        expect(runtime.startAttempts).toBe(1)
+    })
+
+    it('returns unavailable when the runtime fails during task creation', async () => {
+        const runtime = new FakeRuntime()
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
+        runtime.failNextStart(new Error('Work runtime request "thread/start" timed out'))
+
+        await request(app).post('/tasks').send(taskInput).expect(503, {
+            error: 'Work runtime request "thread/start" timed out',
+        })
+    })
+
     it('rejects an unsupported capability', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(
-            new WorkTaskManager(runtime),
-            runtime.capabilities,
-            'http://localhost',
-        )
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
 
         await request(app)
             .post('/tasks')
@@ -106,22 +141,20 @@ describe('Work bridge routes', () => {
     it('replays a completed task over the event stream', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
-        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const app = createApp(manager, runtime, 'http://localhost')
         const task = await manager.start(taskInput as StartWorkTaskInput)
-        const baseParams = { threadId: task.threadId, turnId: task.turnId }
+        const eventIdentity = { threadId: task.threadId, turnId: task.turnId }
 
-        runtime.notify('item/completed', {
-            ...baseParams,
-            item: {
-                type: 'agentMessage',
-                id: 'final',
-                phase: 'final_answer',
-                text: '{"contacts":[]}',
-            },
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: '{"contacts":[]}',
         })
-        runtime.notify('turn/completed', {
-            ...baseParams,
-            turn: { id: task.turnId, status: 'completed' },
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
         })
 
         const response = await request(app).get(`/tasks/${task.id}/events`).expect(200)
@@ -144,7 +177,7 @@ describe('Work bridge routes', () => {
     it('cancels a running task and closes its event stream with cancellation', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
-        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const app = createApp(manager, runtime, 'http://localhost')
         const task = await manager.start(taskInput as StartWorkTaskInput)
 
         const cancellation = await request(app).post(`/tasks/${task.id}/cancel`).expect(202)
@@ -166,22 +199,20 @@ describe('Work bridge routes', () => {
     it('rejects cancellation after a task finishes', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
-        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const app = createApp(manager, runtime, 'http://localhost')
         const task = await manager.start(taskInput as StartWorkTaskInput)
-        const baseParams = { threadId: task.threadId, turnId: task.turnId }
+        const eventIdentity = { threadId: task.threadId, turnId: task.turnId }
 
-        runtime.notify('item/completed', {
-            ...baseParams,
-            item: {
-                type: 'agentMessage',
-                id: 'final',
-                phase: 'final_answer',
-                text: '{"contacts":[]}',
-            },
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: '{"contacts":[]}',
         })
-        runtime.notify('turn/completed', {
-            ...baseParams,
-            turn: { id: task.turnId, status: 'completed' },
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
         })
 
         await request(app)
@@ -194,17 +225,20 @@ describe('Work bridge routes', () => {
     it('resumes a task after its browser-origin action is approved', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
-        const app = createApp(manager, runtime.capabilities, 'http://localhost')
+        const app = createApp(manager, runtime, 'http://localhost')
         const task = await manager.start(taskInput as StartWorkTaskInput)
         const actionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
 
-        runtime.requireAction({
-            id: actionId,
-            kind: 'browser-origin',
-            threadId: task.threadId,
-            turnId: task.turnId,
-            message: 'Allow Chrome to access https://www.linkedin.com?',
-            origin: 'https://www.linkedin.com',
+        runtime.emit({
+            type: 'action-required',
+            action: {
+                id: actionId,
+                kind: 'browser-origin',
+                threadId: task.threadId,
+                turnId: task.turnId,
+                message: 'Allow Chrome to access https://www.linkedin.com?',
+                origin: 'https://www.linkedin.com',
+            },
         })
 
         expect(manager.connect(task.id, () => {})?.events.at(-1)?.event).toMatchObject({
@@ -219,9 +253,9 @@ describe('Work bridge routes', () => {
 
         expect(runtime.decisions).toEqual([{ actionId, decision: 'approve' }])
 
-        runtime.notify('serverRequest/resolved', {
+        runtime.emit({
+            type: 'action-resolved',
             threadId: task.threadId,
-            requestId: 99,
             actionId,
         })
 

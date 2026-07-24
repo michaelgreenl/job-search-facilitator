@@ -1,24 +1,17 @@
-import type {
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkCapability,
-} from '@job-search-facilitator/core'
+import type { StartWorkTaskInput, WorkActionDecision } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
 import type {
-    AppServerNotification,
     StartedWorkTask,
     WorkRuntime,
-    WorkRuntimeAction,
+    WorkRuntimeEvent,
+    WorkRuntimeHealth,
 } from '../src/app-server.ts'
 import { WorkTaskManager } from '../src/task-manager.ts'
 
 class FakeRuntime implements WorkRuntime {
-    readonly capabilities: WorkCapability[] = ['chrome']
     readonly interruptions: Array<{ threadId: string; turnId: string }> = []
-    private readonly notificationListeners = new Set<
-        (notification: AppServerNotification) => void
-    >()
-    private readonly exitListeners = new Set<(error: Error) => void>()
+    health: WorkRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
+    private readonly eventListeners = new Set<(event: WorkRuntimeEvent) => void>()
 
     constructor(private readonly onInterrupt: () => Promise<void> = async () => {}) {}
 
@@ -35,23 +28,22 @@ class FakeRuntime implements WorkRuntime {
         return false
     }
 
-    onActionRequired(_listener: (action: WorkRuntimeAction) => void): () => void {
-        return () => {}
+    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void {
+        this.eventListeners.add(listener)
+        return () => this.eventListeners.delete(listener)
     }
 
-    onNotification(listener: (notification: AppServerNotification) => void): () => void {
-        this.notificationListeners.add(listener)
-        return () => this.notificationListeners.delete(listener)
-    }
+    emit(event: WorkRuntimeEvent) {
+        if (event.type === 'runtime-failed') {
+            this.health = {
+                status: 'unavailable',
+                capabilities: [],
+                error: event.error.message,
+            }
+        }
 
-    onExit(listener: (error: Error) => void): () => void {
-        this.exitListeners.add(listener)
-        return () => this.exitListeners.delete(listener)
-    }
-
-    notify(method: string, params: Record<string, unknown>) {
-        for (const listener of this.notificationListeners) {
-            listener({ method, params })
+        for (const listener of this.eventListeners) {
+            listener(event)
         }
     }
 }
@@ -62,77 +54,48 @@ const input: StartWorkTaskInput = {
     capabilities: ['chrome'],
 }
 
-const params = (values: Record<string, unknown> = {}) => ({
+const eventIdentity = {
     threadId: 'thread-id',
     turnId: 'turn-id',
-    ...values,
-})
+} as const
 
 describe('Work task manager', () => {
-    it('streams safe progress and stores the final structured output', async () => {
+    it('streams reasoning progress and stores the final structured output', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
         const started = await manager.start(input)
-        const connection = manager.connect(started.id, () => {})
 
-        runtime.notify(
-            'item/started',
-            params({ item: { type: 'agentMessage', id: 'commentary', phase: 'commentary' } }),
-        )
-        runtime.notify(
-            'item/agentMessage/delta',
-            params({
-                itemId: 'commentary',
-                delta: '{"personName":"Checking company staff","personTitle":"Working"}',
-            }),
-        )
-        runtime.notify(
-            'item/reasoning/summaryTextDelta',
-            params({
-                itemId: 'reasoning',
-                summaryIndex: 0,
-                delta: 'Comparing relevant employees',
-            }),
-        )
-        runtime.notify(
-            'item/started',
-            params({ item: { type: 'agentMessage', id: 'final', phase: 'final_answer' } }),
-        )
-        runtime.notify(
-            'item/agentMessage/delta',
-            params({ itemId: 'final', delta: '{"contacts":' }),
-        )
-        runtime.notify(
-            'item/completed',
-            params({
-                item: {
-                    type: 'agentMessage',
-                    id: 'final',
-                    phase: 'final_answer',
-                    text: '{"contacts":[]}',
-                },
-            }),
-        )
-        runtime.notify('turn/completed', params({ turn: { id: 'turn-id', status: 'completed' } }))
+        runtime.emit({
+            type: 'reasoning-delta',
+            ...eventIdentity,
+            itemId: 'reasoning',
+            summaryIndex: 0,
+            textDelta: 'Comparing relevant employees',
+        })
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: '{"contacts":[]}',
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
 
         expect(manager.get(started.id)).toMatchObject({
             status: 'completed',
             output: { contacts: [] },
         })
-        expect(connection?.events).toEqual([
-            {
-                id: 1,
-                event: expect.objectContaining({ type: 'activity', message: 'Task started' }),
-            },
-        ])
-        expect(
-            manager.connect(started.id, () => {})?.events.map(({ id, event }) => [id, event.type]),
-        ).toEqual([
+        const events = manager.connect(started.id, () => {})?.events
+
+        expect(events?.map(({ id, event }) => [id, event.type])).toEqual([
             [1, 'activity'],
             [2, 'message'],
             [3, 'completed'],
         ])
-        expect(manager.connect(started.id, () => {})?.events[1]?.event).toMatchObject({
+        expect(events?.[1]?.event).toMatchObject({
             type: 'message',
             textDelta: 'Comparing relevant employees',
         })
@@ -149,10 +112,13 @@ describe('Work task manager', () => {
             [1, '**Finding '],
             [1, 'the team**'],
         ] as const) {
-            runtime.notify(
-                'item/reasoning/summaryTextDelta',
-                params({ itemId: 'reasoning', summaryIndex, delta }),
-            )
+            runtime.emit({
+                type: 'reasoning-delta',
+                ...eventIdentity,
+                itemId: 'reasoning',
+                summaryIndex,
+                textDelta: delta,
+            })
         }
 
         const messages = manager
@@ -172,22 +138,35 @@ describe('Work task manager', () => {
         const manager = new WorkTaskManager(runtime)
         const started = await manager.start(input)
 
-        runtime.notify(
-            'item/completed',
-            params({
-                item: {
-                    type: 'agentMessage',
-                    id: 'final',
-                    phase: 'final_answer',
-                    text: 'not json',
-                },
-            }),
-        )
-        runtime.notify('turn/completed', params({ turn: { id: 'turn-id', status: 'completed' } }))
+        runtime.emit({ type: 'final-message', ...eventIdentity, text: 'not json' })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
 
         expect(manager.get(started.id)).toMatchObject({
             status: 'failed',
             error: 'Work task returned invalid structured output',
+        })
+    })
+
+    it('preserves the runtime error when a turn fails', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'failed',
+            error: 'Model unavailable',
+        })
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'failed',
+            error: 'Model unavailable',
         })
     })
 
@@ -251,18 +230,17 @@ describe('Work task manager', () => {
         const started = await manager.start(input)
 
         const cancellation = manager.cancel(started.id)
-        runtime.notify(
-            'item/completed',
-            params({
-                item: {
-                    type: 'agentMessage',
-                    id: 'final',
-                    phase: 'final_answer',
-                    text: '{"contacts":[]}',
-                },
-            }),
-        )
-        runtime.notify('turn/completed', params({ turn: { status: 'completed' } }))
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: '{"contacts":[]}',
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
         rejectInterrupt(new Error('Turn is no longer active'))
 
         const result = await cancellation
@@ -304,7 +282,12 @@ describe('Work task manager', () => {
         const manager = new WorkTaskManager(runtime)
         const started = await manager.start(input)
 
-        runtime.notify('turn/completed', params({ turn: { status: 'interrupted' } }))
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'interrupted',
+            error: null,
+        })
 
         expect(manager.get(started.id)).toMatchObject({
             status: 'cancelled',
@@ -314,5 +297,45 @@ describe('Work task manager', () => {
         expect(manager.connect(started.id, () => {})?.events.at(-1)?.event).toMatchObject({
             type: 'cancelled',
         })
+    })
+
+    it('fails running tasks once when the runtime fails and preserves completed tasks', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const completed = await manager.start(input)
+
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: '{"contacts":[]}',
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
+
+        const running = await manager.start(input)
+        const failure = { type: 'runtime-failed', error: new Error('Work runtime exited') } as const
+
+        runtime.emit(failure)
+        runtime.emit(failure)
+
+        expect(manager.get(completed.id)).toMatchObject({
+            status: 'completed',
+            output: { contacts: [] },
+            error: null,
+        })
+        expect(manager.get(running.id)).toMatchObject({
+            status: 'failed',
+            output: null,
+            error: 'Work runtime exited',
+        })
+        expect(
+            manager
+                .connect(running.id, () => {})
+                ?.events.filter(({ event }) => event.type === 'failed'),
+        ).toHaveLength(1)
     })
 })

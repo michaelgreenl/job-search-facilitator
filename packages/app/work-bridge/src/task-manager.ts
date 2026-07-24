@@ -7,7 +7,7 @@ import type {
     WorkTask,
     WorkTaskEvent,
 } from '@job-search-facilitator/core'
-import type { AppServerNotification, WorkRuntime, WorkRuntimeAction } from './app-server.ts'
+import type { WorkRuntime, WorkRuntimeAction, WorkRuntimeEvent } from './app-server.ts'
 
 interface StoredTask extends WorkTask {
     capabilities: StartWorkTaskInput['capabilities']
@@ -30,10 +30,8 @@ export interface WorkTaskStreamEvent {
     event: WorkTaskEvent
 }
 
-const isObject = (value: unknown): value is JsonObject =>
+const isStructuredOutput = (value: unknown): value is JsonObject =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const stringValue = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 
 const publicTask = ({
     capabilities: _capabilities,
@@ -50,15 +48,7 @@ export class WorkTaskManager {
     private readonly tasks = new Map<string, StoredTask>()
 
     constructor(private readonly runtime: WorkRuntime) {
-        runtime.onActionRequired((action) => this.handleActionRequired(action))
-        runtime.onNotification((notification) => this.handleNotification(notification))
-        runtime.onExit((error) => {
-            for (const task of this.tasks.values()) {
-                if (task.status === 'running') {
-                    this.fail(task, error.message)
-                }
-            }
-        })
+        runtime.onEvent((event) => this.handleEvent(event))
     }
 
     async start(input: StartWorkTaskInput): Promise<WorkTask> {
@@ -155,21 +145,34 @@ export class WorkTaskManager {
         }
     }
 
-    private handleNotification({ method, params }: AppServerNotification): void {
-        const threadId = stringValue(params.threadId)
+    private handleEvent(event: WorkRuntimeEvent): void {
+        if (event.type === 'runtime-failed') {
+            for (const task of this.tasks.values()) {
+                if (task.status === 'running') {
+                    this.fail(task, event.error.message)
+                }
+            }
 
-        if (method === 'serverRequest/resolved') {
-            const actionId = stringValue(params.actionId)
+            return
+        }
+
+        if (event.type === 'action-required') {
+            this.handleActionRequired(event.action)
+            return
+        }
+
+        if (event.type === 'action-resolved') {
             const task = [...this.tasks.values()].find(
                 (candidate) =>
-                    candidate.threadId === threadId && candidate.pendingAction?.id === actionId,
+                    candidate.threadId === event.threadId &&
+                    candidate.pendingAction?.id === event.actionId,
             )
 
-            if (task !== undefined && actionId !== null) {
+            if (task !== undefined) {
                 task.pendingAction = null
                 this.emit(task, {
                     type: 'action-resolved',
-                    actionId,
+                    actionId: event.actionId,
                     createdAt: new Date().toISOString(),
                 })
             }
@@ -177,56 +180,45 @@ export class WorkTaskManager {
             return
         }
 
-        const turnId =
-            stringValue(params.turnId) ?? stringValue((params.turn as JsonObject | undefined)?.id)
-
-        if (threadId === null || turnId === null) {
-            return
-        }
-
         const task = [...this.tasks.values()].find(
-            (candidate) => candidate.threadId === threadId && candidate.turnId === turnId,
+            (candidate) =>
+                candidate.threadId === event.threadId && candidate.turnId === event.turnId,
         )
 
         if (task === undefined || task.status !== 'running') {
             return
         }
 
-        if (method === 'item/started') {
-            this.handleItemStarted(task, params.item)
-        } else if (method === 'item/reasoning/summaryTextDelta') {
-            const delta = stringValue(params.delta)
-            const itemId = stringValue(params.itemId)
-            const summaryIndex =
-                typeof params.summaryIndex === 'number' && Number.isInteger(params.summaryIndex)
-                    ? params.summaryIndex
-                    : null
+        if (event.type === 'activity') {
+            const message = {
+                'web-search': 'Searching the web',
+                'tool-use': task.capabilities.includes('chrome') ? 'Using Chrome' : 'Using a tool',
+                'local-read': 'Reading local context',
+                delegation: 'Delegating part of the task',
+                'plan-update': 'Plan updated',
+            }[event.activity]
+            this.activity(task, message)
+        } else if (event.type === 'reasoning-delta') {
+            const startsNewStatement =
+                task.reasoningSection === null ||
+                task.reasoningSection.itemId !== event.itemId ||
+                task.reasoningSection.summaryIndex !== event.summaryIndex
 
-            if (delta !== null) {
-                const startsNewStatement =
-                    itemId !== null &&
-                    summaryIndex !== null &&
-                    (task.reasoningSection === null ||
-                        task.reasoningSection.itemId !== itemId ||
-                        task.reasoningSection.summaryIndex !== summaryIndex)
-
-                if (itemId !== null && summaryIndex !== null) {
-                    task.reasoningSection = { itemId, summaryIndex }
-                }
-
-                this.emit(task, {
-                    type: 'message',
-                    textDelta: delta,
-                    startsNewStatement,
-                    createdAt: new Date().toISOString(),
-                })
+            task.reasoningSection = {
+                itemId: event.itemId,
+                summaryIndex: event.summaryIndex,
             }
-        } else if (method === 'item/completed') {
-            this.handleItemCompleted(task, params.item)
-        } else if (method === 'turn/plan/updated') {
-            this.activity(task, 'Plan updated')
-        } else if (method === 'turn/completed') {
-            this.completeTurn(task, params.turn)
+
+            this.emit(task, {
+                type: 'message',
+                textDelta: event.textDelta,
+                startsNewStatement,
+                createdAt: new Date().toISOString(),
+            })
+        } else if (event.type === 'final-message') {
+            task.finalMessages.push(event.text)
+        } else if (event.type === 'turn-completed') {
+            this.completeTurn(task, event.status, event.error)
         }
     }
 
@@ -251,54 +243,18 @@ export class WorkTaskManager {
         })
     }
 
-    private handleItemStarted(task: StoredTask, value: unknown): void {
-        if (!isObject(value)) {
-            return
-        }
-
-        const type = stringValue(value.type)
-
-        if (type === 'webSearch') {
-            this.activity(task, 'Searching the web')
-        } else if (type === 'mcpToolCall') {
-            this.activity(
-                task,
-                task.capabilities.includes('chrome') ? 'Using Chrome' : 'Using a tool',
-            )
-        } else if (type === 'commandExecution') {
-            this.activity(task, 'Reading local context')
-        } else if (type === 'collabAgentToolCall') {
-            this.activity(task, 'Delegating part of the task')
-        }
-    }
-
-    private handleItemCompleted(task: StoredTask, value: unknown): void {
-        if (!isObject(value) || value.type !== 'agentMessage') {
-            return
-        }
-
-        const text = stringValue(value.text)
-        const phase = stringValue(value.phase)
-
-        if (text !== null && (phase === 'final_answer' || phase === null)) {
-            task.finalMessages.push(text)
-        }
-    }
-
-    private completeTurn(task: StoredTask, value: unknown): void {
-        if (!isObject(value)) {
-            this.fail(task, 'Work task ended without a result')
-            return
-        }
-
-        if (value.status === 'interrupted') {
+    private completeTurn(
+        task: StoredTask,
+        status: Extract<WorkRuntimeEvent, { type: 'turn-completed' }>['status'],
+        error: string | null,
+    ): void {
+        if (status === 'interrupted') {
             this.markCancelled(task)
             return
         }
 
-        if (value.status !== 'completed') {
-            const turnError = isObject(value.error) ? stringValue(value.error.message) : null
-            this.fail(task, turnError ?? 'Work task did not complete')
+        if (status !== 'completed') {
+            this.fail(task, error ?? 'Work task did not complete')
             return
         }
 
@@ -312,7 +268,7 @@ export class WorkTaskManager {
         try {
             const output: unknown = JSON.parse(finalMessage)
 
-            if (!isObject(output)) {
+            if (!isStructuredOutput(output)) {
                 throw new Error()
             }
 

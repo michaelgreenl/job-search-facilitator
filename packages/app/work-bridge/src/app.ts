@@ -1,4 +1,3 @@
-import type { WorkCapability } from '@job-search-facilitator/core'
 import { WORK_CAPABILITIES } from '@job-search-facilitator/core'
 import {
     ACCEPTED,
@@ -6,10 +5,12 @@ import {
     CONFLICT,
     NOT_FOUND,
     SERVER_ERROR,
+    SERVICE_UNAVAILABLE,
 } from '@job-search-facilitator/utils'
 import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
+import type { WorkRuntime } from './app-server.ts'
 import type { WorkTaskManager, WorkTaskStreamEvent } from './task-manager.ts'
 
 const startWorkTaskInputSchema = z.strictObject({
@@ -30,7 +31,7 @@ const sendEvent = (response: express.Response, { id, event }: WorkTaskStreamEven
 
 export const createApp = (
     taskManager: WorkTaskManager,
-    capabilities: WorkCapability[],
+    runtime: WorkRuntime,
     clientOrigin: string,
 ) => {
     const app = express()
@@ -39,7 +40,13 @@ export const createApp = (
     app.use(express.json())
 
     app.get('/health', (_request, response) => {
-        response.json({ status: 'healthy', capabilities })
+        const health = runtime.health
+
+        if (health.status === 'unavailable') {
+            response.status(SERVICE_UNAVAILABLE)
+        }
+
+        response.json(health)
     })
 
     app.post('/tasks', async (request, response) => {
@@ -50,9 +57,23 @@ export const createApp = (
             return
         }
 
+        const health = runtime.health
+
+        if (health.status === 'unavailable') {
+            response.status(SERVICE_UNAVAILABLE).json({ error: health.error })
+            return
+        }
+
         try {
             response.status(ACCEPTED).json(await taskManager.start(input.data))
         } catch (error) {
+            const currentHealth = runtime.health
+
+            if (currentHealth.status === 'unavailable') {
+                response.status(SERVICE_UNAVAILABLE).json({ error: currentHealth.error })
+                return
+            }
+
             response.status(SERVER_ERROR).json({
                 error: error instanceof Error ? error.message : 'Could not start Work task',
             })

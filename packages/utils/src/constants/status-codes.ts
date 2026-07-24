@@ -10,3 +10,4 @@ export const REQUEST_TIMEOUT = 408
 export const CONFLICT = 409
 export const UNPROCESSABLE_ENTITY = 422
 export const SERVER_ERROR = 500
+export const SERVICE_UNAVAILABLE = 503

@@ -2,10 +2,16 @@ import { EventEmitter } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { CodexAppServer } from '../src/app-server.ts'
+import { CodexAppServer, type WorkRuntimeEvent } from '../src/app-server.ts'
 import { WorkTaskManager } from '../src/task-manager.ts'
 
-const createFakeProcess = (completeTaskImmediately = false) => {
+const createFakeProcess = ({
+    completeTaskImmediately = false,
+    ignoredMethods = [],
+}: {
+    completeTaskImmediately?: boolean
+    ignoredMethods?: string[]
+} = {}) => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
     const requests: Array<Record<string, unknown>> = []
@@ -13,6 +19,12 @@ const createFakeProcess = (completeTaskImmediately = false) => {
 
     const respond = (message: Record<string, unknown>) => {
         stdout.write(`${JSON.stringify(message)}\n`)
+    }
+    const writeStderr = (message: string) => {
+        stderr.write(message)
+    }
+    const endStdout = () => {
+        stdout.end()
     }
     const stdin = new Writable({
         write(chunk, _encoding, callback) {
@@ -23,6 +35,10 @@ const createFakeProcess = (completeTaskImmediately = false) => {
             for (const line of lines) {
                 const request = JSON.parse(line) as Record<string, unknown>
                 requests.push(request)
+
+                if (typeof request.method === 'string' && ignoredMethods.includes(request.method)) {
+                    continue
+                }
 
                 if (request.method === 'initialize') {
                     respond({ id: request.id, result: {} })
@@ -96,13 +112,15 @@ const createFakeProcess = (completeTaskImmediately = false) => {
         kill: () => true,
     }) as unknown as ChildProcessWithoutNullStreams
 
-    return { process, requests, respond }
+    return { process, requests, respond, writeStderr, endStdout }
 }
 
 describe('Codex app server client', () => {
     it('discovers Chrome and starts a structured read-only task', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
 
         await runtime.start()
         const task = await runtime.startTask('task-id', {
@@ -111,7 +129,10 @@ describe('Codex app server client', () => {
             capabilities: ['chrome'],
         })
 
-        expect(runtime.capabilities).toEqual(['chrome'])
+        expect(runtime.health).toEqual({
+            status: 'healthy',
+            capabilities: ['chrome'],
+        })
         expect(task).toEqual({ threadId: 'thread-id', turnId: 'turn-id' })
         expect(fake.requests).toContainEqual({ method: 'initialized' })
         expect(fake.requests).toContainEqual(
@@ -169,7 +190,9 @@ describe('Codex app server client', () => {
 
     it('declines an unexpected command approval', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
 
         await runtime.start()
         fake.respond({
@@ -187,7 +210,9 @@ describe('Codex app server client', () => {
 
     it('interrupts the active turn', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
 
         await runtime.start()
         await runtime.interruptTask('thread-id', 'turn-id')
@@ -204,12 +229,12 @@ describe('Codex app server client', () => {
 
     it('resumes a browser-origin request after the client approves it', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
-        const actions: Array<{ id: string; message: string; origin: string }> = []
-        const notifications: Array<{ method: string; params: Record<string, unknown> }> = []
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: WorkRuntimeEvent[] = []
 
-        runtime.onActionRequired((action) => actions.push(action))
-        runtime.onNotification((notification) => notifications.push(notification))
+        runtime.onEvent((event) => events.push(event))
         await runtime.start()
         fake.respond({
             id: 99,
@@ -231,18 +256,25 @@ describe('Codex app server client', () => {
 
         await new Promise((resolve) => setImmediate(resolve))
 
-        expect(actions).toHaveLength(1)
-        expect(actions[0]).toMatchObject({
-            message: 'Allow Chrome to access https://www.linkedin.com?',
-            origin: 'https://www.linkedin.com',
+        expect(events).toHaveLength(1)
+        expect(events[0]).toMatchObject({
+            type: 'action-required',
+            action: {
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                message: 'Allow Chrome to access https://www.linkedin.com?',
+                origin: 'https://www.linkedin.com',
+            },
         })
-        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(true)
+        const action = events[0]?.type === 'action-required' ? events[0].action : null
+        expect(action).not.toBeNull()
+        expect(runtime.resolveAction(action!.id, 'approve')).toBe(true)
         expect(fake.requests).toContainEqual({
             id: 99,
             result: { action: 'accept', content: null, _meta: null },
         })
-        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(true)
-        expect(runtime.resolveAction(actions[0]!.id, 'decline')).toBe(false)
+        expect(runtime.resolveAction(action!.id, 'approve')).toBe(true)
+        expect(runtime.resolveAction(action!.id, 'decline')).toBe(false)
         expect(fake.requests.filter(({ id }) => id === 99)).toHaveLength(1)
 
         fake.respond({
@@ -251,22 +283,177 @@ describe('Codex app server client', () => {
         })
         await new Promise((resolve) => setImmediate(resolve))
 
-        expect(notifications).toContainEqual({
-            method: 'serverRequest/resolved',
-            params: {
-                threadId: 'thread-id',
-                requestId: 99,
-                actionId: actions[0]!.id,
-            },
+        expect(events).toContainEqual({
+            type: 'action-resolved',
+            threadId: 'thread-id',
+            actionId: action!.id,
         })
-        expect(runtime.resolveAction(actions[0]!.id, 'approve')).toBe(false)
+        expect(runtime.resolveAction(action!.id, 'approve')).toBe(false)
 
         runtime.close()
     })
 
-    it('keeps terminal events emitted with the turn response', async () => {
-        const fake = createFakeProcess(true)
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+    it('translates supported notifications and ignores unknown notifications', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: WorkRuntimeEvent[] = []
+
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        fake.respond({
+            method: 'item/started',
+            params: {
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                item: { type: 'webSearch', ignored: true },
+            },
+        })
+        fake.respond({
+            method: 'item/reasoning/summaryTextDelta',
+            params: {
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                itemId: 'reasoning-id',
+                summaryIndex: 2,
+                delta: 'Checking likely contacts',
+            },
+        })
+        fake.respond({
+            method: 'item/completed',
+            params: {
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                item: {
+                    type: 'agentMessage',
+                    phase: null,
+                    text: '{"contacts":[]}',
+                },
+            },
+        })
+        fake.respond({
+            method: 'turn/plan/updated',
+            params: { threadId: 'thread-id', turnId: 'turn-id' },
+        })
+        fake.respond({
+            method: 'turn/completed',
+            params: {
+                threadId: 'thread-id',
+                turn: {
+                    id: 'turn-id',
+                    status: 'failed',
+                    error: { message: 'Model unavailable' },
+                },
+            },
+        })
+        fake.respond({
+            method: 'future/notification',
+            params: { arbitrary: true },
+        })
+
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(events).toEqual([
+            {
+                type: 'activity',
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                activity: 'web-search',
+            },
+            {
+                type: 'reasoning-delta',
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                itemId: 'reasoning-id',
+                summaryIndex: 2,
+                textDelta: 'Checking likely contacts',
+            },
+            {
+                type: 'final-message',
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                text: '{"contacts":[]}',
+            },
+            {
+                type: 'activity',
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                activity: 'plan-update',
+            },
+            {
+                type: 'turn-completed',
+                threadId: 'thread-id',
+                turnId: 'turn-id',
+                status: 'failed',
+                error: 'Model unavailable',
+            },
+        ])
+        expect(runtime.health.status).toBe('healthy')
+
+        runtime.close()
+    })
+
+    it('rejects an invalid task response and becomes unavailable', async () => {
+        const fake = createFakeProcess({ ignoredMethods: ['thread/start'] })
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+
+        await runtime.start()
+        const task = runtime.startTask('task-id', {
+            prompt: 'Find contacts',
+            outputSchema: { type: 'object' },
+            capabilities: ['chrome'],
+        })
+        const request = fake.requests.find(({ method }) => method === 'thread/start')
+        fake.respond({ id: request?.id, result: { thread: {} } })
+
+        await expect(task).rejects.toThrow(
+            'Work runtime returned invalid response for "thread/start"',
+        )
+        expect(runtime.health).toEqual({
+            status: 'unavailable',
+            capabilities: [],
+            error: 'Work runtime returned invalid response for "thread/start"',
+        })
+    })
+
+    it('fails closed when a recognized notification is malformed', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: WorkRuntimeEvent[] = []
+
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        fake.respond({
+            method: 'turn/completed',
+            params: {
+                threadId: 'thread-id',
+                turn: { id: 'turn-id', status: 'future-status' },
+            },
+        })
+
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(events).toEqual([
+            {
+                type: 'runtime-failed',
+                error: expect.objectContaining({
+                    message: 'Work runtime returned invalid "turn/completed" notification',
+                }),
+            },
+        ])
+        expect(runtime.health.status).toBe('unavailable')
+    })
+
+    it('keeps terminal events ahead of an immediate runtime exit', async () => {
+        const fake = createFakeProcess({ completeTaskImmediately: true })
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
         const manager = new WorkTaskManager(runtime)
 
         await runtime.start()
@@ -275,24 +462,167 @@ describe('Codex app server client', () => {
             outputSchema: { type: 'object' },
             capabilities: ['chrome'],
         })
+        fake.process.emit('exit', 17, null)
         await new Promise((resolve) => setImmediate(resolve))
 
         expect(manager.get(task.id)).toMatchObject({
             status: 'completed',
             output: { contacts: [] },
         })
-
-        runtime.close()
+        expect(runtime.health).toEqual({
+            status: 'unavailable',
+            capabilities: [],
+            error: 'Work runtime exited with code 17',
+        })
     })
 
-    it('reports child stdin failures through the runtime exit event', async () => {
+    it('drains terminal notifications emitted after process exit', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', () => fake.process)
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new WorkTaskManager(runtime)
 
         await runtime.start()
-        const exit = new Promise<Error>((resolve) => runtime.onExit(resolve))
+        const task = await manager.start({
+            prompt: 'Find contacts',
+            outputSchema: { type: 'object' },
+            capabilities: ['chrome'],
+        })
+        fake.process.emit('exit', 17, null)
+        fake.respond({
+            method: 'item/completed',
+            params: {
+                threadId: task.threadId,
+                turnId: task.turnId,
+                item: {
+                    type: 'agentMessage',
+                    phase: 'final_answer',
+                    text: '{"contacts":[]}',
+                },
+            },
+        })
+        fake.respond({
+            method: 'turn/completed',
+            params: {
+                threadId: task.threadId,
+                turn: { id: task.turnId, status: 'completed' },
+            },
+        })
+        fake.endStdout()
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(manager.get(task.id)).toMatchObject({
+            status: 'completed',
+            output: { contacts: [] },
+        })
+    })
+
+    it('fails running tasks when exited process streams never close', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+            exitDrainTimeoutMs: 10,
+        })
+        const manager = new WorkTaskManager(runtime)
+
+        await runtime.start()
+        const task = await manager.start({
+            prompt: 'Find contacts',
+            outputSchema: { type: 'object' },
+            capabilities: ['chrome'],
+        })
+        fake.process.emit('exit', 17, null)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(manager.get(task.id)).toMatchObject({
+            status: 'failed',
+            error: 'Work runtime exited with code 17',
+        })
+    })
+
+    it('rejects an ambiguous JSON-RPC envelope immediately', async () => {
+        const fake = createFakeProcess({ ignoredMethods: ['initialize'] })
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const start = runtime.start()
+        const request = fake.requests.find(({ method }) => method === 'initialize')
+
+        fake.respond({ id: request?.id, method: 'unexpected', result: {} })
+
+        await expect(start).rejects.toThrow('Work runtime returned an invalid JSON-RPC message')
+    })
+
+    it('reports stdin failure with bounded private stderr diagnostics', async () => {
+        const fake = createFakeProcess()
+        const diagnostics: string[] = []
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+            diagnosticSink: (message) => diagnostics.push(message),
+            diagnosticBufferSize: 12,
+        })
+
+        await runtime.start()
+        const exit = new Promise<Error>((resolve) =>
+            runtime.onEvent((event) => {
+                if (event.type === 'runtime-failed') {
+                    resolve(event.error)
+                }
+            }),
+        )
+        fake.writeStderr('0123456789abcdef')
         fake.process.stdin.emit('error', new Error('broken pipe'))
+        fake.writeStderr('tail')
+        fake.process.emit('close', null, null)
 
         await expect(exit).resolves.toMatchObject({ message: 'broken pipe' })
+        expect(diagnostics).toEqual(['Work runtime stderr before failure:\n89abcdeftail'])
+        runtime.close()
+        expect(runtime.health).toEqual({
+            status: 'unavailable',
+            capabilities: [],
+            error: 'broken pipe',
+        })
+    })
+
+    it('becomes unavailable when the protocol output closes', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+
+        await runtime.start()
+        const failure = new Promise<Error>((resolve) =>
+            runtime.onEvent((event) => {
+                if (event.type === 'runtime-failed') {
+                    resolve(event.error)
+                }
+            }),
+        )
+        fake.endStdout()
+
+        await expect(failure).resolves.toMatchObject({
+            message: 'Work runtime protocol stream closed unexpectedly',
+        })
+        expect(runtime.health.status).toBe('unavailable')
+    })
+
+    it('times out a silent request and becomes unavailable', async () => {
+        const fake = createFakeProcess({ ignoredMethods: ['initialize'] })
+        const runtime = new CodexAppServer('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+            requestTimeoutMs: 10,
+        })
+
+        await expect(runtime.start()).rejects.toThrow(
+            'Work runtime request "initialize" timed out after 10ms',
+        )
+        expect(runtime.health).toEqual({
+            status: 'unavailable',
+            capabilities: [],
+            error: 'Work runtime request "initialize" timed out after 10ms',
+        })
     })
 })
