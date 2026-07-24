@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<Props>(), {
     flex-direction: column;
     gap: $space-4;
     min-height: 24rem;
+    max-height: 96dvh;
     padding: $space-5 $space-5 0;
     border-radius: $radius-lg;
 

@@ -127,7 +127,7 @@ const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
     align-content: start;
     gap: $space-4;
     min-height: 0;
-    padding: 0 $space-1 $space-5 0;
+    padding-right: $space-1;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
