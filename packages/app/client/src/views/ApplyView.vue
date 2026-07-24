@@ -9,9 +9,10 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
-import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
@@ -103,6 +104,12 @@ const outreachActionDisabled = computed(
         (workStore.taskActive &&
             (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
 )
+const applyViewerMode = computed<JobPostViewerMode>(() => ({
+    kind: 'apply',
+    applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
+    applicationError: applicationError.value,
+    outreachDisabled: outreachActionDisabled.value,
+}))
 watch(
     filteredPosts,
     (posts) => {
@@ -387,25 +394,18 @@ onMounted(() => {
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
             >
+                <PanelBackButton
+                    v-if="!workStore.taskActive && activePanel !== 'posts'"
+                    label="Back to job posts"
+                    :mobile-only="activePanel === 'viewer' && outreachContact === null"
+                    @back="showPosts"
+                />
                 <JobPostViewer
                     :post="selectedPost"
                     :recommendation="selectedRecommendationContext ?? undefined"
-                    :show-legitimacy="false"
                     :label-updating="labelUpdating || applyQueuePostIds === null"
                     :label-error="labelError"
-                    :application-updating="applicationUpdating || applyQueuePostIds === null"
-                    :application-error="applicationError"
-                    always-show-application-action
-                    :back-label="
-                        !workStore.taskActive && activePanel !== 'posts'
-                            ? 'Back to job posts'
-                            : null
-                    "
-                    :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
-                    show-outreach-action
-                    :outreach-disabled="outreachActionDisabled"
-                    show-applied-option
-                    @back="showPosts"
+                    :mode="applyViewerMode"
                     @update-label="updateUserLabel"
                     @open-outreach="openOutreach"
                     @mark-applied="markApplied"

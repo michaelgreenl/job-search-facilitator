@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
-import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
@@ -40,6 +40,7 @@ const selectedResult = shallowRef<JobSearchResult | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const reportsLoaded = shallowRef(false)
+const reviewViewerMode = { kind: 'review' } satisfies JobPostViewerMode
 
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -429,6 +430,7 @@ onMounted(() => {
                     :recommendation="selectedResult"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
+                    :mode="reviewViewerMode"
                     @update-label="updateUserLabel"
                 />
             </FlowPanel>

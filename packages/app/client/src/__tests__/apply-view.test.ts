@@ -379,7 +379,7 @@ describe('apply view', () => {
         )
         expect(viewer?.querySelector('.post-analysis')).not.toBeNull()
         expect(viewer?.textContent).not.toContain('Legitimacy')
-        expect(findButton(root, "Discover contact's")).not.toBeNull()
+        expect(findButton(root, 'Discover contacts')).not.toBeNull()
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
 
@@ -413,7 +413,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('.contact-history')).not.toBeNull()
@@ -477,7 +477,7 @@ describe('apply view', () => {
             expect(messagedControl.textContent).toContain('Saving…')
             expect(messagedControl.querySelector('.loading-spinner')).not.toBeNull()
             expect(messagedControl.disabled).toBe(true)
-            expect(findButton(root, "Discover contact's").disabled).toBe(true)
+            expect(findButton(root, 'Discover contacts').disabled).toBe(true)
         })
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
@@ -518,7 +518,7 @@ describe('apply view', () => {
             expect(pendingMessagedControl.getAttribute('aria-pressed')).toBe('false')
             expect(pendingMessagedControl.textContent).toContain('Mark as messaged')
             expect(pendingMessagedControl.disabled).toBe(false)
-            expect(findButton(root, "Discover contact's").disabled).toBe(false)
+            expect(findButton(root, 'Discover contacts').disabled).toBe(false)
         })
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
@@ -530,7 +530,7 @@ describe('apply view', () => {
             },
         )
 
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('.contact-history')).not.toBeNull()
@@ -556,7 +556,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
         await vi.waitFor(() => {
             expect(
                 root.querySelector('[aria-label="Open outreach draft for Grace Hopper"]'),
@@ -597,7 +597,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => {
             expect(
@@ -675,7 +675,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => {
             expect(root.querySelector('.contact-history')).not.toBeNull()
@@ -738,7 +738,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
 
         const mounted = mountedApps.pop()
@@ -798,17 +798,17 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
         await vi.waitFor(() => expect(pendingLookups).toHaveLength(1))
 
         findButton(root, 'P2 Engineer').click()
         await nextTick()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
         await vi.waitFor(() => expect(pendingLookups).toHaveLength(2))
 
         findButton(root, 'P1 Engineer').click()
         await nextTick()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
         await vi.waitFor(() => expect(pendingLookups).toHaveLength(3))
 
         expect(pendingLookups.map(({ postId }) => postId)).toEqual([
@@ -824,7 +824,7 @@ describe('apply view', () => {
             false,
         )
         expect(FakeEventSource.instances).toHaveLength(0)
-        expect(findButton(root, "Discover contact's").disabled).toBe(true)
+        expect(findButton(root, 'Discover contacts').disabled).toBe(true)
 
         pendingLookups[2]!.resolve(jsonResponse([savedContact]))
 
@@ -881,7 +881,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        const discoverButton = findButton(root, "Discover contact's")
+        const discoverButton = findButton(root, 'Discover contacts')
         discoverButton.click()
 
         await vi.waitFor(() => {
@@ -979,7 +979,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P2 Engineer').click()
-        const discoverButton = findButton(root, "Discover contact's")
+        const discoverButton = findButton(root, 'Discover contacts')
         discoverButton.click()
 
         await vi.waitFor(() => {
@@ -1120,7 +1120,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -1178,7 +1178,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -1275,7 +1275,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         const source = FakeEventSource.instances[0]!
@@ -1334,7 +1334,7 @@ describe('apply view', () => {
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)
@@ -1381,7 +1381,7 @@ describe('apply view', () => {
         const root = await mountApplyView(pinia)
 
         findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
+        findButton(root, 'Discover contacts').click()
 
         await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
         FakeEventSource.instances[0]!.message(linkedInActionRequired)

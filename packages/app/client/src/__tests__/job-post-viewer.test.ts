@@ -42,9 +42,7 @@ const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement 
 function mountViewer(
     overrides: Partial<JobPost> = {},
     options: {
-        alwaysShowApplicationAction?: boolean
         recommendation?: JobRecommendation
-        showLegitimacy?: boolean
     } = {},
 ) {
     const root = document.createElement('div')
@@ -54,10 +52,9 @@ function mountViewer(
     const app = createApp(JobPostViewer, {
         post: selectedPost,
         recommendation: options.recommendation,
-        showLegitimacy: options.showLegitimacy,
         labelUpdating: false,
         labelError: null,
-        alwaysShowApplicationAction: options.alwaysShowApplicationAction,
+        mode: { kind: 'review' },
     })
     app.mount(root)
     mountedApps.push({ app, root })
@@ -105,20 +102,6 @@ describe('JobPostViewer', () => {
         expect(links[1]?.getAttribute('aria-label')).toBe(
             `Open application for ${post.roleTitle} in a new tab`,
         )
-    })
-
-    it('includes a shared application destination when requested', () => {
-        const root = mountViewer(
-            { applicationUrl: post.postUrl },
-            { alwaysShowApplicationAction: true },
-        )
-        const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
-
-        expect(links.map(({ textContent }) => textContent?.trim())).toEqual([
-            'Open post ↗',
-            'Open application ↗',
-        ])
-        expect(links.map(({ href }) => href)).toEqual([post.postUrl, post.postUrl])
     })
 
     it('does not repeat a shared post and application destination', () => {
@@ -175,18 +158,6 @@ describe('JobPostViewer', () => {
         expect(text).toContain(recommendation.keyLegitimacySignals)
         expect(text).toContain('Notes')
         expect(text).toContain(recommendation.legitimacyNotes)
-    })
-
-    it('can show recommendation context without review-only legitimacy', () => {
-        const root = mountViewer({}, { recommendation, showLegitimacy: false })
-        const text = root.textContent ?? ''
-
-        expect(text).toContain('Recommendation')
-        expect(text).toContain(recommendation.recommendedAction)
-        expect(text).toContain(recommendation.fitRationale)
-        expect(text).not.toContain('Legitimacy')
-        expect(text).not.toContain(recommendation.keyLegitimacySignals)
-        expect(text).not.toContain(recommendation.legitimacyNotes)
     })
 
     it('collapses absent AI content and nullable post facts without empty sections', () => {

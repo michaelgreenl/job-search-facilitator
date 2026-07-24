@@ -1,3 +1,14 @@
+<script lang="ts">
+export type JobPostViewerMode =
+    | { kind: 'review' }
+    | {
+          kind: 'apply'
+          applicationUpdating: boolean
+          applicationError: string | null
+          outreachDisabled: boolean
+      }
+</script>
+
 <script setup lang="ts">
 import {
     USER_LABELS,
@@ -7,49 +18,26 @@ import {
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
 import JobPostContent from './JobPostContent.vue'
 import JobPostLabel from './JobPostLabel.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
 
-const props = withDefaults(
-    defineProps<{
-        post: JobPost
-        recommendation?: JobRecommendation
-        showLegitimacy?: boolean
-        labelUpdating: boolean
-        labelError: string | null
-        showOutreachAction?: boolean
-        outreachDisabled?: boolean
-        showAppliedOption?: boolean
-        applicationUpdating?: boolean
-        applicationError?: string | null
-        backLabel?: string | null
-        backMobileOnly?: boolean
-        alwaysShowApplicationAction?: boolean
-    }>(),
-    {
-        recommendation: undefined,
-        showLegitimacy: true,
-        showOutreachAction: false,
-        outreachDisabled: false,
-        showAppliedOption: false,
-        applicationUpdating: false,
-        applicationError: null,
-        backLabel: null,
-        backMobileOnly: false,
-        alwaysShowApplicationAction: false,
-    },
-)
+const props = defineProps<{
+    post: JobPost
+    recommendation?: JobRecommendation
+    labelUpdating: boolean
+    labelError: string | null
+    mode: JobPostViewerMode
+}>()
 
 const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     openOutreach: []
     markApplied: []
-    back: []
 }>()
 
+const applyMode = computed(() => (props.mode.kind === 'apply' ? props.mode : null))
 const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
 const toHttpUrl = (value: string) => {
     try {
@@ -62,7 +50,7 @@ const toHttpUrl = (value: string) => {
 const postUrl = computed(() => toHttpUrl(props.post.postUrl))
 const applicationUrl = computed(() => toHttpUrl(props.post.applicationUrl))
 const applicationActionUrl = computed(() =>
-    props.alwaysShowApplicationAction || applicationUrl.value !== postUrl.value
+    applyMode.value !== null || applicationUrl.value !== postUrl.value
         ? applicationUrl.value
         : null,
 )
@@ -73,10 +61,10 @@ const labelPrompt = computed(() => {
 
     return props.post.userLabel === null ? 'Add label' : 'Change label'
 })
-const postError = computed(() => props.applicationError ?? props.labelError)
+const postError = computed(() => applyMode.value?.applicationError ?? props.labelError)
 const labelOptions = computed<AppDropdownOption[]>(() => [
     ...USER_LABEL_OPTIONS,
-    ...(props.showAppliedOption
+    ...(applyMode.value !== null
         ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
         : []),
     ...(props.post.userLabel !== null
@@ -107,13 +95,6 @@ function selectLabel(value: string) {
 
 <template>
     <section class="post-viewer" aria-labelledby="selected-post-title">
-        <PanelBackButton
-            v-if="backLabel"
-            :label="backLabel"
-            :mobile-only="backMobileOnly"
-            @back="emit('back')"
-        />
-
         <div class="post-heading">
             <div class="post-labels">
                 <span class="component-label">{{ post.company }}</span>
@@ -156,7 +137,7 @@ function selectLabel(value: string) {
                 button-label="Job post label"
                 :label="labelPrompt"
                 :options="labelOptions"
-                :disabled="labelUpdating || applicationUpdating || applied"
+                :disabled="labelUpdating || (applyMode?.applicationUpdating ?? false) || applied"
                 @select="selectLabel"
             />
         </div>
@@ -166,17 +147,17 @@ function selectLabel(value: string) {
         <JobPostContent
             :post="post"
             :recommendation="recommendation"
-            :show-legitimacy="showLegitimacy"
+            :show-legitimacy="mode.kind === 'review'"
         />
 
-        <div v-if="showOutreachAction" class="primary-actions primary-actions-outreach">
+        <div v-if="applyMode" class="primary-actions primary-actions-outreach">
             <button
                 class="post-action-button"
                 type="button"
-                :disabled="outreachDisabled"
+                :disabled="applyMode.outreachDisabled"
                 @click="emit('openOutreach')"
             >
-                Discover contact's
+                Discover contacts
             </button>
         </div>
     </section>
