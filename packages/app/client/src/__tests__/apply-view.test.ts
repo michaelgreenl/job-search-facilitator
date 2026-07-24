@@ -2,6 +2,7 @@
 
 import type {
     JobPost,
+    JobSearchReport,
     OutreachContact,
     UserLabel,
     WorkTaskEvent,
@@ -9,6 +10,7 @@ import type {
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useReportStore } from '@/stores/report.store'
 import ApplyView from '../views/ApplyView.vue'
 
 const createPost = (id: string, userLabel: UserLabel): JobPost => ({
@@ -36,6 +38,25 @@ const posts = [
     createPost('post-p2', 'P2'),
     createPost('post-quick-app', 'quick-app'),
 ]
+const report: JobSearchReport = {
+    id: 'report-id',
+    reportDate: '2026-07-16',
+    summary: 'Three application candidates',
+    createdAt: '2026-07-16T12:00:00.000Z',
+    updatedAt: '2026-07-16T12:00:00.000Z',
+    archivedAt: null,
+    results: posts.map((post, index) => ({
+        agentRank: index + 1,
+        agentLabel: post.userLabel === 'quick-app' ? 'quick-app' : 'target',
+        fitRationale: `Fit rationale for ${post.roleTitle}`,
+        applicationFlow: 'Direct application',
+        keyLegitimacySignals: `Legitimacy signals for ${post.roleTitle}`,
+        recommendedResume: index === 1 ? 'backend-full-stack' : 'frontend',
+        recommendedAction: `Recommended action for ${post.roleTitle}`,
+        legitimacyNotes: `Legitimacy notes for ${post.roleTitle}`,
+        post,
+    })),
+}
 
 const runningWorkTask = {
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -121,9 +142,17 @@ class FakeEventSource {
     }
 }
 
-const mountApplyView = async (pinia: Pinia = createPinia()) => {
+const mountApplyView = async (
+    pinia: Pinia = createPinia(),
+    { seedReports = true }: { seedReports?: boolean } = {},
+) => {
     const root = document.createElement('div')
     document.body.append(root)
+    const reportStore = useReportStore(pinia)
+
+    if (seedReports && reportStore.reports.length === 0) {
+        reportStore.reports = [report]
+    }
 
     const app = createApp(ApplyView)
     app.use(pinia)
@@ -265,8 +294,14 @@ describe('apply view', () => {
 
     it('moves between the post list and viewer', async () => {
         const root = await mountApplyView()
+        const selectedPost = posts[1]
+        const selectedResult = report.results[1]
         const list = root.querySelector('.apply-post-list')
         const viewer = root.querySelector('.apply-job-post-view')
+
+        if (selectedPost === undefined || selectedResult === undefined) {
+            throw new Error('Could not find the selected result fixture')
+        }
 
         expect(list?.classList.contains('is-active')).toBe(true)
         expect(list?.classList.contains('is-adjacent')).toBe(false)
@@ -286,6 +321,17 @@ describe('apply view', () => {
                 .querySelector('[aria-label="Back to job posts"]')
                 ?.closest('.back-button-mobile-only'),
         ).not.toBeNull()
+        expect(viewer?.querySelector('.post-content')?.textContent).toContain(
+            selectedPost.techStack,
+        )
+        expect(viewer?.querySelector('.post-content')?.textContent).toContain(
+            selectedPost.postSource,
+        )
+        expect(viewer?.querySelector('.post-content')?.textContent).toContain(
+            selectedResult.recommendedAction,
+        )
+        expect(viewer?.querySelector('.post-analysis')).not.toBeNull()
+        expect(viewer?.textContent).not.toContain('Legitimacy')
         expect(findButton(root, "Discover contact's")).not.toBeNull()
 
         root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
@@ -296,6 +342,62 @@ describe('apply view', () => {
             expect(viewer?.classList.contains('is-active')).toBe(false)
             expect(viewer?.classList.contains('is-adjacent')).toBe(true)
         })
+    })
+
+    it('shows the selected recommendation without review-only legitimacy context', async () => {
+        const fetchMock = vi.mocked(fetch).mockImplementation((input) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/labeled')) {
+                return Promise.resolve(jsonResponse(posts))
+            }
+
+            if (url.endsWith('/api/job-search-reports')) {
+                return Promise.resolve(jsonResponse([report]))
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        const root = await mountApplyView(createPinia(), { seedReports: false })
+        const selected = report.results[1]
+
+        if (selected === undefined) {
+            throw new Error('Could not find the selected result fixture')
+        }
+
+        findButton(root, selected.post.roleTitle).click()
+        await nextTick()
+
+        const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
+
+        expect(viewerText).toContain('Recommended resume')
+        expect(viewerText).toContain('Backend / full-stack')
+        expect(viewerText).toContain(selected.recommendedAction)
+        expect(viewerText).toContain(selected.fitRationale)
+        expect(viewerText).not.toContain('Legitimacy')
+        expect(viewerText).not.toContain('Key signals')
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:3000/api/job-search-reports',
+            undefined,
+        )
+    })
+
+    it('keeps post facts available when no saved recommendation remains', async () => {
+        const selectedPost = posts[0]!
+        const pinia = createPinia()
+        useReportStore(pinia).reports = [{ ...report, results: report.results.slice(1) }]
+        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([selectedPost]))
+        const root = await mountApplyView(pinia, { seedReports: false })
+
+        findButton(root, selectedPost.roleTitle).click()
+        await nextTick()
+
+        const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
+
+        expect(viewerText).toContain('At a glance')
+        expect(viewerText).toContain(selectedPost.techStack)
+        expect(viewerText).not.toContain('Recommendation')
+        expect(viewerText).not.toContain('Legitimacy')
     })
 
     it('opens and updates saved contacts without starting another discovery', async () => {

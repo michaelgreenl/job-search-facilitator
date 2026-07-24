@@ -1,15 +1,23 @@
 <script setup lang="ts">
-import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
+import {
+    USER_LABELS,
+    type JobPost,
+    type JobSearchResult,
+    type UserLabel,
+} from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 
+import JobPostContent from './JobPostContent.vue'
 import JobPostLabel from './JobPostLabel.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
 
 const props = withDefaults(
     defineProps<{
         post: JobPost
+        result?: JobSearchResult
+        showLegitimacy?: boolean
         labelUpdating: boolean
         labelError: string | null
         showOutreachAction?: boolean
@@ -22,6 +30,8 @@ const props = withDefaults(
         alwaysShowApplicationAction?: boolean
     }>(),
     {
+        result: undefined,
+        showLegitimacy: true,
         showOutreachAction: false,
         outreachDisabled: false,
         showAppliedOption: false,
@@ -114,7 +124,7 @@ function selectLabel(value: string) {
             </div>
 
             <h2 id="selected-post-title" class="post-title">{{ post.roleTitle }}</h2>
-            <p class="post-company">{{ post.location }}</p>
+            <p v-if="post.location" class="post-company">{{ post.location }}</p>
         </div>
 
         <div class="post-actions">
@@ -153,12 +163,7 @@ function selectLabel(value: string) {
 
         <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
 
-        <div class="placeholder-content">
-            <strong>Selected post: {{ post.id }}</strong>
-            <p class="placeholder-copy">
-                Detailed job information and review controls will appear in this panel.
-            </p>
-        </div>
+        <JobPostContent :post="post" :result="result" :show-legitimacy="showLegitimacy" />
 
         <div v-if="showOutreachAction" class="primary-actions primary-actions-outreach">
             <button
@@ -179,6 +184,7 @@ function selectLabel(value: string) {
     display: flex;
     flex-direction: column;
     gap: $space-4;
+    min-height: 0;
 }
 
 .component-label {
@@ -259,19 +265,7 @@ function selectLabel(value: string) {
     font-size: 0.8125rem;
 }
 
-.post-company,
-.placeholder-copy {
+.post-company {
     color: $color-ink-muted;
-}
-
-.placeholder-content {
-    flex: 1;
-    display: grid;
-    gap: $space-3;
-    min-height: 12rem;
-    padding: $space-4;
-    background: $color-ink-alpha-5;
-    border: 1px dashed $color-signal-light-alpha-18;
-    border-radius: $radius-md;
 }
 </style>

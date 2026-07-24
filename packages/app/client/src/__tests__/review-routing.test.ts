@@ -332,6 +332,28 @@ describe('review route selection', () => {
         })
     })
 
+    it('shows the selected report result in the job-post viewer', async () => {
+        const { root } = await mountReview()
+        const result = secondReport.results[0]
+
+        if (result === undefined) {
+            throw new Error('Could not find the selected report result')
+        }
+
+        findButton(root, secondReport.summary).click()
+        await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
+        findButton(root, secondPost.roleTitle).click()
+
+        await vi.waitFor(() => {
+            const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
+
+            expect(viewerText).toContain(result.recommendedAction)
+            expect(viewerText).toContain(result.fitRationale)
+            expect(viewerText).toContain(result.keyLegitimacySignals)
+            expect(viewerText).toContain(secondPost.techStack)
+        })
+    })
+
     it('removes only the hidden post state when returning to the report posts', async () => {
         const { root, router } = await mountReview()
 
@@ -383,7 +405,7 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
-            expect(root.textContent).toContain(`Selected post: ${secondPost.id}`)
+            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
             expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
         })
     })
@@ -399,7 +421,7 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
                 reviewPostId: secondPost.id,
             })
-            expect(root.textContent).toContain(`Selected post: ${secondPost.id}`)
+            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
         })
     })
 
@@ -424,7 +446,7 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
             })
             expect(router.options.history.state.reviewPostId).toBeUndefined()
-            expect(root.textContent).not.toContain(`Selected post: ${secondPost.id}`)
+            expect(root.querySelector('.post-viewer')).toBeNull()
         })
 
         router.back()
@@ -441,9 +463,9 @@ describe('review route selection', () => {
         )
 
         router.forward()
-        await vi.waitFor(() =>
-            expect(root.textContent).toContain(`Selected post: ${secondPost.id}`),
-        )
+        await vi.waitFor(() => {
+            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
+        })
     })
 
     it('removes stale legacy ids from the visible URL', async () => {
@@ -454,7 +476,7 @@ describe('review route selection', () => {
             expect(router.options.history.state.reviewReportId).toBeUndefined()
             expect(router.options.history.state.reviewPostId).toBeUndefined()
             expect(findButton(root, firstReport.summary).getAttribute('aria-pressed')).toBe('true')
-            expect(root.textContent).not.toContain('Selected post:')
+            expect(root.querySelector('.post-viewer')).toBeNull()
         })
     })
 
@@ -468,7 +490,7 @@ describe('review route selection', () => {
             })
             expect(router.options.history.state.reviewPostId).toBeUndefined()
             expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
-            expect(root.textContent).not.toContain('Selected post:')
+            expect(root.querySelector('.post-viewer')).toBeNull()
         })
     })
 })

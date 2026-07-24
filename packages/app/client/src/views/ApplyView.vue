@@ -11,6 +11,7 @@ import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
+import { useReportStore } from '@/stores/report.store'
 import { useWorkStore } from '@/stores/work.store'
 import { createOutreachTask } from '@/work-tasks'
 
@@ -30,6 +31,7 @@ const postFilterOptions: AppDropdownOption[] = [
 const isPostFilter = (value: string): value is PostFilter =>
     value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
+const reportStore = useReportStore()
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
 const {
@@ -79,6 +81,21 @@ const postFilterLabel = computed(
 const selectedPost = computed(
     () => postStore.posts.find(({ id }) => id === selectedPostId.value) ?? null,
 )
+const selectedResult = computed(() => {
+    if (selectedPostId.value === null) {
+        return null
+    }
+
+    for (const report of reportStore.reports) {
+        const result = report.results.find(({ post }) => post.id === selectedPostId.value)
+
+        if (result !== undefined) {
+            return result
+        }
+    }
+
+    return null
+})
 const outreachPost = computed(
     () => postStore.posts.find(({ id }) => id === outreachPostId.value) ?? null,
 )
@@ -310,6 +327,10 @@ async function loadLabeledPosts() {
 
 onMounted(() => {
     void loadLabeledPosts()
+
+    if (reportStore.reports.length === 0) {
+        void reportStore.fetchReports().catch(() => undefined)
+    }
 })
 </script>
 
@@ -362,6 +383,8 @@ onMounted(() => {
             >
                 <JobPostViewer
                     :post="selectedPost"
+                    :result="selectedResult ?? undefined"
+                    :show-legitimacy="false"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
                     :application-updating="applicationUpdating"

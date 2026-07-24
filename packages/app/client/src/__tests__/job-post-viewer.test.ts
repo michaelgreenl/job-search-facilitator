@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost } from '@job-search-facilitator/core'
+import type { JobPost, JobSearchResult } from '@job-search-facilitator/core'
 import { createApp } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -25,17 +25,38 @@ const post = {
     updatedAt: '2026-07-20T00:00:00.000Z',
 } satisfies JobPost
 
+const result = {
+    agentRank: 1,
+    agentLabel: 'target',
+    fitRationale:
+        'The role matches the candidate’s TypeScript product work and backend integration experience.',
+    applicationFlow: 'Direct application',
+    keyLegitimacySignals:
+        'The role appears on the company careers site and links to its established Greenhouse account.',
+    recommendedResume: 'backend-full-stack',
+    recommendedAction: 'Apply with the backend/full-stack resume.',
+    legitimacyNotes: 'The company and role details are consistent across both sources.',
+    post,
+} satisfies JobSearchResult
+
 const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
 function mountViewer(
     overrides: Partial<JobPost> = {},
-    options: { alwaysShowApplicationAction?: boolean } = {},
+    options: {
+        alwaysShowApplicationAction?: boolean
+        result?: JobSearchResult
+        showLegitimacy?: boolean
+    } = {},
 ) {
     const root = document.createElement('div')
     document.body.append(root)
+    const selectedPost = { ...post, ...overrides }
 
     const app = createApp(JobPostViewer, {
-        post: { ...post, ...overrides },
+        post: selectedPost,
+        result: options.result ? { ...options.result, post: selectedPost } : undefined,
+        showLegitimacy: options.showLegitimacy,
         labelUpdating: false,
         labelError: null,
         alwaysShowApplicationAction: options.alwaysShowApplicationAction,
@@ -116,6 +137,85 @@ describe('JobPostViewer', () => {
         })
 
         expect(root.querySelector('.post-action-button')).toBeNull()
+    })
+
+    it('shows the available post facts without inventing search-result context', () => {
+        const root = mountViewer()
+        const facts = [...root.querySelectorAll('.post-fact')].map((fact) => ({
+            label: fact.querySelector('dt')?.textContent?.trim(),
+            value: fact.querySelector('dd')?.textContent?.trim(),
+        }))
+
+        expect(facts).toEqual([
+            { label: 'Compensation', value: '$120,000' },
+            { label: 'Source', value: 'Greenhouse' },
+            { label: 'Tech stack', value: 'TypeScript, Vue, Node.js' },
+        ])
+        expect(root.textContent).not.toContain('Recommended action')
+        expect(root.textContent).not.toContain('Why it fits')
+        expect(root.textContent).not.toContain('Legitimacy')
+        expect(root.textContent).not.toContain('Selected post:')
+    })
+
+    it('lays out the complete search recommendation and legitimacy context', () => {
+        const root = mountViewer({}, { result })
+        const text = root.textContent ?? ''
+
+        expect(text).toContain('Recommended action')
+        expect(text).toContain(result.recommendedAction)
+        expect(text).toContain('Recommended resume')
+        expect(text).toContain('Backend / full-stack')
+        expect(text).toContain('Tech stack')
+        expect(text).toContain(post.techStack)
+        expect(text).toContain('Compensation')
+        expect(text).toContain(post.compensation)
+        expect(text).toContain('Source')
+        expect(text).toContain(post.postSource)
+        expect(text).toContain('Why it fits')
+        expect(text).toContain(result.fitRationale)
+        expect(text).toContain('Key signals')
+        expect(text).toContain(result.keyLegitimacySignals)
+        expect(text).toContain('Notes')
+        expect(text).toContain(result.legitimacyNotes)
+    })
+
+    it('can show recommendation context without review-only legitimacy', () => {
+        const root = mountViewer({}, { result, showLegitimacy: false })
+        const text = root.textContent ?? ''
+
+        expect(text).toContain('Recommendation')
+        expect(text).toContain(result.recommendedAction)
+        expect(text).toContain(result.fitRationale)
+        expect(text).not.toContain('Legitimacy')
+        expect(text).not.toContain(result.keyLegitimacySignals)
+        expect(text).not.toContain(result.legitimacyNotes)
+    })
+
+    it('collapses absent AI content and nullable post facts without empty sections', () => {
+        const sparseResult = {
+            ...result,
+            fitRationale: '',
+            keyLegitimacySignals: '',
+            recommendedAction: '',
+            legitimacyNotes: null,
+        }
+        const root = mountViewer(
+            {
+                compensation: null,
+                techStack: 'Not recorded',
+                postSource: '',
+            },
+            { result: sparseResult },
+        )
+        const facts = [...root.querySelectorAll('.post-fact')].map((fact) => ({
+            label: fact.querySelector('dt')?.textContent?.trim(),
+            value: fact.querySelector('dd')?.textContent?.trim(),
+        }))
+
+        expect(facts).toEqual([{ label: 'Recommended resume', value: 'Backend / full-stack' }])
+        expect(root.querySelector('.recommended-action')).toBeNull()
+        expect(root.querySelector('.post-analysis')).toBeNull()
+        expect(root.querySelectorAll('dd:empty, p:empty')).toHaveLength(0)
     })
 
     it('omits the clear-label option when the post has no label', async () => {
