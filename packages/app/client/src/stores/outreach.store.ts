@@ -1,14 +1,29 @@
 import type {
+    JobPost,
     JsonObject,
     OutreachContact,
     OutreachContactInput,
+    StartWorkTaskInput,
     UpdateOutreachContactInput,
+    WorkTask,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import { request } from '@/api'
+import { createContactDiscoveryTask, createDraftRevisionTask } from '@/work-tasks'
+import { useWorkStore } from './work.store'
 
 type OutreachTaskKind = 'contact' | 'draft'
+type OutreachTaskPhase = 'starting' | 'running' | 'applying'
+
+interface ActiveOutreachTask {
+    revision: number
+    kind: OutreachTaskKind
+    postId: string
+    contactId: string | null
+    taskId: string | null
+    phase: OutreachTaskPhase
+}
 
 const outputText = (output: JsonObject, key: string) => {
     const value = output[key]
@@ -36,20 +51,21 @@ const profileUrl = (output: JsonObject) => {
 }
 
 export const useOutreachStore = defineStore('outreach', () => {
+    const workStore = useWorkStore()
     const postId = shallowRef<string | null>(null)
     const contacts = shallowRef<OutreachContact[]>([])
     const contact = shallowRef<OutreachContact | null>(null)
     const draft = shallowRef('')
     const assistantReply = shallowRef<string | null>(null)
-    const taskKind = shallowRef<OutreachTaskKind | null>(null)
+    const activeTask = shallowRef<ActiveOutreachTask | null>(null)
     const contactSaving = shallowRef(false)
     const contactUpdating = shallowRef(false)
     const contactUpdateError = shallowRef<string | null>(null)
     const resultError = shallowRef<string | null>(null)
     const contactsLoading = shallowRef(false)
     const contactsError = shallowRef<string | null>(null)
-    const discovering = computed(() => taskKind.value === 'contact')
-    const drafting = computed(() => taskKind.value === 'draft')
+    const discovering = computed(() => activeTask.value?.kind === 'contact')
+    const drafting = computed(() => activeTask.value?.kind === 'draft')
     let resultRevision = 0
     let contactRequestRevision = 0
     let contactUpdateRevision = 0
@@ -71,14 +87,75 @@ export const useOutreachStore = defineStore('outreach', () => {
         contact.value = null
         draft.value = ''
         assistantReply.value = null
-        taskKind.value = null
+        activeTask.value = null
         contactSaving.value = false
         resultError.value = null
     }
 
-    function beginDiscovery(post: string) {
-        openForPost(post)
-        taskKind.value = 'contact'
+    function taskContextMatches(task: ActiveOutreachTask) {
+        return (
+            postId.value === task.postId &&
+            (task.kind === 'contact' || contact.value?.id === task.contactId)
+        )
+    }
+
+    async function startTask(task: ActiveOutreachTask, input: StartWorkTaskInput) {
+        activeTask.value = task
+
+        try {
+            const startedTask = await workStore.startTask(input)
+            const currentTask = activeTask.value
+
+            if (
+                currentTask?.revision !== task.revision ||
+                currentTask.phase !== 'starting' ||
+                !taskContextMatches(currentTask)
+            ) {
+                if (workStore.task?.id === startedTask.id && workStore.task.status === 'running') {
+                    await workStore.cancelTask().catch(() => undefined)
+                }
+
+                return false
+            }
+
+            activeTask.value = {
+                ...currentTask,
+                taskId: startedTask.id,
+                phase: 'running',
+            }
+            applyWorkTask(workStore.task)
+            return true
+        } catch (error) {
+            if (activeTask.value?.revision === task.revision) {
+                clearTask(task.revision)
+            }
+
+            throw error
+        }
+    }
+
+    async function startContactDiscovery(post: JobPost) {
+        if (
+            workStore.taskActive ||
+            contactSaving.value ||
+            contactUpdating.value ||
+            contactsLoading.value
+        ) {
+            return false
+        }
+
+        openForPost(post.id)
+        return startTask(
+            {
+                revision: resultRevision,
+                kind: 'contact',
+                postId: post.id,
+                contactId: null,
+                taskId: null,
+                phase: 'starting',
+            },
+            createContactDiscoveryTask(post),
+        )
     }
 
     async function fetchContacts(post: string) {
@@ -180,16 +257,41 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
     }
 
-    function beginDraft() {
+    async function requestDraftRevision(post: JobPost, userRequest: string) {
+        const selectedContact = contact.value
+        const currentDraft = draft.value
+        const request = userRequest.trim()
+
+        if (
+            postId.value !== post.id ||
+            selectedContact === null ||
+            !currentDraft.trim() ||
+            !request ||
+            workStore.taskActive
+        ) {
+            return false
+        }
+
         resultRevision += 1
         assistantReply.value = null
-        taskKind.value = 'draft'
         contactSaving.value = false
         resultError.value = null
+
+        return startTask(
+            {
+                revision: resultRevision,
+                kind: 'draft',
+                postId: post.id,
+                contactId: selectedContact.id,
+                taskId: null,
+                phase: 'starting',
+            },
+            createDraftRevisionTask(post, selectedContact, currentDraft, request),
+        )
     }
 
-    async function applyTaskResult(output: JsonObject): Promise<OutreachContact | null> {
-        if (taskKind.value === 'contact') {
+    async function applyTaskResult(task: ActiveOutreachTask, output: JsonObject) {
+        if (task.kind === 'contact') {
             const personName = outputText(output, 'personName')
             const personTitle = outputText(output, 'personTitle')
             const linkedInUrl = profileUrl(output)
@@ -203,12 +305,10 @@ export const useOutreachStore = defineStore('outreach', () => {
                 relevanceRationale === null ||
                 draftMessage === null
             ) {
-                failResult('Work returned an invalid outreach result')
-                return null
+                failResult(task.revision, 'Work returned an invalid outreach result')
+                return
             }
 
-            const activePostId = postId.value
-            const activeResultRevision = resultRevision
             const input: OutreachContactInput = {
                 personName,
                 personTitle,
@@ -216,18 +316,17 @@ export const useOutreachStore = defineStore('outreach', () => {
                 relevanceRationale,
                 draftMessage,
             }
-            taskKind.value = null
 
-            if (activePostId === null) {
-                failResult('Could not associate the outreach contact with a job post')
-                return null
+            if (postId.value !== task.postId) {
+                finishTask(task.revision)
+                return
             }
 
             contactSaving.value = true
 
             try {
                 const savedContact = await request<OutreachContact>(
-                    `/job-posts/${encodeURIComponent(activePostId)}/outreach-contacts`,
+                    `/job-posts/${encodeURIComponent(task.postId)}/outreach-contacts`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -235,72 +334,111 @@ export const useOutreachStore = defineStore('outreach', () => {
                     },
                 )
 
-                if (postId.value !== activePostId || resultRevision !== activeResultRevision) {
-                    return null
+                if (
+                    postId.value !== task.postId ||
+                    resultRevision !== task.revision ||
+                    activeTask.value?.revision !== task.revision
+                ) {
+                    return
                 }
 
                 contacts.value = [
                     savedContact,
                     ...contacts.value.filter(({ id }) => id !== savedContact.id),
                 ]
+                selectContact(savedContact)
+                finishTask(task.revision)
                 resultError.value = null
-
-                return savedContact
             } catch (error) {
-                if (postId.value === activePostId && resultRevision === activeResultRevision) {
+                if (
+                    postId.value === task.postId &&
+                    resultRevision === task.revision &&
+                    activeTask.value?.revision === task.revision
+                ) {
+                    finishTask(task.revision)
                     resultError.value =
                         error instanceof Error ? error.message : 'Could not save outreach contact'
                 }
-
-                return null
             } finally {
-                if (postId.value === activePostId && resultRevision === activeResultRevision) {
+                if (postId.value === task.postId && resultRevision === task.revision) {
                     contactSaving.value = false
                 }
             }
-        } else if (taskKind.value === 'draft') {
+        } else {
+            if (postId.value !== task.postId || contact.value?.id !== task.contactId) {
+                finishTask(task.revision)
+                return
+            }
+
             const draftMessage = outputText(output, 'draftMessage')
             const response = outputText(output, 'response')
 
             if (draftMessage === null || response === null) {
-                failResult('Work returned an invalid draft result')
-                return null
+                failResult(task.revision, 'Work returned an invalid draft result')
+                return
             }
 
             draft.value = draftMessage
             assistantReply.value = response
-        } else {
-            return null
+            finishTask(task.revision)
+            resultError.value = null
         }
-
-        taskKind.value = null
-        resultError.value = null
-        return null
     }
 
-    function failResult(message: string) {
-        taskKind.value = null
+    function finishTask(revision: number) {
+        if (activeTask.value?.revision === revision) {
+            activeTask.value = null
+        }
+    }
+
+    function failResult(revision: number, message: string) {
+        if (activeTask.value?.revision !== revision) {
+            return
+        }
+
+        activeTask.value = null
         contactSaving.value = false
         resultError.value = message
     }
 
-    function cancelTask() {
+    function clearTask(revision?: number) {
+        if (revision !== undefined && activeTask.value?.revision !== revision) {
+            return
+        }
+
         resultRevision += 1
-        taskKind.value = null
+        activeTask.value = null
         contactSaving.value = false
         resultError.value = null
+    }
+
+    async function cancelActiveTask() {
+        const activeResultRevision = activeTask.value?.revision
+
+        if (activeResultRevision === undefined) {
+            return false
+        }
+
+        const cancelledTask = await workStore.cancelTask()
+
+        if (cancelledTask?.status !== 'cancelled') {
+            return false
+        }
+
+        clearTask(activeResultRevision)
+        return true
     }
 
     function reset() {
         resultRevision += 1
         contactRequestRevision += 1
         contactUpdateRevision += 1
+        activeTask.value = null
         postId.value = null
         contacts.value = []
         contact.value = null
         draft.value = ''
         assistantReply.value = null
-        taskKind.value = null
         contactSaving.value = false
         contactUpdating.value = false
         contactUpdateError.value = null
@@ -308,6 +446,36 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsLoading.value = false
         contactsError.value = null
     }
+
+    function applyWorkTask(currentTask: WorkTask | null) {
+        const task = activeTask.value
+
+        if (
+            task === null ||
+            task.taskId === null ||
+            task.phase !== 'running' ||
+            currentTask?.id !== task.taskId ||
+            currentTask.status === 'running'
+        ) {
+            return
+        }
+
+        if (currentTask.status === 'failed' || currentTask.status === 'cancelled') {
+            clearTask(task.revision)
+            return
+        }
+
+        if (currentTask.output === null) {
+            failResult(task.revision, 'Work returned no outreach result')
+            return
+        }
+
+        const applyingTask: ActiveOutreachTask = { ...task, phase: 'applying' }
+        activeTask.value = applyingTask
+        void applyTaskResult(applyingTask, currentTask.output)
+    }
+
+    watch(() => workStore.task, applyWorkTask)
 
     return {
         postId,
@@ -324,14 +492,13 @@ export const useOutreachStore = defineStore('outreach', () => {
         discovering,
         drafting,
         openForPost,
-        beginDiscovery,
+        startContactDiscovery,
         fetchContacts,
         selectContact,
         clearContact,
         updateContactMessaged,
-        beginDraft,
-        applyTaskResult,
-        cancelTask,
+        requestDraftRevision,
+        cancelActiveTask,
         reset,
     }
 })

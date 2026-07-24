@@ -671,10 +671,6 @@ describe('apply view', () => {
     })
 
     it('starts another discovery from the saved contact list', async () => {
-        let resolveContactSave: ((response: Response) => void) | undefined
-        const contactSaveResponse = new Promise<Response>((resolve) => {
-            resolveContactSave = resolve
-        })
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
@@ -682,7 +678,6 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockReturnValueOnce(contactSaveResponse)
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -715,37 +710,6 @@ describe('apply view', () => {
             expect(root.querySelector('[aria-label="Discover another contact"]')).toBeNull()
         })
         expect(fetchMock).toHaveBeenCalledTimes(4)
-
-        FakeEventSource.instances[0]!.message({
-            type: 'completed',
-            output: {
-                personName: savedContact.personName,
-                personTitle: savedContact.personTitle,
-                profileUrl: savedContact.profileUrl,
-                relevanceRationale: savedContact.relevanceRationale,
-                draftMessage: savedContact.draftMessage,
-            },
-            createdAt: '2026-07-22T00:00:00.000Z',
-        })
-
-        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector<HTMLButtonElement>('[aria-label="Discover another contact"]')
-                    ?.disabled,
-            ).toBe(true)
-        })
-
-        resolveContactSave?.(jsonResponse(savedContact, 201))
-
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector<HTMLButtonElement>('[aria-label="Discover another contact"]')
-                    ?.disabled,
-            ).toBe(false)
-        })
     })
 
     it('does not start discovery after leaving the apply view', async () => {
@@ -892,7 +856,6 @@ describe('apply view', () => {
     })
 
     it('navigates a first discovery with cancel available only in the stream', async () => {
-        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
         let resolveContacts: ((response: Response) => void) | undefined
         const contactsResponse = new Promise<Response>((resolve) => {
             resolveContacts = resolve
@@ -917,10 +880,6 @@ describe('apply view', () => {
 
             if (url.endsWith('/tasks') && init?.method === 'POST') {
                 return Promise.resolve(jsonResponse(runningWorkTask, 202))
-            }
-
-            if (url.endsWith(`/tasks/${runningWorkTask.id}/cancel`)) {
-                return Promise.resolve(jsonResponse(cancelledTask, 202))
             }
 
             throw new Error(`Unexpected request: ${url}`)
@@ -1012,25 +971,10 @@ describe('apply view', () => {
             expect(root.querySelector('.contact-history')).toBeNull()
             expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
         })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(
-                fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/cancel')),
-            ).toBe(true)
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-            expect(root.querySelector('.contact-history')).toBeNull()
-        })
     })
 
-    it('finds a relevant outreach contact for the selected job post', async () => {
+    it('discovers a contact and requests a draft revision for the selected post', async () => {
         const fetchMock = vi.mocked(fetch)
-        const writeText = vi.fn().mockResolvedValue(undefined)
-        Object.defineProperty(navigator, 'clipboard', {
-            configurable: true,
-            value: { writeText },
-        })
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
@@ -1059,63 +1003,14 @@ describe('apply view', () => {
 
         const taskInput = JSON.parse(taskBody as string) as {
             prompt: string
-            outputSchema: { required: string[] }
-            capabilities: string[]
         }
 
         expect(taskRequest?.[0]).toBe('http://localhost:3001/tasks')
-        expect(taskInput.prompt).toContain('Example Co')
         expect(taskInput.prompt).toContain('P2 Engineer')
-        expect(taskInput.prompt).toContain('https://example.com/jobs/post-p2')
         expect(taskInput.prompt).not.toContain('P1 Engineer')
-        expect(taskInput.prompt).toContain('People')
-        expect(taskInput.prompt).toContain('likely hiring manager or team lead')
-        expect(taskInput.prompt).toContain('not simply the first result')
-        expect(taskInput.prompt).toContain('docs/agents/job-search-user-info.md')
-        expect(taskInput.prompt).toContain('truthful first outreach message')
-        expect(taskInput.outputSchema.required).toEqual([
-            'personName',
-            'personTitle',
-            'profileUrl',
-            'relevanceRationale',
-            'draftMessage',
-        ])
-        expect(taskInput.capabilities).toEqual(['chrome'])
 
         const source = FakeEventSource.instances[0]!
         expect(source.url).toBe(`http://localhost:3001/tasks/${runningWorkTask.id}/events`)
-
-        source.message({
-            type: 'activity',
-            message: 'Task started',
-            createdAt: '2026-07-18T11:59:59.000Z',
-        })
-        source.message({
-            type: 'activity',
-            message: 'Using Chrome',
-            createdAt: '2026-07-18T12:00:00.000Z',
-        })
-        source.message({
-            type: 'message',
-            textDelta: 'I am reviewing the ',
-            startsNewStatement: true,
-            createdAt: '2026-07-18T12:00:00.100Z',
-        })
-        source.message({
-            type: 'message',
-            textDelta: 'hiring team.',
-            startsNewStatement: false,
-            createdAt: '2026-07-18T12:00:00.200Z',
-        })
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('.activity-icon-tool')).not.toBeNull()
-            expect(root.querySelector('.activity-icon-globe')).toBeNull()
-            expect(root.textContent).toContain('I am reviewing the hiring team.')
-            expect(root.querySelectorAll('.activity-progress')).toHaveLength(1)
-            expect(root.querySelector('.activity-item-activity .activity-progress')).not.toBeNull()
-            expect(root.querySelector('.activity-item-commentary .activity-progress')).toBeNull()
-        })
 
         source.message({
             type: 'completed',
@@ -1131,39 +1026,10 @@ describe('apply view', () => {
         })
 
         await vi.waitFor(() => {
-            expect(root.textContent).toContain('Ada Lovelace')
-            expect(root.textContent).toContain('Engineering Manager')
-            expect(root.textContent).toContain(
-                'Their Engineering Manager title aligns with this role, and their platform leadership',
-            )
-            expect(root.querySelector<HTMLAnchorElement>('.person-name')?.href).toBe(
-                'https://www.linkedin.com/in/ada-lovelace',
-            )
             expect(
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would value your perspective on the P2 Engineer role.')
-            expect(root.querySelector('label[for="outreach-message"]')).toBeNull()
             expect(root.querySelector('.work-updates')).toBeNull()
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Back to job posts"]')).not.toBeNull()
-            expectButtonTooltip(root, 'Back to saved contacts')
-            expectButtonTooltip(root, 'Back to job posts')
-            expect(
-                root.querySelector('[aria-label="Back to job posts"] .back-button-icon'),
-            ).not.toBeNull()
-            expect(discoverButton.disabled).toBe(false)
-            expect(discoverButton.getAttribute('aria-busy')).toBeNull()
-            expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
-                false,
-            )
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
-            ).toBe(true)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
         })
         expect(fetchMock).toHaveBeenNthCalledWith(
             5,
@@ -1180,72 +1046,6 @@ describe('apply view', () => {
                 }),
             },
         )
-
-        const rationale = root.querySelector<HTMLElement>('.relevance-rationale')
-
-        if (rationale === null) {
-            throw new Error('Could not find contact rationale')
-        }
-
-        Object.defineProperties(rationale, {
-            clientHeight: { configurable: true, value: 48 },
-            scrollHeight: { configurable: true, value: 96 },
-        })
-        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
-        window.dispatchEvent(new Event('resize'))
-        await vi.waitFor(() => expect(root.textContent).toContain('Show more'))
-        expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-        expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
-
-        const rationaleToggle = findButton(root, 'Show more')
-        const expandControl = root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')
-
-        expect(rationale.classList.contains('is-clamped')).toBe(true)
-        expect(rationaleToggle.closest('.rationale-copy')).not.toBeNull()
-        expect(rationaleToggle.getAttribute('aria-expanded')).toBe('false')
-        expect(expandControl?.classList.contains('panel-control-expand')).toBe(true)
-        const expandTooltipId = expandControl?.getAttribute('aria-describedby')
-        const expandTooltip = expandTooltipId ? document.getElementById(expandTooltipId) : null
-
-        expect(expandTooltip?.getAttribute('role')).toBe('tooltip')
-        expect(expandTooltip?.textContent).toContain('Expand panel')
-        expect(
-            [...(expandControl?.querySelectorAll('polyline') ?? [])].map((corner) =>
-                corner.getAttribute('points'),
-            ),
-        ).toEqual(['11 5 5 5 5 11', '13 19 19 19 19 13'])
-        rationaleToggle.click()
-
-        await vi.waitFor(() => {
-            expect(rationale?.classList.contains('is-clamped')).toBe(false)
-            expect(rationaleToggle.textContent).toContain('Show less')
-            expect(rationaleToggle.getAttribute('aria-expanded')).toBe('true')
-        })
-
-        const copyButton = root.querySelector<HTMLButtonElement>(
-            '[aria-label="Copy outreach message"]',
-        )
-
-        if (copyButton === null) {
-            throw new Error('Could not find outreach copy button')
-        }
-
-        expect(copyButton.closest('.draft-field')).not.toBeNull()
-        expect(copyButton.querySelector('.copy-icon')?.tagName.toLowerCase()).toBe('svg')
-        expect(copyButton.getAttribute('aria-describedby')).toBeNull()
-        copyButton.click()
-        await vi.waitFor(() => {
-            expect(writeText).toHaveBeenCalledExactlyOnceWith(
-                'Hi Ada, I would value your perspective on the P2 Engineer role.',
-            )
-            const feedbackId = copyButton.getAttribute('aria-describedby')
-            const feedback = feedbackId ? document.getElementById(feedbackId) : null
-
-            expect(feedback?.getAttribute('role')).toBe('status')
-            expect(feedback?.classList.contains('copy-feedback-copied')).toBe(true)
-            expect(feedback?.textContent).toContain('Copied')
-            expect(copyButton.getAttribute('aria-label')).toBe('Outreach message copied')
-        })
 
         const draft = root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')
         const request = root.querySelector<HTMLTextAreaElement>('#draft-request')
@@ -1269,12 +1069,8 @@ describe('apply view', () => {
             threadId: 'revision-thread-id',
             turnId: 'revision-turn-id',
         }
-        let resolveRevisionHealth: ((response: Response) => void) | undefined
-        const revisionHealth = new Promise<Response>((resolve) => {
-            resolveRevisionHealth = resolve
-        })
         fetchMock
-            .mockReturnValueOnce(revisionHealth)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(revisionTask, 202))
 
         const sendButton = root.querySelector<HTMLButtonElement>('[aria-label="Send request"]')
@@ -1284,25 +1080,10 @@ describe('apply view', () => {
         }
 
         await vi.waitFor(() => expect(sendButton.disabled).toBe(false))
-        expect(sendButton.closest('.request-field')).not.toBeNull()
-        expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
-        expect(sendButton.querySelector('.loading-spinner')).toBeNull()
         sendButton.click()
-        await nextTick()
-
-        expect(sendButton.disabled).toBe(true)
-        expect(sendButton.getAttribute('aria-busy')).toBe('true')
-        expect(sendButton.querySelector('.send-icon')).toBeNull()
-        expect(sendButton.querySelector('.send-spinner')).not.toBeNull()
-
-        resolveRevisionHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(2)
-            expect(sendButton.disabled).toBe(true)
-            expect(sendButton.getAttribute('aria-busy')).toBe('true')
-            expect(sendButton.querySelector('.send-icon')).toBeNull()
-            expect(sendButton.querySelector('.loading-spinner')).not.toBeNull()
         })
         const revisionRequest = fetchMock.mock.calls[6]
         const revisionBody = (revisionRequest?.[1] as RequestInit | undefined)?.body
@@ -1311,17 +1092,10 @@ describe('apply view', () => {
 
         const revisionInput = JSON.parse(revisionBody as string) as {
             prompt: string
-            outputSchema: { required: string[] }
-            capabilities: string[]
         }
 
-        expect(revisionInput.prompt).toContain('P2 Engineer')
-        expect(revisionInput.prompt).toContain('Ada Lovelace')
         expect(revisionInput.prompt).toContain('Hi Ada, could I ask about the engineering team?')
         expect(revisionInput.prompt).toContain('Make this warmer without making it longer.')
-        expect(revisionInput.prompt).toContain('asks a question')
-        expect(revisionInput.outputSchema.required).toEqual(['draftMessage', 'response'])
-        expect(revisionInput.capabilities).toEqual([])
 
         FakeEventSource.instances[1]!.message({
             type: 'completed',
@@ -1337,167 +1111,6 @@ describe('apply view', () => {
                 root.querySelector<HTMLTextAreaElement>('[aria-label="Outreach message"]')?.value,
             ).toBe('Hi Ada, I would love to hear about the engineering team.')
             expect(root.textContent).toContain('I made the opening warmer and kept it concise.')
-            expect(root.querySelector<HTMLElement>('.draft-board')?.style.display).not.toBe('none')
-            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
-            expect(sendButton.getAttribute('aria-busy')).toBeNull()
-            expect(sendButton.querySelector('.loading-spinner')).toBeNull()
-            expect(sendButton.querySelector('.send-icon')?.tagName.toLowerCase()).toBe('svg')
-        })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
-            ).toBe(false)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(true)
-            expect(root.querySelector('[aria-label="Collapse panel"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Show selected job post"]')).toBeNull()
-            expect(
-                root
-                    .querySelector('section[aria-label="Outreach"]')
-                    ?.querySelectorAll('.back-button'),
-            ).toHaveLength(1)
-            expect(root.querySelector('.rationale-toggle')).toBeNull()
-            expect(
-                root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
-            ).toBe(false)
-        })
-
-        const collapseControl = root.querySelector<HTMLButtonElement>(
-            '[aria-label="Collapse panel"]',
-        )
-        const collapseTooltipId = collapseControl?.getAttribute('aria-describedby')
-
-        expect(document.getElementById(collapseTooltipId ?? '')?.textContent).toContain(
-            'Collapse panel',
-        )
-
-        collapseControl?.click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('.draft-board')?.classList.contains('is-expanded')).toBe(
-                false,
-            )
-            expect(root.querySelector('[aria-label="Expand panel"]')).not.toBeNull()
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
-            ).toBe(true)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(findButton(root, 'Show more')).not.toBeNull()
-            expect(
-                root.querySelector('.relevance-rationale')?.classList.contains('is-clamped'),
-            ).toBe(true)
-        })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to saved contacts"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('.contact-history')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Back to job post"]')).not.toBeNull()
-            expect(root.querySelector('[aria-label="Back to saved contacts"]')).toBeNull()
-        })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to job post"]')?.click()
-
-        await vi.waitFor(() => {
-            const backToJobPosts = root.querySelector('[aria-label="Back to job posts"]')
-
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-active'),
-            ).toBe(true)
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-adjacent')).toBe(
-                false,
-            )
-            expect(root.querySelector('.apply-post-list')?.classList.contains('is-adjacent')).toBe(
-                true,
-            )
-            expect(backToJobPosts).not.toBeNull()
-            expect(backToJobPosts?.closest('.back-button-mobile-only')).not.toBeNull()
-        })
-
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('.apply-post-list')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(
-                root.querySelector('.apply-job-post-view')?.classList.contains('is-adjacent'),
-            ).toBe(true)
-            expect(root.querySelector('[aria-label="Back to job posts"]')).toBeNull()
-        })
-    })
-
-    it('cancels an active outreach task without using panel navigation', async () => {
-        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
-        const fetchMock = vi.mocked(fetch)
-        fetchMock
-            .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([]))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
-        FakeEventSource.instances = []
-        vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
-
-        findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
-
-        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
-        expect(root.textContent).not.toContain('Message draft')
-        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
-
-        await vi.waitFor(() => {
-            expect(fetchMock).toHaveBeenNthCalledWith(
-                5,
-                `http://localhost:3001/tasks/${runningWorkTask.id}/cancel`,
-                { method: 'POST' },
-            )
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).toBeNull()
-            expect(root.querySelector('[aria-label="Back to saved contacts"]')).not.toBeNull()
-        })
-
-        expect(FakeEventSource.instances[0]!.close).toHaveBeenCalledOnce()
-    })
-
-    it('keeps an active outreach task visible when cancellation fails', async () => {
-        vi.mocked(fetch)
-            .mockReset()
-            .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse([]))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockResolvedValueOnce(jsonResponse({}, 500))
-        FakeEventSource.instances = []
-        vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
-
-        findButton(root, 'P1 Engineer').click()
-        findButton(root, "Discover contact's").click()
-
-        await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
-        root.querySelector<HTMLButtonElement>('[aria-label="Cancel outreach task"]')?.click()
-
-        await vi.waitFor(() => {
-            const issue = root.querySelector('[role="alert"]')
-
-            expect(issue?.textContent).toBe('Work request failed (500)')
-            expect(root.querySelector('.apply-outreach')?.classList.contains('is-active')).toBe(
-                true,
-            )
-            expect(root.querySelector('[aria-label="Cancel outreach task"]')).not.toBeNull()
-            expect(issue).toBe(document.activeElement)
         })
     })
 

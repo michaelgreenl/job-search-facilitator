@@ -170,6 +170,27 @@ describe('work store', () => {
         expect(source.close).toHaveBeenCalledOnce()
     })
 
+    it('keeps a running task available when cancellation fails', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        const store = useWorkStore()
+
+        await store.startTask(taskInput)
+        const source = FakeEventSource.instances[0]!
+        source.open()
+
+        await expect(store.cancelTask()).rejects.toThrow('Work request failed (500)')
+
+        expect(store.task).toEqual(startedTask)
+        expect(store.taskActive).toBe(true)
+        expect(store.cancelling).toBe(false)
+        expect(store.error).toBe('Work request failed (500)')
+        expect(store.connectionState).toBe('connected')
+        expect(source.close).not.toHaveBeenCalled()
+    })
+
     it('does not create a task when the requested capability is unavailable', async () => {
         const fetchMock = vi
             .mocked(fetch)

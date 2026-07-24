@@ -13,7 +13,6 @@ import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
 import { useReportStore } from '@/stores/report.store'
 import { useWorkStore } from '@/stores/work.store'
-import { createOutreachTask } from '@/work-tasks'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
@@ -181,17 +180,10 @@ async function startContactDiscovery(post: JobPost) {
         return
     }
 
-    outreachStore.beginDiscovery(post.id)
     outreachExpanded.value = false
     activePanel.value = 'outreach'
 
-    try {
-        await workStore.startTask(createOutreachTask(post))
-    } catch {
-        if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
-            outreachStore.cancelTask()
-        }
-    }
+    await outreachStore.startContactDiscovery(post).catch(() => false)
 }
 
 function discoverAnotherContact() {
@@ -242,20 +234,13 @@ async function openOutreach() {
         await startContactDiscovery(post)
     } catch {
         if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
-            outreachStore.cancelTask()
             activePanel.value = 'outreach'
         }
     }
 }
 
 async function cancelOutreach() {
-    const cancelledTask = await workStore.cancelTask().catch(() => null)
-
-    if (cancelledTask?.status !== 'cancelled') {
-        return
-    }
-
-    outreachStore.cancelTask()
+    await outreachStore.cancelActiveTask().catch(() => false)
 }
 
 function expandOutreach() {

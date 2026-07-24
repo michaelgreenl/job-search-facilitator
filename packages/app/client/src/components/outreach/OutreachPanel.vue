@@ -9,7 +9,6 @@ import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { useWorkStore } from '@/stores/work.store'
-import { createDraftTask } from '@/work-tasks'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
@@ -60,30 +59,6 @@ const issue = computed(() => error.value ?? task.value?.error ?? resultError.val
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
-    task,
-    (currentTask) => {
-        if (currentTask?.status === 'completed' && currentTask.output !== null) {
-            const completedTaskId = currentTask.id
-            const completedPostId = props.post.id
-
-            void outreachStore.applyTaskResult(currentTask.output).then((savedContact) => {
-                if (
-                    savedContact?.jobPostId === props.post.id &&
-                    outreachStore.postId === completedPostId &&
-                    task.value?.id === completedTaskId &&
-                    !discovering.value &&
-                    panelView.value === 'stream'
-                ) {
-                    outreachStore.selectContact(savedContact)
-                    panelView.value = 'draft'
-                }
-            })
-        }
-    },
-    { immediate: true },
-)
-
-watch(
     () => props.post.id,
     () => {
         contactFilter.value = 'all'
@@ -102,7 +77,9 @@ watch(
 )
 
 watch(contact, (selectedContact) => {
-    if (selectedContact === null && !discovering.value) {
+    if (selectedContact !== null) {
+        panelView.value = 'draft'
+    } else if (!discovering.value) {
         panelView.value = 'contacts'
     }
 })
@@ -136,11 +113,12 @@ function submitDraftRequest() {
         return
     }
 
-    outreachStore.beginDraft()
-    void workStore
-        .startTask(createDraftTask(props.post, contact.value, draft.value, request))
-        .then(() => {
-            draftRequest.value = ''
+    void outreachStore
+        .requestDraftRevision(props.post, request)
+        .then((started) => {
+            if (started) {
+                draftRequest.value = ''
+            }
         })
         .catch(() => undefined)
 }

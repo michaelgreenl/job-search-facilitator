@@ -20,12 +20,12 @@ const runningTask: WorkTask = {
 describe('work stream', () => {
     const mounted: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
-    function mountWorkStream() {
+    function mountWorkStream(issue: string | null = null) {
         const pinia = createPinia()
         setActivePinia(pinia)
         const store = useWorkStore()
         const root = document.createElement('div')
-        const app = createApp(WorkStream, { issue: null })
+        const app = createApp(WorkStream, { issue })
         document.body.append(root)
         app.use(pinia)
         app.mount(root)
@@ -158,6 +158,14 @@ describe('work stream', () => {
         })
 
         await vi.waitFor(() => expect(scrollTop).toBe(160))
+    })
+
+    it('focuses a Work issue so the failure is announced', async () => {
+        const { root } = mountWorkStream('Could not cancel task')
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).toBe(document.activeElement)
+        })
     })
 
     it('does not rewrite an already-bottomed scroll position for a same-height update', async () => {

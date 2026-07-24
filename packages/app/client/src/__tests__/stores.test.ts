@@ -1,9 +1,16 @@
-import type { JobPost, JobSearchReport, OutreachContact } from '@job-search-facilitator/core'
+import type {
+    JobPost,
+    JobSearchReport,
+    OutreachContact,
+    WorkTask,
+} from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '../stores/outreach.store'
 import { usePostStore } from '../stores/post.store'
 import { useReportStore } from '../stores/report.store'
+import { useWorkStore } from '../stores/work.store'
+import { createContactDiscoveryTask, createDraftRevisionTask } from '../work-tasks'
 
 const post: JobPost = {
     id: 'post-1',
@@ -255,171 +262,374 @@ describe('outreach store', () => {
         expect(store.contactUpdateError).toBeNull()
     })
 
-    it('does not replace an edited draft with a completed task that was already applied', async () => {
-        const store = useOutreachStore()
+    it('persists and selects a discovered contact when Work completes without a mounted panel', async () => {
         const output = {
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
-        }
-        vi.mocked(fetch).mockResolvedValueOnce(
-            jsonResponse({
-                id: 'contact-1',
-                jobPostId: post.id,
-                ...output,
-                messaged: false,
-                createdAt: '2026-07-21T12:00:00.000Z',
-                updatedAt: '2026-07-21T12:00:00.000Z',
-            }),
-        )
-
-        store.beginDiscovery(post.id)
-        await store.applyTaskResult(output)
-        store.draft = 'Edited draft'
-        await store.applyTaskResult(output)
-
-        expect(store.draft).toBe('Edited draft')
-    })
-
-    it('loads saved contacts and persists a completed discovery', async () => {
-        const fetchMock = vi
-            .mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
-            .mockResolvedValueOnce(jsonResponse(savedContact, 201))
-        const store = useOutreachStore()
-
-        store.beginDiscovery(post.id)
-        await store.fetchContacts(post.id)
-        const completedContact = await store.applyTaskResult({
             personName: savedContact.personName,
             personTitle: savedContact.personTitle,
             profileUrl: savedContact.profileUrl,
             relevanceRationale: savedContact.relevanceRationale,
             draftMessage: savedContact.draftMessage,
+        }
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const completedTask: WorkTask = {
+            ...runningTask,
+            status: 'completed',
+            output,
+        }
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(savedContact, 201))
+        const workStore = useWorkStore()
+        const startTask = vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = completedTask
+            return completedTask
         })
+        const store = useOutreachStore()
 
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            1,
-            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
-            undefined,
-        )
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            2,
+        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
+
+        await vi.waitFor(() => {
+            expect(store.contact).toEqual(savedContact)
+        })
+        expect(startTask).toHaveBeenCalledExactlyOnceWith(createContactDiscoveryTask(post))
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
             `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    personName: savedContact.personName,
-                    personTitle: savedContact.personTitle,
-                    profileUrl: savedContact.profileUrl,
-                    relevanceRationale: savedContact.relevanceRationale,
-                    draftMessage: savedContact.draftMessage,
-                }),
+                body: JSON.stringify(output),
             },
         )
-        expect(completedContact).toEqual(savedContact)
         expect(store.contacts).toEqual([savedContact])
+        expect(store.draft).toBe(savedContact.draftMessage)
     })
 
-    it('ignores a completed discovery save after outreach moves to another post', async () => {
-        const nextPostId = 'post-2'
-        let resolveSave: ((response: Response) => void) | undefined
-        const saveResponse = new Promise<Response>((resolve) => {
-            resolveSave = resolve
+    it('does not select a contact when completed discovery persistence fails', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
         })
-        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
+        await store.startContactDiscovery(post)
 
-        store.beginDiscovery(post.id)
-        const completedContact = store.applyTaskResult({
-            personName: savedContact.personName,
-            personTitle: savedContact.personTitle,
-            profileUrl: savedContact.profileUrl,
-            relevanceRationale: savedContact.relevanceRationale,
-            draftMessage: savedContact.draftMessage,
+        workStore.task = {
+            ...runningTask,
+            status: 'completed',
+            output: {
+                personName: savedContact.personName,
+                personTitle: savedContact.personTitle,
+                profileUrl: savedContact.profileUrl,
+                relevanceRationale: savedContact.relevanceRationale,
+                draftMessage: savedContact.draftMessage,
+            },
+        }
+
+        await vi.waitFor(() => {
+            expect(store.resultError).toBe('API request failed (500)')
         })
-        store.beginDiscovery(nextPostId)
-        resolveSave?.(jsonResponse(savedContact, 201))
-
-        await expect(completedContact).resolves.toBeNull()
-        expect(store.postId).toBe(nextPostId)
+        expect(store.contactSaving).toBe(false)
         expect(store.contact).toBeNull()
         expect(store.contacts).toEqual([])
     })
 
-    it('ignores an earlier discovery save after outreach restarts for the same post', async () => {
-        let resolveSave: ((response: Response) => void) | undefined
-        const saveResponse = new Promise<Response>((resolve) => {
-            resolveSave = resolve
+    it('updates the draft and assistant reply when draft Work completes', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const workStore = useWorkStore()
+        const startTask = vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
         })
-        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
         const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
 
-        store.beginDiscovery(post.id)
-        const completedContact = store.applyTaskResult({
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
+        await expect(store.requestDraftRevision(post, 'Make it warmer')).resolves.toBe(true)
+        workStore.task = {
+            ...runningTask,
+            status: 'completed',
+            output: {
+                draftMessage: 'A warmer draft',
+                response: 'I made the introduction warmer.',
+            },
+        }
+
+        await vi.waitFor(() => {
+            expect(store.draft).toBe('A warmer draft')
         })
-        store.beginDiscovery(post.id)
-        resolveSave?.(jsonResponse({ error: 'Previous save failed' }, 500))
-
-        await expect(completedContact).resolves.toBeNull()
-        expect(store.postId).toBe(post.id)
-        expect(store.discovering).toBe(true)
-        expect(store.resultError).toBeNull()
+        expect(startTask).toHaveBeenCalledExactlyOnceWith(
+            createDraftRevisionTask(
+                post,
+                savedContact,
+                savedContact.draftMessage,
+                'Make it warmer',
+            ),
+        )
+        expect(store.assistantReply).toBe('I made the introduction warmer.')
     })
 
-    it('ignores an earlier successful save after outreach restarts for the same post', async () => {
-        let resolveSave: ((response: Response) => void) | undefined
-        const saveResponse = new Promise<Response>((resolve) => {
-            resolveSave = resolve
+    it('does not apply a draft result after another contact is selected', async () => {
+        const otherContact: OutreachContact = {
+            ...savedContact,
+            id: 'contact-2',
+            personName: 'Grace Hopper',
+            profileUrl: 'https://www.linkedin.com/in/grace-hopper',
+            draftMessage: 'Draft for Grace',
+        }
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
         })
-        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact, otherContact]
+        store.selectContact(savedContact)
+        await store.requestDraftRevision(post, 'Make it warmer')
+
+        store.selectContact(otherContact)
+        workStore.task = {
+            ...runningTask,
+            status: 'completed',
+            output: {
+                draftMessage: 'Revised draft for Ada',
+                response: 'I revised the message.',
+            },
+        }
+
+        await vi.waitFor(() => {
+            expect(store.drafting).toBe(false)
+        })
+        expect(store.contact).toEqual(otherContact)
+        expect(store.draft).toBe(otherContact.draftMessage)
+        expect(store.assistantReply).toBeNull()
+    })
+
+    it('clears outreach only after Work cancellation succeeds', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
+        let resolveCancellation: ((task: WorkTask) => void) | undefined
+        const cancellationResponse = new Promise<WorkTask>((resolve) => {
+            resolveCancellation = resolve
+        })
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
+        })
+        const cancelTask = vi
+            .spyOn(workStore, 'cancelTask')
+            .mockReturnValueOnce(cancellationResponse)
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+
+        const cancellation = store.cancelActiveTask()
+
+        expect(store.discovering).toBe(true)
+        resolveCancellation?.(cancelledTask)
+        await expect(cancellation).resolves.toBe(true)
+        expect(cancelTask).toHaveBeenCalledOnce()
+        expect(store.discovering).toBe(false)
+    })
+
+    it('preserves active outreach when Work cancellation fails', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
+        })
+        vi.spyOn(workStore, 'cancelTask').mockRejectedValueOnce(new Error('Could not cancel task'))
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+
+        await expect(store.cancelActiveTask()).rejects.toThrow('Could not cancel task')
+
+        expect(store.discovering).toBe(true)
+    })
+
+    it('ends outreach without persistence when Work fails', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
+        })
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+
+        workStore.task = { ...runningTask, status: 'failed', error: 'Chrome stopped responding' }
+
+        await vi.waitFor(() => {
+            expect(store.discovering).toBe(false)
+        })
+        expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('cancels a task that starts after its outreach context is reset', async () => {
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
+        let resolveStart: ((task: WorkTask) => void) | undefined
+        const startResponse = new Promise<WorkTask>((resolve) => {
+            resolveStart = resolve
+        })
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            const task = await startResponse
+            workStore.task = task
+            return task
+        })
+        const cancelTask = vi.spyOn(workStore, 'cancelTask').mockResolvedValueOnce(cancelledTask)
         const store = useOutreachStore()
 
-        store.beginDiscovery(post.id)
-        const completedContact = store.applyTaskResult({
+        const start = store.startContactDiscovery(post)
+        store.reset()
+        resolveStart?.(runningTask)
+
+        await expect(start).resolves.toBe(false)
+        expect(cancelTask).toHaveBeenCalledOnce()
+        expect(store.postId).toBeNull()
+        expect(store.discovering).toBe(false)
+    })
+
+    it('does not persist or select an invalid completed discovery', async () => {
+        const output = {
             personName: savedContact.personName,
-            personTitle: savedContact.personTitle,
-            profileUrl: savedContact.profileUrl,
-            relevanceRationale: savedContact.relevanceRationale,
-            draftMessage: savedContact.draftMessage,
+        }
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
         })
-        store.beginDiscovery(post.id)
-        resolveSave?.(jsonResponse(savedContact, 201))
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
 
-        await expect(completedContact).resolves.toBeNull()
-        expect(store.discovering).toBe(true)
+        workStore.task = { ...runningTask, status: 'completed', output }
+
+        await vi.waitFor(() => {
+            expect(store.resultError).toBe('Work returned an invalid outreach result')
+        })
+        expect(fetch).not.toHaveBeenCalled()
+        expect(store.contact).toBeNull()
         expect(store.contacts).toEqual([])
-        expect(store.resultError).toBeNull()
     })
 
-    it('ignores an earlier discovery save after draft work begins', async () => {
+    it('ignores a pending discovery save after outreach cancellation', async () => {
         let resolveSave: ((response: Response) => void) | undefined
         const saveResponse = new Promise<Response>((resolve) => {
             resolveSave = resolve
         })
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
-        const store = useOutreachStore()
-
-        store.beginDiscovery(post.id)
-        const completedContact = store.applyTaskResult({
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her title aligns with the role.',
-            draftMessage: 'Initial draft',
+        const runningTask: WorkTask = {
+            id: 'task-1',
+            status: 'running',
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            output: null,
+            error: null,
+        }
+        const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
+        let resolveCancellation: ((task: WorkTask) => void) | undefined
+        const cancellationResponse = new Promise<WorkTask>((resolve) => {
+            resolveCancellation = resolve
         })
-        store.beginDraft()
-        resolveSave?.(jsonResponse({ error: 'Previous save failed' }, 500))
+        const workStore = useWorkStore()
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.task = runningTask
+            return runningTask
+        })
+        vi.spyOn(workStore, 'cancelTask').mockReturnValueOnce(cancellationResponse)
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+        const cancellation = store.cancelActiveTask()
 
-        await expect(completedContact).resolves.toBeNull()
+        workStore.task = {
+            ...runningTask,
+            status: 'completed',
+            output: {
+                personName: savedContact.personName,
+                personTitle: savedContact.personTitle,
+                profileUrl: savedContact.profileUrl,
+                relevanceRationale: savedContact.relevanceRationale,
+                draftMessage: savedContact.draftMessage,
+            },
+        }
+        await vi.waitFor(() => {
+            expect(store.contactSaving).toBe(true)
+        })
+        resolveCancellation?.(cancelledTask)
+        await expect(cancellation).resolves.toBe(true)
+        resolveSave?.(jsonResponse(savedContact, 201))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(store.contact).toBeNull()
+        expect(store.contacts).toEqual([])
         expect(store.discovering).toBe(false)
         expect(store.resultError).toBeNull()
     })
