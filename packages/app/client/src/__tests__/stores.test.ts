@@ -183,7 +183,12 @@ describe('post store', () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse([post]))
             .mockResolvedValueOnce(jsonResponse(secondPost))
-            .mockResolvedValueOnce(jsonResponse(updatedPost))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    post: updatedPost,
+                    inApplyQueue: false,
+                }),
+            )
         const store = usePostStore()
         const reportStore = useReportStore()
         reportStore.reports = [report]
@@ -221,18 +226,18 @@ describe('post store', () => {
         expect(reportStore.reports[0]?.results[0]?.post).toEqual(updatedPost)
     })
 
-    it('loads labeled posts from the dedicated endpoint', async () => {
-        const labeledPost = { ...post, userLabel: 'P1' as const }
-        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([labeledPost]))
+    it('loads the Apply queue from its endpoint', async () => {
+        const applyQueuePost = { ...post, userLabel: 'P1' as const }
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([applyQueuePost]))
         const store = usePostStore()
 
-        await store.fetchLabeledPosts()
+        await store.fetchApplyQueuePosts()
 
         expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-            'http://localhost:3000/api/job-posts/labeled',
+            'http://localhost:3000/api/job-posts/apply-queue',
             undefined,
         )
-        expect(store.posts).toEqual([labeledPost])
+        expect(store.posts).toEqual([applyQueuePost])
     })
 })
 

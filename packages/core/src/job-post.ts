@@ -56,3 +56,8 @@ export interface UpdateJobPostInput {
     userLabel?: UserLabel | null
     archivedAt?: IsoDateTime | null
 }
+
+export interface UpdateJobPostResult {
+    post: JobPost
+    inApplyQueue: boolean
+}

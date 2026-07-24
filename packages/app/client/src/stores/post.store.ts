@@ -1,6 +1,7 @@
 import {
     parseJobPost,
     parseJobPosts,
+    parseUpdateJobPostResult,
     type JobPost,
     type UpdateJobPostInput,
 } from '@job-search-facilitator/core'
@@ -11,12 +12,12 @@ import { useReportStore } from '@/stores/report.store'
 
 const getJobPosts = () => request('/job-posts', parseJobPosts)
 
-const getLabeledJobPosts = () => request('/job-posts/labeled', parseJobPosts)
+const getApplyQueuePosts = () => request('/job-posts/apply-queue', parseJobPosts)
 
 const getJobPost = (id: string) => request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost)
 
 const patchJobPost = (id: string, input: UpdateJobPostInput) =>
-    request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost, {
+    request(`/job-posts/${encodeURIComponent(id)}`, parseUpdateJobPostResult, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -32,7 +33,9 @@ export const usePostStore = defineStore('posts', () => {
         error.value = null
 
         try {
-            posts.value = await getPosts()
+            const loadedPosts = await getPosts()
+            posts.value = loadedPosts
+            return loadedPosts
         } catch (requestError) {
             error.value = requestError instanceof Error ? requestError.message : 'Request failed'
             throw requestError
@@ -43,7 +46,7 @@ export const usePostStore = defineStore('posts', () => {
 
     const fetchPosts = () => loadPosts(getJobPosts)
 
-    const fetchLabeledPosts = () => loadPosts(getLabeledJobPosts)
+    const fetchApplyQueuePosts = () => loadPosts(getApplyQueuePosts)
 
     async function fetchPost(id: string) {
         loading.value = true
@@ -66,9 +69,9 @@ export const usePostStore = defineStore('posts', () => {
         error.value = null
 
         try {
-            const post = await patchJobPost(id, input)
-            savePost(post)
-            return post
+            const result = await patchJobPost(id, input)
+            savePost(result.post)
+            return result
         } catch (requestError) {
             error.value = requestError instanceof Error ? requestError.message : 'Request failed'
             throw requestError
@@ -94,7 +97,7 @@ export const usePostStore = defineStore('posts', () => {
         loading,
         error,
         fetchPosts,
-        fetchLabeledPosts,
+        fetchApplyQueuePosts,
         fetchPost,
         updatePost,
     }

@@ -26,7 +26,7 @@ const existingPost: JobPost = {
 
 const missingPostId = '22222222-2222-4222-8222-222222222222'
 
-const createFakeRepository = (initialPosts: JobPost[]) => {
+const createFakeRepository = (initialPosts: JobPost[], applyQueuePosts: JobPost[] = []) => {
     const posts = [...initialPosts]
     const update = vi.fn(async (id: string, input: UpdateJobPostInput) => {
         const index = posts.findIndex((post) => post.id === id)
@@ -42,12 +42,14 @@ const createFakeRepository = (initialPosts: JobPost[]) => {
         }
         posts[index] = updatedPost
 
-        return updatedPost
+        return {
+            post: updatedPost,
+            inApplyQueue: false,
+        }
     })
     const repository: JobPostRepository = {
         findMany: async () => [...posts],
-        findLabeled: async () =>
-            posts.filter(({ userLabel }) => userLabel !== null && userLabel !== 'forgo'),
+        findApplyQueue: async () => [...applyQueuePosts],
         findById: async (id) => posts.find((post) => post.id === id) ?? null,
         update,
     }
@@ -69,22 +71,13 @@ describe('job post routes', () => {
         await request(createTestApp(repository)).get('/job-posts').expect(200, [existingPost])
     })
 
-    it('lists labeled job posts without forgone or unlabeled posts', async () => {
-        const labeledPost: JobPost = { ...existingPost, userLabel: 'P1' }
-        const forgonePost: JobPost = {
-            ...existingPost,
-            id: '22222222-2222-4222-8222-222222222222',
-            userLabel: 'forgo',
-        }
-        const unlabeledPost: JobPost = {
-            ...existingPost,
-            id: '33333333-3333-4333-8333-333333333333',
-        }
-        const { repository } = createFakeRepository([labeledPost, forgonePost, unlabeledPost])
+    it('lists posts in the Apply queue', async () => {
+        const applyQueuePost: JobPost = { ...existingPost, userLabel: 'P1' }
+        const { repository } = createFakeRepository([], [applyQueuePost])
 
         await request(createTestApp(repository))
-            .get('/job-posts/labeled')
-            .expect(200, [labeledPost])
+            .get('/job-posts/apply-queue')
+            .expect(200, [applyQueuePost])
     })
 
     it('forwards an allowed update and returns the updated post', async () => {
@@ -103,9 +96,12 @@ describe('job post routes', () => {
 
         expect(update).toHaveBeenCalledExactlyOnceWith(existingPost.id, input)
         expect(response.body).toEqual({
-            ...existingPost,
-            ...input,
-            updatedAt: '2026-07-12T11:00:00.000Z',
+            post: {
+                ...existingPost,
+                ...input,
+                updatedAt: '2026-07-12T11:00:00.000Z',
+            },
+            inApplyQueue: false,
         })
     })
 

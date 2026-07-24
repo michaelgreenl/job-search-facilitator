@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { USER_LABELS, type JobPost, type UserLabel } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -52,26 +52,24 @@ const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
-const retainedAppliedPostIds = reactive(new Set<string>())
+const applyQueuePostIds = shallowRef<ReadonlySet<string> | null>(null)
 let viewMounted = true
 
 onBeforeUnmount(() => {
     viewMounted = false
 })
 
-const actionablePosts = computed(() =>
-    postStore.posts.filter(
-        ({ applicationStatus, id, userLabel }) =>
-            userLabel !== null &&
-            userLabel !== 'forgo' &&
-            (applicationStatus === 'not-applied' || retainedAppliedPostIds.has(id)),
-    ),
+// Server responses own membership; this ID snapshot keeps newly applied posts for this visit.
+const currentVisitApplyQueue = computed(() =>
+    applyQueuePostIds.value === null
+        ? []
+        : postStore.posts.filter(({ id }) => applyQueuePostIds.value?.has(id)),
 )
 
 const filteredPosts = computed(() =>
     postFilter.value === 'all'
-        ? actionablePosts.value
-        : actionablePosts.value.filter(({ userLabel }) => userLabel === postFilter.value),
+        ? currentVisitApplyQueue.value
+        : currentVisitApplyQueue.value.filter(({ userLabel }) => userLabel === postFilter.value),
 )
 const postFilterLabel = computed(
     () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
@@ -150,6 +148,22 @@ function selectPostFilter(value: string) {
     if (isPostFilter(value)) {
         postFilter.value = value
     }
+}
+
+function updateApplyQueueMembership(postId: string, inApplyQueue: boolean) {
+    if (applyQueuePostIds.value === null) {
+        return
+    }
+
+    const postIds = new Set(applyQueuePostIds.value)
+
+    if (inApplyQueue) {
+        postIds.add(postId)
+    } else {
+        postIds.delete(postId)
+    }
+
+    applyQueuePostIds.value = postIds
 }
 
 function showPosts() {
@@ -254,16 +268,23 @@ function collapseOutreach() {
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
-    if (selectedPostId.value === null || labelUpdating.value || applicationUpdating.value) {
+    if (
+        selectedPostId.value === null ||
+        applyQueuePostIds.value === null ||
+        labelUpdating.value ||
+        applicationUpdating.value
+    ) {
         return
     }
 
+    const postId = selectedPostId.value
     labelUpdating.value = true
     labelError.value = null
     applicationError.value = null
 
     try {
-        await postStore.updatePost(selectedPostId.value, { userLabel })
+        const result = await postStore.updatePost(postId, { userLabel })
+        updateApplyQueueMembership(postId, result.inApplyQueue)
     } catch (error) {
         labelError.value = error instanceof Error ? error.message : 'Could not update label'
     } finally {
@@ -274,7 +295,12 @@ async function updateUserLabel(userLabel: UserLabel | null) {
 async function markApplied() {
     const post = selectedPost.value
 
-    if (post === null || applicationUpdating.value || labelUpdating.value) {
+    if (
+        post === null ||
+        applyQueuePostIds.value === null ||
+        applicationUpdating.value ||
+        labelUpdating.value
+    ) {
         return
     }
 
@@ -282,15 +308,12 @@ async function markApplied() {
     applicationUpdating.value = true
     applicationError.value = null
     labelError.value = null
-    retainedAppliedPostIds.add(postId)
 
     try {
         await postStore.updatePost(postId, {
             applicationStatus: 'awaiting-response',
         })
     } catch (error) {
-        retainedAppliedPostIds.delete(postId)
-
         if (selectedPostId.value === postId) {
             applicationError.value =
                 error instanceof Error ? error.message : 'Could not update application status'
@@ -300,18 +323,19 @@ async function markApplied() {
     }
 }
 
-async function loadLabeledPosts() {
+async function loadApplyQueue() {
     try {
-        await postStore.fetchLabeledPosts()
+        const posts = await postStore.fetchApplyQueuePosts()
+        applyQueuePostIds.value = new Set(posts.map(({ id }) => id))
     } catch (error) {
-        listError.value = error instanceof Error ? error.message : 'Could not load labeled posts'
+        listError.value = error instanceof Error ? error.message : 'Could not load Apply queue'
     } finally {
         listLoading.value = false
     }
 }
 
 onMounted(() => {
-    void loadLabeledPosts()
+    void loadApplyQueue()
 
     if (reportStore.reports.length === 0) {
         void reportStore.fetchReports().catch(() => undefined)
@@ -328,7 +352,7 @@ onMounted(() => {
                 :adjacent="activePanel === 'viewer' && outreachContact === null"
                 aria-label="Job posts"
             >
-                <PanelHeading eyebrow="Apply" title="Labeled posts" title-tag="h1">
+                <PanelHeading eyebrow="Apply" title="Queue" title-tag="h1">
                     <template #controls>
                         <span class="item-count">{{ filteredPosts.length }} posts</span>
 
@@ -351,7 +375,7 @@ onMounted(() => {
                     :selected-post-id="selectedPostId"
                     :loading="listLoading"
                     :error="listError"
-                    loading-message="Loading labeled posts…"
+                    loading-message="Loading Apply queue…"
                     empty-message="No job posts match this filter."
                     @select="selectPost"
                 />
@@ -370,9 +394,9 @@ onMounted(() => {
                     :post="selectedPost"
                     :result="selectedResult ?? undefined"
                     :show-legitimacy="false"
-                    :label-updating="labelUpdating"
+                    :label-updating="labelUpdating || applyQueuePostIds === null"
                     :label-error="labelError"
-                    :application-updating="applicationUpdating"
+                    :application-updating="applicationUpdating || applyQueuePostIds === null"
                     :application-error="applicationError"
                     always-show-application-action
                     :back-label="

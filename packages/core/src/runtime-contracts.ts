@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { APPLICATION_STATUSES, POST_STATUSES, USER_LABELS, type JobPost } from './job-post.ts'
+import {
+    APPLICATION_STATUSES,
+    POST_STATUSES,
+    USER_LABELS,
+    type JobPost,
+    type UpdateJobPostResult,
+} from './job-post.ts'
 import {
     type ContactDiscoveryResult,
     type DraftRevisionResult,
@@ -71,6 +77,11 @@ const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     archivedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
+})
+
+const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject({
+    post: jobPostSchema,
+    inApplyQueue: z.boolean(),
 })
 
 const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
@@ -259,6 +270,10 @@ export const parseDraftRevisionResult = createParser(
 )
 export const parseJobPost = createParser('Job post', jobPostSchema)
 export const parseJobPosts = createParser('Job posts', z.array(jobPostSchema))
+export const parseUpdateJobPostResult = createParser(
+    'Job post update result',
+    updateJobPostResultSchema,
+)
 export const parseJobSearchReport = createParser('Job search report', jobSearchReportSchema)
 export const parseJobSearchReports = createParser(
     'Job search reports',

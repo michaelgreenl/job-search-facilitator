@@ -87,8 +87,8 @@ afterAll(async () => {
 })
 
 describe('job post repository', () => {
-    it('lists only actionable labeled posts', async () => {
-        const userLabels = ['P1', 'P2', 'quick-app', 'forgo', null] as const
+    it('defines the Apply queue by application status and user label', async () => {
+        const userLabels = ['P1', 'P1', 'P2', 'quick-app', 'forgo', null] as const
         const report = await searchReportRepository.upsertById(
             '11111111-1111-4111-8111-111111111111',
             '2026-07-12',
@@ -102,20 +102,31 @@ describe('job post repository', () => {
             }),
         )
 
-        await Promise.all(
+        const labelUpdates = await Promise.all(
             userLabels.map((userLabel, index) =>
                 jobPostRepository.update(report.report.results[index]!.post.id, { userLabel }),
             ),
         )
-        await jobPostRepository.update(report.report.results[0]!.post.id, {
+        const appliedUpdate = await jobPostRepository.update(report.report.results[0]!.post.id, {
             applicationStatus: 'awaiting-response',
         })
 
-        const labeledPosts = await jobPostRepository.findLabeled()
-        const labels = labeledPosts.map(({ userLabel }) => userLabel)
+        const applyQueuePosts = await jobPostRepository.findApplyQueue()
+        const sourceKeys = applyQueuePosts.map(({ sourceKey }) => sourceKey)
 
-        expect(labels).toHaveLength(2)
-        expect(labels).toEqual(expect.arrayContaining(['P2', 'quick-app']))
+        expect(labelUpdates.map((update) => update?.inApplyQueue)).toEqual([
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+        ])
+        expect(appliedUpdate?.inApplyQueue).toBe(false)
+        expect(sourceKeys).toHaveLength(3)
+        expect(sourceKeys).toEqual(
+            expect.arrayContaining(['example-source:1', 'example-source:2', 'example-source:3']),
+        )
     })
 })
 

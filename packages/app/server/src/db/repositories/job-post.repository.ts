@@ -1,4 +1,4 @@
-import type { JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
+import type { JobPost, UpdateJobPostInput, UpdateJobPostResult } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import {
     toJobPost,
@@ -10,10 +10,19 @@ import { prisma } from '../prisma.ts'
 
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
-    findLabeled(): Promise<JobPost[]>
+    findApplyQueue(): Promise<JobPost[]>
     findById(id: string): Promise<JobPost | null>
-    update(id: string, input: UpdateJobPostInput): Promise<JobPost | null>
+    update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
 }
+
+// postStatus and archivedAt remain outside this policy until their Apply queue behavior is defined.
+const applyQueueWhere = {
+    applicationStatus: 'NOT_APPLIED',
+    userLabel: {
+        not: null,
+        notIn: ['FORGO'],
+    },
+} satisfies Prisma.JobPostWhereInput
 
 export const jobPostRepository: JobPostRepository = {
     async findMany() {
@@ -24,12 +33,9 @@ export const jobPostRepository: JobPostRepository = {
         return posts.map(toJobPost)
     },
 
-    async findLabeled() {
+    async findApplyQueue() {
         const posts = await prisma.jobPost.findMany({
-            where: {
-                applicationStatus: 'NOT_APPLIED',
-                userLabel: { notIn: ['FORGO'] },
-            },
+            where: applyQueueWhere,
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         })
 
@@ -62,9 +68,21 @@ export const jobPostRepository: JobPostRepository = {
         }
 
         try {
-            const post = await prisma.jobPost.update({ where: { id }, data })
+            const [post, applyQueuePost] = await prisma.$transaction([
+                prisma.jobPost.update({ where: { id }, data }),
+                prisma.jobPost.findFirst({
+                    where: {
+                        id,
+                        AND: applyQueueWhere,
+                    },
+                    select: { id: true },
+                }),
+            ])
 
-            return toJobPost(post)
+            return {
+                post: toJobPost(post),
+                inApplyQueue: applyQueuePost !== null,
+            }
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
                 return null

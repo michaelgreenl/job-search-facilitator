@@ -10,6 +10,7 @@ import type {
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { usePostStore } from '@/stores/post.store'
 import { useReportStore } from '@/stores/report.store'
 import ApplyView from '../views/ApplyView.vue'
 
@@ -143,7 +144,10 @@ class FakeEventSource {
 
 const mountApplyView = async (
     pinia: Pinia = createPinia(),
-    { seedReports = true }: { seedReports?: boolean } = {},
+    {
+        seedReports = true,
+        waitForPosts = true,
+    }: { seedReports?: boolean; waitForPosts?: boolean } = {},
 ) => {
     const root = document.createElement('div')
     document.body.append(root)
@@ -158,7 +162,9 @@ const mountApplyView = async (
     app.mount(root)
     mountedApps.push({ app, root })
 
-    await vi.waitFor(() => expect(root.textContent).toContain('P1 Engineer'))
+    if (waitForPosts) {
+        await vi.waitFor(() => expect(root.textContent).toContain('P1 Engineer'))
+    }
 
     return root
 }
@@ -291,6 +297,24 @@ describe('apply view', () => {
         })
     })
 
+    it('does not admit a post fetched outside the Apply queue during the current visit', async () => {
+        const outsideQueuePost = {
+            ...createPost('30000000-0000-4000-8000-000000000004', 'P1'),
+            roleTitle: 'Outside Queue Engineer',
+        }
+        const pinia = createPinia()
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockResolvedValueOnce(jsonResponse(outsideQueuePost))
+        const root = await mountApplyView(pinia)
+
+        await usePostStore(pinia).fetchPost(outsideQueuePost.id)
+        await nextTick()
+
+        expect(root.textContent).not.toContain(outsideQueuePost.roleTitle)
+    })
+
     it('moves between the post list and viewer', async () => {
         const root = await mountApplyView()
         const selectedPost = posts[1]
@@ -347,7 +371,7 @@ describe('apply view', () => {
         const fetchMock = vi.mocked(fetch).mockImplementation((input) => {
             const url = fetchUrl(input)
 
-            if (url.endsWith('/api/job-posts/labeled')) {
+            if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(posts))
             }
 
@@ -721,7 +745,7 @@ describe('apply view', () => {
         fetchMock.mockImplementation((input, init) => {
             const url = fetchUrl(input)
 
-            if (url.endsWith('/api/job-posts/labeled')) {
+            if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(posts))
             }
 
@@ -775,7 +799,7 @@ describe('apply view', () => {
         fetchMock.mockImplementation((input, init) => {
             const url = fetchUrl(input)
 
-            if (url.endsWith('/api/job-posts/labeled')) {
+            if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(posts))
             }
 
@@ -864,7 +888,7 @@ describe('apply view', () => {
         fetchMock.mockImplementation((input, init) => {
             const url = fetchUrl(input)
 
-            if (url.endsWith('/api/job-posts/labeled')) {
+            if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(posts))
             }
 
@@ -1371,6 +1395,10 @@ describe('apply view', () => {
     })
 
     it('keeps a pending outreach action available after the Apply view remounts', async () => {
+        let resolveQueueResponse: ((response: Response) => void) | undefined
+        const queueResponse = new Promise<Response>((resolve) => {
+            resolveQueueResponse = resolve
+        })
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockReset()
@@ -1378,7 +1406,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockResolvedValueOnce(jsonResponse(posts))
+            .mockReturnValueOnce(queueResponse)
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const pinia = createPinia()
@@ -1394,7 +1422,15 @@ describe('apply view', () => {
         mounted.app.unmount()
         mounted.root.remove()
 
-        const remountedRoot = await mountApplyView(pinia)
+        const remountedRoot = await mountApplyView(pinia, { waitForPosts: false })
+        const labelPicker = remountedRoot.querySelector<HTMLButtonElement>(
+            'button[aria-label="Job post label"]',
+        )
+
+        expect(labelPicker).not.toBeNull()
+        expect(labelPicker?.disabled).toBe(true)
+
+        resolveQueueResponse?.(jsonResponse(posts))
 
         await vi.waitFor(() => {
             expect(remountedRoot.textContent).toContain('Allow Chrome to access')
@@ -1402,6 +1438,7 @@ describe('apply view', () => {
                 remountedRoot.querySelector('.apply-outreach')?.classList.contains('is-active'),
             ).toBe(true)
             expect(remountedRoot.querySelector('.action-required')).toBe(document.activeElement)
+            expect(labelPicker?.disabled).toBe(false)
         })
     })
 
@@ -1411,7 +1448,12 @@ describe('apply view', () => {
         fetchMock
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(posts))
-            .mockResolvedValueOnce(jsonResponse(appliedPost))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    post: appliedPost,
+                    inApplyQueue: false,
+                }),
+            )
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()
@@ -1489,7 +1531,12 @@ describe('apply view', () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse([posts[0]]))
-            .mockResolvedValueOnce(jsonResponse(forgonePost))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    post: forgonePost,
+                    inApplyQueue: false,
+                }),
+            )
         const root = await mountApplyView()
 
         findButton(root, 'P1 Engineer').click()

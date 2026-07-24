@@ -7,7 +7,7 @@ export const createJobPostRouter = (repository: JobPostRepository) => {
     const controller = createJobPostController(repository)
 
     router.get('/', controller.list)
-    router.get('/labeled', controller.listLabeled)
+    router.get('/apply-queue', controller.listApplyQueue)
     router.get('/:id', controller.getById)
     router.patch('/:id', controller.updateById)
 
