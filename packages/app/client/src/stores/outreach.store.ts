@@ -107,7 +107,10 @@ export const useOutreachStore = defineStore('outreach', () => {
             return true
         } catch (error) {
             if (activeTask.value?.revision === task.revision) {
-                clearTask(task.revision)
+                failResult(
+                    task.revision,
+                    error instanceof Error ? error.message : 'Could not start outreach task',
+                )
             }
 
             throw error
@@ -428,7 +431,12 @@ export const useOutreachStore = defineStore('outreach', () => {
             return
         }
 
-        if (currentTask.status === 'failed' || currentTask.status === 'cancelled') {
+        if (currentTask.status === 'failed') {
+            failResult(task.revision, currentTask.error ?? 'Outreach task failed')
+            return
+        }
+
+        if (currentTask.status === 'cancelled') {
             clearTask(task.revision)
             return
         }

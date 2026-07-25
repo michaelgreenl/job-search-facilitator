@@ -267,6 +267,41 @@ describe('apply view', () => {
         )
     })
 
+    it('shows a Work failure while revising an outreach draft', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({ error: 'Work bridge unavailable' }, 503))
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, `outreach-contact-${savedContact.id}-select`).click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-draft-request"]')).not.toBeNull(),
+        )
+
+        const request = root.querySelector<HTMLTextAreaElement>(
+            '[data-testid="outreach-draft-request"]',
+        )!
+        request.value = 'Make the introduction warmer'
+        request.dispatchEvent(new Event('input'))
+        await nextTick()
+        findTestButton(root, 'outreach-draft-submit').click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-draft-issue"]')).not.toBeNull(),
+        )
+        expect(request.disabled).toBe(false)
+    })
+
     it('moves a first contact discovery into the task stream', async () => {
         vi.mocked(fetch)
             .mockReset()

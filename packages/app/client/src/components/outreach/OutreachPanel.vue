@@ -54,8 +54,13 @@ const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(() => task.value?.status === 'running' && panelView.value === 'stream')
+const canCancel = computed(
+    () =>
+        task.value?.status === 'running' &&
+        (panelView.value === 'stream' || (panelView.value === 'draft' && drafting.value)),
+)
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+const draftIssue = computed(() => resultError.value ?? (drafting.value ? error.value : null))
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
@@ -253,6 +258,7 @@ async function copyDraft() {
                 :requesting-changes="drafting && taskActive"
                 :copy-state="copyState"
                 :expanded="expanded"
+                :issue="draftIssue"
                 :messaged-error="contactUpdateError"
                 :messaged-updating="contactUpdating"
                 @submit="submitDraftRequest"
