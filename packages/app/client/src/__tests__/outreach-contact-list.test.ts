@@ -28,10 +28,8 @@ afterEach(() => {
     }
 })
 
-const selectFilter = async (root: HTMLElement, label: string) => {
-    const trigger = root.querySelector<HTMLButtonElement>(
-        'button[aria-label="Filter saved contacts"]',
-    )
+const selectFilter = async (root: HTMLElement, value: string) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-testid="contact-filter-trigger"]')
 
     if (trigger === null) {
         throw new Error('Could not find saved contact filter')
@@ -39,24 +37,29 @@ const selectFilter = async (root: HTMLElement, label: string) => {
 
     trigger.click()
     await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).not.toBeNull())
-    const option = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-        ({ textContent }) => textContent?.trim() === label,
+    const option = root.querySelector<HTMLButtonElement>(
+        `[data-testid="contact-filter-option-${value}"]`,
     )
 
-    if (option === undefined) {
-        throw new Error(`Could not find saved contact filter option "${label}"`)
+    if (option === null) {
+        throw new Error(`Could not find saved contact filter option "${value}"`)
     }
 
     option.click()
-    await vi.waitFor(() => expect(trigger.textContent?.trim()).toBe(label))
+    await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).toBeNull())
+}
 
-    return option
+const expectContacts = (root: HTMLElement, visibleIds: string[]) => {
+    for (const id of ['contact-1', 'contact-2']) {
+        expect(root.querySelector(`[data-testid="outreach-contact-${id}"]`) !== null).toBe(
+            visibleIds.includes(id),
+        )
+    }
 }
 
 describe('OutreachContactList', () => {
     it('filters saved contacts by messaged status', async () => {
         const root = document.createElement('div')
-        const onShowStream = vi.fn()
         document.body.append(root)
         const app = createApp(OutreachContactList, {
             contacts: [
@@ -66,28 +69,19 @@ describe('OutreachContactList', () => {
             discovering: true,
             error: null,
             loading: false,
-            onShowStream,
         })
         app.mount(root)
         mountedApps.push({ app, root })
 
-        expect(root.textContent).toContain('Ada Lovelace')
-        expect(root.textContent).toContain('Grace Hopper')
+        expectContacts(root, ['contact-1', 'contact-2'])
 
-        const messagedFilter = await selectFilter(root, 'Messaged')
-        expect(messagedFilter.classList.contains('app-dropdown-item-success')).toBe(true)
-        expect(root.textContent).toContain('Ada Lovelace')
-        expect(root.textContent).not.toContain('Grace Hopper')
-        root.querySelector<HTMLButtonElement>('[aria-label="View outreach progress"]')?.click()
-        expect(onShowStream).toHaveBeenCalledOnce()
+        await selectFilter(root, 'messaged')
+        expectContacts(root, ['contact-1'])
 
-        const notMessagedFilter = await selectFilter(root, 'Not Messaged')
-        expect(notMessagedFilter.classList.contains('app-dropdown-item-muted')).toBe(true)
-        expect(root.textContent).not.toContain('Ada Lovelace')
-        expect(root.textContent).toContain('Grace Hopper')
+        await selectFilter(root, 'not-messaged')
+        expectContacts(root, ['contact-2'])
 
-        await selectFilter(root, 'All')
-        expect(root.textContent).toContain('Ada Lovelace')
-        expect(root.textContent).toContain('Grace Hopper')
+        await selectFilter(root, 'all')
+        expectContacts(root, ['contact-1', 'contact-2'])
     })
 })

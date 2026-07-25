@@ -52,6 +52,7 @@ function handleFocusOut(event: FocusEvent) {
             ref="trigger"
             class="nav-handle"
             type="button"
+            data-testid="app-nav-trigger"
             aria-controls="primary-navigation"
             :aria-label="showNav ? 'Close navigation' : 'Open navigation'"
             :aria-expanded="showNav"
@@ -81,6 +82,7 @@ function handleFocusOut(event: FocusEvent) {
                     :key="item.path"
                     class="link"
                     :to="item.path"
+                    :data-testid="`nav-link-${item.path === '/' ? 'review' : item.path.slice(1)}`"
                     @click="closeNavigation()"
                 >
                     {{ item.label }}

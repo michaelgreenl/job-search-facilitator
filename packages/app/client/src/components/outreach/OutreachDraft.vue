@@ -31,7 +31,12 @@ const copyFeedbackId = useId()
 </script>
 
 <template>
-    <section class="draft-board" :class="{ 'is-expanded': expanded }" aria-label="Outreach draft">
+    <section
+        class="draft-board"
+        data-testid="outreach-draft"
+        :class="{ 'is-expanded': expanded }"
+        aria-label="Outreach draft"
+    >
         <OutreachContactCard
             class="draft-contact-card"
             :contact="contact"

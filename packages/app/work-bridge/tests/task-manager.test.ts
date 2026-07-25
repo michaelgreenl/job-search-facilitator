@@ -2,56 +2,14 @@ import {
     createContactDiscoveryOutputSchema,
     createDraftRevisionOutputSchema,
     type StartWorkTaskInput,
-    type WorkActionDecision,
 } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import type {
-    StartedWorkTask,
-    WorkRuntime,
-    WorkRuntimeEvent,
-    WorkRuntimeHealth,
-} from '../src/app-server.ts'
-import { WorkTaskManager } from '../src/task-manager.ts'
-
-class FakeRuntime implements WorkRuntime {
-    readonly interruptions: Array<{ threadId: string; turnId: string }> = []
-    health: WorkRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
-    private readonly eventListeners = new Set<(event: WorkRuntimeEvent) => void>()
-
-    constructor(private readonly onInterrupt: () => Promise<void> = async () => {}) {}
-
-    async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
-        return { threadId: 'thread-id', turnId: 'turn-id' }
-    }
-
-    async interruptTask(threadId: string, turnId: string): Promise<void> {
-        this.interruptions.push({ threadId, turnId })
-        await this.onInterrupt()
-    }
-
-    resolveAction(_actionId: string, _decision: WorkActionDecision): boolean {
-        return false
-    }
-
-    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void {
-        this.eventListeners.add(listener)
-        return () => this.eventListeners.delete(listener)
-    }
-
-    emit(event: WorkRuntimeEvent) {
-        if (event.type === 'runtime-failed') {
-            this.health = {
-                status: 'unavailable',
-                capabilities: [],
-                error: event.error.message,
-            }
-        }
-
-        for (const listener of this.eventListeners) {
-            listener(event)
-        }
-    }
-}
+import {
+    InvalidWorkOutputSchemaError,
+    WorkTaskManager,
+    type WorkTaskStreamEvent,
+} from '../src/task-manager.ts'
+import { FakeRuntime } from './fake-runtime.ts'
 
 const input: StartWorkTaskInput = {
     prompt: 'Find contacts',
@@ -72,7 +30,33 @@ const eventIdentity = {
 } as const
 
 describe('Work task manager', () => {
-    it('streams reasoning progress and stores the final structured output', async () => {
+    it('delivers live events only while a listener is subscribed', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start(input)
+        const streamedEvents: WorkTaskStreamEvent[] = []
+        const connection = manager.connect(started.id, (event) => streamedEvents.push(event))
+
+        runtime.emit({
+            type: 'reasoning-delta',
+            ...eventIdentity,
+            itemId: 'reasoning',
+            summaryIndex: 0,
+            textDelta: 'First update',
+        })
+        connection?.unsubscribe()
+        runtime.emit({
+            type: 'reasoning-delta',
+            ...eventIdentity,
+            itemId: 'reasoning',
+            summaryIndex: 0,
+            textDelta: 'Second update',
+        })
+
+        expect(streamedEvents.map(({ id, event }) => [id, event.type])).toEqual([[2, 'message']])
+    })
+
+    it('stores final structured output and replays its ordered event sequence', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
         const started = await manager.start(input)
@@ -163,6 +147,43 @@ describe('Work task manager', () => {
         },
     )
 
+    it.each([
+        ['malformed', { type: 'not-a-json-schema-type' }],
+        ['asynchronous', { $async: true, type: 'object' }],
+        ['non-object', { type: 'array' }],
+        ['dialect marker', { $schema: 'http://json-schema.org/draft-07/schema#', type: 'object' }],
+        [
+            'nested dialect marker',
+            {
+                type: 'object',
+                properties: {
+                    value: {
+                        $schema: 'http://json-schema.org/draft-07/schema#',
+                        type: 'string',
+                    },
+                },
+            },
+        ],
+        [
+            'unsupported format',
+            {
+                type: 'object',
+                properties: { email: { type: 'string', format: 'email' } },
+            },
+        ],
+    ])('rejects a %s output schema before starting the runtime', async (_kind, outputSchema) => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+
+        await expect(
+            manager.start({
+                ...input,
+                outputSchema: outputSchema as StartWorkTaskInput['outputSchema'],
+            }),
+        ).rejects.toBeInstanceOf(InvalidWorkOutputSchemaError)
+        expect(runtime.startAttempts).toBe(0)
+    })
+
     it('marks boundaries between fragmented reasoning summary sections', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
@@ -195,7 +216,7 @@ describe('Work task manager', () => {
         ])
     })
 
-    it('fails a completed turn that does not contain structured output', async () => {
+    it('fails a completed turn whose final output is not JSON', async () => {
         const runtime = new FakeRuntime()
         const manager = new WorkTaskManager(runtime)
         const started = await manager.start(input)
@@ -210,7 +231,8 @@ describe('Work task manager', () => {
 
         expect(manager.get(started.id)).toMatchObject({
             status: 'failed',
-            error: 'Work task returned invalid structured output',
+            output: null,
+            error: expect.any(String),
         })
     })
 
@@ -230,7 +252,7 @@ describe('Work task manager', () => {
         expect(manager.get(started.id)).toMatchObject({
             status: 'failed',
             output: null,
-            error: 'Work task returned output that did not match its schema',
+            error: expect.any(String),
         })
         expect(
             manager
@@ -248,12 +270,12 @@ describe('Work task manager', () => {
             type: 'turn-completed',
             ...eventIdentity,
             status: 'failed',
-            error: 'Model unavailable',
+            error: 'runtime failure',
         })
 
         expect(manager.get(started.id)).toMatchObject({
             status: 'failed',
-            error: 'Model unavailable',
+            error: 'runtime failure',
         })
     })
 

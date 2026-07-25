@@ -24,6 +24,7 @@ const props = defineProps<{
     disabled: boolean
     options: AppDropdownOption[]
     label: string
+    testId?: string
 }>()
 
 const emit = defineEmits<{
@@ -113,6 +114,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             ref="trigger"
             class="app-dropdown-trigger"
             type="button"
+            :data-testid="testId ? `${testId}-trigger` : undefined"
             aria-haspopup="menu"
             :aria-label="buttonLabel"
             :aria-controls="menuId"
@@ -131,6 +133,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             :id="menuId"
             ref="menu"
             class="app-dropdown-list glass-frame"
+            :data-testid="testId ? `${testId}-menu` : undefined"
             role="menu"
             :aria-label="buttonLabel"
             @keydown.down.prevent="moveFocus(1)"
@@ -151,6 +154,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
                     class="app-dropdown-item"
                     :class="`app-dropdown-item-${option.tone ?? 'default'}`"
                     type="button"
+                    :data-testid="testId ? `${testId}-option-${option.value}` : undefined"
                     role="menuitem"
                     tabindex="-1"
                     @click="selectOption(option.value)"

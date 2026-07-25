@@ -94,7 +94,12 @@ function selectLabel(value: string) {
 </script>
 
 <template>
-    <section class="post-viewer" aria-labelledby="selected-post-title">
+    <section
+        class="post-viewer"
+        data-testid="job-post-viewer"
+        :data-post-id="post.id"
+        aria-labelledby="selected-post-title"
+    >
         <div class="post-heading">
             <div class="post-labels">
                 <span class="component-label">{{ post.company }}</span>
@@ -113,6 +118,7 @@ function selectLabel(value: string) {
                 <a
                     v-if="postUrl"
                     class="post-action-button"
+                    data-testid="post-link"
                     :href="postUrl"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -123,6 +129,7 @@ function selectLabel(value: string) {
                 <a
                     v-if="applicationActionUrl"
                     class="post-action-button"
+                    data-testid="application-link"
                     :href="applicationActionUrl"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -135,6 +142,7 @@ function selectLabel(value: string) {
             <AppDropdown
                 class="label-picker-dropdown"
                 button-label="Job post label"
+                test-id="job-label"
                 :label="labelPrompt"
                 :options="labelOptions"
                 :disabled="labelUpdating || (applyMode?.applicationUpdating ?? false) || applied"
@@ -154,6 +162,7 @@ function selectLabel(value: string) {
             <button
                 class="post-action-button"
                 type="button"
+                data-testid="discover-contacts"
                 :disabled="applyMode.outreachDisabled"
                 @click="emit('openOutreach')"
             >

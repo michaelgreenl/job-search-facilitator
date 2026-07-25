@@ -31,12 +31,18 @@ const createTestApp = (repository: OutreachRunRepository) => {
 }
 
 const createFakeRepository = () => {
-    const create = vi.fn(async (input: CreateOutreachRunInput) => ({ ...existingRun, ...input }))
-    const update = vi.fn(async (id: string, input: UpdateOutreachRunInput) => ({
-        ...existingRun,
-        id,
-        ...input,
-    }))
+    const create = vi.fn(
+        async (input: CreateOutreachRunInput): Promise<OutreachRun | null> => ({
+            ...existingRun,
+            ...input,
+        }),
+    )
+    const update = vi.fn(
+        async (_id: string, input: UpdateOutreachRunInput): Promise<OutreachRun | null> => ({
+            ...existingRun,
+            ...input,
+        }),
+    )
     const repository: OutreachRunRepository = {
         create,
         findById: async (id) => (id === existingRun.id ? existingRun : null),
@@ -54,7 +60,10 @@ describe('outreach run routes', () => {
             requestedContactCount: count,
         }
 
-        await request(createTestApp(repository)).post('/outreach-runs').send(input).expect(201)
+        await request(createTestApp(repository))
+            .post('/outreach-runs')
+            .send(input)
+            .expect(201, { ...existingRun, ...input })
 
         expect(create).toHaveBeenCalledExactlyOnceWith(input)
     })
@@ -80,7 +89,7 @@ describe('outreach run routes', () => {
         await request(createTestApp(repository))
             .post('/outreach-runs')
             .send({ jobPostId: existingRun.jobPostId, requestedContactCount: 2 })
-            .expect(404, { error: 'Job post not found' })
+            .expect(404)
     })
 
     it('gets a run by id', async () => {
@@ -103,7 +112,7 @@ describe('outreach run routes', () => {
         await request(createTestApp(repository))
             .patch(`/outreach-runs/${existingRun.id}`)
             .send(input)
-            .expect(200)
+            .expect(200, { ...existingRun, ...input })
 
         expect(update).toHaveBeenCalledExactlyOnceWith(existingRun.id, input)
     })

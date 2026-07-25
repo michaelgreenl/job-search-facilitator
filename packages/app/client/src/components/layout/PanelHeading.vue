@@ -6,6 +6,7 @@ interface Props {
     title: string
     titleTag?: 'h1' | 'h2'
     backLabel?: string
+    backTestId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -20,7 +21,12 @@ const emit = defineEmits<{
 <template>
     <header class="panel-heading">
         <div class="panel-title">
-            <PanelBackButton v-if="props.backLabel" :label="props.backLabel" @back="emit('back')" />
+            <PanelBackButton
+                v-if="props.backLabel"
+                :label="props.backLabel"
+                :test-id="props.backTestId"
+                @back="emit('back')"
+            />
 
             <span class="eyebrow">{{ props.eyebrow }}</span>
             <component :is="props.titleTag" class="panel-heading-title">

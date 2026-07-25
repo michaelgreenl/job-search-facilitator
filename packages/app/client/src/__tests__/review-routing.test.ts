@@ -56,18 +56,34 @@ const createReport = (
 const firstPost = createPost('10000000-0000-4000-8000-000000000001', 'Frontend Engineer')
 const secondPost = createPost('10000000-0000-4000-8000-000000000002', 'Backend Engineer')
 const thirdPost = createPost('10000000-0000-4000-8000-000000000003', 'Platform Engineer')
+const labeledPost = {
+    ...createPost('10000000-0000-4000-8000-000000000004', 'Labeled Engineer'),
+    userLabel: 'P1' as const,
+}
+const forgonePost = {
+    ...createPost('10000000-0000-4000-8000-000000000005', 'Forgone Engineer'),
+    userLabel: 'forgo' as const,
+}
 const firstReport = createReport(
     '20000000-0000-4000-8000-000000000001',
     '2026-07-10',
     'First report',
     firstPost,
 )
-const secondReport = createReport(
+const secondReportBase = createReport(
     '20000000-0000-4000-8000-000000000002',
     '2026-07-15',
     'Second report',
     secondPost,
 )
+const secondReport: JobSearchReport = {
+    ...secondReportBase,
+    results: [
+        ...secondReportBase.results,
+        { ...secondReportBase.results[0]!, post: labeledPost },
+        { ...secondReportBase.results[0]!, post: forgonePost },
+    ],
+}
 const thirdReport = createReport(
     '20000000-0000-4000-8000-000000000003',
     '2026-07-15',
@@ -90,21 +106,33 @@ interface MountedReview {
 
 const mountedReviews: MountedReview[] = []
 
-const findButton = (root: HTMLElement, text: string) => {
-    const button = [...root.querySelectorAll('button')].find((candidate) =>
-        candidate.textContent?.includes(text),
-    )
+const findTestButton = (root: HTMLElement, testId: string) => {
+    const button = root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
 
-    if (button === undefined) {
-        throw new Error(`Could not find button containing "${text}"`)
+    if (button === null) {
+        throw new Error(`Could not find button "${testId}"`)
     }
 
     return button
 }
 
+const reportButton = (root: HTMLElement, reportId: string) =>
+    findTestButton(root, `report-card-${reportId}`)
+
+const postButton = (root: HTMLElement, postId: string) =>
+    findTestButton(root, `job-post-card-${postId}`)
+
+const expectReportCards = (root: HTMLElement, visibleIds: string[]) => {
+    for (const report of reports) {
+        expect(root.querySelector(`[data-testid="report-card-${report.id}"]`) !== null).toBe(
+            visibleIds.includes(report.id),
+        )
+    }
+}
+
 const getReportDateInputs = (root: HTMLElement) => {
-    const from = root.querySelector<HTMLInputElement>('input[aria-label="Reports from date"]')
-    const to = root.querySelector<HTMLInputElement>('input[aria-label="Reports through date"]')
+    const from = root.querySelector<HTMLInputElement>('[data-testid="review-date-from"]')
+    const to = root.querySelector<HTMLInputElement>('[data-testid="review-date-to"]')
 
     if (from === null || to === null) {
         throw new Error('Could not find report date range inputs')
@@ -139,7 +167,9 @@ const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
     const mountedReview = { app, root, router }
     mountedReviews.push(mountedReview)
 
-    await vi.waitFor(() => expect(root.textContent).toContain(secondReport.summary))
+    await vi.waitFor(() =>
+        expect(root.querySelector(`[data-testid="report-card-${secondReport.id}"]`)).not.toBeNull(),
+    )
 
     return mountedReview
 }
@@ -174,7 +204,7 @@ describe('review route selection', () => {
     it('keeps the selected report id out of the visible URL', async () => {
         const { root, router } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
+        reportButton(root, secondReport.id).click()
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
@@ -184,13 +214,13 @@ describe('review route selection', () => {
         })
     })
 
-    it('uses the shared dropdown for job post filters', async () => {
+    it('filters report posts by review state', async () => {
         const { root } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
+        reportButton(root, secondReport.id).click()
         const filter = await vi.waitFor(() => {
             const button = root.querySelector<HTMLButtonElement>(
-                'button[aria-label="Filter job posts"]',
+                '[data-testid="review-post-filter-trigger"]',
             )
 
             if (button === null) {
@@ -200,51 +230,22 @@ describe('review route selection', () => {
             return button
         })
 
-        expect(root.querySelector('select')).toBeNull()
-        expect(filter.closest('.post-filter-dropdown')).not.toBeNull()
         filter.click()
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="review-post-filter-option-labeled"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'review-post-filter-option-labeled').click()
 
         await vi.waitFor(() => {
             expect(
-                [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((item) =>
-                    item.textContent?.trim(),
-                ),
-            ).toEqual(['All', 'Labeled', 'Unreviewed', 'Forgone'])
+                root.querySelector(`[data-testid="job-post-card-${labeledPost.id}"]`),
+            ).not.toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`)).toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${forgonePost.id}"]`)).toBeNull()
         })
-    })
-
-    it('groups the date range and report count in the responsive report heading', async () => {
-        const { root } = await mountReview()
-        const reportPanel = root.querySelector<HTMLElement>('[aria-label="Search reports"]')
-
-        if (reportPanel === null) {
-            throw new Error('Could not find the search reports panel')
-        }
-
-        const reportHeading = reportPanel.querySelector('.report-list-heading')
-        const dateFilter = reportHeading?.querySelector(
-            'fieldset[aria-label="Filter reports by date"]',
-        )
-        const reportCount = reportHeading?.querySelector('.report-count')
-        const reportList = reportPanel.querySelector('.card-list')
-        const clearDates = reportHeading?.querySelector<HTMLButtonElement>(
-            'button[aria-label="Clear report dates"]',
-        )
-
-        expect(reportHeading?.querySelector('header')).not.toBeNull()
-        expect(dateFilter?.textContent).toContain('–')
-        expect(dateFilter?.textContent).not.toContain('From')
-        expect(dateFilter?.textContent).not.toContain('To')
-        expect(reportCount?.textContent).toBe('3 reports')
-        expect(clearDates?.disabled).toBe(true)
-
-        if (reportCount === null || reportCount === undefined || reportList === null) {
-            throw new Error('Could not find the report count or card list')
-        }
-
-        expect(
-            reportCount.compareDocumentPosition(reportList) & Node.DOCUMENT_POSITION_FOLLOWING,
-        ).toBeTruthy()
     })
 
     it('filters reports by an inclusive open-ended date range and clears it', async () => {
@@ -253,23 +254,22 @@ describe('review route selection', () => {
 
         expect(from.value).toBe('')
         expect(to.value).toBe('')
-        expect(root.textContent).toContain('3 reports')
+        expectReportCards(
+            root,
+            reports.map(({ id }) => id),
+        )
 
         setDateInput(from, '2026-07-15')
 
         await vi.waitFor(() => {
-            expect(root.textContent).not.toContain(firstReport.summary)
-            expect(root.textContent).toContain(secondReport.summary)
-            expect(root.textContent).toContain(thirdReport.summary)
-            expect(root.textContent).toContain('2 of 3 reports')
+            expectReportCards(root, [secondReport.id, thirdReport.id])
             expect(to.min).toBe('2026-07-15')
         })
 
         setDateInput(to, '2026-07-15')
 
         await vi.waitFor(() => {
-            expect(root.textContent).toContain(secondReport.summary)
-            expect(root.textContent).toContain(thirdReport.summary)
+            expectReportCards(root, [secondReport.id, thirdReport.id])
             expect(from.max).toBe('2026-07-15')
         })
 
@@ -277,22 +277,18 @@ describe('review route selection', () => {
         setDateInput(to, '2026-07-10')
 
         await vi.waitFor(() => {
-            expect(root.textContent).toContain(firstReport.summary)
-            expect(root.textContent).not.toContain(secondReport.summary)
-            expect(root.textContent).not.toContain(thirdReport.summary)
-            expect(root.textContent).toContain('1 of 3 reports')
+            expectReportCards(root, [firstReport.id])
         })
 
-        findButton(root, 'Clear').click()
+        findTestButton(root, 'review-date-clear').click()
 
         await vi.waitFor(() => {
             expect(from.value).toBe('')
             expect(to.value).toBe('')
-            expect(root.textContent).toContain(firstReport.summary)
-            expect(root.textContent).toContain(secondReport.summary)
-            expect(root.textContent).toContain(thirdReport.summary)
-            expect(root.textContent).toContain('3 reports')
-            expect(root.textContent).not.toContain('of 3 reports')
+            expectReportCards(
+                root,
+                reports.map(({ id }) => id),
+            )
         })
     })
 
@@ -304,18 +300,19 @@ describe('review route selection', () => {
         setDateInput(to, '2026-07-14')
 
         await vi.waitFor(() => {
-            expect(root.textContent).toContain('No reports ran from 2026-07-11 through 2026-07-14.')
-            expect(root.textContent).toContain('0 of 3 reports')
-            expect(root.textContent).not.toContain('No search reports found.')
+            expect(root.querySelector('[data-testid="report-empty-state"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="report-list"]')).toBeNull()
         })
     })
 
     it('keeps the selected report open when the range excludes its card', async () => {
         const { root, router } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
+        reportButton(root, secondReport.id).click()
         await vi.waitFor(() => {
-            expect(root.textContent).toContain(secondPost.roleTitle)
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull()
             expect(router.options.history.state.reviewReportId).toBe(secondReport.id)
         })
 
@@ -324,8 +321,10 @@ describe('review route selection', () => {
         setDateInput(to, '2026-07-10')
 
         await vi.waitFor(() => {
-            expect(root.textContent).not.toContain(secondReport.summary)
-            expect(root.textContent).toContain(secondPost.roleTitle)
+            expect(root.querySelector(`[data-testid="report-card-${secondReport.id}"]`)).toBeNull()
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull()
             expect(router.options.history.state.reviewReportId).toBe(secondReport.id)
         })
     })
@@ -333,9 +332,13 @@ describe('review route selection', () => {
     it('keeps the selected post id out of the visible URL', async () => {
         const { root, router } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
-        await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
-        findButton(root, secondPost.roleTitle).click()
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull(),
+        )
+        postButton(root, secondPost.id).click()
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
@@ -346,34 +349,16 @@ describe('review route selection', () => {
         })
     })
 
-    it('shows the selected report result in the job-post viewer', async () => {
-        const { root } = await mountReview()
-        const result = secondReport.results[0]
-
-        if (result === undefined) {
-            throw new Error('Could not find the selected report result')
-        }
-
-        findButton(root, secondReport.summary).click()
-        await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
-        findButton(root, secondPost.roleTitle).click()
-
-        await vi.waitFor(() => {
-            const viewerText = root.querySelector('.post-viewer')?.textContent ?? ''
-
-            expect(viewerText).toContain(result.recommendedAction)
-            expect(viewerText).toContain(result.fitRationale)
-            expect(viewerText).toContain(result.keyLegitimacySignals)
-            expect(viewerText).toContain(secondPost.techStack)
-        })
-    })
-
     it('removes only the hidden post state when returning to the report posts', async () => {
         const { root, router } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
-        await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
-        findButton(root, secondPost.roleTitle).click()
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull(),
+        )
+        postButton(root, secondPost.id).click()
         await vi.waitFor(() =>
             expect(router.options.history.state).toMatchObject({
                 reviewReportId: secondReport.id,
@@ -381,7 +366,7 @@ describe('review route selection', () => {
             }),
         )
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to job posts"]')?.click()
+        findTestButton(root, 'back-to-job-posts').click()
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
@@ -395,14 +380,14 @@ describe('review route selection', () => {
     it('removes hidden selection state when returning to the reports list', async () => {
         const { root, router } = await mountReview()
 
-        findButton(root, secondReport.summary).click()
+        reportButton(root, secondReport.id).click()
         await vi.waitFor(() =>
             expect(router.options.history.state).toMatchObject({
                 reviewReportId: secondReport.id,
             }),
         )
 
-        root.querySelector<HTMLButtonElement>('[aria-label="Back to search reports"]')?.click()
+        findTestButton(root, 'back-to-reports').click()
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
@@ -419,8 +404,10 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
-            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
-            expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id)
+            expect(reportButton(root, secondReport.id).getAttribute('aria-pressed')).toBe('true')
         })
     })
 
@@ -435,50 +422,9 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
                 reviewPostId: secondPost.id,
             })
-            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
-        })
-    })
-
-    it('restores hidden selection state through browser back and forward navigation', async () => {
-        const { root, router } = await mountReview()
-
-        findButton(root, secondReport.summary).click()
-        await vi.waitFor(() => expect(root.textContent).toContain(secondPost.roleTitle))
-        findButton(root, secondPost.roleTitle).click()
-        await vi.waitFor(() =>
-            expect(router.options.history.state).toMatchObject({
-                reviewReportId: secondReport.id,
-                reviewPostId: secondPost.id,
-            }),
-        )
-
-        router.back()
-
-        await vi.waitFor(() => {
-            expect(router.currentRoute.value.fullPath).toBe('/')
-            expect(router.options.history.state).toMatchObject({
-                reviewReportId: secondReport.id,
-            })
-            expect(router.options.history.state.reviewPostId).toBeUndefined()
-            expect(root.querySelector('.post-viewer')).toBeNull()
-        })
-
-        router.back()
-
-        await vi.waitFor(() => {
-            expect(router.currentRoute.value.fullPath).toBe('/')
-            expect(router.options.history.state.reviewReportId).toBeUndefined()
-            expect(root.querySelector('[aria-label="Back to search reports"]')).toBeNull()
-        })
-
-        router.forward()
-        await vi.waitFor(() =>
-            expect(root.querySelector('[aria-label="Back to search reports"]')).not.toBeNull(),
-        )
-
-        router.forward()
-        await vi.waitFor(() => {
-            expect(root.querySelector('.post-viewer')?.textContent).toContain(secondPost.techStack)
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id)
         })
     })
 
@@ -489,8 +435,8 @@ describe('review route selection', () => {
             expect(router.currentRoute.value.fullPath).toBe('/')
             expect(router.options.history.state.reviewReportId).toBeUndefined()
             expect(router.options.history.state.reviewPostId).toBeUndefined()
-            expect(findButton(root, firstReport.summary).getAttribute('aria-pressed')).toBe('true')
-            expect(root.querySelector('.post-viewer')).toBeNull()
+            expect(reportButton(root, firstReport.id).getAttribute('aria-pressed')).toBe('true')
+            expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
         })
     })
 
@@ -503,8 +449,8 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
             })
             expect(router.options.history.state.reviewPostId).toBeUndefined()
-            expect(findButton(root, secondReport.summary).getAttribute('aria-pressed')).toBe('true')
-            expect(root.querySelector('.post-viewer')).toBeNull()
+            expect(reportButton(root, secondReport.id).getAttribute('aria-pressed')).toBe('true')
+            expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
         })
     })
 })

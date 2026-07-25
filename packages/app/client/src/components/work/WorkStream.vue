@@ -166,6 +166,7 @@ function allowBrowserActionsForTask() {
 
         <div
             ref="progress"
+            data-testid="work-progress"
             class="work-progress"
             :class="{ 'work-progress-following': followingLatest }"
             @scroll.passive="handleScroll"
@@ -181,6 +182,7 @@ function allowBrowserActionsForTask() {
                 <li
                     v-for="(item, index) in streamItems"
                     :key="`${index}:${item.type}`"
+                    :data-testid="`work-stream-${item.type}`"
                     class="activity-item"
                     :class="`activity-item-${item.type}`"
                 >
@@ -190,6 +192,7 @@ function allowBrowserActionsForTask() {
                             visiblePendingAction === null &&
                             index === latestActivityIndex
                         "
+                        data-testid="work-progress-indicator"
                         class="activity-progress"
                         aria-hidden="true"
                     ></span>
@@ -199,7 +202,9 @@ function allowBrowserActionsForTask() {
                         class="activity-icon"
                         :class="`activity-icon-${item.icon}`"
                     />
-                    <span class="activity-copy">{{ item.message }}</span>
+                    <span data-testid="work-stream-copy" class="activity-copy">
+                        {{ item.message }}
+                    </span>
                 </li>
             </ul>
         </div>

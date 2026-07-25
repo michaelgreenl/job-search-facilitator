@@ -1,5 +1,3 @@
-/** @vitest-environment jsdom */
-
 import type { StartWorkTaskInput, WorkTask, WorkTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,6 +60,28 @@ const taskInput = {
     outputSchema: { type: 'object' },
     capabilities: ['chrome'],
 } satisfies StartWorkTaskInput
+const firstActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+const firstActionRequired = {
+    type: 'action-required',
+    action: {
+        id: firstActionId,
+        kind: 'browser-origin',
+        message: 'Allow Chrome to access https://www.linkedin.com?',
+        origin: 'https://www.linkedin.com',
+    },
+    createdAt: '2026-07-18T12:00:00.000Z',
+} satisfies WorkTaskEvent
+const secondActionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
+const secondActionRequired = {
+    type: 'action-required',
+    action: {
+        id: secondActionId,
+        kind: 'browser-origin',
+        message: 'Allow Chrome to access https://example.com?',
+        origin: 'https://example.com',
+    },
+    createdAt: '2026-07-18T12:00:02.000Z',
+} satisfies WorkTaskEvent
 
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -128,7 +148,7 @@ describe('work store', () => {
             status: 'completed',
             output: { title: 'Example Domain' },
         })
-        expect(store.events).toHaveLength(2)
+        expect(store.events.map(({ type }) => type)).toEqual(['activity', 'completed'])
         expect(source.close).toHaveBeenCalledOnce()
     })
 
@@ -279,16 +299,7 @@ describe('work store', () => {
         await store.startTask(taskInput)
         const source = FakeEventSource.instances[0]!
         source.open()
-        source.message({
-            type: 'action-required',
-            action: {
-                id: 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4',
-                kind: 'browser-origin',
-                message: 'Allow Chrome to access https://www.linkedin.com?',
-                origin: 'https://www.linkedin.com',
-            },
-            createdAt: '2026-07-18T12:00:00.000Z',
-        })
+        source.message(firstActionRequired)
 
         expect(store.pendingAction?.origin).toBe('https://www.linkedin.com')
 
@@ -297,7 +308,7 @@ describe('work store', () => {
         expect(store.actionSubmitting).toBe(true)
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3001/tasks/${startedTask.id}/actions/b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4`,
+            `http://localhost:3001/tasks/${startedTask.id}/actions/${firstActionId}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -309,7 +320,7 @@ describe('work store', () => {
 
         source.message({
             type: 'action-resolved',
-            actionId: 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4',
+            actionId: firstActionId,
             createdAt: '2026-07-18T12:00:01.000Z',
         })
 
@@ -326,10 +337,7 @@ describe('work store', () => {
     })
 
     it('asks again after an always-allowed task completes', async () => {
-        const firstActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
-        const secondActionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
-        const fetchMock = vi.mocked(fetch)
-        fetchMock
+        vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
             .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
@@ -339,16 +347,7 @@ describe('work store', () => {
 
         await store.startTask(taskInput)
         const firstSource = FakeEventSource.instances[0]!
-        firstSource.message({
-            type: 'action-required',
-            action: {
-                id: firstActionId,
-                kind: 'browser-origin',
-                message: 'Allow Chrome to access https://www.linkedin.com?',
-                origin: 'https://www.linkedin.com',
-            },
-            createdAt: '2026-07-18T12:00:00.000Z',
-        })
+        firstSource.message(firstActionRequired)
 
         await store.allowBrowserActionsForTask()
         firstSource.message({
@@ -368,21 +367,77 @@ describe('work store', () => {
         await store.startTask(taskInput)
 
         const secondSource = FakeEventSource.instances[1]!
-        secondSource.message({
-            type: 'action-required',
-            action: {
-                id: secondActionId,
-                kind: 'browser-origin',
-                message: 'Allow Chrome to access https://example.com?',
-                origin: 'https://example.com',
-            },
-            createdAt: '2026-07-18T12:00:03.000Z',
-        })
+        secondSource.message(secondActionRequired)
 
-        expect(fetchMock).toHaveBeenCalledTimes(5)
-        expect(store.task?.id).toBe(nextTask.id)
         expect(store.pendingAction?.id).toBe(secondActionId)
         expect(store.alwaysAllowBrowserActions).toBe(false)
         expect(store.actionNeedsAttention).toBe(true)
+    })
+
+    it('automatically approves later browser actions for the same task', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+        const store = useWorkStore()
+
+        await store.startTask(taskInput)
+        const source = FakeEventSource.instances[0]!
+        source.message(firstActionRequired)
+        await store.allowBrowserActionsForTask()
+        source.message({
+            type: 'action-resolved',
+            actionId: firstActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        source.message(secondActionRequired)
+
+        await vi.waitFor(() => {
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                4,
+                `http://localhost:3001/tasks/${startedTask.id}/actions/${secondActionId}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: 'approve' }),
+                },
+            )
+        })
+        expect(store.pendingAction?.id).toBe(secondActionId)
+        expect(store.alwaysAllowBrowserActions).toBe(true)
+        expect(store.actionNeedsAttention).toBe(false)
+    })
+
+    it('restores attention without disconnecting when automatic browser approval fails', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        const store = useWorkStore()
+
+        await store.startTask(taskInput)
+        const source = FakeEventSource.instances[0]!
+        source.open()
+        source.message(firstActionRequired)
+        await store.allowBrowserActionsForTask()
+        source.message({
+            type: 'action-resolved',
+            actionId: firstActionId,
+            createdAt: '2026-07-18T12:00:01.000Z',
+        })
+
+        source.message(secondActionRequired)
+
+        await vi.waitFor(() => {
+            expect(store.error).toBe('Work request failed (500)')
+        })
+        expect(store.pendingAction?.id).toBe(secondActionId)
+        expect(store.alwaysAllowBrowserActions).toBe(false)
+        expect(store.actionNeedsAttention).toBe(true)
+        expect(store.connectionState).toBe('connected')
     })
 })

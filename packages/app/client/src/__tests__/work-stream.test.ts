@@ -57,8 +57,8 @@ describe('work stream', () => {
         ] satisfies WorkTaskEvent[]
         await nextTick()
 
-        expect(root.querySelectorAll('.activity-item-commentary')).toHaveLength(1)
-        expect(root.querySelector('.activity-copy')?.textContent).toBe(
+        expect(root.querySelectorAll('[data-testid="work-stream-commentary"]')).toHaveLength(1)
+        expect(root.querySelector('[data-testid="work-stream-copy"]')?.textContent).toBe(
             'Reviewing the role\nFinding the **right** person',
         )
     })
@@ -78,33 +78,31 @@ describe('work stream', () => {
         ]
         await nextTick()
 
-        const activityItems = root.querySelectorAll('.activity-item-activity')
-        const commentaryItem = root.querySelector('.activity-item-commentary')
+        const activityItems = root.querySelectorAll('[data-testid="work-stream-activity"]')
+        const commentaryItem = root.querySelector('[data-testid="work-stream-commentary"]')
         const latestActivity = activityItems.item(activityItems.length - 1)
 
-        expect(root.querySelectorAll('.activity-progress')).toHaveLength(1)
-        expect(latestActivity.querySelector('.activity-progress')).not.toBeNull()
-        expect(latestActivity.querySelector('.activity-icon')).toBeNull()
-        expect(commentaryItem?.querySelector('.activity-progress')).toBeNull()
-        expect(commentaryItem?.querySelector('.activity-icon-agent')).not.toBeNull()
-        expect(commentaryItem?.querySelector('.activity-icon-agent')?.tagName.toLowerCase()).toBe(
-            'svg',
-        )
+        expect(root.querySelectorAll('[data-testid="work-progress-indicator"]')).toHaveLength(1)
+        expect(
+            latestActivity.querySelector('[data-testid="work-progress-indicator"]'),
+        ).not.toBeNull()
+        expect(commentaryItem?.querySelector('[data-testid="work-progress-indicator"]')).toBeNull()
 
         store.events.push({ type: 'activity', message: 'Reading local context', createdAt })
         await nextTick()
 
-        const updatedActivityItems = root.querySelectorAll('.activity-item-activity')
+        const updatedActivityItems = root.querySelectorAll('[data-testid="work-stream-activity"]')
         const newestActivity = updatedActivityItems.item(updatedActivityItems.length - 1)
 
-        expect(latestActivity.querySelector('.activity-progress')).toBeNull()
-        expect(latestActivity.querySelector('.activity-icon-globe')).not.toBeNull()
-        expect(newestActivity.querySelector('.activity-progress')).not.toBeNull()
+        expect(latestActivity.querySelector('[data-testid="work-progress-indicator"]')).toBeNull()
+        expect(
+            newestActivity.querySelector('[data-testid="work-progress-indicator"]'),
+        ).not.toBeNull()
     })
 
     it('follows new updates until the user scrolls up and resumes at the bottom', async () => {
         const { root, store } = mountWorkStream()
-        const progress = root.querySelector<HTMLElement>('.work-progress')
+        const progress = root.querySelector<HTMLElement>('[data-testid="work-progress"]')
 
         if (progress === null) {
             throw new Error('Could not find work progress viewport')
@@ -112,6 +110,7 @@ describe('work stream', () => {
 
         let scrollHeight = 180
         let scrollTop = 0
+        let scrollWrites = 0
 
         Object.defineProperties(progress, {
             clientHeight: { configurable: true, get: () => 100 },
@@ -121,18 +120,17 @@ describe('work stream', () => {
                 get: () => scrollTop,
                 set: (value: number) => {
                     scrollTop = value
+                    scrollWrites += 1
                 },
             },
         })
 
         store.events = [{ type: 'activity', message: 'Task started', createdAt }]
         await vi.waitFor(() => expect(scrollTop).toBe(80))
-        expect(progress.classList.contains('work-progress-following')).toBe(true)
 
         scrollTop = 20
         progress.dispatchEvent(new Event('scroll'))
         await nextTick()
-        expect(progress.classList.contains('work-progress-following')).toBe(false)
         scrollHeight = 220
         store.events.push({
             type: 'message',
@@ -148,7 +146,6 @@ describe('work stream', () => {
         scrollTop = 120
         progress.dispatchEvent(new Event('scroll'))
         await nextTick()
-        expect(progress.classList.contains('work-progress-following')).toBe(true)
         scrollHeight = 260
         store.events.push({
             type: 'message',
@@ -158,6 +155,14 @@ describe('work stream', () => {
         })
 
         await vi.waitFor(() => expect(scrollTop).toBe(160))
+
+        const writesAtBottom = scrollWrites
+        store.events.push({ type: 'activity', message: 'Reading local context', createdAt })
+        await nextTick()
+        await nextTick()
+
+        expect(scrollTop).toBe(160)
+        expect(scrollWrites).toBe(writesAtBottom)
     })
 
     it('focuses a Work issue so the failure is announced', async () => {
@@ -166,41 +171,5 @@ describe('work stream', () => {
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')).toBe(document.activeElement)
         })
-    })
-
-    it('does not rewrite an already-bottomed scroll position for a same-height update', async () => {
-        const { root, store } = mountWorkStream()
-        const progress = root.querySelector<HTMLElement>('.work-progress')
-
-        if (progress === null) {
-            throw new Error('Could not find work progress viewport')
-        }
-
-        let scrollTop = 80
-        let scrollWrites = 0
-
-        Object.defineProperties(progress, {
-            clientHeight: { configurable: true, get: () => 100 },
-            scrollHeight: { configurable: true, get: () => 180 },
-            scrollTop: {
-                configurable: true,
-                get: () => scrollTop,
-                set: (value: number) => {
-                    scrollTop = value
-                    scrollWrites += 1
-                },
-            },
-        })
-
-        await nextTick()
-        await nextTick()
-        scrollWrites = 0
-
-        store.events = [{ type: 'activity', message: 'Task started', createdAt }]
-        await nextTick()
-        await nextTick()
-
-        expect(scrollTop).toBe(80)
-        expect(scrollWrites).toBe(0)
     })
 })

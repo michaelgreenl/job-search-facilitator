@@ -124,6 +124,7 @@ onBeforeUnmount(() => {
                 ref="tooltip"
                 :id="tooltipId"
                 class="button-tooltip-content tooltip-surface"
+                data-testid="button-tooltip-content"
                 :class="[`is-${placement}`, { 'is-visible': visible }]"
                 :style="position"
                 role="tooltip"

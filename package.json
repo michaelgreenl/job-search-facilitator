@@ -5,6 +5,9 @@
     "description": "A monorepo for the Job Search Facilitator application",
     "type": "module",
     "packageManager": "pnpm@11.9.0",
+    "engines": {
+        "node": ">=24 <25"
+    },
     "scripts": {
         "predev": "pnpm run prisma:generate",
         "dev": "pnpm --parallel --filter client --filter server run dev",

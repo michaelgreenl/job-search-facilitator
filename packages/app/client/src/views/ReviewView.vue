@@ -335,6 +335,7 @@ onMounted(() => {
                                 v-model="reportDateFrom"
                                 class="report-date-input"
                                 type="date"
+                                data-testid="review-date-from"
                                 aria-label="Reports from date"
                                 :max="reportDateTo || undefined"
                                 :disabled="reportStore.loading || reportStore.reports.length === 0"
@@ -344,12 +345,14 @@ onMounted(() => {
                                 v-model="reportDateTo"
                                 class="report-date-input"
                                 type="date"
+                                data-testid="review-date-to"
                                 aria-label="Reports through date"
                                 :min="reportDateFrom || undefined"
                                 :disabled="reportStore.loading || reportStore.reports.length === 0"
                             />
                             <button
                                 class="report-date-clear"
+                                data-testid="review-date-clear"
                                 :class="{ 'is-hidden': !reportDateFilterActive }"
                                 type="button"
                                 aria-label="Clear report dates"
@@ -368,7 +371,7 @@ onMounted(() => {
                 <p v-else-if="reportStore.error" class="list-message">
                     {{ reportStore.error }}
                 </p>
-                <ul v-else-if="filteredReports.length" class="card-list">
+                <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
                     <li v-for="report in filteredReports" :key="report.id">
                         <SearchReportCard
                             :report="report"
@@ -377,7 +380,9 @@ onMounted(() => {
                         />
                     </li>
                 </ul>
-                <p v-else class="list-message">{{ reportListEmptyMessage }}</p>
+                <p v-else class="list-message" data-testid="report-empty-state">
+                    {{ reportListEmptyMessage }}
+                </p>
             </FlowPanel>
 
             <FlowPanel
@@ -390,6 +395,7 @@ onMounted(() => {
                     eyebrow="Job posts"
                     :title="selectedReport?.reportDate ?? 'Select a search report'"
                     :back-label="activePanel === 'reports' ? undefined : 'Back to search reports'"
+                    back-test-id="back-to-reports"
                     @back="showReports"
                 >
                     <template #controls>
@@ -400,6 +406,7 @@ onMounted(() => {
                             <AppDropdown
                                 class="post-filter-dropdown"
                                 button-label="Filter job posts"
+                                test-id="review-post-filter"
                                 :disabled="selectedReport === null"
                                 :options="postFilterOptions"
                                 :label="postFilterLabel"
@@ -424,7 +431,12 @@ onMounted(() => {
                 :active="activePanel === 'viewer'"
                 :adjacent="activePanel === 'posts'"
             >
-                <PanelBackButton label="Back to job posts" mobile-only @back="showPosts" />
+                <PanelBackButton
+                    label="Back to job posts"
+                    mobile-only
+                    test-id="back-to-job-posts"
+                    @back="showPosts"
+                />
                 <JobPostViewer
                     :post="selectedResult.post"
                     :recommendation="selectedResult"

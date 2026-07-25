@@ -352,6 +352,7 @@ onMounted(() => {
         <div class="apply-panels">
             <FlowPanel
                 class="apply-panel apply-post-list glass-frame"
+                data-testid="apply-posts-panel"
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'viewer' && outreachContact === null"
                 aria-label="Job posts"
@@ -365,6 +366,7 @@ onMounted(() => {
                             <AppDropdown
                                 class="post-filter-dropdown"
                                 button-label="Filter job posts"
+                                test-id="apply-post-filter"
                                 :disabled="false"
                                 :options="postFilterOptions"
                                 :label="postFilterLabel"
@@ -389,6 +391,7 @@ onMounted(() => {
                 v-if="selectedPost"
                 as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
+                data-testid="apply-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
@@ -397,6 +400,7 @@ onMounted(() => {
                 <PanelBackButton
                     v-if="!workStore.taskActive && activePanel !== 'posts'"
                     label="Back to job posts"
+                    test-id="back-to-job-posts"
                     :mobile-only="activePanel === 'viewer' && outreachContact === null"
                     @back="showPosts"
                 />
@@ -416,6 +420,7 @@ onMounted(() => {
                 v-if="outreachPost"
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
+                data-testid="apply-outreach-panel"
                 :class="{
                     'apply-outreach-contact': outreachContact,
                 }"

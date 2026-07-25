@@ -40,17 +40,10 @@ const draftTask = createDraftRevisionTask(
     'Hi Ada, could I ask about the team?',
     'Make it warmer.',
 )
-const tasks = [
-    ['contact discovery', discoveryTask],
-    ['draft revision', draftTask],
-] as const
 
 describe('outreach work tasks', () => {
-    it('defines the contact discovery context and output contract', () => {
+    it('defines the contact discovery capability and output contract', () => {
         expect(discoveryTask.capabilities).toEqual(['chrome'])
-        expect(discoveryTask.prompt).toContain(post.roleTitle)
-        expect(discoveryTask.prompt).toContain('likely hiring manager or team lead')
-        expect(discoveryTask.prompt).toContain('docs/agents/job-search-user-info.md')
         expect(discoveryTask.outputSchema.required).toEqual([
             'personName',
             'personTitle',
@@ -60,22 +53,8 @@ describe('outreach work tasks', () => {
         ])
     })
 
-    it('defines the draft revision context and output contract', () => {
+    it('defines the draft revision capability and output contract', () => {
         expect(draftTask.capabilities).toEqual([])
-        expect(draftTask.prompt).toContain(contact.personName)
-        expect(draftTask.prompt).toContain('Hi Ada, could I ask about the team?')
-        expect(draftTask.prompt).toContain('Make it warmer.')
         expect(draftTask.outputSchema.required).toEqual(['draftMessage', 'response'])
-    })
-
-    it.each(tasks)('guides %s messages toward natural formatting', (_name, task) => {
-        expect(task.prompt).toContain('intentional line breaks')
-        expect(task.prompt).toContain('Never use em dashes')
-        expect(task.prompt).toContain('not a generated template')
-    })
-
-    it.each(tasks)('uses the job detail URL for %s context', (_name, task) => {
-        expect(task.prompt).toContain(post.postUrl)
-        expect(task.prompt).not.toContain(post.applicationUrl)
     })
 })

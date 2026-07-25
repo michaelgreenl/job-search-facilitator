@@ -22,6 +22,7 @@ const reportTime = computed(() =>
 <template>
     <button
         class="report-card"
+        :data-testid="`report-card-${report.id}`"
         :class="{ 'report-card-selected': selected }"
         type="button"
         :aria-pressed="selected"

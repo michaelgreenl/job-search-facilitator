@@ -16,6 +16,7 @@ const emit = defineEmits<{
 <template>
     <button
         class="post-card"
+        :data-testid="`job-post-card-${post.id}`"
         :class="{
             'post-card-selected': selected,
             'post-card-forgone': post.userLabel === 'forgo',

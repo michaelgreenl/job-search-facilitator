@@ -65,7 +65,7 @@ const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
 
 <template>
     <div v-if="hasContent" class="post-content">
-        <section v-if="hasFacts" class="content-section">
+        <section v-if="hasFacts" class="content-section" data-testid="post-facts">
             <h3 class="content-section-title">At a glance</h3>
 
             <dl class="post-facts">
@@ -89,7 +89,11 @@ const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
         </section>
 
         <div v-if="hasAnalysis" class="post-analysis">
-            <section v-if="hasRecommendation" class="content-section">
+            <section
+                v-if="hasRecommendation"
+                class="content-section"
+                data-testid="post-recommendation"
+            >
                 <h3 class="content-section-title">Recommendation</h3>
 
                 <div v-if="content.recommendedAction" class="content-block">
@@ -105,7 +109,7 @@ const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
                 </div>
             </section>
 
-            <section v-if="hasLegitimacy" class="content-section">
+            <section v-if="hasLegitimacy" class="content-section" data-testid="post-legitimacy">
                 <h3 class="content-section-title">Legitimacy</h3>
 
                 <div v-if="content.keyLegitimacySignals" class="content-block">

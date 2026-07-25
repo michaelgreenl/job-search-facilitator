@@ -134,6 +134,13 @@ onBeforeUnmount(() => {
 <template>
     <article
         class="contact-card"
+        :data-testid="
+            contact
+                ? `outreach-contact-${contact.id}`
+                : loading
+                  ? 'outreach-contact-loading'
+                  : undefined
+        "
         :class="{ 'is-selectable': selectionLabel !== null }"
         :aria-busy="loading || messagedUpdating || undefined"
     >
@@ -141,6 +148,9 @@ onBeforeUnmount(() => {
             v-if="selectionLabel"
             class="contact-select-button"
             type="button"
+            :data-testid="
+                contact ? `outreach-contact-${contact.id}-select` : 'outreach-contact-progress'
+            "
             :aria-label="selectionLabel"
             @click="emit('select')"
         ></button>
@@ -159,6 +169,7 @@ onBeforeUnmount(() => {
                 <button
                     v-if="showMessagedControl"
                     class="messaged-status-button"
+                    data-testid="outreach-contact-messaged-toggle"
                     :class="{
                         'is-messaged': contact.messaged,
                         'is-updating': messagedUpdating,
@@ -195,6 +206,7 @@ onBeforeUnmount(() => {
                     :id="rationaleId"
                     ref="rationale"
                     class="relevance-rationale"
+                    data-testid="outreach-contact-rationale"
                     :class="{ 'is-clamped': !rationaleExpanded }"
                 >
                     {{ contact.relevanceRationale }}
@@ -203,6 +215,7 @@ onBeforeUnmount(() => {
                     <button
                         class="rationale-toggle"
                         type="button"
+                        data-testid="outreach-contact-rationale-toggle"
                         :aria-controls="rationaleId"
                         :aria-expanded="descriptionExpanded"
                         @click="toggleRationale"

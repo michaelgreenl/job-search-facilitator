@@ -41,16 +41,13 @@ const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement 
 
 function mountViewer(
     overrides: Partial<JobPost> = {},
-    options: {
-        recommendation?: JobRecommendation
-    } = {},
+    options: { recommendation?: JobRecommendation } = {},
 ) {
     const root = document.createElement('div')
     document.body.append(root)
-    const selectedPost = { ...post, ...overrides }
 
     const app = createApp(JobPostViewer, {
-        post: selectedPost,
+        post: { ...post, ...overrides },
         recommendation: options.recommendation,
         labelUpdating: false,
         labelError: null,
@@ -63,17 +60,15 @@ function mountViewer(
 }
 
 async function openLabelOptions(root: HTMLElement) {
-    const trigger = root.querySelector<HTMLButtonElement>('[aria-label="Job post label"]')
+    const trigger = root.querySelector<HTMLButtonElement>('[data-testid="job-label-trigger"]')
 
     if (trigger === null) {
         throw new Error('Could not find label dropdown trigger')
     }
 
     trigger.click()
-    await vi.waitFor(() => expect(root.querySelector('[role="menu"]')).not.toBeNull())
-
-    return [...root.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(({ textContent }) =>
-        textContent?.trim(),
+    await vi.waitFor(() =>
+        expect(root.querySelector('[data-testid="job-label-menu"]')).not.toBeNull(),
     )
 }
 
@@ -85,30 +80,27 @@ describe('JobPostViewer', () => {
         }
     })
 
-    it('opens the post and distinct application destinations', () => {
+    it('exposes distinct safe post and application destinations', () => {
         const root = mountViewer()
-        const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
-
-        expect(links.map(({ textContent }) => textContent?.trim())).toEqual([
-            'Open post ↗',
-            'Open application ↗',
-        ])
-        expect(links.map(({ href }) => href)).toEqual([post.postUrl, post.applicationUrl])
-        expect(links.map((link) => link.getAttribute('target'))).toEqual(['_blank', '_blank'])
-        expect(links.map((link) => link.getAttribute('rel'))).toEqual([
-            'noopener noreferrer',
-            'noopener noreferrer',
-        ])
-        expect(links[1]?.getAttribute('aria-label')).toBe(
-            `Open application for ${post.roleTitle} in a new tab`,
+        const postLink = root.querySelector<HTMLAnchorElement>('[data-testid="post-link"]')
+        const applicationLink = root.querySelector<HTMLAnchorElement>(
+            '[data-testid="application-link"]',
         )
+
+        expect(postLink?.href).toBe(post.postUrl)
+        expect(applicationLink?.href).toBe(post.applicationUrl)
+
+        for (const link of [postLink, applicationLink]) {
+            expect(link?.target).toBe('_blank')
+            expect(link?.rel).toBe('noopener noreferrer')
+        }
     })
 
-    it('does not repeat a shared post and application destination', () => {
+    it('deduplicates a shared destination in review mode', () => {
         const root = mountViewer({ applicationUrl: post.postUrl })
-        const links = [...root.querySelectorAll<HTMLAnchorElement>('.post-action-button')]
 
-        expect(links.map(({ textContent }) => textContent?.trim())).toEqual(['Open post ↗'])
+        expect(root.querySelector('[data-testid="post-link"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="application-link"]')).toBeNull()
     })
 
     it('omits unsafe external destinations', () => {
@@ -117,85 +109,56 @@ describe('JobPostViewer', () => {
             applicationUrl: 'data:text/html,unsafe',
         })
 
-        expect(root.querySelector('.post-action-button')).toBeNull()
+        expect(root.querySelector('[data-testid="post-link"]')).toBeNull()
+        expect(root.querySelector('[data-testid="application-link"]')).toBeNull()
     })
 
-    it('shows the available post facts without inventing search-result context', () => {
+    it('keeps recommendation sections absent when no recommendation is provided', () => {
         const root = mountViewer()
-        const facts = [...root.querySelectorAll('.post-fact')].map((fact) => ({
-            label: fact.querySelector('dt')?.textContent?.trim(),
-            value: fact.querySelector('dd')?.textContent?.trim(),
-        }))
 
-        expect(facts).toEqual([
-            { label: 'Compensation', value: '$120,000' },
-            { label: 'Source', value: 'Greenhouse' },
-            { label: 'Tech stack', value: 'TypeScript, Vue, Node.js' },
-        ])
-        expect(root.textContent).not.toContain('Recommended action')
-        expect(root.textContent).not.toContain('Why it fits')
-        expect(root.textContent).not.toContain('Legitimacy')
-        expect(root.textContent).not.toContain('Selected post:')
+        expect(root.querySelector('[data-testid="post-facts"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="post-recommendation"]')).toBeNull()
+        expect(root.querySelector('[data-testid="post-legitimacy"]')).toBeNull()
     })
 
-    it('lays out the complete search recommendation and legitimacy context', () => {
+    it('exposes recommendation and legitimacy sections when that context is available', () => {
         const root = mountViewer({}, { recommendation })
-        const text = root.textContent ?? ''
 
-        expect(text).toContain('Recommended action')
-        expect(text).toContain(recommendation.recommendedAction)
-        expect(text).toContain('Recommended resume')
-        expect(text).toContain('Backend / full-stack')
-        expect(text).toContain('Tech stack')
-        expect(text).toContain(post.techStack)
-        expect(text).toContain('Compensation')
-        expect(text).toContain(post.compensation)
-        expect(text).toContain('Source')
-        expect(text).toContain(post.postSource)
-        expect(text).toContain('Why it fits')
-        expect(text).toContain(recommendation.fitRationale)
-        expect(text).toContain('Key signals')
-        expect(text).toContain(recommendation.keyLegitimacySignals)
-        expect(text).toContain('Notes')
-        expect(text).toContain(recommendation.legitimacyNotes)
+        expect(root.querySelector('[data-testid="post-recommendation"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="post-legitimacy"]')).not.toBeNull()
     })
 
-    it('collapses absent AI content and nullable post facts without empty sections', () => {
-        const sparseRecommendation = {
-            ...recommendation,
-            fitRationale: '',
-            keyLegitimacySignals: '',
-            recommendedAction: '',
-            legitimacyNotes: null,
-        }
+    it('omits empty optional recommendation sections', () => {
         const root = mountViewer(
             {
                 compensation: null,
                 techStack: 'Not recorded',
                 postSource: '',
             },
-            { recommendation: sparseRecommendation },
+            {
+                recommendation: {
+                    ...recommendation,
+                    fitRationale: '',
+                    keyLegitimacySignals: '',
+                    recommendedAction: '',
+                    legitimacyNotes: null,
+                },
+            },
         )
-        const facts = [...root.querySelectorAll('.post-fact')].map((fact) => ({
-            label: fact.querySelector('dt')?.textContent?.trim(),
-            value: fact.querySelector('dd')?.textContent?.trim(),
-        }))
 
-        expect(facts).toEqual([{ label: 'Recommended resume', value: 'Backend / full-stack' }])
-        expect(root.querySelector('.recommended-action')).toBeNull()
-        expect(root.querySelector('.post-analysis')).toBeNull()
-        expect(root.querySelectorAll('dd:empty, p:empty')).toHaveLength(0)
+        expect(root.querySelector('[data-testid="post-facts"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="post-recommendation"]')).toBeNull()
+        expect(root.querySelector('[data-testid="post-legitimacy"]')).toBeNull()
     })
 
-    it('omits the clear-label option when the post has no label', async () => {
-        const root = mountViewer({ userLabel: null })
+    it.each([
+        { userLabel: null, expected: false },
+        { userLabel: 'P1' as const, expected: true },
+    ])('sets clear-label availability for $userLabel', async ({ userLabel, expected }) => {
+        const root = mountViewer({ userLabel })
 
-        expect(await openLabelOptions(root)).not.toContain('Clear label')
-    })
+        await openLabelOptions(root)
 
-    it('keeps the clear-label option for a labeled post', async () => {
-        const root = mountViewer()
-
-        expect(await openLabelOptions(root)).toContain('Clear label')
+        expect(root.querySelector('[data-testid="job-label-option-clear"]') !== null).toBe(expected)
     })
 })

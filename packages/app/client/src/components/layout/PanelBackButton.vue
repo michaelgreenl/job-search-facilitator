@@ -7,6 +7,7 @@ withDefaults(
         label: string
         mobileOnly?: boolean
         disabled?: boolean
+        testId?: string
     }>(),
     {
         mobileOnly: false,
@@ -28,6 +29,7 @@ const emit = defineEmits<{
         <button
             class="back-button"
             type="button"
+            :data-testid="testId"
             :aria-label="label"
             :aria-describedby="tooltipId"
             :disabled="disabled"

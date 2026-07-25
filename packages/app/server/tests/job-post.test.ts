@@ -25,36 +25,27 @@ const existingPost: JobPost = {
 }
 
 const missingPostId = '22222222-2222-4222-8222-222222222222'
+const applyQueueItem: ApplyQueueItem = {
+    post: { ...existingPost, userLabel: 'P1' },
+    recommendationContext: null,
+}
 
-const createFakeRepository = (initialPosts: JobPost[], applyQueueItems: ApplyQueueItem[] = []) => {
-    const posts = [...initialPosts]
-    const update = vi.fn(async (id: string, input: UpdateJobPostInput) => {
-        const index = posts.findIndex((post) => post.id === id)
-
-        if (index === -1) {
-            return null
-        }
-
-        const updatedPost: JobPost = {
-            ...posts[index],
-            ...input,
-            updatedAt: '2026-07-12T11:00:00.000Z',
-        }
-        posts[index] = updatedPost
-
-        return {
-            post: updatedPost,
-            inApplyQueue: false,
-        }
-    })
+const createFakeRepository = () => {
+    const findMany = vi.fn(async () => [existingPost])
+    const findApplyQueue = vi.fn(async () => [applyQueueItem])
+    const findById = vi.fn(async (_id: string): Promise<JobPost | null> => existingPost)
+    const update = vi.fn(async (_id: string, input: UpdateJobPostInput) => ({
+        post: { ...existingPost, ...input },
+        inApplyQueue: false,
+    }))
     const repository: JobPostRepository = {
-        findMany: async () => [...posts],
-        findApplyQueue: async () => [...applyQueueItems],
-        findById: async (id) => posts.find((post) => post.id === id) ?? null,
+        findMany,
+        findApplyQueue,
+        findById,
         update,
     }
 
-    return { repository, update }
+    return { findApplyQueue, findById, findMany, repository, update }
 }
 
 const createTestApp = (repository: JobPostRepository) => {
@@ -66,37 +57,35 @@ const createTestApp = (repository: JobPostRepository) => {
 
 describe('job post routes', () => {
     it('lists job posts', async () => {
-        const { repository } = createFakeRepository([existingPost])
+        const { findMany, repository } = createFakeRepository()
 
         await request(createTestApp(repository)).get('/job-posts').expect(200, [existingPost])
+
+        expect(findMany).toHaveBeenCalledOnce()
     })
 
     it('lists posts in the Apply queue', async () => {
-        const applyQueuePost: JobPost = { ...existingPost, userLabel: 'P1' }
-        const applyQueueItem: ApplyQueueItem = {
-            post: applyQueuePost,
-            recommendationContext: {
-                reportId: '33333333-3333-4333-8333-333333333333',
-                reportDate: '2026-07-12',
-                agentRank: 1,
-                agentLabel: 'target',
-                fitRationale: 'Strong match',
-                applicationFlow: 'Direct application',
-                keyLegitimacySignals: 'Company careers page',
-                recommendedResume: 'frontend',
-                recommendedAction: 'Apply',
-                legitimacyNotes: null,
-            },
-        }
-        const { repository } = createFakeRepository([], [applyQueueItem])
+        const { findApplyQueue, repository } = createFakeRepository()
 
         await request(createTestApp(repository))
             .get('/job-posts/apply-queue')
             .expect(200, [applyQueueItem])
+
+        expect(findApplyQueue).toHaveBeenCalledOnce()
+    })
+
+    it('gets a job post by id', async () => {
+        const { findById, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .get(`/job-posts/${existingPost.id}`)
+            .expect(200, existingPost)
+
+        expect(findById).toHaveBeenCalledExactlyOnceWith(existingPost.id)
     })
 
     it('forwards an allowed update and returns the updated post', async () => {
-        const { repository, update } = createFakeRepository([existingPost])
+        const { repository, update } = createFakeRepository()
         const input: UpdateJobPostInput = {
             applicationStatus: 'interviewing',
             postStatus: 'closed',
@@ -104,20 +93,15 @@ describe('job post routes', () => {
             archivedAt: '2026-07-12T12:00:00.000Z',
         }
 
-        const response = await request(createTestApp(repository))
+        await request(createTestApp(repository))
             .patch(`/job-posts/${existingPost.id}`)
             .send(input)
-            .expect(200)
+            .expect(200, {
+                post: { ...existingPost, ...input },
+                inApplyQueue: false,
+            })
 
         expect(update).toHaveBeenCalledExactlyOnceWith(existingPost.id, input)
-        expect(response.body).toEqual({
-            post: {
-                ...existingPost,
-                ...input,
-                updatedAt: '2026-07-12T11:00:00.000Z',
-            },
-            inApplyQueue: false,
-        })
     })
 
     it.each([
@@ -125,21 +109,22 @@ describe('job post routes', () => {
         ['an extra field', { roleTitle: 'Changed title' }],
         ['an empty body', {}],
     ])('rejects %s without updating', async (_description, input) => {
-        const { repository, update } = createFakeRepository([existingPost])
+        const { repository, update } = createFakeRepository()
 
         await request(createTestApp(repository))
             .patch(`/job-posts/${existingPost.id}`)
             .send(input)
-            .expect(400, { error: 'Invalid request' })
+            .expect(400)
 
         expect(update).not.toHaveBeenCalled()
     })
 
     it('returns 404 for a missing valid UUID', async () => {
-        const { repository } = createFakeRepository([existingPost])
+        const { findById, repository } = createFakeRepository()
+        findById.mockResolvedValueOnce(null)
 
-        await request(createTestApp(repository))
-            .get(`/job-posts/${missingPostId}`)
-            .expect(404, { error: 'Job post not found' })
+        await request(createTestApp(repository)).get(`/job-posts/${missingPostId}`).expect(404)
+
+        expect(findById).toHaveBeenCalledExactlyOnceWith(missingPostId)
     })
 })

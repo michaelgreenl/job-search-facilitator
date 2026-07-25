@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<Props>(), {
         :is="props.as"
         v-bind="$attrs"
         class="flow-panel"
+        :data-active="props.active"
         :class="{
             'is-active': props.active,
             'is-adjacent': props.adjacent,

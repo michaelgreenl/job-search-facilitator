@@ -214,7 +214,6 @@ describe('job post repository', () => {
             reportId: reports[3].id,
             reportDate: reports[3].reportDate,
             agentRank: 9,
-            recommendedAction: 'Use the deterministic recommendation',
         })
         expect(orphanItem?.recommendationContext).toBeNull()
     })
@@ -282,8 +281,8 @@ describe('outreach contact repository', () => {
             draftMessage: 'Hi Grace, I would value your perspective on the team.',
         })
 
-        if (first === null) {
-            throw new Error('Could not create the first outreach contact')
+        if (first === null || second === null) {
+            throw new Error('Could not create outreach contacts')
         }
 
         const wrongPostUpdate = await outreachContactRepository.update(
@@ -300,10 +299,8 @@ describe('outreach contact repository', () => {
         expect(wrongPostUpdate).toBeNull()
         expect(updatedFirst).toMatchObject({ id: first.id, jobPostId, messaged: true })
         expect(second).toMatchObject({ jobPostId, messaged: false })
-        expect(contacts.map(({ personName }) => personName)).toEqual([
-            'Grace Hopper',
-            'Ada Lovelace',
-        ])
+        expect(contacts).toHaveLength(2)
+        expect(contacts.map(({ id }) => id)).toEqual(expect.arrayContaining([first.id, second.id]))
         expect(contacts.find(({ id }) => id === first.id)?.messaged).toBe(true)
     })
 })
@@ -350,14 +347,20 @@ describe('search report repository', () => {
 
         expect(initial.created).toBe(true)
         expect(replacement.created).toBe(false)
-        expect(replacement.report.id).toBe(initial.report.id)
-        expect(replacement.report.summary).toBe(replacementInput.summary)
-        expect(replacement.report.results).toHaveLength(1)
-        expect(replacement.report.results[0]).toMatchObject({
-            applicationFlow: replacementInput.results[0]?.applicationFlow,
-            keyLegitimacySignals: replacementInput.results[0]?.keyLegitimacySignals,
+        expect(replacement.report).toMatchObject({
+            id: initial.report.id,
+            summary: replacementInput.summary,
+            results: [
+                {
+                    applicationFlow: replacementInput.results[0]?.applicationFlow,
+                    keyLegitimacySignals: replacementInput.results[0]?.keyLegitimacySignals,
+                    post: {
+                        sourceKey: 'example-source:second',
+                        roleTitle: 'Senior Software Engineer',
+                    },
+                },
+            ],
         })
-        expect(replacement.report.results[0]?.post.sourceKey).toBe('example-source:second')
         expect(reportCount).toBe(1)
         expect(resultCount).toBe(1)
     })

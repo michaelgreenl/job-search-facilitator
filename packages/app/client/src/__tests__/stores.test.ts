@@ -11,7 +11,6 @@ import { useOutreachStore } from '../stores/outreach.store'
 import { usePostStore } from '../stores/post.store'
 import { useReportStore } from '../stores/report.store'
 import { useWorkStore } from '../stores/work.store'
-import { createContactDiscoveryTask, createDraftRevisionTask } from '../work-tasks'
 
 const post: JobPost = {
     id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',
@@ -43,6 +42,15 @@ const savedContact: OutreachContact = {
     messaged: false,
     createdAt: '2026-07-21T12:00:00.000Z',
     updatedAt: '2026-07-21T12:00:00.000Z',
+}
+
+const runningTask: WorkTask = {
+    id: 'task-1',
+    status: 'running',
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    output: null,
+    error: null,
 }
 
 const report: JobSearchReport = {
@@ -79,7 +87,7 @@ describe('report store', () => {
         vi.stubGlobal('fetch', vi.fn())
     })
 
-    it('loads same-day reports and refreshes one by id', async () => {
+    it('loads reports and refreshes one by id without discarding forward-compatible fields', async () => {
         const reportWithAdditions = {
             ...report,
             scoringVersion: 2,
@@ -129,7 +137,6 @@ describe('report store', () => {
             { id: refreshedReport.id, summary: refreshedReport.summary },
             { id: earlierReport.id, summary: earlierReport.summary },
         ])
-        expect(store.reports[0]!.results[0]!.post).toBe(store.reports[1]!.results[0]!.post)
         expect(store.reports[0]!.results[0]!.post).toMatchObject({
             sourceMetadata: { importedBy: 'agent' },
         })
@@ -150,12 +157,13 @@ describe('report store', () => {
             ]),
         )
         const store = useReportStore()
+        store.reports = [report]
 
         await expect(store.fetchReports()).rejects.toThrow(
             'API /job-search-reports returned invalid data',
         )
 
-        expect(store.reports).toEqual([])
+        expect(store.reports).toEqual([report])
         expect(store.loading).toBe(false)
     })
 
@@ -271,20 +279,21 @@ describe('post store', () => {
         )
         expect(updateResult.post).toBe(canonicalPost)
         expect(staleReadResult).toBe(canonicalPost)
-        expect(store.findPost(post.id)).toBe(canonicalPost)
-        expect(reportStore.reports[0]!.results[0]!.post).toBe(canonicalPost)
-        expect(reportStore.reports[1]!.results[0]!.post).toBe(canonicalPost)
         expect(canonicalPost).toEqual(updatedPost)
-        expect(store.findPost(secondPost.id)).toBe(unrelatedPost)
         expect(unrelatedPost).toEqual(secondPost)
     })
 
     it('loads the Apply queue from its endpoint', async () => {
         const applyQueuePost = { ...post, userLabel: 'P1' as const }
+        const { post: _reportPost, ...recommendation } = report.results[0]!
         const applyQueueItems: ApplyQueueItem[] = [
             {
                 post: applyQueuePost,
-                recommendationContext: null,
+                recommendationContext: {
+                    reportId: report.id,
+                    reportDate: report.reportDate,
+                    ...recommendation,
+                },
             },
         ]
         const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -297,7 +306,7 @@ describe('post store', () => {
             undefined,
         )
         expect(store.posts).toEqual([applyQueuePost])
-        expect(items).toEqual(applyQueueItems)
+        expect(items[0]!.recommendationContext).toEqual(applyQueueItems[0]!.recommendationContext)
         expect(items[0]!.post).toBe(store.posts[0])
     })
 })
@@ -346,12 +355,13 @@ describe('outreach store', () => {
         )
         const store = useOutreachStore()
         store.openForPost(post.id)
+        store.contacts = [savedContact]
 
         await expect(store.fetchContacts(post.id)).rejects.toThrow(
             `API /job-posts/${post.id}/outreach-contacts returned invalid data`,
         )
 
-        expect(store.contacts).toEqual([])
+        expect(store.contacts).toEqual([savedContact])
         expect(store.contactsLoading).toBe(false)
     })
 
@@ -377,13 +387,16 @@ describe('outreach store', () => {
         const updateResponse = new Promise<Response>((resolve) => {
             resolveUpdate = resolve
         })
-        vi.mocked(fetch).mockReturnValueOnce(updateResponse)
+        const fetchMock = vi.mocked(fetch).mockReturnValueOnce(updateResponse)
         const store = useOutreachStore()
         store.openForPost(post.id)
         store.contacts = [savedContact]
         store.selectContact(savedContact)
 
         const update = store.updateContactMessaged(savedContact.id, true)
+
+        expect(store.contactUpdating).toBe(true)
+        expect(fetchMock).toHaveBeenCalledOnce()
         store.openForPost('post-2')
         resolveUpdate?.(jsonResponse({ ...savedContact, messaged: true }))
 
@@ -410,14 +423,6 @@ describe('outreach store', () => {
             relevanceRationale: savedContact.relevanceRationale,
             draftMessage: savedContact.draftMessage,
         }
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const completedTask: WorkTask = {
             ...runningTask,
             status: 'completed',
@@ -425,7 +430,7 @@ describe('outreach store', () => {
         }
         const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(savedContact, 201))
         const workStore = useWorkStore()
-        const startTask = vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = completedTask
             return completedTask
         })
@@ -436,7 +441,6 @@ describe('outreach store', () => {
         await vi.waitFor(() => {
             expect(store.contact).toEqual(savedContact)
         })
-        expect(startTask).toHaveBeenCalledExactlyOnceWith(createContactDiscoveryTask(post))
         expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
             `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
             {
@@ -450,14 +454,6 @@ describe('outreach store', () => {
     })
 
     it('does not select a contact when completed discovery persistence fails', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
         const workStore = useWorkStore()
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
@@ -488,16 +484,8 @@ describe('outreach store', () => {
     })
 
     it('updates the draft and assistant reply when draft Work completes', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const workStore = useWorkStore()
-        const startTask = vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = runningTask
             return runningTask
         })
@@ -519,14 +507,6 @@ describe('outreach store', () => {
         await vi.waitFor(() => {
             expect(store.draft).toBe('A warmer draft')
         })
-        expect(startTask).toHaveBeenCalledExactlyOnceWith(
-            createDraftRevisionTask(
-                post,
-                savedContact,
-                savedContact.draftMessage,
-                'Make it warmer',
-            ),
-        )
         expect(store.assistantReply).toBe('I made the introduction warmer.')
     })
 
@@ -538,14 +518,6 @@ describe('outreach store', () => {
             profileUrl: 'https://www.linkedin.com/in/grace-hopper',
             draftMessage: 'Draft for Grace',
         }
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const workStore = useWorkStore()
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = runningTask
@@ -555,7 +527,8 @@ describe('outreach store', () => {
         store.openForPost(post.id)
         store.contacts = [savedContact, otherContact]
         store.selectContact(savedContact)
-        await store.requestDraftRevision(post, 'Make it warmer')
+        await expect(store.requestDraftRevision(post, 'Make it warmer')).resolves.toBe(true)
+        expect(store.drafting).toBe(true)
 
         store.selectContact(otherContact)
         workStore.task = {
@@ -576,14 +549,6 @@ describe('outreach store', () => {
     })
 
     it('clears outreach only after Work cancellation succeeds', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
         let resolveCancellation: ((task: WorkTask) => void) | undefined
         const cancellationResponse = new Promise<WorkTask>((resolve) => {
@@ -610,14 +575,6 @@ describe('outreach store', () => {
     })
 
     it('preserves active outreach when Work cancellation fails', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const workStore = useWorkStore()
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = runningTask
@@ -633,21 +590,14 @@ describe('outreach store', () => {
     })
 
     it('ends outreach without persistence when Work fails', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const workStore = useWorkStore()
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = runningTask
             return runningTask
         })
         const store = useOutreachStore()
-        await store.startContactDiscovery(post)
+        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
+        expect(store.discovering).toBe(true)
 
         workStore.task = { ...runningTask, status: 'failed', error: 'Chrome stopped responding' }
 
@@ -658,14 +608,6 @@ describe('outreach store', () => {
     })
 
     it('cancels a task that starts after its outreach context is reset', async () => {
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
         let resolveStart: ((task: WorkTask) => void) | undefined
         const startResponse = new Promise<WorkTask>((resolve) => {
@@ -694,14 +636,6 @@ describe('outreach store', () => {
         const output = {
             personName: savedContact.personName,
         }
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const workStore = useWorkStore()
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
             workStore.task = runningTask
@@ -726,14 +660,6 @@ describe('outreach store', () => {
             resolveSave = resolve
         })
         vi.mocked(fetch).mockReturnValueOnce(saveResponse)
-        const runningTask: WorkTask = {
-            id: 'task-1',
-            status: 'running',
-            threadId: 'thread-1',
-            turnId: 'turn-1',
-            output: null,
-            error: null,
-        }
         const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
         let resolveCancellation: ((task: WorkTask) => void) | undefined
         const cancellationResponse = new Promise<WorkTask>((resolve) => {

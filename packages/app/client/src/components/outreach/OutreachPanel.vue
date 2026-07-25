@@ -183,10 +183,16 @@ async function copyDraft() {
                     <PanelBackButton
                         v-if="panelView === 'contacts'"
                         label="Back to job post"
+                        test-id="back-to-job-post"
                         mobile-only
                         @back="emit('showViewer')"
                     />
-                    <PanelBackButton v-else label="Back to saved contacts" @back="showContacts" />
+                    <PanelBackButton
+                        v-else
+                        label="Back to saved contacts"
+                        test-id="back-to-saved-contacts"
+                        @back="showContacts"
+                    />
 
                     <ButtonTooltip
                         v-if="panelView === 'draft'"

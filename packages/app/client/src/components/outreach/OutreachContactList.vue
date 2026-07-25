@@ -51,7 +51,11 @@ function selectContactFilter(value: string) {
 </script>
 
 <template>
-    <section class="contact-history" aria-labelledby="contact-history-title">
+    <section
+        class="contact-history"
+        data-testid="outreach-contact-list"
+        aria-labelledby="contact-history-title"
+    >
         <div class="contact-history-heading">
             <div class="contact-history-summary">
                 <h2 id="contact-history-title" class="contact-history-title">Saved contacts</h2>
@@ -60,6 +64,7 @@ function selectContactFilter(value: string) {
             <AppDropdown
                 class="contact-filter-dropdown"
                 button-label="Filter saved contacts"
+                test-id="contact-filter"
                 :disabled="loading || contacts.length === 0"
                 :options="contactFilterOptions"
                 :label="contactFilterLabel"
