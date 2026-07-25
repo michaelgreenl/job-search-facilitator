@@ -24,10 +24,11 @@ function reloadDocument() {
             v-if="applicationFailed"
             class="error-recovery glass-frame"
             data-testid="app-error-recovery"
-            role="alert"
         >
-            <h1 class="error-title">The interface could not continue</h1>
-            <p class="error-message">Reload the page to restore a clean application state.</p>
+            <div class="error-summary" role="alert">
+                <h1 class="error-title">The interface could not continue</h1>
+                <p class="error-message">Reload the page to restore a clean application state.</p>
+            </div>
             <button
                 class="error-reload"
                 data-testid="app-error-reload"
@@ -87,6 +88,11 @@ function reloadDocument() {
     align-self: center;
     padding: $space-6;
     margin: auto;
+}
+
+.error-summary {
+    display: grid;
+    gap: $space-4;
 }
 
 .error-title,
