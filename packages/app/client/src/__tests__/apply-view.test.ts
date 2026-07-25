@@ -318,10 +318,14 @@ describe('apply view', () => {
         )
     })
 
-    it('preserves navigation without exposing stale contacts during a saved-contact retry', async () => {
+    it('preserves navigation without exposing stale contacts across saved-contact load outcomes', async () => {
         let resolveRetry: ((response: Response) => void) | undefined
+        let resolveFailedReload: ((response: Response) => void) | undefined
         const retryResponse = new Promise<Response>((resolve) => {
             resolveRetry = resolve
+        })
+        const failedReloadResponse = new Promise<Response>((resolve) => {
+            resolveFailedReload = resolve
         })
         const pinia = createPinia()
         const outreachStore = useOutreachStore(pinia)
@@ -330,6 +334,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse({}, 500))
             .mockReturnValueOnce(retryResponse)
+            .mockReturnValueOnce(failedReloadResponse)
         const root = await mountApplyView(pinia)
         outreachStore.openForPost(posts[0]!.id)
         outreachStore.contacts = [savedContact]
@@ -352,6 +357,19 @@ describe('apply view', () => {
 
         findTestButton(root, 'back-to-job-post').click()
         resolveRetry?.(jsonResponse([savedContact]))
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).toBeNull(),
+        )
+        expect(
+            root.querySelector('[data-testid="apply-viewer-panel"]')?.getAttribute('data-active'),
+        ).toBe('true')
+
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).not.toBeNull(),
+        )
+        findTestButton(root, 'back-to-job-post').click()
+        resolveFailedReload?.(jsonResponse({}, 500))
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).toBeNull(),
         )
