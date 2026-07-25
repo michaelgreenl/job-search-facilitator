@@ -93,6 +93,19 @@ export const useWorkStore = defineStore('work', () => {
         closeConnection('closed')
     }
 
+    function failConnectedTask(taskId: string, message: string) {
+        const currentTask = task.value
+
+        if (currentTask?.id === taskId && currentTask.status === 'running') {
+            finishTask({
+                ...currentTask,
+                status: 'failed',
+                output: null,
+                error: message,
+            })
+        }
+    }
+
     function connect(taskId: string) {
         const source = new EventSource(
             `${workBridgeUrl}/tasks/${encodeURIComponent(taskId)}/events`,
@@ -162,8 +175,7 @@ export const useWorkStore = defineStore('work', () => {
                     })
                 }
             } catch {
-                error.value = 'Work stream returned invalid data'
-                closeConnection('disconnected')
+                failConnectedTask(taskId, 'Work stream returned invalid data')
             }
         }
 
@@ -173,8 +185,7 @@ export const useWorkStore = defineStore('work', () => {
             }
 
             if (source.readyState === EventSource.CLOSED) {
-                error.value = 'Work stream closed before the task finished'
-                closeConnection('disconnected')
+                failConnectedTask(taskId, 'Work stream closed before the task finished')
             } else {
                 connectionState.value = 'reconnecting'
             }

@@ -187,7 +187,7 @@ describe('work store', () => {
         expect(store.connectionState).toBe('disconnected')
     })
 
-    it('disconnects without mutating task state when the event stream violates its contract', async () => {
+    it('releases a task when the event stream violates its contract', async () => {
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
@@ -202,14 +202,15 @@ describe('work store', () => {
             createdAt: '2026-07-18T12:00:00.000Z',
         })
 
-        expect(store.task).toEqual(startedTask)
-        expect(store.events).toEqual([])
-        expect(store.error).toBe('Work stream returned invalid data')
-        expect(store.connectionState).toBe('disconnected')
-        expect(source.close).toHaveBeenCalledOnce()
+        expect(store.task).toEqual({
+            ...startedTask,
+            status: 'failed',
+            error: 'Work stream returned invalid data',
+        })
+        expect(store.taskActive).toBe(false)
     })
 
-    it('stops retrying when the event stream closes permanently', async () => {
+    it('releases a task after its event stream closes permanently', async () => {
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
@@ -219,10 +220,12 @@ describe('work store', () => {
         const source = FakeEventSource.instances[0]!
         source.disconnect(FakeEventSource.CLOSED)
 
-        expect(store.connectionState).toBe('disconnected')
-        expect(store.task?.status).toBe('running')
-        expect(store.error).toBe('Work stream closed before the task finished')
-        expect(source.close).toHaveBeenCalledOnce()
+        expect(store.task).toEqual({
+            ...startedTask,
+            status: 'failed',
+            error: 'Work stream closed before the task finished',
+        })
+        expect(store.taskActive).toBe(false)
     })
 
     it('cancels a running task and closes its event stream', async () => {

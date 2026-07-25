@@ -412,19 +412,13 @@ describe('apply view', () => {
         )
     })
 
-    it('keeps a running draft recoverable across Work connection failures', async () => {
+    it('reconnects a running draft and releases it after a permanent Work failure', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
-            .mockResolvedValueOnce(
-                jsonResponse({
-                    ...runningWorkTask,
-                    status: 'cancelled',
-                }),
-            )
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -485,11 +479,8 @@ describe('apply view', () => {
             expect(
                 root.querySelector('[data-testid="outreach-draft-issue"]')?.getAttribute('role'),
             ).toBe('alert')
-            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+            expect(request.disabled).toBe(false)
         })
-
-        findTestButton(root, 'outreach-cancel').click()
-        await vi.waitFor(() => expect(request.disabled).toBe(false))
     })
 
     it('moves a first contact discovery into the task stream', async () => {
