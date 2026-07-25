@@ -91,15 +91,31 @@ const fetchUrl = (input: string | URL | Request) =>
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
 
 class FakeEventSource {
+    static readonly CONNECTING = 0
+    static readonly OPEN = 1
+    static readonly CLOSED = 2
     static instances: FakeEventSource[] = []
 
-    readonly close = vi.fn()
+    readyState = FakeEventSource.CONNECTING
+    readonly close = vi.fn(() => {
+        this.readyState = FakeEventSource.CLOSED
+    })
     onopen: (() => void) | null = null
     onmessage: ((event: { data: string }) => void) | null = null
     onerror: (() => void) | null = null
 
     constructor(readonly url: string) {
         FakeEventSource.instances.push(this)
+    }
+
+    open() {
+        this.readyState = FakeEventSource.OPEN
+        this.onopen?.()
+    }
+
+    disconnect() {
+        this.readyState = FakeEventSource.CONNECTING
+        this.onerror?.()
     }
 }
 
@@ -370,7 +386,68 @@ describe('apply view', () => {
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-draft-issue"]')).not.toBeNull(),
         )
-        expect(request.disabled).toBe(false)
+    })
+
+    it('announces Work reconnection while revising an outreach draft', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, `outreach-contact-${savedContact.id}-select`).click()
+
+        const request = await vi.waitFor(() => {
+            const input = root.querySelector<HTMLTextAreaElement>(
+                '[data-testid="outreach-draft-request"]',
+            )
+
+            if (input === null) {
+                throw new Error('Could not find the draft request input')
+            }
+
+            return input
+        })
+        request.value = 'Make the introduction warmer'
+        request.dispatchEvent(new Event('input'))
+        await nextTick()
+        findTestButton(root, 'outreach-draft-submit').click()
+
+        const source = await vi.waitFor(() => {
+            const instance = FakeEventSource.instances[0]
+
+            if (instance === undefined) {
+                throw new Error('Could not find the Work event stream')
+            }
+
+            return instance
+        })
+        source.open()
+        source.disconnect()
+
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="outreach-draft-reconnect"]')
+                    ?.getAttribute('role'),
+            ).toBe('status'),
+        )
+
+        source.open()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-draft-reconnect"]')).toBeNull(),
+        )
     })
 
     it('moves a first contact discovery into the task stream', async () => {

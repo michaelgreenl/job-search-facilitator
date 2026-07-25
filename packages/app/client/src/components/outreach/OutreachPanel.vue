@@ -31,8 +31,15 @@ const emit = defineEmits<{
 
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { actionNeedsAttention, actionSubmitting, cancelling, error, task, taskActive } =
-    storeToRefs(workStore)
+const {
+    actionNeedsAttention,
+    actionSubmitting,
+    cancelling,
+    connectionState,
+    error,
+    task,
+    taskActive,
+} = storeToRefs(workStore)
 const {
     assistantReply,
     contact,
@@ -269,6 +276,7 @@ async function copyDraft() {
                 :issue="draftIssue"
                 :messaged-error="contactUpdateError"
                 :messaged-updating="contactUpdating"
+                :reconnecting="connectionState === 'reconnecting'"
                 @submit="submitDraftRequest"
                 @copy="copyDraft"
                 @update-messaged="updateMessaged"

@@ -17,6 +17,7 @@ defineProps<{
     issue: string | null
     messagedError: string | null
     messagedUpdating: boolean
+    reconnecting: boolean
 }>()
 
 const emit = defineEmits<{
@@ -90,6 +91,14 @@ const copyFeedbackId = useId()
             <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
                 {{ assistantReply }}
             </p>
+            <p
+                v-if="reconnecting"
+                class="draft-reconnect"
+                data-testid="outreach-draft-reconnect"
+                role="status"
+            >
+                Reconnecting to Work…
+            </p>
             <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
                 {{ issue }}
             </p>
@@ -157,12 +166,14 @@ const copyFeedbackId = useId()
 }
 
 .assistant-reply,
+.draft-reconnect,
 .draft-issue {
     margin: 0;
     font-size: 0.875rem;
 }
 
-.assistant-reply {
+.assistant-reply,
+.draft-reconnect {
     color: $color-ink-secondary;
 }
 
