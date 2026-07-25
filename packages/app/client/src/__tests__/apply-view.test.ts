@@ -318,7 +318,7 @@ describe('apply view', () => {
         )
     })
 
-    it('announces and retries a failed saved-contact load', async () => {
+    it('announces a failed saved-contact load and hides stale contacts while retrying', async () => {
         let resolveRetry: ((response: Response) => void) | undefined
         const retryResponse = new Promise<Response>((resolve) => {
             resolveRetry = resolve

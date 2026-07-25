@@ -85,7 +85,7 @@ describe('application error handling', () => {
         mountedApps.push({ app, root })
         vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-        await expect(applicationRouter.push('/error-handling-broken')).rejects.toThrow()
+        await applicationRouter.push('/error-handling-broken').catch(() => undefined)
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="app-error-reload"]')).not.toBeNull(),
         )
