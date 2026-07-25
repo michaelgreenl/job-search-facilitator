@@ -25,13 +25,21 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    retryContacts: []
     showViewer: []
 }>()
 
 const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const { actionNeedsAttention, actionSubmitting, cancelling, error, task, taskActive } =
-    storeToRefs(workStore)
+const {
+    actionNeedsAttention,
+    actionSubmitting,
+    cancelling,
+    connectionState,
+    error,
+    task,
+    taskActive,
+} = storeToRefs(workStore)
 const {
     assistantReply,
     contact,
@@ -54,8 +62,13 @@ const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(() => task.value?.status === 'running' && panelView.value === 'stream')
+const canCancel = computed(
+    () =>
+        task.value?.status === 'running' &&
+        (panelView.value === 'stream' || (panelView.value === 'draft' && drafting.value)),
+)
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+const draftIssue = computed(() => resultError.value ?? (drafting.value ? error.value : null))
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
@@ -188,7 +201,7 @@ async function copyDraft() {
                         @back="emit('showViewer')"
                     />
                     <PanelBackButton
-                        v-else
+                        v-else-if="!(drafting && taskActive)"
                         label="Back to saved contacts"
                         test-id="back-to-saved-contacts"
                         @back="showContacts"
@@ -225,6 +238,7 @@ async function copyDraft() {
                 :discovering="discovering && taskActive"
                 :error="contactsError"
                 :loading="contactsLoading"
+                @retry="emit('retryContacts')"
                 @select="selectContact"
                 @show-stream="showStream"
             />
@@ -235,7 +249,13 @@ async function copyDraft() {
                     type="button"
                     aria-label="Discover another contact"
                     :aria-describedby="tooltipId"
-                    :disabled="taskActive || contactsLoading || contactSaving || contactUpdating"
+                    :disabled="
+                        taskActive ||
+                        contactsLoading ||
+                        contactSaving ||
+                        contactUpdating ||
+                        contactsError !== null
+                    "
                     @click="emit('discover')"
                 >
                     <span aria-hidden="true">+</span>
@@ -253,8 +273,10 @@ async function copyDraft() {
                 :requesting-changes="drafting && taskActive"
                 :copy-state="copyState"
                 :expanded="expanded"
+                :issue="draftIssue"
                 :messaged-error="contactUpdateError"
                 :messaged-updating="contactUpdating"
+                :reconnecting="connectionState === 'reconnecting'"
                 @submit="submitDraftRequest"
                 @copy="copyDraft"
                 @update-messaged="updateMessaged"
@@ -266,6 +288,7 @@ async function copyDraft() {
         <button
             v-if="canCancel"
             class="cancel-action"
+            data-testid="outreach-cancel"
             type="button"
             aria-label="Cancel outreach task"
             :disabled="cancelling"

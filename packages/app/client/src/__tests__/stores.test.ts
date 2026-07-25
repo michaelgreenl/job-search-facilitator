@@ -168,12 +168,14 @@ describe('report store', () => {
     })
 
     it('exposes failed requests to the UI', async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
+        vi.mocked(fetch).mockResolvedValueOnce(
+            jsonResponse({ error: 'Search reports unavailable' }, 500),
+        )
         const store = useReportStore()
 
-        await expect(store.fetchReports()).rejects.toThrow('API request failed (500)')
+        await expect(store.fetchReports()).rejects.toThrow('Search reports unavailable')
 
-        expect(store.error).toBe('API request failed (500)')
+        expect(store.error).toBe('Search reports unavailable')
         expect(store.loading).toBe(false)
     })
 })

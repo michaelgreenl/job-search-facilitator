@@ -132,6 +132,8 @@ watch(
         if (changed) {
             outreachStore.reset()
             outreachExpanded.value = false
+            labelError.value = null
+            applicationError.value = null
         }
 
         if (selectedPostId.value === null) {
@@ -236,6 +238,7 @@ async function openOutreach() {
 
     outreachStore.openForPost(post.id)
     outreachExpanded.value = false
+    activePanel.value = 'outreach'
 
     try {
         const savedContacts = await outreachStore.fetchContacts(post.id)
@@ -245,7 +248,8 @@ async function openOutreach() {
             workStore.taskActive ||
             savedContacts === null ||
             outreachStore.postId !== post.id ||
-            selectedPostId.value !== post.id
+            selectedPostId.value !== post.id ||
+            activePanel.value !== 'outreach'
         ) {
             return
         }
@@ -257,9 +261,7 @@ async function openOutreach() {
 
         await startContactDiscovery(post)
     } catch {
-        if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
-            activePanel.value = 'outreach'
-        }
+        // The contact list owns the error; preserve the user's current panel.
     }
 }
 
@@ -317,7 +319,9 @@ async function updateUserLabel(userLabel: UserLabel | null) {
             retainedForgoneLabelByPostId.delete(postId)
         }
 
-        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        if (selectedPostId.value === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        }
     } finally {
         labelUpdating.value = false
     }
@@ -355,6 +359,9 @@ async function markApplied() {
 }
 
 async function loadApplyQueue() {
+    listLoading.value = true
+    listError.value = null
+
     try {
         const items = await postStore.fetchApplyQueue()
         applyQueuePostIds.value = items.map(({ post }) => post.id)
@@ -410,6 +417,7 @@ onMounted(() => {
                     loading-message="Loading Apply queue…"
                     empty-message="No job posts match this filter."
                     @select="selectPost"
+                    @retry="loadApplyQueue"
                 />
             </FlowPanel>
 
@@ -462,6 +470,7 @@ onMounted(() => {
                     @collapse="collapseOutreach"
                     @discover="discoverAnotherContact"
                     @expand="expandOutreach"
+                    @retry-contacts="openOutreach"
                     @show-viewer="showViewer"
                 />
             </FlowPanel>

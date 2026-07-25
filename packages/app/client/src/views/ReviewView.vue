@@ -78,6 +78,7 @@ function pushSelectionState(reportId?: string, postId?: string, replace = false)
 }
 
 function restoreRouteSelection() {
+    const previousPostId = selectedResult.value?.post.id ?? null
     const stateReportId = getHistoryId('reviewReportId')
     const statePostId = getHistoryId('reviewPostId')
     const hasSelectionState = stateReportId !== null || statePostId !== null
@@ -91,6 +92,10 @@ function restoreRouteSelection() {
 
     selectedReport.value = report
     selectedResult.value = result
+
+    if (previousPostId !== (result?.post.id ?? null)) {
+        labelError.value = null
+    }
 
     if (
         route.query.reportId !== undefined ||
@@ -233,21 +238,25 @@ async function updateUserLabel(userLabel: UserLabel | null) {
     try {
         await postStore.updatePost(postId, { userLabel })
     } catch (error) {
-        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        if (selectedResult.value?.post.id === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        }
     } finally {
         labelUpdating.value = false
     }
 }
 
-onMounted(() => {
-    void reportStore
-        .fetchReports()
-        .then(() => {
-            reportsLoaded.value = true
-            restoreRouteSelection()
-        })
-        .catch(() => undefined)
-})
+async function loadReports() {
+    try {
+        await reportStore.fetchReports()
+        reportsLoaded.value = true
+        restoreRouteSelection()
+    } catch {
+        // The report store owns the error rendered by SearchReportSelector.
+    }
+}
+
+onMounted(() => void loadReports())
 </script>
 
 <template>
@@ -265,6 +274,7 @@ onMounted(() => {
                     :loading="reportStore.loading"
                     :error="reportStore.error"
                     @select="selectReport"
+                    @retry="loadReports"
                 />
             </FlowPanel>
 

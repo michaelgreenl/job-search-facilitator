@@ -14,8 +14,10 @@ defineProps<{
     requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
     expanded: boolean
+    issue: string | null
     messagedError: string | null
     messagedUpdating: boolean
+    reconnecting: boolean
 }>()
 
 const emit = defineEmits<{
@@ -89,6 +91,17 @@ const copyFeedbackId = useId()
             <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
                 {{ assistantReply }}
             </p>
+            <p
+                v-if="reconnecting"
+                class="draft-reconnect"
+                data-testid="outreach-draft-reconnect"
+                role="status"
+            >
+                Reconnecting to Work…
+            </p>
+            <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
+                {{ issue }}
+            </p>
 
             <form class="draft-request" @submit.prevent="emit('submit')">
                 <div class="request-field">
@@ -96,6 +109,7 @@ const copyFeedbackId = useId()
                         id="draft-request"
                         v-model="request"
                         class="text-field request-input"
+                        data-testid="outreach-draft-request"
                         rows="1"
                         aria-label="Request draft changes"
                         :disabled="running"
@@ -104,6 +118,7 @@ const copyFeedbackId = useId()
                     <button
                         class="field-action send-button"
                         type="submit"
+                        data-testid="outreach-draft-submit"
                         aria-label="Send request"
                         :aria-busy="requestingChanges || undefined"
                         :disabled="running || !canSubmit"
@@ -150,10 +165,20 @@ const copyFeedbackId = useId()
     min-height: 0;
 }
 
-.assistant-reply {
+.assistant-reply,
+.draft-reconnect,
+.draft-issue {
     margin: 0;
-    color: $color-ink-secondary;
     font-size: 0.875rem;
+}
+
+.assistant-reply,
+.draft-reconnect {
+    color: $color-ink-secondary;
+}
+
+.draft-issue {
+    color: lighten-color($color-red-600, 20%);
 }
 
 .draft-request {

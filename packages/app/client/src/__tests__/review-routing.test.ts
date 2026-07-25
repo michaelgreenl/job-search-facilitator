@@ -92,9 +92,9 @@ const thirdReport = createReport(
 )
 const reports = [firstReport, secondReport, thirdReport]
 
-const jsonResponse = (body: unknown) =>
+const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
-        status: 200,
+        status,
         headers: { 'Content-Type': 'application/json' },
     })
 
@@ -122,6 +122,14 @@ const reportButton = (root: HTMLElement, reportId: string) =>
 const postButton = (root: HTMLElement, postId: string) =>
     findTestButton(root, `job-post-card-${postId}`)
 
+const chooseJobPostAction = async (root: HTMLElement, value: string) => {
+    findTestButton(root, 'job-label-trigger').click()
+    await vi.waitFor(() =>
+        expect(root.querySelector(`[data-testid="job-label-option-${value}"]`)).not.toBeNull(),
+    )
+    findTestButton(root, `job-label-option-${value}`).click()
+}
+
 const expectReportCards = (root: HTMLElement, visibleIds: string[]) => {
     for (const report of reports) {
         expect(root.querySelector(`[data-testid="report-card-${report.id}"]`) !== null).toBe(
@@ -146,7 +154,11 @@ const setDateInput = (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
+const mountReview = async (
+    initialUrl = '/',
+    initialState?: HistoryState,
+    waitForReports = true,
+) => {
     const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: '/', component: ReviewView }],
@@ -167,9 +179,13 @@ const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
     const mountedReview = { app, root, router }
     mountedReviews.push(mountedReview)
 
-    await vi.waitFor(() =>
-        expect(root.querySelector(`[data-testid="report-card-${secondReport.id}"]`)).not.toBeNull(),
-    )
+    if (waitForReports) {
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
+            ).not.toBeNull(),
+        )
+    }
 
     return mountedReview
 }
@@ -212,6 +228,31 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
             })
         })
+    })
+
+    it('announces and retries a failed report load', async () => {
+        let resolveInitialLoad: ((response: Response) => void) | undefined
+        const initialLoad = new Promise<Response>((resolve) => {
+            resolveInitialLoad = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockReturnValueOnce(initialLoad)
+            .mockResolvedValueOnce(jsonResponse(reports))
+        const { root } = await mountReview('/', undefined, false)
+
+        await vi.waitFor(() => expect(root.querySelector('[role="status"]')).not.toBeNull())
+        resolveInitialLoad?.(jsonResponse({}, 500))
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'review-report-retry').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
+            ).not.toBeNull(),
+        )
     })
 
     it('filters report posts by review state', async () => {
@@ -347,6 +388,66 @@ describe('review route selection', () => {
                 reviewPostId: secondPost.id,
             })
         })
+    })
+
+    it('shows a label failure only on its originating selected post', async () => {
+        let resolveUpdate: ((response: Response) => void) | undefined
+        const updateResponse = new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(reports))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+            .mockReturnValueOnce(updateResponse)
+        const { root, router } = await mountReview()
+
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull(),
+        )
+        postButton(root, labeledPost.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(labeledPost.id),
+        )
+        postButton(root, secondPost.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id),
+        )
+        await chooseJobPostAction(root, 'P1')
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="job-post-error"]')).not.toBeNull(),
+        )
+
+        router.back()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(labeledPost.id),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
+
+        await chooseJobPostAction(root, 'P2')
+        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3))
+
+        router.forward()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id),
+        )
+        resolveUpdate?.(jsonResponse({}, 500))
+
+        await vi.waitFor(() =>
+            expect(findTestButton(root, 'job-label-trigger').disabled).toBe(false),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
     })
 
     it('removes only the hidden post state when returning to the report posts', async () => {

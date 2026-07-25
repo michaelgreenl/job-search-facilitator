@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     select: [contact: OutreachContact]
     showStream: []
+    retry: []
 }>()
 
 const contactFilter = defineModel<OutreachContactFilter>('filter', { default: 'all' })
@@ -72,26 +73,48 @@ function selectContactFilter(value: string) {
             />
         </div>
 
-        <p v-if="error" class="contact-history-error" role="alert">{{ error }}</p>
-
-        <ul v-if="discovering || filteredContacts.length > 0" class="contact-list">
-            <li v-if="discovering">
-                <OutreachContactCard loading selectable @select="emit('showStream')" />
-            </li>
-            <li v-for="savedContact in filteredContacts" :key="savedContact.id">
-                <OutreachContactCard
-                    :contact="savedContact"
-                    selectable
-                    @select="emit('select', savedContact)"
-                />
-            </li>
-        </ul>
-
-        <p v-else-if="loading" class="contact-history-empty">Loading saved contacts…</p>
-        <p v-else-if="contacts.length > 0" class="contact-history-empty">
-            No contacts match this filter.
+        <p
+            v-if="loading"
+            class="contact-history-empty"
+            data-testid="outreach-contacts-loading"
+            role="status"
+        >
+            Loading saved contacts…
         </p>
-        <p v-else class="contact-history-empty">No saved contacts yet.</p>
+
+        <template v-else-if="error">
+            <p class="contact-history-error" data-testid="outreach-contacts-error" role="alert">
+                {{ error }}
+            </p>
+            <button
+                class="retry-button"
+                data-testid="outreach-contacts-retry"
+                type="button"
+                @click="emit('retry')"
+            >
+                Retry
+            </button>
+        </template>
+
+        <template v-else>
+            <ul v-if="discovering || filteredContacts.length > 0" class="contact-list">
+                <li v-if="discovering">
+                    <OutreachContactCard loading selectable @select="emit('showStream')" />
+                </li>
+                <li v-for="savedContact in filteredContacts" :key="savedContact.id">
+                    <OutreachContactCard
+                        :contact="savedContact"
+                        selectable
+                        @select="emit('select', savedContact)"
+                    />
+                </li>
+            </ul>
+
+            <p v-else-if="contacts.length > 0" class="contact-history-empty">
+                No contacts match this filter.
+            </p>
+            <p v-else class="contact-history-empty">No saved contacts yet.</p>
+        </template>
     </section>
 </template>
 
@@ -156,5 +179,22 @@ function selectContactFilter(value: string) {
 
 .contact-history-error {
     color: lighten-color($color-red-600, 20%);
+}
+
+.retry-button {
+    width: fit-content;
+    padding: 0;
+    color: $color-signal-light;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-ink;
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
 }
 </style>

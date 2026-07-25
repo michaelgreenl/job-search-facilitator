@@ -223,4 +223,20 @@ describe('work stream', () => {
             expect(root.querySelector('[role="alert"]')).toBe(document.activeElement)
         })
     })
+
+    it('announces reconnecting until the Work stream reconnects', async () => {
+        const { root, store } = mountWorkStream()
+
+        store.connectionState = 'reconnecting'
+        await nextTick()
+
+        expect(
+            root.querySelector('[data-testid="work-reconnect-status"]')?.getAttribute('role'),
+        ).toBe('status')
+
+        store.connectionState = 'connected'
+        await nextTick()
+
+        expect(root.querySelector('[data-testid="work-reconnect-status"]')).toBeNull()
+    })
 })
