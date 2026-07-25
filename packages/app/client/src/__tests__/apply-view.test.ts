@@ -117,6 +117,11 @@ class FakeEventSource {
         this.readyState = FakeEventSource.CONNECTING
         this.onerror?.()
     }
+
+    fail() {
+        this.readyState = FakeEventSource.CLOSED
+        this.onerror?.()
+    }
 }
 
 const findTestButton = (root: HTMLElement, testId: string) => {
@@ -387,7 +392,7 @@ describe('apply view', () => {
         )
     })
 
-    it('announces Work reconnection while revising an outreach draft', async () => {
+    it('keeps a running draft recoverable across Work connection failures', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -433,6 +438,7 @@ describe('apply view', () => {
             return instance
         })
         source.open()
+        expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).toBeNull()
         source.disconnect()
 
         await vi.waitFor(() =>
@@ -447,6 +453,14 @@ describe('apply view', () => {
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-draft-reconnect"]')).toBeNull(),
         )
+
+        source.fail()
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[data-testid="outreach-draft-issue"]')?.getAttribute('role'),
+            ).toBe('alert')
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+        })
     })
 
     it('moves a first contact discovery into the task stream', async () => {

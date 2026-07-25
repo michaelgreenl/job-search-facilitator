@@ -201,7 +201,7 @@ async function copyDraft() {
                         @back="emit('showViewer')"
                     />
                     <PanelBackButton
-                        v-else
+                        v-else-if="!(drafting && taskActive)"
                         label="Back to saved contacts"
                         test-id="back-to-saved-contacts"
                         @back="showContacts"
@@ -288,6 +288,7 @@ async function copyDraft() {
         <button
             v-if="canCancel"
             class="cancel-action"
+            data-testid="outreach-cancel"
             type="button"
             aria-label="Cancel outreach task"
             :disabled="cancelling"
