@@ -132,6 +132,8 @@ watch(
         if (changed) {
             outreachStore.reset()
             outreachExpanded.value = false
+            labelError.value = null
+            applicationError.value = null
         }
 
         if (selectedPostId.value === null) {

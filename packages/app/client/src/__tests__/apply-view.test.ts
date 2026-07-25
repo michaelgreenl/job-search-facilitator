@@ -318,7 +318,7 @@ describe('apply view', () => {
         )
     })
 
-    it('retries saved contacts without exposing stale contacts or losing navigation', async () => {
+    it('preserves navigation without exposing stale contacts during a saved-contact retry', async () => {
         let resolveRetry: ((response: Response) => void) | undefined
         const retryResponse = new Promise<Response>((resolve) => {
             resolveRetry = resolve
@@ -695,11 +695,35 @@ describe('apply view', () => {
             expect(root.querySelector('[data-testid="job-post-error"]')).not.toBeNull(),
         )
 
+        findTestButton(root, 'apply-post-filter-trigger').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="apply-post-filter-option-P2"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'apply-post-filter-option-P2').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(posts[1]!.id),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
+
         await chooseJobPostAction(root, 'quick-app')
         await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3))
 
-        findTestButton(root, 'back-to-job-posts').click()
-        await selectPost(root, posts[1]!.id)
+        findTestButton(root, 'apply-post-filter-trigger').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="apply-post-filter-option-P1"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'apply-post-filter-option-P1').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(posts[0]!.id),
+        )
         resolveUpdate?.(jsonResponse({}, 500))
 
         await vi.waitFor(() =>

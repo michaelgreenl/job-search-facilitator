@@ -400,13 +400,19 @@ describe('review route selection', () => {
             .mockResolvedValueOnce(jsonResponse(reports))
             .mockResolvedValueOnce(jsonResponse({}, 500))
             .mockReturnValueOnce(updateResponse)
-        const { root } = await mountReview()
+        const { root, router } = await mountReview()
 
         reportButton(root, secondReport.id).click()
         await vi.waitFor(() =>
             expect(
                 root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
             ).not.toBeNull(),
+        )
+        postButton(root, labeledPost.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(labeledPost.id),
         )
         postButton(root, secondPost.id).click()
         await vi.waitFor(() =>
@@ -419,15 +425,22 @@ describe('review route selection', () => {
             expect(root.querySelector('[data-testid="job-post-error"]')).not.toBeNull(),
         )
 
-        await chooseJobPostAction(root, 'P2')
-        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3))
-
-        findTestButton(root, 'back-to-job-posts').click()
-        postButton(root, labeledPost.id).click()
+        router.back()
         await vi.waitFor(() =>
             expect(
                 root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
             ).toBe(labeledPost.id),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
+
+        await chooseJobPostAction(root, 'P2')
+        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3))
+
+        router.forward()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id),
         )
         resolveUpdate?.(jsonResponse({}, 500))
 

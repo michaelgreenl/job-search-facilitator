@@ -78,6 +78,7 @@ function pushSelectionState(reportId?: string, postId?: string, replace = false)
 }
 
 function restoreRouteSelection() {
+    const previousPostId = selectedResult.value?.post.id ?? null
     const stateReportId = getHistoryId('reviewReportId')
     const statePostId = getHistoryId('reviewPostId')
     const hasSelectionState = stateReportId !== null || statePostId !== null
@@ -91,6 +92,10 @@ function restoreRouteSelection() {
 
     selectedReport.value = report
     selectedResult.value = result
+
+    if (previousPostId !== (result?.post.id ?? null)) {
+        labelError.value = null
+    }
 
     if (
         route.query.reportId !== undefined ||
