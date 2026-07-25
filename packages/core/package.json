@@ -11,9 +11,10 @@
     },
     "scripts": {
         "generate": "prisma generate",
+        "test": "node --test scripts/*.test.ts",
         "validate": "prisma validate",
         "db:push": "prisma db push",
-        "db:reset": "prisma migrate reset --force",
+        "db:reset": "node scripts/assert-local-database.ts && prisma migrate reset --force",
         "db:migrate": "prisma migrate dev",
         "db:deploy": "prisma migrate deploy",
         "db:seed": "prisma db seed",
