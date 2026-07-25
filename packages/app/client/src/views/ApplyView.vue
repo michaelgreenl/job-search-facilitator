@@ -357,6 +357,9 @@ async function markApplied() {
 }
 
 async function loadApplyQueue() {
+    listLoading.value = true
+    listError.value = null
+
     try {
         const items = await postStore.fetchApplyQueue()
         applyQueuePostIds.value = items.map(({ post }) => post.id)
@@ -412,6 +415,7 @@ onMounted(() => {
                     loading-message="Loading Apply queue…"
                     empty-message="No job posts match this filter."
                     @select="selectPost"
+                    @retry="loadApplyQueue"
                 />
             </FlowPanel>
 

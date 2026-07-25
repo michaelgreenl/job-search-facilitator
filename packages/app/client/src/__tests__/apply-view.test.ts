@@ -115,7 +115,7 @@ const findTestButton = (root: HTMLElement, testId: string) => {
 const postButton = (root: HTMLElement, postId: string) =>
     findTestButton(root, `job-post-card-${postId}`)
 
-const mountApplyView = async (pinia: Pinia = createPinia()) => {
+const mountApplyView = async (pinia: Pinia = createPinia(), waitForQueue = true) => {
     const root = document.createElement('div')
     document.body.append(root)
 
@@ -124,9 +124,13 @@ const mountApplyView = async (pinia: Pinia = createPinia()) => {
     app.mount(root)
     mountedApps.push({ app, root })
 
-    await vi.waitFor(() =>
-        expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).not.toBeNull(),
-    )
+    if (waitForQueue) {
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`),
+            ).not.toBeNull(),
+        )
+    }
 
     return root
 }
@@ -182,6 +186,32 @@ describe('apply view', () => {
             ).not.toBeNull()
             expect(root.querySelector(`[data-testid="job-post-card-${posts[2]!.id}"]`)).toBeNull()
         })
+    })
+
+    it('announces and retries a failed Apply queue load', async () => {
+        let resolveInitialLoad: ((response: Response) => void) | undefined
+        const initialLoad = new Promise<Response>((resolve) => {
+            resolveInitialLoad = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockReturnValueOnce(initialLoad)
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+        const root = await mountApplyView(createPinia(), false)
+
+        await vi.waitFor(() => expect(root.querySelector('[role="status"]')).not.toBeNull())
+        resolveInitialLoad?.(jsonResponse({}, 500))
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="job-post-list-retry"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'job-post-list-retry').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`),
+            ).not.toBeNull(),
+        )
     })
 
     it('does not admit a fetched post outside the current Apply queue', async () => {
