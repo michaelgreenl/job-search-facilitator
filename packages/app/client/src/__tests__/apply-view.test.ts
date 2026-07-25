@@ -405,22 +405,49 @@ describe('apply view', () => {
         expect(FakeEventSource.instances).toHaveLength(0)
     })
 
-    it('keeps a newly applied post in the queue for the current visit', async () => {
+    it('keeps applied and forgone posts in the filtered queue for the current visit', async () => {
+        const forgoSourcePost = {
+            ...posts[1]!,
+            userLabel: 'P1' as const,
+        }
         const appliedPost = {
             ...posts[0]!,
             applicationStatus: 'awaiting-response' as const,
             updatedAt: '2026-07-16T12:00:01.000Z',
         }
+        const forgonePost = {
+            ...forgoSourcePost,
+            userLabel: 'forgo' as const,
+            updatedAt: '2026-07-16T12:00:01.000Z',
+        }
+        let resolveForgo: ((response: Response) => void) | undefined
+        const forgoResponse = new Promise<Response>((resolve) => {
+            resolveForgo = resolve
+        })
         vi.mocked(fetch)
             .mockReset()
-            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(
+                jsonResponse([
+                    createApplyQueueItem(posts[0]!),
+                    createApplyQueueItem(forgoSourcePost),
+                ]),
+            )
             .mockResolvedValueOnce(
                 jsonResponse({
                     post: appliedPost,
                     inApplyQueue: false,
                 }),
             )
+            .mockReturnValueOnce(forgoResponse)
         const root = await mountApplyView()
+
+        findTestButton(root, 'apply-post-filter-trigger').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="apply-post-filter-option-P1"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'apply-post-filter-option-P1').click()
 
         await selectPost(root, posts[0]!.id)
         await chooseJobPostAction(root, 'applied')
@@ -430,44 +457,25 @@ describe('apply view', () => {
         )
         findTestButton(root, 'back-to-job-posts').click()
 
-        await vi.waitFor(() => {
-            expect(
-                root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`),
-            ).not.toBeNull()
-            expect(
-                root.querySelector(`[data-testid="job-post-card-${posts[1]!.id}"]`),
-            ).not.toBeNull()
-        })
-    })
-
-    it('removes a forgone post from the Apply queue', async () => {
-        const forgonePost = {
-            ...posts[0]!,
-            userLabel: 'forgo' as const,
-            updatedAt: '2026-07-16T12:00:01.000Z',
-        }
-        vi.mocked(fetch)
-            .mockReset()
-            .mockResolvedValueOnce(jsonResponse([createApplyQueueItem(posts[0]!)]))
-            .mockResolvedValueOnce(
-                jsonResponse({
-                    post: forgonePost,
-                    inApplyQueue: false,
-                }),
-            )
-        const root = await mountApplyView()
-
-        await selectPost(root, posts[0]!.id)
-        await chooseJobPostAction(root, 'forgo')
+        await selectPost(root, forgoSourcePost.id)
+        const labelTrigger = await chooseJobPostAction(root, 'forgo')
+        await vi.waitFor(() => expect(labelTrigger.disabled).toBe(true))
+        resolveForgo?.(
+            jsonResponse({
+                post: forgonePost,
+                inApplyQueue: false,
+            }),
+        )
+        await vi.waitFor(() => expect(labelTrigger.disabled).toBe(false))
+        findTestButton(root, 'back-to-job-posts').click()
 
         await vi.waitFor(() => {
-            expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).toBeNull()
-            expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
             expect(
-                root
-                    .querySelector('[data-testid="apply-posts-panel"]')
-                    ?.getAttribute('data-active'),
-            ).toBe('true')
+                [posts[0]!.id, forgoSourcePost.id].map(
+                    (postId) =>
+                        root.querySelector(`[data-testid="job-post-card-${postId}"]`) !== null,
+                ),
+            ).toEqual([true, true])
         })
     })
 })

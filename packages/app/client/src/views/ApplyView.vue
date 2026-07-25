@@ -6,7 +6,7 @@ import {
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
@@ -57,6 +57,7 @@ const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
 const applyQueuePostIds = shallowRef<readonly string[] | null>(null)
+const retainedForgoneLabelByPostId = reactive(new Map<string, ApplyLabel>())
 const recommendationContextByPostId = shallowRef<
     ReadonlyMap<string, JobRecommendationContext | null>
 >(new Map())
@@ -66,7 +67,7 @@ onBeforeUnmount(() => {
     viewMounted = false
 })
 
-// Server responses own membership; this ID snapshot keeps newly applied posts for this visit.
+// The route-local snapshot keeps newly applied or forgone posts until this view remounts.
 const currentVisitApplyQueue = computed(() =>
     applyQueuePostIds.value === null
         ? []
@@ -79,7 +80,11 @@ const currentVisitApplyQueue = computed(() =>
 const filteredPosts = computed(() =>
     postFilter.value === 'all'
         ? currentVisitApplyQueue.value
-        : currentVisitApplyQueue.value.filter(({ userLabel }) => userLabel === postFilter.value),
+        : currentVisitApplyQueue.value.filter(
+              ({ id, userLabel }) =>
+                  userLabel === postFilter.value ||
+                  retainedForgoneLabelByPostId.get(id) === postFilter.value,
+          ),
 )
 const postFilterLabel = computed(
     () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
@@ -273,8 +278,10 @@ function collapseOutreach() {
 }
 
 async function updateUserLabel(userLabel: UserLabel | null) {
+    const post = selectedPost.value
+
     if (
-        selectedPostId.value === null ||
+        post === null ||
         applyQueuePostIds.value === null ||
         labelUpdating.value ||
         applicationUpdating.value
@@ -282,15 +289,34 @@ async function updateUserLabel(userLabel: UserLabel | null) {
         return
     }
 
-    const postId = selectedPostId.value
+    const postId = post.id
+    const previousUserLabel = post.userLabel
+    const retainedForgoneLabel =
+        userLabel === 'forgo' && previousUserLabel !== null && previousUserLabel !== 'forgo'
+            ? previousUserLabel
+            : null
     labelUpdating.value = true
     labelError.value = null
     applicationError.value = null
 
+    if (retainedForgoneLabel !== null) {
+        retainedForgoneLabelByPostId.set(postId, retainedForgoneLabel)
+    }
+
     try {
         const result = await postStore.updatePost(postId, { userLabel })
+
+        if (userLabel === 'forgo') {
+            return
+        }
+
+        retainedForgoneLabelByPostId.delete(postId)
         updateApplyQueueMembership(postId, result.inApplyQueue)
     } catch (error) {
+        if (retainedForgoneLabel !== null) {
+            retainedForgoneLabelByPostId.delete(postId)
+        }
+
         labelError.value = error instanceof Error ? error.message : 'Could not update label'
     } finally {
         labelUpdating.value = false
