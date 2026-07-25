@@ -1,4 +1,7 @@
+import { shallowRef } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
+
+export const navigationFailed = shallowRef(false)
 
 export const navigationRoutes = {
     review: {
@@ -33,6 +36,11 @@ export const router = createRouter({
         { path: '/review', redirect: { name: 'review' } },
         { path: '/:pathMatch(.*)*', redirect: { name: 'review' } },
     ],
+})
+
+router.onError((error) => {
+    navigationFailed.value = true
+    console.error(error)
 })
 
 router.afterEach((to) => {
