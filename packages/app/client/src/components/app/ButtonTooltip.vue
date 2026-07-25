@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
             <span
                 ref="tooltip"
                 :id="tooltipId"
-                class="button-tooltip-content tooltip-surface"
+                class="content tooltip-surface"
                 data-testid="button-tooltip-content"
                 :class="[`is-${placement}`, { 'is-visible': visible }]"
                 :style="position"
@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
     width: fit-content;
 }
 
-.button-tooltip-content.tooltip-surface {
+.content.tooltip-surface {
     position: fixed;
     z-index: 50;
     max-width: min(14rem, calc(100vw - #{$space-6}));

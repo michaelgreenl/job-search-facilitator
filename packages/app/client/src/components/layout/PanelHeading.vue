@@ -29,7 +29,7 @@ const emit = defineEmits<{
             />
 
             <span class="eyebrow">{{ props.eyebrow }}</span>
-            <component :is="props.titleTag" class="panel-heading-title">
+            <component :is="props.titleTag" class="heading">
                 {{ props.title }}
             </component>
         </div>
@@ -63,7 +63,7 @@ const emit = defineEmits<{
     text-transform: uppercase;
 }
 
-.panel-heading-title {
+.heading {
     margin: 0;
     font-size: 1.75rem;
     font-weight: 600;
