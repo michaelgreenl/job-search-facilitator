@@ -154,7 +154,11 @@ const setDateInput = (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
+const mountReview = async (
+    initialUrl = '/',
+    initialState?: HistoryState,
+    waitForReports = true,
+) => {
     const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: '/', component: ReviewView }],
@@ -175,9 +179,13 @@ const mountReview = async (initialUrl = '/', initialState?: HistoryState) => {
     const mountedReview = { app, root, router }
     mountedReviews.push(mountedReview)
 
-    await vi.waitFor(() =>
-        expect(root.querySelector(`[data-testid="report-card-${secondReport.id}"]`)).not.toBeNull(),
-    )
+    if (waitForReports) {
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
+            ).not.toBeNull(),
+        )
+    }
 
     return mountedReview
 }
@@ -220,6 +228,32 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
             })
         })
+    })
+
+    it('announces and retries a failed report load', async () => {
+        let resolveInitialLoad: ((response: Response) => void) | undefined
+        const initialLoad = new Promise<Response>((resolve) => {
+            resolveInitialLoad = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockReturnValueOnce(initialLoad)
+            .mockResolvedValueOnce(jsonResponse(reports))
+        const { root } = await mountReview('/', undefined, false)
+
+        await vi.waitFor(() => expect(root.querySelector('[role="status"]')).not.toBeNull())
+        resolveInitialLoad?.(jsonResponse({}, 500))
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="review-report-retry"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'review-report-retry').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
+            ).not.toBeNull(),
+        )
     })
 
     it('filters report posts by review state', async () => {

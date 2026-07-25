@@ -241,15 +241,17 @@ async function updateUserLabel(userLabel: UserLabel | null) {
     }
 }
 
-onMounted(() => {
-    void reportStore
-        .fetchReports()
-        .then(() => {
-            reportsLoaded.value = true
-            restoreRouteSelection()
-        })
-        .catch(() => undefined)
-})
+async function loadReports() {
+    try {
+        await reportStore.fetchReports()
+        reportsLoaded.value = true
+        restoreRouteSelection()
+    } catch {
+        // The report store owns the error rendered by SearchReportSelector.
+    }
+}
+
+onMounted(() => void loadReports())
 </script>
 
 <template>
@@ -267,6 +269,7 @@ onMounted(() => {
                     :loading="reportStore.loading"
                     :error="reportStore.error"
                     @select="selectReport"
+                    @retry="loadReports"
                 />
             </FlowPanel>
 
