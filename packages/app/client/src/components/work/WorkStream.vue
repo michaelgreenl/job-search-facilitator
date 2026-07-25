@@ -12,8 +12,14 @@ import WorkActionPrompt from './WorkActionPrompt.vue'
 const props = defineProps<{ issue: string | null }>()
 
 const workStore = useWorkStore()
-const { actionNeedsAttention, actionSubmitting, events, pendingAction, taskActive } =
-    storeToRefs(workStore)
+const {
+    actionNeedsAttention,
+    actionSubmitting,
+    connectionState,
+    events,
+    pendingAction,
+    taskActive,
+} = storeToRefs(workStore)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -132,6 +138,14 @@ function allowBrowserActionsForTask() {
         <p v-if="issue" ref="issueMessage" class="work-error" role="alert" tabindex="-1">
             {{ issue }}
         </p>
+        <p
+            v-if="connectionState === 'reconnecting'"
+            class="work-reconnect"
+            data-testid="work-reconnect-status"
+            role="status"
+        >
+            Reconnecting to Work…
+        </p>
 
         <div
             ref="progress"
@@ -194,6 +208,12 @@ function allowBrowserActionsForTask() {
 .work-error {
     margin: 0;
     color: lighten-color($color-red-600, 20%);
+}
+
+.work-reconnect {
+    margin: 0;
+    color: $color-ink-muted;
+    font-size: 0.875rem;
 }
 
 .work-progress {
