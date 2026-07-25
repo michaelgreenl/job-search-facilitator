@@ -318,7 +318,7 @@ describe('apply view', () => {
         )
     })
 
-    it('announces a failed saved-contact load and hides stale contacts while retrying', async () => {
+    it('retries saved contacts without exposing stale contacts or losing navigation', async () => {
         let resolveRetry: ((response: Response) => void) | undefined
         const retryResponse = new Promise<Response>((resolve) => {
             resolveRetry = resolve
@@ -350,12 +350,14 @@ describe('apply view', () => {
             root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
         ).toBeNull()
 
+        findTestButton(root, 'back-to-job-post').click()
         resolveRetry?.(jsonResponse([savedContact]))
         await vi.waitFor(() =>
-            expect(
-                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
-            ).not.toBeNull(),
+            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).toBeNull(),
         )
+        expect(
+            root.querySelector('[data-testid="apply-viewer-panel"]')?.getAttribute('data-active'),
+        ).toBe('true')
     })
 
     it('shows a Work failure while revising an outreach draft', async () => {

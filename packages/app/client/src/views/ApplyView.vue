@@ -246,7 +246,8 @@ async function openOutreach() {
             workStore.taskActive ||
             savedContacts === null ||
             outreachStore.postId !== post.id ||
-            selectedPostId.value !== post.id
+            selectedPostId.value !== post.id ||
+            activePanel.value !== 'outreach'
         ) {
             return
         }
@@ -258,9 +259,7 @@ async function openOutreach() {
 
         await startContactDiscovery(post)
     } catch {
-        if (viewMounted && outreachStore.postId === post.id && selectedPostId.value === post.id) {
-            activePanel.value = 'outreach'
-        }
+        // The contact list owns the error; preserve the user's current panel.
     }
 }
 
