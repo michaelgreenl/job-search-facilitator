@@ -165,6 +165,57 @@ describe('work stream', () => {
         expect(scrollWrites).toBe(writesAtBottom)
     })
 
+    it('routes required actions and resets confirmation for the next action', async () => {
+        const { root, store } = mountWorkStream()
+        const resolveAction = vi.spyOn(store, 'resolveAction').mockResolvedValue()
+        const allowBrowserActions = vi
+            .spyOn(store, 'allowBrowserActionsForTask')
+            .mockResolvedValue()
+        store.task = runningTask
+        store.pendingAction = {
+            id: 'action-1',
+            kind: 'browser-origin',
+            message: 'Allow access?',
+            origin: 'https://example.com',
+        }
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="work-action-prompt"]')).toBe(
+                document.activeElement,
+            ),
+        )
+
+        root.querySelector<HTMLButtonElement>('[data-testid="work-action-approve"]')?.click()
+        expect(resolveAction).toHaveBeenCalledExactlyOnceWith('approve')
+
+        root.querySelector<HTMLButtonElement>('[data-testid="work-action-always-allow"]')?.click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="work-action-always-allow-cancel"]')).toBe(
+                document.activeElement,
+            ),
+        )
+
+        store.pendingAction = {
+            id: 'action-2',
+            kind: 'browser-origin',
+            message: 'Allow access?',
+            origin: 'https://example.org',
+        }
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="work-action-prompt"]')).toBe(
+                document.activeElement,
+            ),
+        )
+
+        root.querySelector<HTMLButtonElement>('[data-testid="work-action-always-allow"]')?.click()
+        await nextTick()
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="work-action-always-allow-confirm"]',
+        )?.click()
+
+        expect(allowBrowserActions).toHaveBeenCalledOnce()
+    })
+
     it('focuses a Work issue so the failure is announced', async () => {
         const { root } = mountWorkStream('Could not cancel task')
 
