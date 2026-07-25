@@ -59,7 +59,7 @@ describe('browser interaction contracts', () => {
         ]
         mountComponent(AppDropdown, {
             props: {
-                buttonLabel: 'Job post label',
+                accessibleLabel: 'Job post label',
                 disabled: false,
                 label: 'Change label',
                 options,

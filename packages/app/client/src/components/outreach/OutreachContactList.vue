@@ -63,7 +63,7 @@ function selectContactFilter(value: string) {
             </div>
             <AppDropdown
                 class="contact-filter-dropdown"
-                button-label="Filter saved contacts"
+                accessible-label="Filter saved contacts"
                 test-id="contact-filter"
                 :disabled="loading || contacts.length === 0"
                 :options="contactFilterOptions"

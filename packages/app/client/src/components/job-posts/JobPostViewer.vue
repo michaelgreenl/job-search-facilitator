@@ -141,7 +141,7 @@ function selectLabel(value: string) {
 
             <AppDropdown
                 class="label-picker-dropdown"
-                button-label="Job post label"
+                accessible-label="Job post label"
                 test-id="job-label"
                 :label="labelPrompt"
                 :options="labelOptions"

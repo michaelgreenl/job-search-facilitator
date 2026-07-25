@@ -5,7 +5,7 @@ import JobPostCard from './JobPostCard.vue'
 
 withDefaults(
     defineProps<{
-        posts: JobPost[]
+        posts: readonly JobPost[]
         selectedPostId: string | null
         emptyMessage: string
         loadingMessage?: string
