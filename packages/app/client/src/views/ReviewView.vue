@@ -9,7 +9,7 @@ import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/Jo
 import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
-import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
+import SearchReportSelector from '@/components/search-reports/SearchReportSelector.vue'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
 
@@ -33,8 +33,6 @@ const reportStore = useReportStore()
 const postStore = usePostStore()
 const activePanel = shallowRef<ActivePanel>('reports')
 const postFilter = shallowRef<PostFilter>('all')
-const reportDateFrom = shallowRef('')
-const reportDateTo = shallowRef('')
 const selectedReport = shallowRef<JobSearchReport | null>(null)
 const selectedResult = shallowRef<JobSearchResult | null>(null)
 const labelUpdating = shallowRef(false)
@@ -130,56 +128,6 @@ const filteredResults = computed(() => {
     return results
 })
 
-const reportDateFilterActive = computed(
-    () => reportDateFrom.value !== '' || reportDateTo.value !== '',
-)
-const reportDateRangeInvalid = computed(
-    () =>
-        reportDateFrom.value !== '' &&
-        reportDateTo.value !== '' &&
-        reportDateFrom.value > reportDateTo.value,
-)
-const filteredReports = computed(() => {
-    if (reportDateRangeInvalid.value) {
-        return []
-    }
-
-    return reportStore.reports.filter(
-        ({ reportDate }) =>
-            (reportDateFrom.value === '' || reportDate >= reportDateFrom.value) &&
-            (reportDateTo.value === '' || reportDate <= reportDateTo.value),
-    )
-})
-const reportCountLabel = computed(() => {
-    const total = reportStore.reports.length
-
-    return reportDateFilterActive.value
-        ? `${filteredReports.value.length} of ${total} reports`
-        : `${total} reports`
-})
-const reportListEmptyMessage = computed(() => {
-    if (reportStore.reports.length === 0) {
-        return 'No search reports found.'
-    }
-
-    if (reportDateRangeInvalid.value) {
-        return 'From date must be on or before To date.'
-    }
-
-    if (reportDateFrom.value && reportDateTo.value) {
-        if (reportDateFrom.value === reportDateTo.value) {
-            return `No reports ran on ${reportDateFrom.value}.`
-        }
-
-        return `No reports ran from ${reportDateFrom.value} through ${reportDateTo.value}.`
-    }
-
-    if (reportDateFrom.value) {
-        return `No reports ran on or after ${reportDateFrom.value}.`
-    }
-
-    return `No reports ran on or before ${reportDateTo.value}.`
-})
 const postCountLabel = computed(() => {
     const total = selectedReport.value?.results.length ?? 0
 
@@ -202,18 +150,6 @@ const postListEmptyMessage = computed(() => {
         : 'This report has no job posts.'
 })
 
-watch(filteredResults, (results) => {
-    const selectedPostId = selectedResult.value?.post.id
-
-    if (selectedPostId !== undefined && results.some(({ post }) => post.id === selectedPostId)) {
-        return
-    }
-
-    if (selectedResult.value === null && activePanel.value === 'viewer') {
-        activePanel.value = 'posts'
-    }
-})
-
 watch(bp.isLaptop, () => {
     if (reportsLoaded.value) {
         restoreRouteSelection()
@@ -228,7 +164,13 @@ const removeRouteListener = router.afterEach(() => {
 
 onUnmounted(removeRouteListener)
 
-function selectReport(report: JobSearchReport) {
+function selectReport(reportId: string) {
+    const report = reportStore.reports.find(({ id }) => id === reportId)
+
+    if (report === undefined) {
+        return
+    }
+
     selectedReport.value = report
     postFilter.value = 'all'
     labelError.value = null
@@ -262,11 +204,6 @@ function selectPostFilter(value: string) {
     if (isPostFilter(value)) {
         postFilter.value = value
     }
-}
-
-function clearReportDateFilter() {
-    reportDateFrom.value = ''
-    reportDateTo.value = ''
 }
 
 function showReports() {
@@ -322,67 +259,13 @@ onMounted(() => {
                 :adjacent="false"
                 aria-label="Search reports"
             >
-                <div class="report-list-heading">
-                    <PanelHeading
-                        class="report-list-title"
-                        eyebrow="Job Search reports"
-                        title="Select report to review"
-                    />
-
-                    <fieldset class="report-date-filter" aria-label="Filter reports by date">
-                        <div class="report-date-fields">
-                            <input
-                                v-model="reportDateFrom"
-                                class="report-date-input"
-                                type="date"
-                                data-testid="review-date-from"
-                                aria-label="Reports from date"
-                                :max="reportDateTo || undefined"
-                                :disabled="reportStore.loading || reportStore.reports.length === 0"
-                            />
-                            <span class="report-date-separator" aria-hidden="true">–</span>
-                            <input
-                                v-model="reportDateTo"
-                                class="report-date-input"
-                                type="date"
-                                data-testid="review-date-to"
-                                aria-label="Reports through date"
-                                :min="reportDateFrom || undefined"
-                                :disabled="reportStore.loading || reportStore.reports.length === 0"
-                            />
-                            <button
-                                class="report-date-clear"
-                                data-testid="review-date-clear"
-                                :class="{ 'is-hidden': !reportDateFilterActive }"
-                                type="button"
-                                aria-label="Clear report dates"
-                                :disabled="!reportDateFilterActive"
-                                @click="clearReportDateFilter"
-                            >
-                                Clear
-                            </button>
-                        </div>
-                    </fieldset>
-
-                    <span class="item-count report-count">{{ reportCountLabel }}</span>
-                </div>
-
-                <p v-if="reportStore.loading" class="list-message">Loading search reports…</p>
-                <p v-else-if="reportStore.error" class="list-message">
-                    {{ reportStore.error }}
-                </p>
-                <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
-                    <li v-for="report in filteredReports" :key="report.id">
-                        <SearchReportCard
-                            :report="report"
-                            :selected="selectedReport?.id === report.id"
-                            @select="selectReport(report)"
-                        />
-                    </li>
-                </ul>
-                <p v-else class="list-message" data-testid="report-empty-state">
-                    {{ reportListEmptyMessage }}
-                </p>
+                <SearchReportSelector
+                    :reports="reportStore.reports"
+                    :selected-report-id="selectedReport?.id ?? null"
+                    :loading="reportStore.loading"
+                    :error="reportStore.error"
+                    @select="selectReport"
+                />
             </FlowPanel>
 
             <FlowPanel
@@ -484,126 +367,6 @@ onMounted(() => {
     container-type: inline-size;
 }
 
-.report-list-heading {
-    display: grid;
-    grid-template-areas:
-        'title count'
-        'title dates';
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: $space-2 $space-4;
-    align-items: end;
-}
-
-.report-list-title {
-    grid-area: title;
-}
-
-.report-date-filter {
-    grid-area: dates;
-    justify-self: end;
-    width: min(100%, 21rem);
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
-.report-date-fields {
-    display: flex;
-    gap: $space-2;
-    align-items: center;
-    justify-content: flex-start;
-}
-
-.report-date-separator {
-    flex: 0 0 auto;
-    color: $color-ink-muted;
-}
-
-.report-date-input {
-    flex: 1 1 0;
-    width: auto;
-    min-width: 0;
-    min-height: 2rem;
-    padding: $space-1 $space-2;
-    color: $color-ink;
-    font: inherit;
-    font-size: 0.6875rem;
-    color-scheme: dark;
-    background: $color-ink-alpha-6;
-    border: 1px solid $color-ink-alpha-16;
-    border-radius: $radius-sm;
-
-    &:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-    }
-
-    &:focus-visible,
-    &:hover:not(:disabled) {
-        border-color: $color-signal-light-alpha-50;
-    }
-}
-
-.report-date-clear {
-    flex: 0 0 auto;
-    order: -1;
-    padding: $space-1 0;
-    color: $color-signal-light;
-    font: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &.is-hidden {
-        visibility: hidden;
-    }
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
-}
-
-.report-count {
-    grid-area: count;
-    justify-self: end;
-}
-
-@container report-list (max-width: 38rem) {
-    .report-list-heading {
-        grid-template-areas:
-            'title title'
-            'dates count';
-        row-gap: $space-4;
-    }
-
-    .report-date-filter {
-        justify-self: start;
-    }
-
-    .report-date-clear {
-        order: 0;
-    }
-}
-
-@container report-list (max-width: 24rem) {
-    .report-list-heading {
-        grid-template-areas:
-            'title'
-            'dates'
-            'count';
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .report-date-filter {
-        width: 100%;
-    }
-}
-
 .post-filter {
     display: flex;
     gap: $space-3;
@@ -614,25 +377,5 @@ onMounted(() => {
     &-dropdown {
         min-width: 6.5rem;
     }
-}
-
-.card-list {
-    display: flex;
-    flex: 1 0 0;
-    flex-direction: column;
-    gap: $space-3;
-    margin: 0;
-    padding: 0 0 $space-5;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    list-style: none;
-}
-
-.card-list li {
-    min-width: 0;
-}
-
-.list-message {
-    color: $color-ink-muted;
 }
 </style>
