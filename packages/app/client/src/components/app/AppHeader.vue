@@ -61,7 +61,7 @@ function handleFocusOut(event: FocusEvent) {
             <span class="nav-handle-bar" aria-hidden="true"></span>
         </button>
 
-        <div class="nav-surface glass-frame" :aria-hidden="!showNav" :inert="!showNav">
+        <div class="nav-surface glass-frame" :inert="!showNav">
             <RouterLink
                 class="brand"
                 to="/"
@@ -71,12 +71,7 @@ function handleFocusOut(event: FocusEvent) {
                 <span class="brand-mark" aria-hidden="true">JF</span>
             </RouterLink>
 
-            <nav
-                id="primary-navigation"
-                class="nav-links"
-                aria-label="Primary"
-                :aria-hidden="!showNav"
-            >
+            <nav id="primary-navigation" class="nav-links" aria-label="Primary">
                 <RouterLink
                     v-for="item in navigationItems"
                     :key="item.path"

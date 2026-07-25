@@ -126,7 +126,7 @@ describe('browser interaction contracts', () => {
         await expect.element(trigger).toHaveFocus()
     })
 
-    it('closes navigation after following a route', async () => {
+    it('closes navigation after following a route without hiding the focused link', async () => {
         const EmptyRoute = defineComponent({ setup: () => () => h('div') })
         const router = createRouter({
             history: createMemoryHistory(),
@@ -138,14 +138,37 @@ describe('browser interaction contracts', () => {
         })
         await router.push('/')
         await router.isReady()
-        mountComponent(AppHeader, { install: (app) => app.use(router) })
+        const root = mountComponent(AppHeader, { install: (app) => app.use(router) })
         const trigger = page.getByTestId('app-nav-trigger')
+        let hidFocusedElement = false
+        const ariaHiddenObserver = new MutationObserver((records) => {
+            for (const { target } of records) {
+                if (
+                    target instanceof HTMLElement &&
+                    target.getAttribute('aria-hidden') === 'true' &&
+                    target.contains(document.activeElement)
+                ) {
+                    hidFocusedElement = true
+                }
+            }
+        })
+        ariaHiddenObserver.observe(root, {
+            attributeFilter: ['aria-hidden'],
+            attributes: true,
+            subtree: true,
+        })
 
-        await trigger.hover()
-        await page.getByTestId('nav-link-apply').click()
+        try {
+            await trigger.hover()
+            await page.getByTestId('nav-link-apply').click()
 
-        await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/apply'))
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
+            await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/apply'))
+            await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
+        } finally {
+            ariaHiddenObserver.disconnect()
+        }
+
+        expect(hidFocusedElement).toBe(false)
     })
 })
 
