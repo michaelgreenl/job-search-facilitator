@@ -419,6 +419,12 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    ...runningWorkTask,
+                    status: 'cancelled',
+                }),
+            )
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -481,6 +487,9 @@ describe('apply view', () => {
             ).toBe('alert')
             expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
         })
+
+        findTestButton(root, 'outreach-cancel').click()
+        await vi.waitFor(() => expect(request.disabled).toBe(false))
     })
 
     it('moves a first contact discovery into the task stream', async () => {
