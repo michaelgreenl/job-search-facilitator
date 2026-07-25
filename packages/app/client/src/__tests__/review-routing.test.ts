@@ -92,9 +92,9 @@ const thirdReport = createReport(
 )
 const reports = [firstReport, secondReport, thirdReport]
 
-const jsonResponse = (body: unknown) =>
+const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
-        status: 200,
+        status,
         headers: { 'Content-Type': 'application/json' },
     })
 
@@ -121,6 +121,14 @@ const reportButton = (root: HTMLElement, reportId: string) =>
 
 const postButton = (root: HTMLElement, postId: string) =>
     findTestButton(root, `job-post-card-${postId}`)
+
+const chooseJobPostAction = async (root: HTMLElement, value: string) => {
+    findTestButton(root, 'job-label-trigger').click()
+    await vi.waitFor(() =>
+        expect(root.querySelector(`[data-testid="job-label-option-${value}"]`)).not.toBeNull(),
+    )
+    findTestButton(root, `job-label-option-${value}`).click()
+}
 
 const expectReportCards = (root: HTMLElement, visibleIds: string[]) => {
     for (const report of reports) {
@@ -347,6 +355,47 @@ describe('review route selection', () => {
                 reviewPostId: secondPost.id,
             })
         })
+    })
+
+    it('does not show a failed label update on another selected post', async () => {
+        let resolveUpdate: ((response: Response) => void) | undefined
+        const updateResponse = new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(reports))
+            .mockReturnValueOnce(updateResponse)
+        const { root } = await mountReview()
+
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`),
+            ).not.toBeNull(),
+        )
+        postButton(root, secondPost.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(secondPost.id),
+        )
+        await chooseJobPostAction(root, 'P1')
+        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2))
+
+        findTestButton(root, 'back-to-job-posts').click()
+        postButton(root, labeledPost.id).click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
+            ).toBe(labeledPost.id),
+        )
+        resolveUpdate?.(jsonResponse({}, 500))
+
+        await vi.waitFor(() =>
+            expect(findTestButton(root, 'job-label-trigger').disabled).toBe(false),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
     })
 
     it('removes only the hidden post state when returning to the report posts', async () => {

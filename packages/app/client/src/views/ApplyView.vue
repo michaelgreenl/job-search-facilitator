@@ -317,7 +317,9 @@ async function updateUserLabel(userLabel: UserLabel | null) {
             retainedForgoneLabelByPostId.delete(postId)
         }
 
-        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        if (selectedPostId.value === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        }
     } finally {
         labelUpdating.value = false
     }

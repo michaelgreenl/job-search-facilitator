@@ -233,7 +233,9 @@ async function updateUserLabel(userLabel: UserLabel | null) {
     try {
         await postStore.updatePost(postId, { userLabel })
     } catch (error) {
-        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        if (selectedResult.value?.post.id === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        }
     } finally {
         labelUpdating.value = false
     }

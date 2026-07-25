@@ -150,7 +150,9 @@ function selectLabel(value: string) {
             />
         </div>
 
-        <p v-if="postError" class="label-error" role="alert">{{ postError }}</p>
+        <p v-if="postError" class="label-error" data-testid="job-post-error" role="alert">
+            {{ postError }}
+        </p>
 
         <JobPostContent
             :post="post"

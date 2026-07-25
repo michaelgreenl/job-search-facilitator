@@ -513,4 +513,29 @@ describe('apply view', () => {
             ).toEqual([true, true])
         })
     })
+
+    it('does not show a failed label update on another selected post', async () => {
+        let resolveUpdate: ((response: Response) => void) | undefined
+        const updateResponse = new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockReturnValueOnce(updateResponse)
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        await chooseJobPostAction(root, 'P2')
+        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2))
+
+        findTestButton(root, 'back-to-job-posts').click()
+        await selectPost(root, posts[1]!.id)
+        resolveUpdate?.(jsonResponse({}, 500))
+
+        await vi.waitFor(() =>
+            expect(findTestButton(root, 'job-label-trigger').disabled).toBe(false),
+        )
+        expect(root.querySelector('[data-testid="job-post-error"]')).toBeNull()
+    })
 })
