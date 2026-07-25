@@ -112,7 +112,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     <div ref="root" class="app-dropdown">
         <button
             ref="trigger"
-            class="app-dropdown-trigger"
+            class="trigger"
             type="button"
             :data-testid="testId ? `${testId}-trigger` : undefined"
             aria-haspopup="menu"
@@ -125,14 +125,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             @keydown.up.prevent="showMenu('last')"
         >
             <span>{{ label }}</span>
-            <ChevronDownIcon class="app-dropdown-chevron" />
+            <ChevronDownIcon class="chevron" />
         </button>
 
         <ul
             v-if="open"
             :id="menuId"
             ref="menu"
-            class="app-dropdown-list glass-frame"
+            class="list glass-frame"
             :data-testid="testId ? `${testId}-menu` : undefined"
             role="menu"
             :aria-label="buttonLabel"
@@ -146,20 +146,20 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             <li
                 v-for="option in options"
                 :key="option.value"
-                class="app-dropdown-option"
+                class="option"
                 :class="{ 'has-separator': option.separatorBefore }"
                 role="none"
             >
                 <button
-                    class="app-dropdown-item"
-                    :class="`app-dropdown-item-${option.tone ?? 'default'}`"
+                    class="item"
+                    :class="`item-${option.tone ?? 'default'}`"
                     type="button"
                     :data-testid="testId ? `${testId}-option-${option.value}` : undefined"
                     role="menuitem"
                     tabindex="-1"
                     @click="selectOption(option.value)"
                 >
-                    <span class="app-dropdown-marker" aria-hidden="true"></span>
+                    <span class="marker" aria-hidden="true"></span>
                     <span>{{ option.label }}</span>
                 </button>
             </li>
@@ -173,7 +173,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     display: inline-flex;
 }
 
-.app-dropdown-trigger {
+.trigger {
     display: inline-flex;
     gap: $space-3;
     align-items: center;
@@ -201,7 +201,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.app-dropdown-chevron {
+.chevron {
     width: 0.875rem;
     height: 0.875rem;
     fill: none;
@@ -216,7 +216,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.app-dropdown-list {
+.list {
     position: absolute;
     top: calc(100% + $space-2);
     right: 0;
@@ -232,13 +232,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     backdrop-filter: blur(24px) saturate(130%);
 }
 
-.app-dropdown-option.has-separator {
+.option.has-separator {
     padding-top: $space-2;
     margin-top: $space-1;
     border-top: 1px solid $color-ink-alpha-12;
 }
 
-.app-dropdown-item {
+.item {
     display: grid;
     grid-template-columns: 0.625rem minmax(0, 1fr);
     gap: $space-3;
@@ -269,33 +269,33 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
-.app-dropdown-marker {
+.marker {
     width: 0.5rem;
     height: 0.5rem;
     background: $color-ink-muted;
     border-radius: $radius-full;
 
-    .app-dropdown-item-priority-high & {
+    .item-priority-high & {
         background: lighten-color($color-red-600, 25%);
         box-shadow: 0 0 0 3px $color-red-600-alpha-14;
     }
 
-    .app-dropdown-item-priority-medium & {
+    .item-priority-medium & {
         background: $color-amber-500;
         box-shadow: 0 0 0 3px $color-amber-500-alpha-12;
     }
 
-    .app-dropdown-item-quick & {
+    .item-quick & {
         background: $color-signal-light;
         box-shadow: 0 0 0 3px $color-signal-alpha-14;
     }
 
-    .app-dropdown-item-success & {
+    .item-success & {
         background: lighten-color($color-green-600, 25%);
         box-shadow: 0 0 0 3px $color-green-600-alpha-16;
     }
 
-    .app-dropdown-item-muted & {
+    .item-muted & {
         background: transparent;
         border: 1px solid $color-ink-muted;
     }
