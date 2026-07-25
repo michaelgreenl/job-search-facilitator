@@ -20,9 +20,9 @@ import { nextTick, onBeforeUnmount, onMounted, shallowRef, useId, useTemplateRef
 import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 
 const props = defineProps<{
-    buttonLabel: string
+    accessibleLabel: string
     disabled: boolean
-    options: AppDropdownOption[]
+    options: readonly AppDropdownOption[]
     label: string
     testId?: string
 }>()
@@ -116,7 +116,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             type="button"
             :data-testid="testId ? `${testId}-trigger` : undefined"
             aria-haspopup="menu"
-            :aria-label="buttonLabel"
+            :aria-label="accessibleLabel"
             :aria-controls="menuId"
             :aria-expanded="open"
             :disabled="disabled"
@@ -135,7 +135,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             class="list glass-frame"
             :data-testid="testId ? `${testId}-menu` : undefined"
             role="menu"
-            :aria-label="buttonLabel"
+            :aria-label="accessibleLabel"
             @keydown.down.prevent="moveFocus(1)"
             @keydown.up.prevent="moveFocus(-1)"
             @keydown.home.prevent="focusOption(0)"

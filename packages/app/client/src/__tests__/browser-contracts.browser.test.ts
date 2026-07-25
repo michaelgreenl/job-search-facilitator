@@ -59,7 +59,7 @@ describe('browser interaction contracts', () => {
         ]
         mountComponent(AppDropdown, {
             props: {
-                buttonLabel: 'Job post label',
+                accessibleLabel: 'Job post label',
                 disabled: false,
                 label: 'Change label',
                 options,
@@ -173,22 +173,35 @@ describe('browser interaction contracts', () => {
 })
 
 describe('browser layout contracts', () => {
-    it('positions the back-button tooltip inside the viewport and dismisses it with Escape', async () => {
+    it('anchors the back-button tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
         await page.viewport(320, 600)
         mountComponent(PanelBackButton, {
             props: {
                 label: 'Back to the previous panel',
+                style: {
+                    boxSizing: 'border-box',
+                    paddingLeft: '120px',
+                    width: '100%',
+                },
                 testId: 'tooltip-back',
             },
             style: {
                 bottom: '16px',
                 position: 'fixed',
                 right: '0px',
+                width: '320px',
             },
         })
         const button = page.getByTestId('tooltip-back')
         const tooltip = page.getByTestId('button-tooltip-content')
+        const trigger = button.element().parentElement
 
+        if (trigger === null) {
+            throw new Error('Could not find tooltip trigger')
+        }
+
+        await page.elementLocator(trigger).hover()
+        await expect.element(tooltip).not.toBeVisible()
         await button.hover()
         await expect.element(tooltip).toBeVisible()
 
@@ -197,8 +210,11 @@ describe('browser layout contracts', () => {
             expect(tooltip.element().getBoundingClientRect().bottom).toBeLessThan(buttonRect.top),
         )
         const tooltipRect = tooltip.element().getBoundingClientRect()
+        const buttonCenter = buttonRect.left + buttonRect.width / 2
+        const tooltipCenter = tooltipRect.left + tooltipRect.width / 2
 
         expect(button.element().getAttribute('aria-describedby')).toBe(tooltip.element().id)
+        expect(Math.abs(tooltipCenter - buttonCenter)).toBeLessThanOrEqual(1)
         expect(tooltipRect.left).toBeGreaterThanOrEqual(11)
         expect(tooltipRect.right).toBeLessThanOrEqual(309)
 

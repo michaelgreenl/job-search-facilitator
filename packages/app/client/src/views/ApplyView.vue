@@ -391,7 +391,7 @@ onMounted(() => {
                             <span>Filter</span>
                             <AppDropdown
                                 class="post-filter-dropdown"
-                                button-label="Filter job posts"
+                                accessible-label="Filter job posts"
                                 test-id="apply-post-filter"
                                 :disabled="false"
                                 :options="postFilterOptions"

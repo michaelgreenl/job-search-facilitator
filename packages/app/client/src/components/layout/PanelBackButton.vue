@@ -6,12 +6,10 @@ withDefaults(
     defineProps<{
         label: string
         mobileOnly?: boolean
-        disabled?: boolean
         testId?: string
     }>(),
     {
         mobileOnly: false,
-        disabled: false,
     },
 )
 
@@ -32,7 +30,6 @@ const emit = defineEmits<{
             :data-testid="testId"
             :aria-label="label"
             :aria-describedby="tooltipId"
-            :disabled="disabled"
             @click="emit('back')"
         >
             <ArrowLeftIcon class="back-button-icon" />
@@ -53,11 +50,6 @@ const emit = defineEmits<{
     &:hover,
     &:focus-visible {
         color: $color-signal-light;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.5;
     }
 
     &-mobile-only {

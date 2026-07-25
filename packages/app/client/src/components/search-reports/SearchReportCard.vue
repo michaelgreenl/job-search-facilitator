@@ -65,14 +65,6 @@ const reportTime = computed(() =>
     }
 }
 
-.component-label {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
 .report-card-heading {
     display: flex;
     gap: $space-3;
