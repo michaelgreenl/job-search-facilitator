@@ -220,7 +220,6 @@ describe('apply view', () => {
         resolveInitialLoad?.(jsonResponse({}, 500))
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
-            expect(root.querySelector('[data-testid="job-post-list-retry"]')).not.toBeNull()
         })
 
         findTestButton(root, 'job-post-list-retry').click()
@@ -662,7 +661,7 @@ describe('apply view', () => {
         })
     })
 
-    it('does not show a failed label update on another selected post', async () => {
+    it('shows a label failure only on its originating selected post', async () => {
         let resolveUpdate: ((response: Response) => void) | undefined
         const updateResponse = new Promise<Response>((resolve) => {
             resolveUpdate = resolve
@@ -670,12 +669,18 @@ describe('apply view', () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
             .mockReturnValueOnce(updateResponse)
         const root = await mountApplyView()
 
         await selectPost(root, posts[0]!.id)
         await chooseJobPostAction(root, 'P2')
-        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2))
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="job-post-error"]')).not.toBeNull(),
+        )
+
+        await chooseJobPostAction(root, 'quick-app')
+        await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3))
 
         findTestButton(root, 'back-to-job-posts').click()
         await selectPost(root, posts[1]!.id)
