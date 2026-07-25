@@ -236,6 +236,7 @@ async function openOutreach() {
 
     outreachStore.openForPost(post.id)
     outreachExpanded.value = false
+    activePanel.value = 'outreach'
 
     try {
         const savedContacts = await outreachStore.fetchContacts(post.id)
@@ -468,6 +469,7 @@ onMounted(() => {
                     @collapse="collapseOutreach"
                     @discover="discoverAnotherContact"
                     @expand="expandOutreach"
+                    @retry-contacts="openOutreach"
                     @show-viewer="showViewer"
                 />
             </FlowPanel>

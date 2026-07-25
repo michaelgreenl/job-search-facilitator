@@ -297,6 +297,45 @@ describe('apply view', () => {
         )
     })
 
+    it('announces and retries a failed saved-contact load', async () => {
+        let resolveInitialLoad: ((response: Response) => void) | undefined
+        const initialLoad = new Promise<Response>((resolve) => {
+            resolveInitialLoad = resolve
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockReturnValueOnce(initialLoad)
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() => {
+            expect(
+                root
+                    .querySelector('[data-testid="apply-outreach-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).not.toBeNull()
+        })
+
+        resolveInitialLoad?.(jsonResponse({}, 500))
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[data-testid="outreach-contacts-error"]')?.getAttribute('role'),
+            ).toBe('alert')
+            expect(root.querySelector('[data-testid="outreach-contacts-retry"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'outreach-contacts-retry').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+    })
+
     it('shows a Work failure while revising an outreach draft', async () => {
         vi.mocked(fetch)
             .mockReset()

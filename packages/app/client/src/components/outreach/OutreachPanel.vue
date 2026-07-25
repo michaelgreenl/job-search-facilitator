@@ -25,6 +25,7 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    retryContacts: []
     showViewer: []
 }>()
 
@@ -230,6 +231,7 @@ async function copyDraft() {
                 :discovering="discovering && taskActive"
                 :error="contactsError"
                 :loading="contactsLoading"
+                @retry="emit('retryContacts')"
                 @select="selectContact"
                 @show-stream="showStream"
             />
@@ -240,7 +242,13 @@ async function copyDraft() {
                     type="button"
                     aria-label="Discover another contact"
                     :aria-describedby="tooltipId"
-                    :disabled="taskActive || contactsLoading || contactSaving || contactUpdating"
+                    :disabled="
+                        taskActive ||
+                        contactsLoading ||
+                        contactSaving ||
+                        contactUpdating ||
+                        contactsError !== null
+                    "
                     @click="emit('discover')"
                 >
                     <span aria-hidden="true">+</span>
