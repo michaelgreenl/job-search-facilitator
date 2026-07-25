@@ -10,6 +10,7 @@ import type {
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
 import ApplyView from '../views/ApplyView.vue'
 
@@ -298,37 +299,38 @@ describe('apply view', () => {
     })
 
     it('announces and retries a failed saved-contact load', async () => {
-        let resolveInitialLoad: ((response: Response) => void) | undefined
-        const initialLoad = new Promise<Response>((resolve) => {
-            resolveInitialLoad = resolve
+        let resolveRetry: ((response: Response) => void) | undefined
+        const retryResponse = new Promise<Response>((resolve) => {
+            resolveRetry = resolve
         })
+        const pinia = createPinia()
+        const outreachStore = useOutreachStore(pinia)
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
-            .mockReturnValueOnce(initialLoad)
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
-        const root = await mountApplyView()
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+            .mockReturnValueOnce(retryResponse)
+        const root = await mountApplyView(pinia)
+        outreachStore.openForPost(posts[0]!.id)
+        outreachStore.contacts = [savedContact]
 
         await selectPost(root, posts[0]!.id)
         findTestButton(root, 'discover-contacts').click()
         await vi.waitFor(() => {
             expect(
-                root
-                    .querySelector('[data-testid="apply-outreach-panel"]')
-                    ?.getAttribute('data-active'),
-            ).toBe('true')
-            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).not.toBeNull()
-        })
-
-        resolveInitialLoad?.(jsonResponse({}, 500))
-        await vi.waitFor(() => {
-            expect(
                 root.querySelector('[data-testid="outreach-contacts-error"]')?.getAttribute('role'),
             ).toBe('alert')
-            expect(root.querySelector('[data-testid="outreach-contacts-retry"]')).not.toBeNull()
         })
 
         findTestButton(root, 'outreach-contacts-retry').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-contacts-loading"]')).not.toBeNull(),
+        )
+        expect(
+            root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+        ).toBeNull()
+
+        resolveRetry?.(jsonResponse([savedContact]))
         await vi.waitFor(() =>
             expect(
                 root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),

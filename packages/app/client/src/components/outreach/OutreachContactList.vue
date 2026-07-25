@@ -73,7 +73,16 @@ function selectContactFilter(value: string) {
             />
         </div>
 
-        <template v-if="error">
+        <p
+            v-if="loading"
+            class="contact-history-empty"
+            data-testid="outreach-contacts-loading"
+            role="status"
+        >
+            Loading saved contacts…
+        </p>
+
+        <template v-else-if="error">
             <p class="contact-history-error" data-testid="outreach-contacts-error" role="alert">
                 {{ error }}
             </p>
@@ -101,14 +110,6 @@ function selectContactFilter(value: string) {
                 </li>
             </ul>
 
-            <p
-                v-else-if="loading"
-                class="contact-history-empty"
-                data-testid="outreach-contacts-loading"
-                role="status"
-            >
-                Loading saved contacts…
-            </p>
             <p v-else-if="contacts.length > 0" class="contact-history-empty">
                 No contacts match this filter.
             </p>
