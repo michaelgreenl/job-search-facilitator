@@ -112,7 +112,7 @@ $nav-surface-height: 4.25rem;
     gap: $space-4;
     align-items: center;
     min-height: $nav-surface-height;
-    padding: $space-3 $space-4 $space-3 $space-3;
+    padding: $space-3 $space-5 $space-3 $space-3;
     border-top: 0;
     border-radius: 0 0 $radius-lg $radius-lg;
 }
