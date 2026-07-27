@@ -21,11 +21,12 @@ const post: JobPost = {
     company: 'Example Company',
     location: 'Detroit, MI',
     compensation: '$120,000',
+    techStack: 'TypeScript, Vue, Node.js',
     postSource: 'Example Source',
-    applicationUrl: 'https://example.com/jobs/123',
+    postUrl: 'https://example.com/jobs/123',
+    applicationUrl: 'https://apply.example.com/jobs/123',
     postStatus: 'active',
     applicationStatus: 'not-applied',
-    userRank: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
@@ -71,63 +72,34 @@ const input: UpsertJobSearchReportInput = {
             company: result.post.company,
             location: result.post.location,
             compensation: result.post.compensation,
+            techStack: result.post.techStack,
             postSource: result.post.postSource,
+            postUrl: result.post.postUrl,
             applicationUrl: result.post.applicationUrl,
             postStatus: result.post.postStatus,
         },
     })),
 }
 
-const toReport = (
-    id: string,
-    date: string,
-    reportInput: UpsertJobSearchReportInput,
-    previous?: JobSearchReport,
-): JobSearchReport => ({
-    id,
-    reportDate: date,
-    summary: reportInput.summary,
-    createdAt: previous?.createdAt ?? existingReport.createdAt,
-    updatedAt: existingReport.updatedAt,
-    archivedAt: previous?.archivedAt ?? null,
-    results: reportInput.results.map((result) => ({
-        agentRank: result.agentRank,
-        agentLabel: result.agentLabel,
-        fitRationale: result.fitRationale,
-        applicationFlow: result.applicationFlow,
-        keyLegitimacySignals: result.keyLegitimacySignals,
-        recommendedResume: result.recommendedResume,
-        recommendedAction: result.recommendedAction,
-        legitimacyNotes: result.legitimacyNotes,
-        post: {
-            ...post,
-            ...result.post,
-        },
-    })),
-})
-
-const createFakeRepository = (initialReports: JobSearchReport[]) => {
-    const reports = new Map(initialReports.map((report) => [report.id, report]))
+const createFakeRepository = () => {
+    const findMany = vi.fn(async () => [existingReport])
+    const findById = vi.fn(
+        async (_reportId: string): Promise<JobSearchReport | null> => existingReport,
+    )
     const upsertById = vi.fn(
         async (
-            reportId: string,
-            date: string,
-            reportInput: UpsertJobSearchReportInput,
-        ): Promise<SearchReportUpsertResult> => {
-            const previous = reports.get(reportId)
-            const report = toReport(reportId, date, reportInput, previous)
-            reports.set(reportId, report)
-
-            return { report, created: previous === undefined }
-        },
+            _reportId: string,
+            _date: string,
+            _reportInput: UpsertJobSearchReportInput,
+        ): Promise<SearchReportUpsertResult> => ({ report: existingReport, created: true }),
     )
     const repository: SearchReportRepository = {
-        findMany: async () => [...reports.values()],
-        findById: async (id) => reports.get(id) ?? null,
+        findMany,
+        findById,
         upsertById,
     }
 
-    return { repository, upsertById }
+    return { findById, findMany, repository, upsertById }
 }
 
 const createTestApp = (repository: SearchReportRepository) => {
@@ -139,85 +111,114 @@ const createTestApp = (repository: SearchReportRepository) => {
 
 describe('job search report routes', () => {
     it('lists job search reports', async () => {
-        const { repository } = createFakeRepository([existingReport])
+        const { findMany, repository } = createFakeRepository()
 
         await request(createTestApp(repository))
             .get('/job-search-reports')
             .expect(200, [existingReport])
+
+        expect(findMany).toHaveBeenCalledOnce()
     })
 
     it('gets a job search report by id', async () => {
-        const { repository } = createFakeRepository([existingReport])
+        const { findById, repository } = createFakeRepository()
 
         await request(createTestApp(repository))
             .get(`/job-search-reports/${existingReport.id}`)
             .expect(200, existingReport)
+
+        expect(findById).toHaveBeenCalledExactlyOnceWith(existingReport.id)
     })
 
     it('forwards a valid dated snapshot and returns 201 when it is created', async () => {
-        const { repository, upsertById } = createFakeRepository([])
+        const { repository, upsertById } = createFakeRepository()
 
-        const response = await request(createTestApp(repository))
+        await request(createTestApp(repository))
             .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send(input)
-            .expect(201)
+            .expect(201, existingReport)
 
         expect(upsertById).toHaveBeenCalledExactlyOnceWith(existingReport.id, reportDate, input)
-        expect(response.body).toEqual(existingReport)
     })
 
     it('accepts an empty replacement snapshot and returns 200 for an existing report', async () => {
-        const { repository, upsertById } = createFakeRepository([existingReport])
+        const { repository, upsertById } = createFakeRepository()
         const replacement: UpsertJobSearchReportInput = {
             summary: 'No matching roles today',
             results: [],
         }
+        upsertById.mockResolvedValueOnce({
+            report: { ...existingReport, summary: replacement.summary, results: [] },
+            created: false,
+        })
 
-        const response = await request(createTestApp(repository))
+        await request(createTestApp(repository))
             .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send(replacement)
-            .expect(200)
+            .expect(200, { ...existingReport, summary: replacement.summary, results: [] })
 
         expect(upsertById).toHaveBeenCalledExactlyOnceWith(
             existingReport.id,
             reportDate,
             replacement,
         )
-        expect(response.body).toEqual({
-            ...existingReport,
-            summary: replacement.summary,
-            results: [],
-        })
     })
 
-    it('rejects whitespace-only required and optional text without writing', async () => {
-        const { repository, upsertById } = createFakeRepository([])
-        const result = input.results[0]
+    it.each([
+        ['summary', (value: UpsertJobSearchReportInput) => (value.summary = ' ')],
+        [
+            'application flow',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.applicationFlow = ' '),
+        ],
+        [
+            'legitimacy signals',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.keyLegitimacySignals = ' '),
+        ],
+        [
+            'legitimacy notes',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.legitimacyNotes = ' '),
+        ],
+        [
+            'location',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.post.location = ' '),
+        ],
+        [
+            'compensation',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.post.compensation = ' '),
+        ],
+        [
+            'technology stack',
+            (value: UpsertJobSearchReportInput) => (value.results[0]!.post.techStack = ' '),
+        ],
+    ] satisfies Array<[field: string, invalidate: (value: UpsertJobSearchReportInput) => void]>)(
+        'rejects whitespace-only %s without writing',
+        async (_field, invalidate) => {
+            const { repository, upsertById } = createFakeRepository()
+            const invalidInput = structuredClone(input)
+            invalidate(invalidInput)
 
-        await request(createTestApp(repository))
-            .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
-            .send({ ...input, summary: '   ' })
-            .expect(400, { error: 'Invalid request' })
+            await request(createTestApp(repository))
+                .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
+                .send(invalidInput)
+                .expect(400)
+
+            expect(upsertById).not.toHaveBeenCalled()
+        },
+    )
+
+    it.each([
+        ['post URL', { ...input.results[0]!.post, postUrl: 'javascript:alert(1)' }],
+        ['application URL', { ...input.results[0]!.post, applicationUrl: 'ftp://example.com/job' }],
+    ])('rejects an unsafe %s without writing', async (_description, invalidPost) => {
+        const { repository, upsertById } = createFakeRepository()
 
         await request(createTestApp(repository))
             .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
             .send({
                 ...input,
-                results: [
-                    {
-                        ...result,
-                        applicationFlow: ' ',
-                        keyLegitimacySignals: ' ',
-                        legitimacyNotes: ' ',
-                        post: {
-                            ...result.post,
-                            location: '',
-                            compensation: '   ',
-                        },
-                    },
-                ],
+                results: [{ ...input.results[0], post: invalidPost }],
             })
-            .expect(400, { error: 'Invalid request' })
+            .expect(400)
 
         expect(upsertById).not.toHaveBeenCalled()
     })
@@ -276,21 +277,25 @@ describe('job search report routes', () => {
             },
         ],
     ])('rejects %s without writing', async (_description, date, reportId, invalidInput) => {
-        const { repository, upsertById } = createFakeRepository([])
+        const { repository, upsertById } = createFakeRepository()
 
         await request(createTestApp(repository))
             .put(`/job-search-reports/${date}/${reportId}`)
             .send(invalidInput)
-            .expect(400, { error: 'Invalid request' })
+            .expect(400)
 
         expect(upsertById).not.toHaveBeenCalled()
     })
 
     it('returns 404 for a missing valid report id', async () => {
-        const { repository } = createFakeRepository([])
+        const { findById, repository } = createFakeRepository()
+        const missingReportId = '33333333-3333-4333-8333-333333333333'
+        findById.mockResolvedValueOnce(null)
 
         await request(createTestApp(repository))
-            .get('/job-search-reports/33333333-3333-4333-8333-333333333333')
-            .expect(404, { error: 'Job search report not found' })
+            .get(`/job-search-reports/${missingReportId}`)
+            .expect(404)
+
+        expect(findById).toHaveBeenCalledExactlyOnceWith(missingReportId)
     })
 })

@@ -2,15 +2,28 @@
 import type { JobSearchReport, JobSearchResult, UserLabel } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
+import JobPostList from '@/components/job-posts/JobPostList.vue'
+import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
+import FlowPanel from '@/components/layout/FlowPanel.vue'
+import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import PanelHeading from '@/components/layout/PanelHeading.vue'
+import SearchReportSelector from '@/components/search-reports/SearchReportSelector.vue'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
-import JobPostCard from '@/components/JobPostCard.vue'
-import JobPostViewer from '@/components/JobPostViewer.vue'
-import SearchReportCard from '@/components/SearchReportCard.vue'
 
 type ActivePanel = 'reports' | 'posts' | 'viewer'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
+
+const postFilterOptions: AppDropdownOption[] = [
+    { value: 'all', label: 'All' },
+    { value: 'labeled', label: 'Labeled' },
+    { value: 'unreviewed', label: 'Unreviewed' },
+    { value: 'forgone', label: 'Forgone', tone: 'muted' },
+]
+const isPostFilter = (value: string): value is PostFilter =>
+    postFilterOptions.some((option) => option.value === value)
 
 const bp = useBreakpoints()
 const route = useRoute()
@@ -25,6 +38,7 @@ const selectedResult = shallowRef<JobSearchResult | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const reportsLoaded = shallowRef(false)
+const reviewViewerMode = { kind: 'review' } satisfies JobPostViewerMode
 
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -64,6 +78,7 @@ function pushSelectionState(reportId?: string, postId?: string, replace = false)
 }
 
 function restoreRouteSelection() {
+    const previousPostId = selectedResult.value?.post.id ?? null
     const stateReportId = getHistoryId('reviewReportId')
     const statePostId = getHistoryId('reviewPostId')
     const hasSelectionState = stateReportId !== null || statePostId !== null
@@ -77,6 +92,10 @@ function restoreRouteSelection() {
 
     selectedReport.value = report
     selectedResult.value = result
+
+    if (previousPostId !== (result?.post.id ?? null)) {
+        labelError.value = null
+    }
 
     if (
         route.query.reportId !== undefined ||
@@ -121,17 +140,19 @@ const postCountLabel = computed(() => {
         ? `${total} posts`
         : `${filteredResults.value.length} of ${total} posts`
 })
+const postFilterLabel = computed(
+    () => postFilterOptions.find(({ value }) => value === postFilter.value)?.label ?? 'All',
+)
 
-watch(filteredResults, (results) => {
-    const selectedPostId = selectedResult.value?.post.id
-
-    if (selectedPostId !== undefined && results.some(({ post }) => post.id === selectedPostId)) {
-        return
+const filteredPosts = computed(() => filteredResults.value.map(({ post }) => post))
+const postListEmptyMessage = computed(() => {
+    if (selectedReport.value?.results.length) {
+        return 'No job posts match this filter.'
     }
 
-    if (selectedResult.value === null && activePanel.value === 'viewer') {
-        activePanel.value = 'posts'
-    }
+    return selectedReport.value === null
+        ? 'Select a search report.'
+        : 'This report has no job posts.'
 })
 
 watch(bp.isLaptop, () => {
@@ -148,7 +169,13 @@ const removeRouteListener = router.afterEach(() => {
 
 onUnmounted(removeRouteListener)
 
-function selectReport(report: JobSearchReport) {
+function selectReport(reportId: string) {
+    const report = reportStore.reports.find(({ id }) => id === reportId)
+
+    if (report === undefined) {
+        return
+    }
+
     selectedReport.value = report
     postFilter.value = 'all'
     labelError.value = null
@@ -167,6 +194,20 @@ function selectResult(result: JobSearchResult) {
 
     if (selectedReport.value !== null) {
         pushSelectionState(selectedReport.value.id, result.post.id)
+    }
+}
+
+function selectPost(postId: string) {
+    const result = filteredResults.value.find(({ post }) => post.id === postId)
+
+    if (result !== undefined) {
+        selectResult(result)
+    }
+}
+
+function selectPostFilter(value: string) {
+    if (isPostFilter(value)) {
+        postFilter.value = value
     }
 }
 
@@ -197,146 +238,107 @@ async function updateUserLabel(userLabel: UserLabel | null) {
     try {
         await postStore.updatePost(postId, { userLabel })
     } catch (error) {
-        labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        if (selectedResult.value?.post.id === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not update label'
+        }
     } finally {
         labelUpdating.value = false
     }
 }
 
-onMounted(() => {
-    void reportStore
-        .fetchReports()
-        .then(() => {
-            reportsLoaded.value = true
-            restoreRouteSelection()
-        })
-        .catch(() => undefined)
-})
+async function loadReports() {
+    try {
+        await reportStore.fetchReports()
+        reportsLoaded.value = true
+        restoreRouteSelection()
+    } catch {
+        // The report store owns the error rendered by SearchReportSelector.
+    }
+}
+
+onMounted(() => void loadReports())
 </script>
 
 <template>
     <section class="layout-draft" aria-label="Job search review">
         <div class="layout-panels">
-            <section
-                class="layout-panel glass-frame"
-                :class="{ 'is-active': activePanel === 'reports' }"
+            <FlowPanel
+                class="report-list-panel glass-frame"
+                :active="activePanel === 'reports'"
+                :adjacent="false"
                 aria-label="Search reports"
             >
-                <header class="panel-heading">
-                    <div class="panel-title">
-                        <span class="eyebrow">Job Search reports</span>
-                        <h2 class="panel-heading-title">Select report to review</h2>
-                    </div>
+                <SearchReportSelector
+                    :reports="reportStore.reports"
+                    :selected-report-id="selectedReport?.id ?? null"
+                    :loading="reportStore.loading"
+                    :error="reportStore.error"
+                    @select="selectReport"
+                    @retry="loadReports"
+                />
+            </FlowPanel>
 
-                    <span class="item-count">{{ reportStore.reports.length }} reports</span>
-                </header>
-
-                <p v-if="reportStore.loading" class="list-message">Loading search reports…</p>
-                <p v-else-if="reportStore.error" class="list-message">
-                    {{ reportStore.error }}
-                </p>
-                <ul v-else-if="reportStore.reports.length" class="card-list">
-                    <li v-for="report in reportStore.reports" :key="report.id">
-                        <SearchReportCard
-                            :report="report"
-                            :selected="selectedReport?.id === report.id"
-                            @select="selectReport(report)"
-                        />
-                    </li>
-                </ul>
-                <p v-else class="list-message">No search reports found.</p>
-            </section>
-
-            <section
-                class="layout-panel glass-frame"
-                :class="{
-                    'is-active': activePanel === 'posts',
-                    'is-adjacent': activePanel === 'reports' || activePanel === 'viewer',
-                }"
+            <FlowPanel
+                class="glass-frame"
+                :active="activePanel === 'posts'"
+                :adjacent="activePanel === 'reports' || activePanel === 'viewer'"
                 aria-label="Job posts"
             >
-                <header class="panel-heading">
-                    <div class="panel-title">
-                        <button
-                            v-if="activePanel !== 'reports'"
-                            class="back-button"
-                            type="button"
-                            aria-label="Back to search reports"
-                            @click="showReports"
-                        >
-                            ←
-                        </button>
-
-                        <span class="eyebrow">Job posts</span>
-                        <h2 class="panel-heading-title">
-                            {{ selectedReport?.reportDate ?? 'Select a search report' }}
-                        </h2>
-                    </div>
-
-                    <div class="panel-controls">
-                        <span class="item-count item-count--plain">{{ postCountLabel }}</span>
-
-                        <label class="post-filter">
-                            <span>Filter</span>
-                            <span class="select-field">
-                                <select
-                                    v-model="postFilter"
-                                    class="select-control post-filter-select"
-                                    :disabled="selectedReport === null"
-                                >
-                                    <option value="all">All</option>
-                                    <option value="labeled">Labeled</option>
-                                    <option value="unreviewed">Unreviewed</option>
-                                    <option value="forgone">Forgone</option>
-                                </select>
-                            </span>
-                        </label>
-                    </div>
-                </header>
-
-                <ul v-if="filteredResults.length" class="card-list">
-                    <li v-for="result in filteredResults" :key="result.post.id">
-                        <JobPostCard
-                            :result="result"
-                            :selected="selectedResult?.post.id === result.post.id"
-                            @select="selectResult(result)"
-                        />
-                    </li>
-                </ul>
-                <p v-else class="list-message">
-                    {{
-                        selectedReport?.results.length
-                            ? 'No job posts match this filter.'
-                            : selectedReport
-                              ? 'This report has no job posts.'
-                              : 'Select a search report.'
-                    }}
-                </p>
-            </section>
-
-            <aside
-                v-if="selectedResult"
-                class="job-post-view layout-panel glass-frame"
-                :class="{
-                    'is-active': activePanel === 'viewer',
-                    'is-adjacent': activePanel === 'posts',
-                }"
-            >
-                <button
-                    class="back-button back-button-viewer"
-                    type="button"
-                    aria-label="Back to job posts"
-                    @click="showPosts"
+                <PanelHeading
+                    eyebrow="Job posts"
+                    :title="selectedReport?.reportDate ?? 'Select a search report'"
+                    :back-label="activePanel === 'reports' ? undefined : 'Back to search reports'"
+                    back-test-id="back-to-reports"
+                    @back="showReports"
                 >
-                    ←
-                </button>
+                    <template #controls>
+                        <span class="item-count">{{ postCountLabel }}</span>
+
+                        <div class="post-filter">
+                            <span>Filter</span>
+                            <AppDropdown
+                                class="post-filter-dropdown"
+                                accessible-label="Filter job posts"
+                                test-id="review-post-filter"
+                                :disabled="selectedReport === null"
+                                :options="postFilterOptions"
+                                :label="postFilterLabel"
+                                @select="selectPostFilter"
+                            />
+                        </div>
+                    </template>
+                </PanelHeading>
+
+                <JobPostList
+                    :posts="filteredPosts"
+                    :selected-post-id="selectedResult?.post.id ?? null"
+                    :empty-message="postListEmptyMessage"
+                    @select="selectPost"
+                />
+            </FlowPanel>
+
+            <FlowPanel
+                v-if="selectedResult"
+                as="aside"
+                class="job-post-view glass-frame"
+                :active="activePanel === 'viewer'"
+                :adjacent="activePanel === 'posts'"
+            >
+                <PanelBackButton
+                    label="Back to job posts"
+                    mobile-only
+                    test-id="back-to-job-posts"
+                    @back="showPosts"
+                />
                 <JobPostViewer
-                    :result="selectedResult"
+                    :post="selectedResult.post"
+                    :recommendation="selectedResult"
                     :label-updating="labelUpdating"
                     :label-error="labelError"
+                    :mode="reviewViewerMode"
                     @update-label="updateUserLabel"
                 />
-            </aside>
+            </FlowPanel>
         </div>
     </section>
 </template>
@@ -345,27 +347,7 @@ onMounted(() => {
 .layout-draft {
     display: flex;
     flex-direction: column;
-    width: min(100%, 84rem);
-    margin: 0 auto;
     flex: 1;
-}
-
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-}
-
-.panel-heading-title {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 600;
-    letter-spacing: -0.035em;
-    line-height: 1.1;
-    text-wrap: balance;
 }
 
 .layout-panels {
@@ -375,66 +357,9 @@ onMounted(() => {
     min-width: 0;
 }
 
-.layout-panel {
-    display: none;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-4;
-    min-height: 24rem;
-    padding: $space-5 $space-5 0;
-    border-radius: $radius-lg;
-
-    &.is-active {
-        display: flex;
-    }
-
-    @include bp-md-tablet {
-        min-height: 38rem;
-
-        &.is-adjacent {
-            display: flex;
-            min-width: 24rem;
-        }
-    }
-
-    &.job-post-view {
-        flex: 2;
-        padding: 1.5rem;
-    }
-}
-
-.panel-heading {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $space-4;
-    align-items: end;
-    justify-content: space-between;
-}
-
-.panel-title {
-    display: grid;
-    gap: $space-1;
-}
-
-.back-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-ink-muted;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-signal-light;
-    }
-
-    &-viewer {
-        @include bp-md-tablet {
-            display: none;
-        }
-    }
+.job-post-view {
+    flex: 2;
+    padding: 1.5rem;
 }
 
 .item-count {
@@ -447,13 +372,9 @@ onMounted(() => {
     border-radius: 0;
 }
 
-.panel-controls {
-    display: flex;
-    flex-flow: column wrap;
-    gap: $space-1;
-    align-items: end;
-    justify-content: flex-end;
-    height: 100%;
+.report-list-panel {
+    container-name: report-list;
+    container-type: inline-size;
 }
 
 .post-filter {
@@ -463,28 +384,8 @@ onMounted(() => {
     color: $color-ink-muted;
     font-size: 0.75rem;
 
-    &-select {
+    &-dropdown {
         min-width: 6.5rem;
     }
-}
-
-.card-list {
-    display: flex;
-    flex: 1 0 0;
-    flex-direction: column;
-    gap: $space-3;
-    margin: 0;
-    padding: 0 0 $space-5;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    list-style: none;
-}
-
-.card-list li {
-    min-width: 0;
-}
-
-.list-message {
-    color: $color-ink-muted;
 }
 </style>

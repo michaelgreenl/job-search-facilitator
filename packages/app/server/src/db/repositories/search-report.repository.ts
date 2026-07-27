@@ -1,11 +1,11 @@
-import type {
-    AgentLabel,
-    JobSearchReport,
-    ResumeType,
-    UpsertJobSearchReportInput,
-} from '@job-search-facilitator/core'
+import type { JobSearchReport, UpsertJobSearchReportInput } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import { toJobPost, toPrismaPostStatus } from '../mappers/job-post.mapper.ts'
+import {
+    toJobRecommendation,
+    toPrismaAgentLabel,
+    toPrismaResumeType,
+} from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
 
 const reportInclude = {
@@ -18,30 +18,6 @@ const reportInclude = {
 type PrismaSearchReport = Prisma.JobSearchReportGetPayload<{
     include: typeof reportInclude
 }>
-type PrismaSearchResult = PrismaSearchReport['results'][number]
-
-const agentLabelToApi = {
-    TARGET: 'target',
-    QUICK_APP: 'quick-app',
-} satisfies Record<PrismaSearchResult['agentLabel'], AgentLabel>
-
-const agentLabelToPrisma = {
-    target: 'TARGET',
-    'quick-app': 'QUICK_APP',
-} satisfies Record<AgentLabel, PrismaSearchResult['agentLabel']>
-
-const resumeTypeToApi = {
-    FRONTEND: 'frontend',
-    BACKEND_FULL_STACK: 'backend-full-stack',
-    GENERAL: 'general',
-} satisfies Record<PrismaSearchResult['recommendedResume'], ResumeType>
-
-const resumeTypeToPrisma = {
-    frontend: 'FRONTEND',
-    'backend-full-stack': 'BACKEND_FULL_STACK',
-    general: 'GENERAL',
-} satisfies Record<ResumeType, PrismaSearchResult['recommendedResume']>
-
 const toReportDate = (reportDate: string) => new Date(`${reportDate}T00:00:00.000Z`)
 
 const toJobSearchReport = (report: PrismaSearchReport): JobSearchReport => ({
@@ -52,14 +28,7 @@ const toJobSearchReport = (report: PrismaSearchReport): JobSearchReport => ({
     updatedAt: report.updatedAt.toISOString(),
     archivedAt: report.archivedAt?.toISOString() ?? null,
     results: report.results.map((result) => ({
-        agentRank: result.agentRank,
-        agentLabel: agentLabelToApi[result.agentLabel],
-        fitRationale: result.fitRationale,
-        applicationFlow: result.applicationFlow,
-        keyLegitimacySignals: result.keyLegitimacySignals,
-        recommendedResume: resumeTypeToApi[result.recommendedResume],
-        recommendedAction: result.recommendedAction,
-        legitimacyNotes: result.legitimacyNotes,
+        ...toJobRecommendation(result),
         post: toJobPost(result.post),
     })),
 })
@@ -116,12 +85,15 @@ export const searchReportRepository: SearchReportRepository = {
             })
 
             for (const result of input.results) {
+                // Report ingestion refreshes canonical listing facts, but not user-owned post state.
                 const listingData = {
                     roleTitle: result.post.roleTitle,
                     company: result.post.company,
                     location: result.post.location,
                     compensation: result.post.compensation,
+                    techStack: result.post.techStack,
                     postSource: result.post.postSource,
+                    postUrl: result.post.postUrl,
                     applicationUrl: result.post.applicationUrl,
                     postStatus: toPrismaPostStatus(result.post.postStatus),
                 }
@@ -140,11 +112,11 @@ export const searchReportRepository: SearchReportRepository = {
                         reportId: report.id,
                         postId: post.id,
                         agentRank: result.agentRank,
-                        agentLabel: agentLabelToPrisma[result.agentLabel],
+                        agentLabel: toPrismaAgentLabel(result.agentLabel),
                         fitRationale: result.fitRationale,
                         applicationFlow: result.applicationFlow,
                         keyLegitimacySignals: result.keyLegitimacySignals,
-                        recommendedResume: resumeTypeToPrisma[result.recommendedResume],
+                        recommendedResume: toPrismaResumeType(result.recommendedResume),
                         recommendedAction: result.recommendedAction,
                         legitimacyNotes: result.legitimacyNotes,
                     },

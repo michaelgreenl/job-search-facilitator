@@ -22,6 +22,7 @@ const reportTime = computed(() =>
 <template>
     <button
         class="report-card"
+        :data-testid="`report-card-${report.id}`"
         :class="{ 'report-card-selected': selected }"
         type="button"
         :aria-pressed="selected"
@@ -48,28 +49,20 @@ const reportTime = computed(() =>
     font: inherit;
     text-align: start;
     cursor: pointer;
-    background: rgb(245 241 251 / 5%);
-    border: 1px solid rgb(245 241 251 / 9%);
+    background: $color-ink-alpha-5;
+    border: 1px solid $color-ink-alpha-9;
     border-radius: $radius-md;
 
     &:hover,
     &:focus-visible {
-        background: rgb(173 123 249 / 9%);
-        border-color: rgb(173 123 249 / 28%);
+        background: $color-signal-alpha-9;
+        border-color: $color-signal-alpha-28;
     }
 
     &-selected {
-        background: rgb(173 123 249 / 12%);
+        background: $color-signal-alpha-12;
         border-color: $color-signal !important;
     }
-}
-
-.component-label {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
 }
 
 .report-card-heading {

@@ -11,6 +11,10 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         response.json(await repository.findMany())
     },
 
+    listApplyQueue: async (_request: Request, response: Response): Promise<void> => {
+        response.json(await repository.findApplyQueue())
+    },
+
     getById: async (request: Request, response: Response): Promise<void> => {
         const params = jobPostIdParamsSchema.safeParse(request.params)
 
@@ -38,13 +42,13 @@ export const createJobPostController = (repository: JobPostRepository) => ({
             return
         }
 
-        const post = await repository.update(params.data.id, input.data)
+        const updateResult = await repository.update(params.data.id, input.data)
 
-        if (post === null) {
+        if (updateResult === null) {
             response.status(NOT_FOUND).json(jobPostNotFound)
             return
         }
 
-        response.json(post)
+        response.json(updateResult)
     },
 })

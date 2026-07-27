@@ -25,11 +25,12 @@ export interface JobPost {
     company: string
     location: string | null
     compensation: string | null
+    techStack: string
     postSource: string
+    postUrl: string
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
-    userRank: number | null
     userLabel: UserLabel | null
     archivedAt: IsoDateTime | null
     createdAt: IsoDateTime
@@ -42,7 +43,9 @@ export interface JobPostInput {
     company: string
     location: string | null
     compensation: string | null
+    techStack: string
     postSource: string
+    postUrl: string
     applicationUrl: string
     postStatus: PostStatus
 }
@@ -50,7 +53,11 @@ export interface JobPostInput {
 export interface UpdateJobPostInput {
     applicationStatus?: ApplicationStatus
     postStatus?: PostStatus
-    userRank?: number | null
     userLabel?: UserLabel | null
     archivedAt?: IsoDateTime | null
+}
+
+export interface UpdateJobPostResult {
+    post: JobPost
+    inApplyQueue: boolean
 }

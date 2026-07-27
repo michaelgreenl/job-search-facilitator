@@ -1,5 +1,6 @@
 export const OK = 200
 export const CREATED = 201
+export const ACCEPTED = 202
 export const OK_NO_CONTENT = 204
 export const BAD_REQUEST = 400
 export const UNAUTHORIZED = 401
@@ -9,3 +10,4 @@ export const REQUEST_TIMEOUT = 408
 export const CONFLICT = 409
 export const UNPROCESSABLE_ENTITY = 422
 export const SERVER_ERROR = 500
+export const SERVICE_UNAVAILABLE = 503

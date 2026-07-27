@@ -26,14 +26,17 @@ model JobPost {
   company           String
   location          String?
   compensation      String?
+  techStack         String
   postSource        String
+  postUrl           String
   applicationUrl    String
   postStatus        PostStatus        @default(UNKNOWN)
   applicationStatus ApplicationStatus @default(NOT_APPLIED)
-  userRank          Int?
   userLabel         UserLabel?
   archivedAt        DateTime?         @db.Timestamptz(3)
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
   results           JobSearchResult[]
+  outreachContacts  OutreachContact[]
+  outreachRuns      OutreachRun[]
 }

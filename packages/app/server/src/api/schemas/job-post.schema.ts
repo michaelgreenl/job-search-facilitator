@@ -9,7 +9,6 @@ export const updateJobPostInputSchema = z
     .strictObject({
         applicationStatus: z.enum(APPLICATION_STATUSES).optional(),
         postStatus: z.enum(POST_STATUSES).optional(),
-        userRank: z.number().int().nullable().optional(),
         userLabel: z.enum(USER_LABELS).nullable().optional(),
         archivedAt: z.iso.datetime({ offset: true }).nullable().optional(),
     })
