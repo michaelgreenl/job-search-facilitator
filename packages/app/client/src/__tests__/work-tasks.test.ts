@@ -1,6 +1,10 @@
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import { createContactDiscoveryTask, createDraftRevisionTask } from '../work-tasks'
+import {
+    createContactDiscoveryTask,
+    createDraftRevisionTask,
+    createJobPostImportTask,
+} from '../work-tasks'
 
 const post: JobPost = {
     id: 'post-id',
@@ -40,6 +44,7 @@ const draftTask = createDraftRevisionTask(
     'Hi Ada, could I ask about the team?',
     'Make it warmer.',
 )
+const importTask = createJobPostImportTask('https://example.com/jobs/post-id')
 
 describe('outreach work tasks', () => {
     it('defines the contact discovery capability and output contract', () => {
@@ -56,5 +61,37 @@ describe('outreach work tasks', () => {
     it('defines the draft revision capability and output contract', () => {
         expect(draftTask.capabilities).toEqual([])
         expect(draftTask.outputSchema.required).toEqual(['draftMessage', 'response'])
+    })
+
+    it('defines the job-post import capability and nested output contract', () => {
+        expect(importTask.capabilities).toEqual(['chrome'])
+        expect(importTask.outputSchema).toMatchObject({
+            required: [
+                'agentLabel',
+                'fitRationale',
+                'applicationFlow',
+                'keyLegitimacySignals',
+                'recommendedResume',
+                'recommendedAction',
+                'legitimacyNotes',
+                'post',
+            ],
+            properties: {
+                post: {
+                    required: [
+                        'sourceKey',
+                        'roleTitle',
+                        'company',
+                        'location',
+                        'compensation',
+                        'techStack',
+                        'postSource',
+                        'postUrl',
+                        'applicationUrl',
+                        'postStatus',
+                    ],
+                },
+            },
+        })
     })
 })

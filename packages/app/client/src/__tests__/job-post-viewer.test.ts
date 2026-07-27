@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import type { JobPost, JobRecommendation } from '@job-search-facilitator/core'
+import type { JobPost, StandaloneJobRecommendation } from '@job-search-facilitator/core'
 import { createApp } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
@@ -25,7 +25,6 @@ const post = {
 } satisfies JobPost
 
 const recommendation = {
-    agentRank: 1,
     agentLabel: 'target',
     fitRationale:
         'The role matches the candidate’s TypeScript product work and backend integration experience.',
@@ -35,13 +34,13 @@ const recommendation = {
     recommendedResume: 'backend-full-stack',
     recommendedAction: 'Apply with the backend/full-stack resume.',
     legitimacyNotes: 'The company and role details are consistent across both sources.',
-} satisfies JobRecommendation
+} satisfies StandaloneJobRecommendation
 
 const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
 function mountViewer(
     overrides: Partial<JobPost> = {},
-    options: { recommendation?: JobRecommendation } = {},
+    options: { recommendation?: StandaloneJobRecommendation } = {},
 ) {
     const root = document.createElement('div')
     document.body.append(root)

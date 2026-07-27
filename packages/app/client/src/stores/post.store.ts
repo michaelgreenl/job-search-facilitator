@@ -2,10 +2,14 @@ import {
     parseApplyQueueItems,
     parseJobPost,
     parseJobPosts,
+    parseUserAddedJobPost,
+    parseUserAddedJobPosts,
     parseUpdateJobPostResult,
     type ApplyQueueItem,
+    type CreateUserAddedJobPostInput,
     type JobPost,
     type UpdateJobPostInput,
+    type UserAddedJobPost,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
@@ -14,6 +18,15 @@ import { request } from '@/api'
 const getJobPosts = () => request('/job-posts', parseJobPosts)
 
 const getApplyQueue = () => request('/job-posts/apply-queue', parseApplyQueueItems)
+
+const getUserAddedPosts = () => request('/job-posts/user-added', parseUserAddedJobPosts)
+
+const postUserAddedPost = (input: CreateUserAddedJobPostInput) =>
+    request('/job-posts', parseUserAddedJobPost, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+    })
 
 const getJobPost = (id: string) => request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost)
 
@@ -26,8 +39,11 @@ const patchJobPost = (id: string, input: UpdateJobPostInput) =>
 
 export const usePostStore = defineStore('posts', () => {
     const posts = ref<JobPost[]>([])
+    const userAddedPosts = ref<UserAddedJobPost[]>([])
     const loading = shallowRef(false)
     const error = shallowRef<string | null>(null)
+    const userAddedMutationRevisions = new Map<string, number>()
+    let userAddedMutationRevision = 0
 
     function savePost(post: JobPost) {
         const currentPost = posts.value.find(({ id }) => id === post.id)
@@ -55,6 +71,54 @@ export const usePostStore = defineStore('posts', () => {
             post: upsertPost(item.post),
         }))
 
+    const canonicalizeUserAddedPost = (item: UserAddedJobPost) => ({
+        ...item,
+        post: upsertPost(item.post),
+    })
+
+    const sortUserAddedPosts = (items: UserAddedJobPost[]) =>
+        items.sort(
+            (left, right) =>
+                Date.parse(right.addedAt) - Date.parse(left.addedAt) ||
+                left.post.id.localeCompare(right.post.id),
+        )
+
+    const replaceUserAddedPosts = (
+        items: UserAddedJobPost[],
+        requestMutationRevision = userAddedMutationRevision,
+    ) => {
+        const itemsByPostId = new Map(
+            items.map(canonicalizeUserAddedPost).map((item) => [item.post.id, item]),
+        )
+
+        for (const currentItem of userAddedPosts.value) {
+            if (
+                (userAddedMutationRevisions.get(currentItem.post.id) ?? 0) > requestMutationRevision
+            ) {
+                itemsByPostId.set(currentItem.post.id, currentItem)
+            }
+        }
+
+        userAddedPosts.value = sortUserAddedPosts([...itemsByPostId.values()])
+
+        return userAddedPosts.value
+    }
+
+    const saveUserAddedPost = (item: UserAddedJobPost) => {
+        const savedItem = canonicalizeUserAddedPost(item)
+        userAddedMutationRevisions.set(savedItem.post.id, ++userAddedMutationRevision)
+        userAddedPosts.value = sortUserAddedPosts([
+            ...userAddedPosts.value.filter(
+                (currentItem) => currentItem.post.id !== savedItem.post.id,
+            ),
+            savedItem,
+        ])
+
+        return userAddedPosts.value.find(
+            (currentItem) => currentItem.post.id === savedItem.post.id,
+        )!
+    }
+
     async function load<T>(getValue: () => Promise<T>, saveValue: (value: T) => T) {
         loading.value = true
         error.value = null
@@ -72,6 +136,17 @@ export const usePostStore = defineStore('posts', () => {
     const fetchPosts = () => load(getJobPosts, upsertPosts)
 
     const fetchApplyQueue = () => load(getApplyQueue, upsertApplyQueue)
+
+    const fetchUserAddedPosts = () => {
+        const requestMutationRevision = userAddedMutationRevision
+
+        return load(getUserAddedPosts, (items) =>
+            replaceUserAddedPosts(items, requestMutationRevision),
+        )
+    }
+
+    const addUserAddedPost = (input: CreateUserAddedJobPostInput) =>
+        load(() => postUserAddedPost(input), saveUserAddedPost)
 
     const fetchPost = (id: string) => load(() => getJobPost(id), upsertPost)
 
@@ -97,10 +172,13 @@ export const usePostStore = defineStore('posts', () => {
 
     return {
         posts,
+        userAddedPosts,
         loading,
         error,
         fetchPosts,
         fetchApplyQueue,
+        fetchUserAddedPosts,
+        addUserAddedPost,
         fetchPost,
         updatePost,
         findPost,

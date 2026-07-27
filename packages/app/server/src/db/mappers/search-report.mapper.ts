@@ -1,8 +1,12 @@
-import type { AgentLabel, JobRecommendation, ResumeType } from '@job-search-facilitator/core'
+import type {
+    AgentLabel,
+    JobRecommendation,
+    ResumeType,
+    StandaloneJobRecommendation,
+} from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 
-const recommendationSelect = {
-    agentRank: true,
+const standaloneRecommendationSelect = {
     agentLabel: true,
     fitRationale: true,
     applicationFlow: true,
@@ -10,6 +14,15 @@ const recommendationSelect = {
     recommendedResume: true,
     recommendedAction: true,
     legitimacyNotes: true,
+} satisfies Prisma.UserAddedJobPostSelect
+
+type PrismaStandaloneRecommendation = Prisma.UserAddedJobPostGetPayload<{
+    select: typeof standaloneRecommendationSelect
+}>
+
+const recommendationSelect = {
+    agentRank: true,
+    ...standaloneRecommendationSelect,
 } satisfies Prisma.JobSearchResultSelect
 
 type PrismaRecommendation = Prisma.JobSearchResultGetPayload<{
@@ -19,27 +32,28 @@ type PrismaRecommendation = Prisma.JobSearchResultGetPayload<{
 const agentLabelToApi = {
     TARGET: 'target',
     QUICK_APP: 'quick-app',
-} satisfies Record<PrismaRecommendation['agentLabel'], AgentLabel>
+} satisfies Record<PrismaStandaloneRecommendation['agentLabel'], AgentLabel>
 
 const agentLabelToPrisma = {
     target: 'TARGET',
     'quick-app': 'QUICK_APP',
-} satisfies Record<AgentLabel, PrismaRecommendation['agentLabel']>
+} satisfies Record<AgentLabel, PrismaStandaloneRecommendation['agentLabel']>
 
 const resumeTypeToApi = {
     FRONTEND: 'frontend',
     BACKEND_FULL_STACK: 'backend-full-stack',
     GENERAL: 'general',
-} satisfies Record<PrismaRecommendation['recommendedResume'], ResumeType>
+} satisfies Record<PrismaStandaloneRecommendation['recommendedResume'], ResumeType>
 
 const resumeTypeToPrisma = {
     frontend: 'FRONTEND',
     'backend-full-stack': 'BACKEND_FULL_STACK',
     general: 'GENERAL',
-} satisfies Record<ResumeType, PrismaRecommendation['recommendedResume']>
+} satisfies Record<ResumeType, PrismaStandaloneRecommendation['recommendedResume']>
 
-export const toJobRecommendation = (result: PrismaRecommendation): JobRecommendation => ({
-    agentRank: result.agentRank,
+export const toStandaloneJobRecommendation = (
+    result: PrismaStandaloneRecommendation,
+): StandaloneJobRecommendation => ({
     agentLabel: agentLabelToApi[result.agentLabel],
     fitRationale: result.fitRationale,
     applicationFlow: result.applicationFlow,
@@ -47,6 +61,11 @@ export const toJobRecommendation = (result: PrismaRecommendation): JobRecommenda
     recommendedResume: resumeTypeToApi[result.recommendedResume],
     recommendedAction: result.recommendedAction,
     legitimacyNotes: result.legitimacyNotes,
+})
+
+export const toJobRecommendation = (result: PrismaRecommendation): JobRecommendation => ({
+    agentRank: result.agentRank,
+    ...toStandaloneJobRecommendation(result),
 })
 
 export const toPrismaAgentLabel = (agentLabel: AgentLabel) => agentLabelToPrisma[agentLabel]

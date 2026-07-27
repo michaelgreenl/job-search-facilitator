@@ -1,11 +1,10 @@
-import { AGENT_LABELS, POST_STATUSES, RESUME_TYPES } from '@job-search-facilitator/core'
+import {
+    jobPostInputSchema,
+    standaloneJobRecommendationInputSchema,
+} from '@job-search-facilitator/core'
 import { z } from 'zod'
 
 const nonBlankString = z.string().trim().min(1)
-const httpUrl = z.url().refine((value) => {
-    const protocol = new URL(value).protocol
-    return protocol === 'http:' || protocol === 'https:'
-})
 
 export const reportIdParamsSchema = z.strictObject({
     reportId: z.uuid(),
@@ -16,28 +15,11 @@ export const reportUpsertParamsSchema = z.strictObject({
     reportId: z.uuid(),
 })
 
-export const jobPostInputSchema = z.strictObject({
-    sourceKey: nonBlankString,
-    roleTitle: nonBlankString,
-    company: nonBlankString,
-    location: nonBlankString.nullable(),
-    compensation: nonBlankString.nullable(),
-    techStack: nonBlankString,
-    postSource: nonBlankString,
-    postUrl: httpUrl,
-    applicationUrl: httpUrl,
-    postStatus: z.enum(POST_STATUSES),
-})
+export { jobPostInputSchema }
 
 export const jobSearchResultInputSchema = z.strictObject({
     agentRank: z.number().int().positive(),
-    agentLabel: z.enum(AGENT_LABELS),
-    fitRationale: nonBlankString,
-    applicationFlow: nonBlankString,
-    keyLegitimacySignals: nonBlankString,
-    recommendedResume: z.enum(RESUME_TYPES),
-    recommendedAction: nonBlankString,
-    legitimacyNotes: nonBlankString.nullable(),
+    ...standaloneJobRecommendationInputSchema.shape,
     post: jobPostInputSchema,
 })
 

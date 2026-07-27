@@ -39,4 +39,5 @@ model JobPost {
   results           JobSearchResult[]
   outreachContacts  OutreachContact[]
   outreachRuns      OutreachRun[]
+  userAdded         UserAddedJobPost?
 }

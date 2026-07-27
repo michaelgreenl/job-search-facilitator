@@ -1,6 +1,7 @@
 import type {
     ApplicationStatus,
     JobPost,
+    JobPostInput,
     PostStatus,
     UserLabel,
 } from '@job-search-facilitator/core'
@@ -75,3 +76,16 @@ export const toPrismaApplicationStatus = (status: ApplicationStatus) =>
 export const toPrismaPostStatus = (status: PostStatus) => postStatusToPrisma[status]
 
 export const toPrismaUserLabel = (label: UserLabel) => userLabelToPrisma[label]
+
+export const toPrismaJobPostListingData = (post: JobPostInput) =>
+    ({
+        roleTitle: post.roleTitle,
+        company: post.company,
+        location: post.location,
+        compensation: post.compensation,
+        techStack: post.techStack,
+        postSource: post.postSource,
+        postUrl: post.postUrl,
+        applicationUrl: post.applicationUrl,
+        postStatus: toPrismaPostStatus(post.postStatus),
+    }) satisfies Prisma.JobPostUpdateInput

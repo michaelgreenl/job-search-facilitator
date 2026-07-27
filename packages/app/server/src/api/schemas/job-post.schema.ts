@@ -1,6 +1,8 @@
 import { APPLICATION_STATUSES, POST_STATUSES, USER_LABELS } from '@job-search-facilitator/core'
 import { z } from 'zod'
 
+export { createUserAddedJobPostInputSchema } from '@job-search-facilitator/core'
+
 export const jobPostIdParamsSchema = z.strictObject({
     id: z.uuid(),
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ApplyQueueItem } from './apply-queue.ts'
+import { createUserAddedJobPostInputSchema } from './input-contracts.ts'
 import {
     APPLICATION_STATUSES,
     POST_STATUSES,
@@ -19,6 +20,7 @@ import {
     type JobSearchReport,
     type JobSearchResult,
 } from './search-report.ts'
+import type { CreateUserAddedJobPostInput, UserAddedJobPost } from './user-added-job-post.ts'
 import {
     WORK_CAPABILITIES,
     type JsonObject,
@@ -86,8 +88,7 @@ const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject(
     inApplyQueue: z.boolean(),
 })
 
-const jobRecommendationShape = {
-    agentRank: z.number().int().positive(),
+const standaloneJobRecommendationShape = {
     agentLabel: z.enum(AGENT_LABELS),
     fitRationale: nonBlankStringSchema,
     applicationFlow: nonBlankStringSchema,
@@ -95,6 +96,10 @@ const jobRecommendationShape = {
     recommendedResume: z.enum(RESUME_TYPES),
     recommendedAction: nonBlankStringSchema,
     legitimacyNotes: nonBlankStringSchema.nullable(),
+}
+const jobRecommendationShape = {
+    agentRank: z.number().int().positive(),
+    ...standaloneJobRecommendationShape,
 }
 
 const jobRecommendationContextSchema: z.ZodType<JobRecommendationContext> = z.looseObject({
@@ -106,6 +111,13 @@ const jobRecommendationContextSchema: z.ZodType<JobRecommendationContext> = z.lo
 const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
     ...jobRecommendationShape,
     post: jobPostSchema,
+})
+
+const userAddedJobPostSchema: z.ZodType<UserAddedJobPost> = z.looseObject({
+    ...standaloneJobRecommendationShape,
+    post: jobPostSchema,
+    addedAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema,
 })
 
 const applyQueueItemSchema: z.ZodType<ApplyQueueItem> = z.looseObject({
@@ -270,13 +282,20 @@ const toWorkOutputSchema = (schema: z.ZodType): WorkOutputSchema => {
 
 const contactDiscoveryOutputSchema = toWorkOutputSchema(contactDiscoveryWireSchema)
 const draftRevisionOutputSchema = toWorkOutputSchema(draftRevisionWireSchema)
+const userAddedJobPostOutputSchema = toWorkOutputSchema(createUserAddedJobPostInputSchema)
 
 export const createContactDiscoveryOutputSchema = (): WorkOutputSchema =>
     structuredClone(contactDiscoveryOutputSchema)
 
 export const createDraftRevisionOutputSchema = (): WorkOutputSchema =>
     structuredClone(draftRevisionOutputSchema)
+export const createUserAddedJobPostOutputSchema = (): WorkOutputSchema =>
+    structuredClone(userAddedJobPostOutputSchema)
 
+export const parseCreateUserAddedJobPostInput = createParser<CreateUserAddedJobPostInput>(
+    'User-added job post input',
+    createUserAddedJobPostInputSchema,
+)
 export const parseContactDiscoveryResult = createParser(
     'Contact discovery result',
     contactDiscoveryResultSchema,
@@ -287,6 +306,11 @@ export const parseDraftRevisionResult = createParser(
 )
 export const parseJobPost = createParser('Job post', jobPostSchema)
 export const parseJobPosts = createParser('Job posts', z.array(jobPostSchema))
+export const parseUserAddedJobPost = createParser('User-added job post', userAddedJobPostSchema)
+export const parseUserAddedJobPosts = createParser(
+    'User-added job posts',
+    z.array(userAddedJobPostSchema),
+)
 export const parseApplyQueueItems = createParser('Apply queue', z.array(applyQueueItemSchema))
 export const parseUpdateJobPostResult = createParser(
     'Job post update result',

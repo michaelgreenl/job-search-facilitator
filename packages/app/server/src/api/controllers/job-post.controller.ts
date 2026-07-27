@@ -1,7 +1,11 @@
 import type { Request, Response } from 'express'
-import { BAD_REQUEST, NOT_FOUND } from '@job-search-facilitator/utils'
+import { BAD_REQUEST, CREATED, NOT_FOUND, OK } from '@job-search-facilitator/utils'
 import type { JobPostRepository } from '../../db/repositories/job-post.repository.ts'
-import { jobPostIdParamsSchema, updateJobPostInputSchema } from '../schemas/job-post.schema.ts'
+import {
+    createUserAddedJobPostInputSchema,
+    jobPostIdParamsSchema,
+    updateJobPostInputSchema,
+} from '../schemas/job-post.schema.ts'
 
 const invalidRequest = { error: 'Invalid request' }
 const jobPostNotFound = { error: 'Job post not found' }
@@ -13,6 +17,23 @@ export const createJobPostController = (repository: JobPostRepository) => ({
 
     listApplyQueue: async (_request: Request, response: Response): Promise<void> => {
         response.json(await repository.findApplyQueue())
+    },
+
+    listUserAdded: async (_request: Request, response: Response): Promise<void> => {
+        response.json(await repository.findUserAdded())
+    },
+
+    createUserAdded: async (request: Request, response: Response): Promise<void> => {
+        const input = createUserAddedJobPostInputSchema.safeParse(request.body)
+
+        if (!input.success) {
+            response.status(BAD_REQUEST).json(invalidRequest)
+            return
+        }
+
+        const result = await repository.upsertUserAdded(input.data)
+
+        response.status(result.created ? CREATED : OK).json(result.item)
     },
 
     getById: async (request: Request, response: Response): Promise<void> => {
