@@ -12,6 +12,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '@/stores/outreach.store'
 import { usePostStore } from '@/stores/post.store'
+import { useWorkStore } from '@/stores/work.store'
 import ApplyView from '../views/ApplyView.vue'
 
 const createPost = (id: string, userLabel: UserLabel): JobPost => ({
@@ -508,6 +509,96 @@ describe('apply view', () => {
                     .querySelector('[data-testid="apply-outreach-panel"]')
                     ?.getAttribute('data-active'),
             ).toBe('true')
+        })
+    })
+
+    it('starts contact discovery while a persisted job import task is active', async () => {
+        const importTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb4'
+        const runningImportTask = { ...runningWorkTask, id: importTaskId }
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 2,
+                sessions: [
+                    {
+                        kind: 'job-post-import',
+                        taskId: importTaskId,
+                        url: 'https://example.com/jobs/import',
+                    },
+                ],
+            }),
+        )
+        vi.mocked(fetch)
+            .mockReset()
+            .mockImplementation((input, init) => {
+                const url = fetchUrl(input)
+
+                if (url.endsWith(`/tasks/${importTaskId}`) && init?.method === undefined) {
+                    return Promise.resolve(jsonResponse(runningImportTask))
+                }
+
+                if (url.endsWith('/api/job-posts/apply-queue')) {
+                    return Promise.resolve(jsonResponse(applyQueueItems))
+                }
+
+                if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
+                    return Promise.resolve(jsonResponse([]))
+                }
+
+                if (url.endsWith('/health')) {
+                    return Promise.resolve(
+                        jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                    )
+                }
+
+                if (url.endsWith(`/tasks/${runningWorkTask.id}`) && init?.method === 'PUT') {
+                    return Promise.resolve(jsonResponse(runningWorkTask, 202))
+                }
+
+                throw new Error(`Unexpected request: ${url}`)
+            })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const pinia = createPinia()
+        const workStore = useWorkStore(pinia)
+        await workStore.restoreTask(importTaskId)
+        const root = await mountApplyView(pinia)
+
+        expect(workStore.getSession('job-post-import')).toMatchObject({
+            kind: 'job-post-import',
+            taskId: importTaskId,
+        })
+        expect(workStore.getTaskState(importTaskId)).toMatchObject({
+            task: runningImportTask,
+        })
+        expect(FakeEventSource.instances).toHaveLength(1)
+        expect(FakeEventSource.instances[0]?.url).toBe(
+            `http://localhost:3001/tasks/${importTaskId}/events`,
+        )
+
+        await selectPost(root, posts[0]!.id)
+        expect(findTestButton(root, 'discover-contacts').disabled).toBe(false)
+        findTestButton(root, 'discover-contacts').click()
+
+        await vi.waitFor(() => {
+            expect(FakeEventSource.instances).toHaveLength(2)
+            expect(workStore.getSession('job-post-import')).toMatchObject({
+                kind: 'job-post-import',
+                taskId: importTaskId,
+            })
+            expect(workStore.getTaskState(importTaskId)).toMatchObject({
+                task: runningImportTask,
+            })
+            expect(workStore.getSession('outreach')).toMatchObject({
+                kind: 'outreach-contact',
+                taskId: runningWorkTask.id,
+                postId: posts[0]!.id,
+            })
+            expect(workStore.getTaskState(runningWorkTask.id)?.task).toMatchObject(runningWorkTask)
+            expect(FakeEventSource.instances.map(({ url }) => url)).toEqual([
+                `http://localhost:3001/tasks/${importTaskId}/events`,
+                `http://localhost:3001/tasks/${runningWorkTask.id}/events`,
+            ])
         })
     })
 

@@ -10,7 +10,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '../stores/outreach.store'
 import { usePostStore } from '../stores/post.store'
 import { useReportStore } from '../stores/report.store'
-import { useWorkStore } from '../stores/work.store'
+import {
+    getWorkTaskLane,
+    useWorkStore,
+    type WorkSession,
+    type WorkSessionOwner,
+    type WorkTaskState,
+} from '../stores/work.store'
+import { createJobPostImportTask } from '../work-tasks'
 
 class MemoryStorage implements Storage {
     readonly values = new Map<string, string>()
@@ -358,6 +365,52 @@ describe('post store', () => {
 })
 
 describe('outreach store', () => {
+    const seedTask = (
+        task: WorkTask,
+        owner: WorkSessionOwner,
+        state: Partial<WorkTaskState> = {},
+    ) => {
+        const workStore = useWorkStore()
+        const session: WorkSession = { ...owner, taskId: task.id }
+        const lane = getWorkTaskLane(owner)
+        const taskState: WorkTaskState = {
+            taskId: task.id,
+            task,
+            events: [],
+            connectionState: 'idle',
+            pendingAction: null,
+            alwaysAllowBrowserActions: false,
+            actionSubmitting: false,
+            cancelling: false,
+            starting: false,
+            restoring: false,
+            sessionUnavailable: false,
+            error: null,
+            ...state,
+        }
+
+        workStore.sessions = [
+            ...workStore.sessions.filter((current) => getWorkTaskLane(current) !== lane),
+            session,
+        ]
+        workStore.taskStates = { ...workStore.taskStates, [task.id]: taskState }
+        return task
+    }
+
+    const updateTask = (task: WorkTask) => {
+        const workStore = useWorkStore()
+        const state = workStore.getTaskState(task.id)
+
+        if (state === null) {
+            throw new Error(`Missing Work task state for ${task.id}`)
+        }
+
+        workStore.taskStates = {
+            ...workStore.taskStates,
+            [task.id]: { ...state, task },
+        }
+    }
+
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.stubGlobal('sessionStorage', new MemoryStorage())
@@ -407,7 +460,7 @@ describe('outreach store', () => {
 
         await vi.waitFor(() => expect(store.contact).toEqual(savedContact))
         expect(fetchMock).toHaveBeenCalledTimes(2)
-        expect(useWorkStore().session).toBeNull()
+        expect(useWorkStore().getSession('outreach')).toBeNull()
     })
 
     it('restores the selected contact and edited draft for a cancelled revision', async () => {
@@ -451,7 +504,7 @@ describe('outreach store', () => {
         expect(store.draft).toBe(editedDraft)
         expect(store.drafting).toBe(true)
         expect(store.dismissActiveTask()).toBe(true)
-        expect(useWorkStore().session).toBeNull()
+        expect(useWorkStore().getSession('outreach')).toBeNull()
     })
 
     it('retains a completed draft revision through refresh until it is dismissed', async () => {
@@ -498,10 +551,10 @@ describe('outreach store', () => {
         await vi.waitFor(() => expect(store.draft).toBe(revisedDraft))
         expect(store.assistantReply).toBe('Made the introduction warmer.')
         expect(store.hasActiveTask).toBe(true)
-        expect(useWorkStore().session?.taskId).toBe(restoredTaskId)
+        expect(useWorkStore().getSession('outreach')?.taskId).toBe(restoredTaskId)
 
         expect(store.dismissActiveTask()).toBe(true)
-        expect(useWorkStore().session).toBeNull()
+        expect(useWorkStore().getSession('outreach')).toBeNull()
     })
 
     it('updates the selected and saved contact from the messaged PATCH response', async () => {
@@ -595,6 +648,64 @@ describe('outreach store', () => {
         expect(store.contactUpdateError).toBeNull()
     })
 
+    it('starts contact discovery while a job-post import task is active', async () => {
+        const importTask: WorkTask = {
+            ...runningTask,
+            id: '81e09f1d-8af3-45a6-9ddc-8a12586297f1',
+            threadId: 'import-thread-1',
+            turnId: 'import-turn-1',
+        }
+        const outreachTask: WorkTask = {
+            ...runningTask,
+            id: '0c2035b4-0d2d-422b-a331-0c3ad0adca6e',
+            threadId: 'outreach-thread-1',
+            turnId: 'outreach-turn-1',
+        }
+        const importUrl = 'https://example.com/jobs/imported-role'
+        vi.stubGlobal('crypto', {
+            randomUUID: vi
+                .fn()
+                .mockReturnValueOnce(importTask.id)
+                .mockReturnValueOnce(outreachTask.id),
+        })
+        vi.stubGlobal(
+            'EventSource',
+            class {
+                static readonly CLOSED = 2
+                readonly readyState = 0
+                close() {}
+            },
+        )
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(importTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(outreachTask, 202))
+        const workStore = useWorkStore()
+
+        await workStore.startTask(createJobPostImportTask(importUrl), {
+            kind: 'job-post-import',
+            url: importUrl,
+        })
+
+        const store = useOutreachStore()
+
+        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
+
+        expect(workStore.getSession('job-post-import')).toEqual({
+            kind: 'job-post-import',
+            taskId: importTask.id,
+            url: importUrl,
+        })
+        expect(workStore.getTaskState(importTask.id)?.task).toEqual(importTask)
+        expect(workStore.getSession('outreach')).toEqual({
+            kind: 'outreach-contact',
+            taskId: outreachTask.id,
+            postId: post.id,
+        })
+        expect(workStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
+    })
+
     it('persists and selects a discovered contact when Work completes without a mounted panel', async () => {
         const output = {
             personName: ` ${savedContact.personName} `,
@@ -617,9 +728,8 @@ describe('outreach store', () => {
         }
         const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(savedContact, 201))
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = completedTask
-            return completedTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(completedTask, owner)
         })
         const store = useOutreachStore()
 
@@ -643,14 +753,13 @@ describe('outreach store', () => {
     it('does not select a contact when completed discovery persistence fails', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const store = useOutreachStore()
         await store.startContactDiscovery(post)
 
-        workStore.task = {
+        updateTask({
             ...runningTask,
             status: 'completed',
             output: {
@@ -660,7 +769,7 @@ describe('outreach store', () => {
                 relevanceRationale: savedContact.relevanceRationale,
                 draftMessage: savedContact.draftMessage,
             },
-        }
+        })
 
         await vi.waitFor(() => {
             expect(store.resultError).toBe('API request failed (500)')
@@ -672,9 +781,8 @@ describe('outreach store', () => {
 
     it('updates the draft and assistant reply when draft Work completes', async () => {
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const store = useOutreachStore()
         store.openForPost(post.id)
@@ -682,14 +790,14 @@ describe('outreach store', () => {
         store.selectContact(savedContact)
 
         await expect(store.requestDraftRevision(post, 'Make it warmer')).resolves.toBe(true)
-        workStore.task = {
+        updateTask({
             ...runningTask,
             status: 'completed',
             output: {
                 draftMessage: 'A warmer draft',
                 response: 'I made the introduction warmer.',
             },
-        }
+        })
 
         await vi.waitFor(() => {
             expect(store.draft).toBe('A warmer draft')
@@ -706,9 +814,8 @@ describe('outreach store', () => {
             draftMessage: 'Draft for Grace',
         }
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const store = useOutreachStore()
         store.openForPost(post.id)
@@ -718,14 +825,14 @@ describe('outreach store', () => {
         expect(store.drafting).toBe(true)
 
         store.selectContact(otherContact)
-        workStore.task = {
+        updateTask({
             ...runningTask,
             status: 'completed',
             output: {
                 draftMessage: 'Revised draft for Ada',
                 response: 'I revised the message.',
             },
-        }
+        })
 
         await vi.waitFor(() => {
             expect(store.drafting).toBe(false)
@@ -735,16 +842,15 @@ describe('outreach store', () => {
         expect(store.assistantReply).toBeNull()
     })
 
-    it('clears outreach only after Work cancellation succeeds', async () => {
+    it('retains cancelled outreach until it is dismissed', async () => {
         const cancelledTask: WorkTask = { ...runningTask, status: 'cancelled' }
         let resolveCancellation: ((task: WorkTask) => void) | undefined
         const cancellationResponse = new Promise<WorkTask>((resolve) => {
             resolveCancellation = resolve
         })
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const cancelTask = vi
             .spyOn(workStore, 'cancelTask')
@@ -755,43 +861,51 @@ describe('outreach store', () => {
         const cancellation = store.cancelActiveTask()
 
         expect(store.discovering).toBe(true)
+        updateTask(cancelledTask)
         resolveCancellation?.(cancelledTask)
         await expect(cancellation).resolves.toBe(true)
-        expect(cancelTask).toHaveBeenCalledOnce()
+        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
+        expect(store.discovering).toBe(true)
+        expect(workStore.getSession('outreach')?.taskId).toBe(runningTask.id)
+        expect(store.dismissActiveTask()).toBe(true)
         expect(store.discovering).toBe(false)
     })
 
     it('preserves active outreach when Work cancellation fails', async () => {
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
-        vi.spyOn(workStore, 'cancelTask').mockRejectedValueOnce(new Error('Could not cancel task'))
+        const cancelTask = vi
+            .spyOn(workStore, 'cancelTask')
+            .mockRejectedValueOnce(new Error('Could not cancel task'))
         const store = useOutreachStore()
         await store.startContactDiscovery(post)
 
         await expect(store.cancelActiveTask()).rejects.toThrow('Could not cancel task')
 
+        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
         expect(store.discovering).toBe(true)
     })
 
-    it('ends outreach without persistence when Work fails', async () => {
+    it('retains failed outreach until it is dismissed', async () => {
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const store = useOutreachStore()
         await expect(store.startContactDiscovery(post)).resolves.toBe(true)
         expect(store.discovering).toBe(true)
 
-        workStore.task = { ...runningTask, status: 'failed', error: 'Chrome stopped responding' }
+        updateTask({ ...runningTask, status: 'failed', error: 'Chrome stopped responding' })
 
         await vi.waitFor(() => {
-            expect(store.discovering).toBe(false)
+            expect(store.resultError).toBe('Chrome stopped responding')
         })
         expect(fetch).not.toHaveBeenCalled()
+        expect(store.discovering).toBe(true)
+        expect(store.dismissActiveTask()).toBe(true)
+        expect(store.discovering).toBe(false)
     })
 
     it('cancels a task that starts after its outreach context is reset', async () => {
@@ -801,10 +915,9 @@ describe('outreach store', () => {
             resolveStart = resolve
         })
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
             const task = await startResponse
-            workStore.task = task
-            return task
+            return seedTask(task, owner)
         })
         const cancelTask = vi.spyOn(workStore, 'cancelTask').mockResolvedValueOnce(cancelledTask)
         const store = useOutreachStore()
@@ -814,7 +927,7 @@ describe('outreach store', () => {
         resolveStart?.(runningTask)
 
         await expect(start).resolves.toBe(false)
-        expect(cancelTask).toHaveBeenCalledOnce()
+        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
         expect(store.postId).toBeNull()
         expect(store.discovering).toBe(false)
     })
@@ -824,14 +937,13 @@ describe('outreach store', () => {
             personName: savedContact.personName,
         }
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
         const store = useOutreachStore()
         await store.startContactDiscovery(post)
 
-        workStore.task = { ...runningTask, status: 'completed', output }
+        updateTask({ ...runningTask, status: 'completed', output })
 
         await vi.waitFor(() => {
             expect(store.resultError).toBe('Work returned an invalid outreach result')
@@ -853,16 +965,17 @@ describe('outreach store', () => {
             resolveCancellation = resolve
         })
         const workStore = useWorkStore()
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.task = runningTask
-            return runningTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async (_input, owner) => {
+            return seedTask(runningTask, owner)
         })
-        vi.spyOn(workStore, 'cancelTask').mockReturnValueOnce(cancellationResponse)
+        const cancelTask = vi
+            .spyOn(workStore, 'cancelTask')
+            .mockReturnValueOnce(cancellationResponse)
         const store = useOutreachStore()
         await store.startContactDiscovery(post)
         const cancellation = store.cancelActiveTask()
 
-        workStore.task = {
+        updateTask({
             ...runningTask,
             status: 'completed',
             output: {
@@ -872,12 +985,15 @@ describe('outreach store', () => {
                 relevanceRationale: savedContact.relevanceRationale,
                 draftMessage: savedContact.draftMessage,
             },
-        }
+        })
         await vi.waitFor(() => {
             expect(store.contactSaving).toBe(true)
         })
+        updateTask(cancelledTask)
+        workStore.dismissSession(cancelledTask.id)
         resolveCancellation?.(cancelledTask)
         await expect(cancellation).resolves.toBe(true)
+        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
         resolveSave?.(jsonResponse(savedContact, 201))
         await new Promise((resolve) => setTimeout(resolve, 0))
 

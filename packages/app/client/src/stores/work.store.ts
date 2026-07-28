@@ -10,16 +10,18 @@ import {
     type WorkTaskEvent,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { shallowRef } from 'vue'
 import { parseJsonResponse } from '@/api'
 
-type WorkConnectionState =
+export type WorkConnectionState =
     | 'idle'
     | 'connecting'
     | 'connected'
     | 'reconnecting'
     | 'disconnected'
     | 'closed'
+
+export type WorkTaskLane = 'job-post-import' | 'outreach'
 
 export type WorkSessionOwner =
     | { kind: 'job-post-import'; url: string }
@@ -34,7 +36,40 @@ export type WorkSessionOwner =
 
 export type WorkSession = WorkSessionOwner & { taskId: string }
 
+export interface WorkTaskState {
+    taskId: string
+    task: WorkTask | null
+    events: WorkTaskEvent[]
+    connectionState: WorkConnectionState
+    pendingAction: WorkActionRequired | null
+    alwaysAllowBrowserActions: boolean
+    actionSubmitting: boolean
+    cancelling: boolean
+    starting: boolean
+    restoring: boolean
+    sessionUnavailable: boolean
+    error: string | null
+}
+
 const workSessionStorageKey = 'job-search-facilitator:work-session'
+
+export const getWorkTaskLane = (owner: WorkSessionOwner): WorkTaskLane =>
+    owner.kind === 'job-post-import' ? 'job-post-import' : 'outreach'
+
+const createTaskState = (taskId: string): WorkTaskState => ({
+    taskId,
+    task: null,
+    events: [],
+    connectionState: 'idle',
+    pendingAction: null,
+    alwaysAllowBrowserActions: false,
+    actionSubmitting: false,
+    cancelling: false,
+    starting: false,
+    restoring: false,
+    sessionUnavailable: false,
+    error: null,
+})
 
 const getSessionStorage = () => (typeof sessionStorage === 'undefined' ? null : sessionStorage)
 
@@ -88,14 +123,48 @@ const parseWorkSession = (value: unknown): WorkSession | null => {
     return null
 }
 
-const readWorkSession = (): WorkSession | null => {
-    const storage = getSessionStorage()
-
-    if (storage === null) {
+const parseStoredSessions = (value: unknown): WorkSession[] | null => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return null
     }
 
-    const removeStoredSession = () => {
+    if ('version' in value && value.version === 1 && 'session' in value) {
+        const session = parseWorkSession(value.session)
+        return session === null ? null : [session]
+    }
+
+    if (!('version' in value) || value.version !== 2 || !('sessions' in value)) {
+        return null
+    }
+
+    if (!Array.isArray(value.sessions)) {
+        return null
+    }
+
+    const validSessions = value.sessions
+        .map(parseWorkSession)
+        .filter((session): session is WorkSession => session !== null)
+
+    if (value.sessions.length > 0 && validSessions.length === 0) {
+        return null
+    }
+
+    const taskIds = new Set(validSessions.map(({ taskId }) => taskId))
+    const lanes = new Set(validSessions.map(getWorkTaskLane))
+
+    return taskIds.size === validSessions.length && lanes.size === validSessions.length
+        ? validSessions
+        : null
+}
+
+const readWorkSessions = (): WorkSession[] => {
+    const storage = getSessionStorage()
+
+    if (storage === null) {
+        return []
+    }
+
+    const removeStoredSessions = () => {
         try {
             storage.removeItem(workSessionStorageKey)
         } catch {
@@ -107,37 +176,24 @@ const readWorkSession = (): WorkSession | null => {
         const stored = storage.getItem(workSessionStorageKey)
 
         if (stored === null) {
-            return null
+            return []
         }
 
-        const value: unknown = JSON.parse(stored)
+        const sessions = parseStoredSessions(JSON.parse(stored))
 
-        if (
-            typeof value !== 'object' ||
-            value === null ||
-            Array.isArray(value) ||
-            !('version' in value) ||
-            value.version !== 1 ||
-            !('session' in value)
-        ) {
-            removeStoredSession()
-            return null
+        if (sessions === null) {
+            removeStoredSessions()
+            return []
         }
 
-        const session = parseWorkSession(value.session)
-
-        if (session === null) {
-            removeStoredSession()
-        }
-
-        return session
+        return sessions
     } catch {
-        removeStoredSession()
-        return null
+        removeStoredSessions()
+        return []
     }
 }
 
-const writeWorkSession = (session: WorkSession | null) => {
+const writeWorkSessions = (sessions: WorkSession[]) => {
     const storage = getSessionStorage()
 
     if (storage === null) {
@@ -145,15 +201,51 @@ const writeWorkSession = (session: WorkSession | null) => {
     }
 
     try {
-        if (session === null) {
+        if (sessions.length === 0) {
             storage.removeItem(workSessionStorageKey)
         } else {
-            storage.setItem(workSessionStorageKey, JSON.stringify({ version: 1, session }))
+            storage.setItem(workSessionStorageKey, JSON.stringify({ version: 2, sessions }))
         }
     } catch {
-        // A storage failure must not prevent the task from remaining usable in memory.
+        // A storage failure must not prevent tasks from remaining usable in memory.
     }
 }
+
+const ownersMatch = (left: WorkSession, right: WorkSessionOwner) => {
+    if (left.kind !== right.kind) {
+        return false
+    }
+
+    if (left.kind === 'job-post-import' && right.kind === 'job-post-import') {
+        return left.url === right.url
+    }
+
+    if (left.kind === 'outreach-contact' && right.kind === 'outreach-contact') {
+        return left.postId === right.postId
+    }
+
+    return (
+        left.kind === 'outreach-draft' &&
+        right.kind === 'outreach-draft' &&
+        left.postId === right.postId &&
+        left.contactId === right.contactId &&
+        left.draft === right.draft &&
+        left.request === right.request
+    )
+}
+
+const taskStateActive = (state: WorkTaskState) =>
+    state.starting ||
+    state.restoring ||
+    state.task?.status === 'running' ||
+    (state.task === null && state.error === null && !state.sessionUnavailable)
+
+const taskStateCanDismiss = (state: WorkTaskState) =>
+    !state.starting &&
+    !state.restoring &&
+    (state.sessionUnavailable ||
+        (state.task === null && state.error !== null) ||
+        (state.task !== null && state.task.status !== 'running'))
 
 const workBridgeUrl = (import.meta.env.VITE_WORK_BRIDGE_URL ?? 'http://localhost:3001').replace(
     /\/$/,
@@ -206,96 +298,114 @@ const sendWork = async (path: string, init?: RequestInit): Promise<void> => {
     await workResponse(path, init)
 }
 
+const assertTaskIdentity = (task: WorkTask, taskId: string) => {
+    if (task.id !== taskId) {
+        throw new Error('Work returned a different task than the reserved session')
+    }
+}
+
 export const useWorkStore = defineStore('work', () => {
-    const task = shallowRef<WorkTask | null>(null)
-    const session = shallowRef<WorkSession | null>(readWorkSession())
-    const events = ref<WorkTaskEvent[]>([])
-    const connectionState = shallowRef<WorkConnectionState>('idle')
-    const pendingAction = shallowRef<WorkActionRequired | null>(null)
-    const alwaysAllowBrowserActions = shallowRef(false)
-    const actionSubmitting = shallowRef(false)
-    const cancelling = shallowRef(false)
-    const starting = shallowRef(false)
-    const restoring = shallowRef(false)
-    const sessionUnavailable = shallowRef(false)
-    const error = shallowRef<string | null>(null)
-    const taskActive = computed(
-        () =>
-            starting.value ||
-            task.value?.status === 'running' ||
-            (session.value !== null && task.value === null && !sessionUnavailable.value),
+    const initialSessions = readWorkSessions()
+    const sessions = shallowRef<WorkSession[]>(initialSessions)
+    const taskStates = shallowRef<Record<string, WorkTaskState>>(
+        Object.fromEntries(
+            initialSessions.map(({ taskId }) => [taskId, createTaskState(taskId)] as const),
+        ),
     )
-    const canDismissSession = computed(
-        () =>
-            session.value !== null &&
-            (sessionUnavailable.value || (task.value !== null && task.value.status !== 'running')),
-    )
-    const actionNeedsAttention = computed(
-        () => pendingAction.value !== null && !alwaysAllowBrowserActions.value,
-    )
-    let eventSource: EventSource | null = null
-    let restorePromise: Promise<WorkTask | null> | null = null
+    const eventSources = new Map<string, EventSource>()
+    const restorePromises = new Map<string, Promise<WorkTask | null>>()
 
-    function saveSession(nextSession: WorkSession | null) {
-        session.value = nextSession
-        writeWorkSession(nextSession)
+    function getSession(lane: WorkTaskLane) {
+        return sessions.value.find((session) => getWorkTaskLane(session) === lane) ?? null
     }
 
-    function resetReplayState() {
-        events.value = []
-        pendingAction.value = null
-        actionSubmitting.value = false
+    function getTaskState(taskId: string) {
+        return taskStates.value[taskId] ?? null
     }
 
-    function resetVolatileTaskState() {
-        task.value = null
-        resetReplayState()
-        alwaysAllowBrowserActions.value = false
-        cancelling.value = false
-        sessionUnavailable.value = false
-        error.value = null
+    function updateTaskState(
+        taskId: string,
+        update: Partial<WorkTaskState> | ((state: WorkTaskState) => WorkTaskState),
+    ) {
+        const state = taskStates.value[taskId]
+
+        if (state === undefined) {
+            return null
+        }
+
+        const nextState =
+            typeof update === 'function' ? update(state) : { ...state, ...update, taskId }
+        taskStates.value = { ...taskStates.value, [taskId]: nextState }
+        return nextState
     }
 
-    function closeConnection(state: WorkConnectionState) {
-        eventSource?.close()
-        eventSource = null
-        connectionState.value = state
+    function setTaskState(state: WorkTaskState) {
+        taskStates.value = { ...taskStates.value, [state.taskId]: state }
+    }
+
+    function removeTaskState(taskId: string) {
+        const nextStates = { ...taskStates.value }
+        delete nextStates[taskId]
+        taskStates.value = nextStates
+    }
+
+    function saveSession(nextSession: WorkSession) {
+        const lane = getWorkTaskLane(nextSession)
+        sessions.value = [
+            ...sessions.value.filter((session) => getWorkTaskLane(session) !== lane),
+            nextSession,
+        ]
+        writeWorkSessions(sessions.value)
+    }
+
+    function removeSession(taskId: string) {
+        sessions.value = sessions.value.filter((session) => session.taskId !== taskId)
+        writeWorkSessions(sessions.value)
+    }
+
+    function closeConnection(taskId: string, connectionState: WorkConnectionState) {
+        eventSources.get(taskId)?.close()
+        eventSources.delete(taskId)
+        updateTaskState(taskId, { connectionState })
     }
 
     function finishTask(currentTask: WorkTask) {
-        task.value = currentTask
-        pendingAction.value = null
-        alwaysAllowBrowserActions.value = false
-        actionSubmitting.value = false
-        cancelling.value = false
-        sessionUnavailable.value = false
-        error.value = null
-        closeConnection('closed')
+        updateTaskState(currentTask.id, {
+            task: currentTask,
+            pendingAction: null,
+            alwaysAllowBrowserActions: false,
+            actionSubmitting: false,
+            cancelling: false,
+            sessionUnavailable: false,
+            error: null,
+        })
+        closeConnection(currentTask.id, 'closed')
     }
 
     function disconnectConnectedTask(taskId: string, message: string) {
-        const currentTask = task.value
+        const state = getTaskState(taskId)
 
-        if (currentTask?.id === taskId && currentTask.status === 'running') {
-            error.value = message
-            closeConnection('disconnected')
+        if (state?.task?.status === 'running') {
+            updateTaskState(taskId, { error: message })
+            closeConnection(taskId, 'disconnected')
         }
     }
 
     function connect(taskId: string) {
+        closeConnection(taskId, 'connecting')
         const source = new EventSource(
             `${workBridgeUrl}/tasks/${encodeURIComponent(taskId)}/events`,
         )
-        eventSource = source
+        eventSources.set(taskId, source)
 
         source.onopen = () => {
-            if (eventSource === source) {
-                connectionState.value = 'connected'
+            if (eventSources.get(taskId) === source) {
+                updateTaskState(taskId, { connectionState: 'connected' })
             }
         }
 
         source.onmessage = ({ data }) => {
-            if (eventSource !== source) {
+            if (eventSources.get(taskId) !== source) {
                 return
             }
 
@@ -306,45 +416,55 @@ export const useWorkStore = defineStore('work', () => {
 
                 const value: unknown = JSON.parse(data)
                 const event = parseWorkTaskEvent(value)
+                const state = updateTaskState(taskId, (currentState) => ({
+                    ...currentState,
+                    events: [...currentState.events, event],
+                }))
 
-                events.value.push(event)
+                if (state === null) {
+                    return
+                }
 
                 if (event.type === 'action-required') {
-                    pendingAction.value = event.action
-                    actionSubmitting.value = false
-                    error.value = null
+                    updateTaskState(taskId, {
+                        pendingAction: event.action,
+                        actionSubmitting: false,
+                        error: null,
+                    })
 
-                    if (alwaysAllowBrowserActions.value) {
-                        void allowBrowserActionsForTask().catch(() => undefined)
+                    if (state.alwaysAllowBrowserActions) {
+                        void allowBrowserActionsForTask(taskId).catch(() => undefined)
                     }
                 } else if (
                     event.type === 'action-resolved' &&
-                    pendingAction.value?.id === event.actionId
+                    state.pendingAction?.id === event.actionId
                 ) {
-                    pendingAction.value = null
-                    actionSubmitting.value = false
-                    error.value = null
-                } else if (event.type === 'completed' && task.value !== null) {
+                    updateTaskState(taskId, {
+                        pendingAction: null,
+                        actionSubmitting: false,
+                        error: null,
+                    })
+                } else if (event.type === 'completed' && state.task !== null) {
                     finishTask({
-                        id: task.value.id,
-                        threadId: task.value.threadId,
-                        turnId: task.value.turnId,
+                        id: state.task.id,
+                        threadId: state.task.threadId,
+                        turnId: state.task.turnId,
                         status: 'completed',
                         output: event.output,
                         error: null,
                     })
-                } else if (event.type === 'failed' && task.value !== null) {
+                } else if (event.type === 'failed' && state.task !== null) {
                     finishTask({
-                        id: task.value.id,
-                        threadId: task.value.threadId,
-                        turnId: task.value.turnId,
+                        id: state.task.id,
+                        threadId: state.task.threadId,
+                        turnId: state.task.turnId,
                         status: 'failed',
                         output: null,
                         error: event.error,
                     })
-                } else if (event.type === 'cancelled' && task.value !== null) {
+                } else if (event.type === 'cancelled' && state.task !== null) {
                     finishTask({
-                        ...task.value,
+                        ...state.task,
                         status: 'cancelled',
                         output: null,
                         error: null,
@@ -356,66 +476,49 @@ export const useWorkStore = defineStore('work', () => {
         }
 
         source.onerror = () => {
-            if (eventSource !== source) {
+            if (eventSources.get(taskId) !== source) {
                 return
             }
 
             if (source.readyState === EventSource.CLOSED) {
                 disconnectConnectedTask(taskId, 'Work stream closed before the task finished')
             } else {
-                connectionState.value = 'reconnecting'
+                updateTaskState(taskId, { connectionState: 'reconnecting' })
             }
         }
     }
 
-    const ownersMatch = (left: WorkSession, right: WorkSessionOwner) => {
-        if (left.kind !== right.kind) {
-            return false
+    async function startTask(input: StartWorkTaskInput, owner: WorkSessionOwner) {
+        const lane = getWorkTaskLane(owner)
+        const currentSession = getSession(lane)
+        const currentState = currentSession === null ? null : getTaskState(currentSession.taskId)
+
+        if (currentState !== null && taskStateActive(currentState)) {
+            throw new Error(`Another ${lane} Work task is already active`)
         }
 
-        if (left.kind === 'job-post-import' && right.kind === 'job-post-import') {
-            return left.url === right.url
+        const reuseReservedTask =
+            currentSession !== null &&
+            currentState?.task === null &&
+            currentState.sessionUnavailable &&
+            ownersMatch(currentSession, owner)
+        const taskId = reuseReservedTask ? currentSession.taskId : crypto.randomUUID()
+
+        if (currentSession !== null && currentSession.taskId !== taskId) {
+            closeConnection(currentSession.taskId, 'idle')
+            removeTaskState(currentSession.taskId)
         }
 
-        if (left.kind === 'outreach-contact' && right.kind === 'outreach-contact') {
-            return left.postId === right.postId
-        }
-
-        return (
-            left.kind === 'outreach-draft' &&
-            right.kind === 'outreach-draft' &&
-            left.postId === right.postId &&
-            left.contactId === right.contactId &&
-            left.draft === right.draft &&
-            left.request === right.request
-        )
-    }
-
-    async function startTask(input: StartWorkTaskInput, owner?: WorkSessionOwner) {
-        const previousTask = task.value
-        const currentSession = session.value
-        closeConnection('connecting')
-        resetVolatileTaskState()
-        starting.value = true
-
-        const taskId =
-            owner === undefined
-                ? null
-                : currentSession !== null &&
-                    previousTask === null &&
-                    ownersMatch(currentSession, owner)
-                  ? currentSession.taskId
-                  : crypto.randomUUID()
-
-        if (owner !== undefined && taskId !== null) {
-            saveSession({ ...owner, taskId } as WorkSession)
-        }
-
+        saveSession({ ...owner, taskId } as WorkSession)
+        setTaskState({
+            ...createTaskState(taskId),
+            connectionState: 'connecting',
+            starting: true,
+        })
         let taskRequestStarted = false
 
         try {
             const health = await requestWork('/health', parseWorkHealth)
-
             const unavailableCapability = input.capabilities.find(
                 (capability) => !health.capabilities.includes(capability),
             )
@@ -424,124 +527,169 @@ export const useWorkStore = defineStore('work', () => {
                 throw new Error(`Work capability is unavailable: ${unavailableCapability}`)
             }
 
-            const path = taskId === null ? '/tasks' : `/tasks/${encodeURIComponent(taskId)}`
             taskRequestStarted = true
-            task.value = await requestWork(path, parseWorkTask, {
-                method: taskId === null ? 'POST' : 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(input),
+            const currentTask = await requestWork(
+                `/tasks/${encodeURIComponent(taskId)}`,
+                parseWorkTask,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(input),
+                },
+            )
+
+            assertTaskIdentity(currentTask, taskId)
+
+            if (getSession(lane)?.taskId !== taskId) {
+                return currentTask
+            }
+
+            updateTaskState(taskId, {
+                task: currentTask,
+                sessionUnavailable: false,
+                error: null,
             })
 
-            if (taskId !== null && task.value.id !== taskId) {
-                throw new Error('Work returned a different task than the reserved session')
+            if (currentTask.status === 'running') {
+                connect(taskId)
+            } else {
+                finishTask(currentTask)
             }
 
-            sessionUnavailable.value = false
-            connect(task.value.id)
-
-            return task.value
+            return currentTask
         } catch (requestError) {
-            if (
-                owner !== undefined &&
-                (!taskRequestStarted || requestError instanceof WorkRequestError)
-            ) {
-                sessionUnavailable.value = true
+            if (getSession(lane)?.taskId === taskId) {
+                updateTaskState(taskId, {
+                    sessionUnavailable:
+                        !taskRequestStarted || requestError instanceof WorkRequestError,
+                    error:
+                        requestError instanceof Error
+                            ? requestError.message
+                            : 'Could not start Work task',
+                })
+                closeConnection(taskId, 'disconnected')
             }
 
-            error.value =
-                requestError instanceof Error ? requestError.message : 'Could not start Work task'
-            closeConnection('disconnected')
             throw requestError
         } finally {
-            starting.value = false
+            updateTaskState(taskId, { starting: false })
         }
     }
 
-    async function restoreSession() {
-        const currentSession = session.value
+    async function restoreTask(taskId: string) {
+        const session = sessions.value.find((candidate) => candidate.taskId === taskId)
+        const state = getTaskState(taskId)
 
-        if (currentSession === null) {
+        if (session === undefined || state === null) {
             return null
         }
 
-        if (task.value?.id === currentSession.taskId) {
-            if (task.value.status === 'running' && eventSource === null) {
-                resetReplayState()
-                error.value = null
-                closeConnection('connecting')
-                connect(task.value.id)
+        if (state.task?.id === taskId) {
+            if (state.task.status === 'running' && !eventSources.has(taskId)) {
+                updateTaskState(taskId, {
+                    events: [],
+                    pendingAction: null,
+                    actionSubmitting: false,
+                    error: null,
+                })
+                connect(taskId)
             }
 
-            return task.value
+            return state.task
         }
 
-        if (restorePromise !== null) {
-            return restorePromise
+        const existingRestore = restorePromises.get(taskId)
+
+        if (existingRestore !== undefined) {
+            return existingRestore
         }
 
         const restore = async () => {
-            closeConnection('connecting')
-            resetVolatileTaskState()
-            restoring.value = true
+            closeConnection(taskId, 'connecting')
+            setTaskState({
+                ...createTaskState(taskId),
+                connectionState: 'connecting',
+                restoring: true,
+            })
 
             try {
                 const currentTask = await requestWork(
-                    `/tasks/${encodeURIComponent(currentSession.taskId)}`,
+                    `/tasks/${encodeURIComponent(taskId)}`,
                     parseWorkTask,
                 )
 
-                if (session.value?.taskId !== currentSession.taskId) {
+                assertTaskIdentity(currentTask, taskId)
+
+                if (!sessions.value.some((candidate) => candidate.taskId === taskId)) {
                     return null
                 }
 
-                task.value = currentTask
-                connect(currentTask.id)
+                updateTaskState(taskId, {
+                    task: currentTask,
+                    sessionUnavailable: false,
+                    error: null,
+                })
+
+                if (currentTask.status === 'running') {
+                    connect(taskId)
+                } else {
+                    finishTask(currentTask)
+                }
+
                 return currentTask
             } catch (requestError) {
-                if (session.value?.taskId === currentSession.taskId) {
-                    sessionUnavailable.value =
-                        requestError instanceof WorkRequestError && requestError.status === 404
-                    error.value =
-                        requestError instanceof Error
-                            ? requestError.message
-                            : 'Could not restore Work task'
-                    closeConnection('disconnected')
+                if (sessions.value.some((candidate) => candidate.taskId === taskId)) {
+                    updateTaskState(taskId, {
+                        sessionUnavailable:
+                            requestError instanceof WorkRequestError && requestError.status === 404,
+                        error:
+                            requestError instanceof Error
+                                ? requestError.message
+                                : 'Could not restore Work task',
+                    })
+                    closeConnection(taskId, 'disconnected')
                 }
 
                 throw requestError
             } finally {
-                restoring.value = false
+                updateTaskState(taskId, { restoring: false })
             }
         }
 
-        restorePromise = restore().finally(() => {
-            restorePromise = null
+        const restorePromise = restore().finally(() => {
+            restorePromises.delete(taskId)
         })
-
+        restorePromises.set(taskId, restorePromise)
         return restorePromise
     }
 
-    function dismissSession() {
-        if (!canDismissSession.value) {
+    async function restoreSessions() {
+        await Promise.allSettled(sessions.value.map(({ taskId }) => restoreTask(taskId)))
+    }
+
+    function dismissSession(taskId: string) {
+        const state = getTaskState(taskId)
+
+        if (state === null || !taskStateCanDismiss(state)) {
             return false
         }
 
-        closeConnection('idle')
-        resetVolatileTaskState()
-        saveSession(null)
+        closeConnection(taskId, 'idle')
+        removeSession(taskId)
+        removeTaskState(taskId)
         return true
     }
 
-    async function resolveAction(decision: WorkActionDecision) {
-        const currentTask = task.value
-        const currentAction = pendingAction.value
+    async function resolveAction(taskId: string, decision: WorkActionDecision) {
+        const state = getTaskState(taskId)
+        const currentTask = state?.task ?? null
+        const currentAction = state?.pendingAction ?? null
 
-        if (currentTask === null || currentAction === null || actionSubmitting.value) {
+        if (currentTask === null || currentAction === null || state?.actionSubmitting) {
             return
         }
 
-        actionSubmitting.value = true
-        error.value = null
+        updateTaskState(taskId, { actionSubmitting: true, error: null })
 
         try {
             await sendWork(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
@@ -550,54 +698,56 @@ export const useWorkStore = defineStore('work', () => {
                 body: JSON.stringify({ decision }),
             })
         } catch (requestError) {
-            if (task.value?.id === currentTask.id && pendingAction.value?.id === currentAction.id) {
-                error.value =
-                    requestError instanceof Error
-                        ? requestError.message
-                        : 'Could not resolve Work action'
-                actionSubmitting.value = false
+            const currentState = getTaskState(taskId)
+
+            if (
+                currentState?.task?.id === currentTask.id &&
+                currentState.pendingAction?.id === currentAction.id
+            ) {
+                updateTaskState(taskId, {
+                    error:
+                        requestError instanceof Error
+                            ? requestError.message
+                            : 'Could not resolve Work action',
+                    actionSubmitting: false,
+                })
             }
 
             throw requestError
         }
     }
 
-    async function allowBrowserActionsForTask() {
-        const taskId = task.value?.id
-        const actionId = pendingAction.value?.id
+    async function allowBrowserActionsForTask(taskId: string) {
+        const state = getTaskState(taskId)
+        const actionId = state?.pendingAction?.id
 
-        if (
-            task.value?.status !== 'running' ||
-            taskId === undefined ||
-            actionId === undefined ||
-            actionSubmitting.value
-        ) {
+        if (state?.task?.status !== 'running' || actionId === undefined || state.actionSubmitting) {
             return
         }
 
-        alwaysAllowBrowserActions.value = true
+        updateTaskState(taskId, { alwaysAllowBrowserActions: true })
 
         try {
-            await resolveAction('approve')
+            await resolveAction(taskId, 'approve')
         } catch (requestError) {
-            if (task.value?.id === taskId && pendingAction.value?.id === actionId) {
-                alwaysAllowBrowserActions.value = false
+            const currentState = getTaskState(taskId)
+
+            if (currentState?.task?.id === taskId && currentState.pendingAction?.id === actionId) {
+                updateTaskState(taskId, { alwaysAllowBrowserActions: false })
             }
 
             throw requestError
         }
     }
 
-    async function cancelTask() {
-        const taskId =
-            task.value?.status === 'running' ? task.value.id : (session.value?.taskId ?? null)
+    async function cancelTask(taskId: string) {
+        const state = getTaskState(taskId)
 
-        if (taskId === null || cancelling.value) {
-            return task.value
+        if (state === null || state.cancelling) {
+            return state?.task ?? null
         }
 
-        cancelling.value = true
-        error.value = null
+        updateTaskState(taskId, { cancelling: true, error: null })
 
         try {
             const currentTask = await requestWork(
@@ -608,44 +758,38 @@ export const useWorkStore = defineStore('work', () => {
                 },
             )
 
+            assertTaskIdentity(currentTask, taskId)
+
             if (currentTask.status !== 'running') {
                 finishTask(currentTask)
             } else {
-                task.value = currentTask
+                updateTaskState(taskId, { task: currentTask })
             }
 
             return currentTask
         } catch (requestError) {
-            if (requestError instanceof WorkRequestError && requestError.status === 404) {
-                sessionUnavailable.value = true
-            }
-
-            error.value =
-                requestError instanceof Error ? requestError.message : 'Could not cancel Work task'
+            updateTaskState(taskId, {
+                sessionUnavailable:
+                    requestError instanceof WorkRequestError && requestError.status === 404,
+                error:
+                    requestError instanceof Error
+                        ? requestError.message
+                        : 'Could not cancel Work task',
+            })
             throw requestError
         } finally {
-            cancelling.value = false
+            updateTaskState(taskId, { cancelling: false })
         }
     }
 
     return {
-        task,
-        session,
-        events,
-        connectionState,
-        taskActive,
-        canDismissSession,
-        pendingAction,
-        alwaysAllowBrowserActions,
-        actionNeedsAttention,
-        actionSubmitting,
-        cancelling,
-        starting,
-        restoring,
-        sessionUnavailable,
-        error,
+        sessions,
+        taskStates,
+        getSession,
+        getTaskState,
         startTask,
-        restoreSession,
+        restoreTask,
+        restoreSessions,
         dismissSession,
         resolveAction,
         allowBrowserActionsForTask,

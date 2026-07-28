@@ -11,7 +11,8 @@ import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useWorkStore } from '@/stores/work.store'
+import { useWorkStore, type WorkSession, type WorkTaskState } from '@/stores/work.store'
+import { createJobPostImportTask } from '@/work-tasks'
 import ReviewView from '../views/ReviewView.vue'
 
 const createPost = (id: string, roleTitle: string): JobPost => ({
@@ -174,6 +175,57 @@ interface MountedReview {
 }
 
 const mountedReviews: MountedReview[] = []
+type WorkStore = ReturnType<typeof useWorkStore>
+
+const createWorkTaskState = (task: WorkTask): WorkTaskState => ({
+    taskId: task.id,
+    task,
+    events: [],
+    connectionState: task.status === 'running' ? 'connected' : 'closed',
+    pendingAction: null,
+    alwaysAllowBrowserActions: false,
+    actionSubmitting: false,
+    cancelling: false,
+    starting: false,
+    restoring: false,
+    sessionUnavailable: false,
+    error: null,
+})
+
+const seedImportWork = (workStore: WorkStore, task: WorkTask, url = importOutput.post.postUrl) => {
+    const session = {
+        kind: 'job-post-import',
+        taskId: task.id,
+        url,
+    } satisfies WorkSession
+
+    workStore.sessions = [
+        ...workStore.sessions.filter(({ kind }) => kind !== 'job-post-import'),
+        session,
+    ]
+    workStore.taskStates = {
+        ...workStore.taskStates,
+        [task.id]: createWorkTaskState(task),
+    }
+}
+
+const updateImportWorkTask = (workStore: WorkStore, task: WorkTask) => {
+    const session = workStore.getSession('job-post-import')
+    const currentState = workStore.getTaskState(task.id)
+
+    if (session?.taskId !== task.id || currentState === null) {
+        throw new Error(`Could not update unseeded import task "${task.id}"`)
+    }
+
+    workStore.taskStates = {
+        ...workStore.taskStates,
+        [task.id]: {
+            ...currentState,
+            task,
+            connectionState: task.status === 'running' ? 'connected' : 'closed',
+        },
+    }
+}
 
 const findTestButton = (root: HTMLElement, testId: string) => {
     const button = root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
@@ -443,6 +495,90 @@ describe('review route selection', () => {
         })
     })
 
+    it('starts a job-post import while a persisted outreach task remains active', async () => {
+        class SilentEventSource {
+            static readonly CLOSED = 2
+            readonly readyState = 0
+            onopen: (() => void) | null = null
+            onmessage: ((event: { data: string }) => void) | null = null
+            onerror: (() => void) | null = null
+            close() {}
+        }
+
+        vi.stubGlobal('EventSource', SilentEventSource)
+        const outreachTask = {
+            id: '50000000-0000-4000-8000-000000000001',
+            threadId: 'outreach-thread',
+            turnId: 'outreach-turn',
+            status: 'running',
+            output: null,
+            error: null,
+        } satisfies WorkTask
+        const outreachSession = {
+            kind: 'outreach-contact',
+            taskId: outreachTask.id,
+            postId: firstPost.id,
+        } satisfies WorkSession
+        const importTaskId = '40000000-0000-4000-8000-000000000001'
+        const importTask = {
+            id: importTaskId,
+            threadId: 'import-thread',
+            turnId: 'import-turn',
+            status: 'running',
+            output: null,
+            error: null,
+        } satisfies WorkTask
+        vi.spyOn(crypto, 'randomUUID').mockReturnValue(importTaskId)
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const { method, url } = getRequest(input, init)
+
+            if (method === 'GET' && url.endsWith('/health')) {
+                return Promise.resolve(
+                    jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                )
+            }
+
+            if (method === 'GET' && url.endsWith(`/tasks/${outreachTask.id}`)) {
+                return Promise.resolve(jsonResponse(outreachTask))
+            }
+
+            if (method === 'PUT' && url.endsWith(`/tasks/${importTask.id}`)) {
+                return Promise.resolve(jsonResponse(importTask, 202))
+            }
+
+            return defaultReviewResponse(input, init)
+        })
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({ version: 2, sessions: [outreachSession] }),
+        )
+        const { pinia, root } = await mountReview()
+        const workStore = useWorkStore(pinia)
+        await workStore.restoreTask(outreachTask.id)
+        expect(workStore.getTaskState(outreachTask.id)?.task?.status).toBe('running')
+        const startTask = vi.spyOn(workStore, 'startTask')
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+
+        await vi.waitFor(() => {
+            expect(startTask).toHaveBeenCalledWith(
+                createJobPostImportTask(importOutput.post.postUrl),
+                {
+                    kind: 'job-post-import',
+                    url: importOutput.post.postUrl,
+                },
+            )
+            expect(workStore.getSession('job-post-import')).toEqual({
+                kind: 'job-post-import',
+                taskId: importTask.id,
+                url: importOutput.post.postUrl,
+            })
+            expect(workStore.getTaskState(importTask.id)?.task).toEqual(importTask)
+            expect(workStore.getSession('outreach')).toEqual(outreachSession)
+            expect(workStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
+        })
+    })
+
     it('does not carry an open add-post popup into a fresh view', async () => {
         const firstMount = await mountReview()
 
@@ -537,7 +673,7 @@ describe('review route selection', () => {
                 url: importOutput.post.postUrl,
             },
         )
-        await firstStore.cancelTask()
+        await firstStore.cancelTask(taskId)
 
         const { root } = await mountReview()
 
@@ -575,12 +711,7 @@ describe('review route selection', () => {
             error: null,
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.session = {
-                kind: 'job-post-import',
-                taskId: runningTask.id,
-                url: importOutput.post.postUrl,
-            }
-            workStore.task = runningTask
+            seedImportWork(workStore, runningTask)
             return runningTask
         })
 
@@ -588,12 +719,12 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
 
-        workStore.task = {
+        updateImportWorkTask(workStore, {
             ...runningTask,
             status: 'completed',
             output: importOutput,
             error: null,
-        }
+        })
 
         await vi.waitFor(() => {
             expect(postRequestCount).toBe(1)
@@ -630,24 +761,19 @@ describe('review route selection', () => {
             error: null,
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.session = {
-                kind: 'job-post-import',
-                taskId: runningTask.id,
-                url: importOutput.post.postUrl,
-            }
-            workStore.task = runningTask
+            seedImportWork(workStore, runningTask)
             return runningTask
         })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
 
-        workStore.task = {
+        updateImportWorkTask(workStore, {
             ...runningTask,
             status: 'completed',
             output: { unexpected: true },
             error: null,
-        }
+        })
 
         await vi.waitFor(() => {
             expect(findTestButton(root, 'retry-job-post-import')).not.toBeNull()
@@ -671,12 +797,7 @@ describe('review route selection', () => {
             error: null,
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.session = {
-                kind: 'job-post-import',
-                taskId: runningTask.id,
-                url: importOutput.post.postUrl,
-            }
-            workStore.task = runningTask
+            seedImportWork(workStore, runningTask)
             return runningTask
         })
 
@@ -720,19 +841,14 @@ describe('review route selection', () => {
             status: 'cancelled',
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            workStore.session = {
-                kind: 'job-post-import',
-                taskId: runningTask.id,
-                url: importOutput.post.postUrl,
-            }
-            workStore.task = runningTask
+            seedImportWork(workStore, runningTask)
             return runningTask
         })
         const cancelTask = vi
             .spyOn(workStore, 'cancelTask')
             .mockRejectedValueOnce(new Error('Could not cancel import'))
             .mockImplementationOnce(async () => {
-                workStore.task = cancelledTask
+                updateImportWorkTask(workStore, cancelledTask)
                 return cancelledTask
             })
 
@@ -742,6 +858,7 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => {
             expect(cancelTask).toHaveBeenCalledTimes(1)
+            expect(cancelTask).toHaveBeenNthCalledWith(1, runningTask.id)
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
             expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
         })
@@ -750,6 +867,7 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => {
             expect(cancelTask).toHaveBeenCalledTimes(2)
+            expect(cancelTask).toHaveBeenNthCalledWith(2, runningTask.id)
             expect(
                 root.querySelector('[data-testid="job-post-url-dialog"]')?.hasAttribute('open'),
             ).toBe(false)

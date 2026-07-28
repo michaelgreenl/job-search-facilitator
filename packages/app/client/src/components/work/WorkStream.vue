@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import type { WorkActionDecision } from '@job-search-facilitator/core'
-import { storeToRefs } from 'pinia'
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
+import { useWorkTask } from '@/composables/useWorkTask'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
-import { useWorkStore } from '@/stores/work.store'
+import type { WorkTaskLane } from '@/stores/work.store'
 import WorkActionPrompt from './WorkActionPrompt.vue'
 
-const props = defineProps<{ issue: string | null }>()
+const props = defineProps<{ issue: string | null; lane: WorkTaskLane }>()
 
-const workStore = useWorkStore()
 const {
     actionNeedsAttention,
     actionSubmitting,
@@ -19,7 +18,9 @@ const {
     events,
     pendingAction,
     taskActive,
-} = storeToRefs(workStore)
+    resolveAction: resolveWorkAction,
+    allowBrowserActionsForTask: allowBrowserActions,
+} = useWorkTask(props.lane)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -125,11 +126,11 @@ watch(
 )
 
 function resolveAction(decision: WorkActionDecision) {
-    void workStore.resolveAction(decision).catch(() => undefined)
+    void resolveWorkAction(decision).catch(() => undefined)
 }
 
 function allowBrowserActionsForTask() {
-    void workStore.allowBrowserActionsForTask().catch(() => undefined)
+    void allowBrowserActions().catch(() => undefined)
 }
 </script>
 

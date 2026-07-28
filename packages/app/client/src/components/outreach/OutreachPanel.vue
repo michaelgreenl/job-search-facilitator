@@ -4,11 +4,11 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import { useWorkTask } from '@/composables/useWorkTask'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useOutreachStore } from '@/stores/outreach.store'
-import { useWorkStore } from '@/stores/work.store'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
@@ -30,7 +30,6 @@ const emit = defineEmits<{
     showViewer: []
 }>()
 
-const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
 const {
     actionNeedsAttention,
@@ -41,7 +40,7 @@ const {
     error,
     task,
     taskActive,
-} = storeToRefs(workStore)
+} = useWorkTask('outreach')
 const {
     assistantReply,
     contact,
@@ -302,7 +301,7 @@ async function copyDraft() {
             />
         </template>
 
-        <WorkStream v-else :issue="issue" />
+        <WorkStream v-else lane="outreach" :issue="issue" />
 
         <button
             v-if="canCancel"
