@@ -95,6 +95,17 @@ function clearDateFilter() {
 
         <fieldset class="date-filter" aria-label="Filter reports by date">
             <div class="date-fields">
+                <button
+                    class="date-clear"
+                    data-testid="review-date-clear"
+                    :class="{ 'is-hidden': !dateFilterActive }"
+                    type="button"
+                    aria-label="Clear report dates"
+                    :disabled="!dateFilterActive"
+                    @click="clearDateFilter"
+                >
+                    Clear
+                </button>
                 <input
                     v-model="dateFrom"
                     class="date-input"
@@ -114,17 +125,6 @@ function clearDateFilter() {
                     :min="dateFrom || undefined"
                     :disabled="reportsLoading || reports.length === 0"
                 />
-                <button
-                    class="date-clear"
-                    data-testid="review-date-clear"
-                    :class="{ 'is-hidden': !dateFilterActive }"
-                    type="button"
-                    aria-label="Clear report dates"
-                    :disabled="!dateFilterActive"
-                    @click="clearDateFilter"
-                >
-                    Clear
-                </button>
             </div>
         </fieldset>
 
@@ -222,7 +222,6 @@ function clearDateFilter() {
 
 .date-clear {
     flex: 0 0 auto;
-    order: -1;
     padding: $space-1 0;
     color: $color-signal-light;
     font: inherit;
@@ -252,12 +251,6 @@ function clearDateFilter() {
 .report-count {
     grid-area: count;
     justify-self: end;
-}
-
-@container report-list (max-width: 38rem) {
-    .date-clear {
-        order: 0;
-    }
 }
 
 @container report-list (max-width: 24rem) {
