@@ -43,10 +43,11 @@ const {
     contactSaving,
     contactUpdating,
     contactsLoading,
+    hasActiveTask: hasActiveOutreachTask,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
-    outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
+    outreachPostId.value !== null && hasActiveOutreachTask.value ? 'outreach' : 'posts',
 )
 const outreachExpanded = shallowRef(false)
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
@@ -106,6 +107,8 @@ const outreachActionDisabled = computed(
         contactsLoading.value ||
         contactSaving.value ||
         contactUpdating.value ||
+        hasActiveOutreachTask.value ||
+        workStore.session !== null ||
         (workStore.taskActive &&
             (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
 )
@@ -144,6 +147,11 @@ watch(
 )
 
 function selectPost(postId: string) {
+    if (hasActiveOutreachTask.value) {
+        activePanel.value = 'outreach'
+        return
+    }
+
     const changed = postId !== selectedPostId.value
     selectedPostId.value = postId
 
@@ -179,6 +187,11 @@ function updateApplyQueueMembership(postId: string, inApplyQueue: boolean) {
 }
 
 function showPosts() {
+    if (hasActiveOutreachTask.value) {
+        activePanel.value = 'outreach'
+        return
+    }
+
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
         outreachStore.reset()
@@ -189,6 +202,11 @@ function showPosts() {
 }
 
 function showViewer() {
+    if (hasActiveOutreachTask.value) {
+        activePanel.value = 'outreach'
+        return
+    }
+
     outreachExpanded.value = false
     activePanel.value = 'viewer'
 }
@@ -196,6 +214,7 @@ function showViewer() {
 async function startContactDiscovery(post: JobPost) {
     if (
         !viewMounted ||
+        hasActiveOutreachTask.value ||
         workStore.taskActive ||
         contactSaving.value ||
         contactUpdating.value ||
@@ -224,6 +243,15 @@ async function openOutreach() {
     const post = selectedPost.value
 
     if (post === null || contactSaving.value || contactUpdating.value || contactsLoading.value) {
+        return
+    }
+
+    if (hasActiveOutreachTask.value) {
+        if (outreachStore.postId === post.id) {
+            outreachExpanded.value = false
+            activePanel.value = 'outreach'
+        }
+
         return
     }
 
@@ -267,6 +295,12 @@ async function openOutreach() {
 
 async function cancelOutreach() {
     await outreachStore.cancelActiveTask().catch(() => false)
+}
+
+function dismissOutreach() {
+    if (outreachStore.dismissActiveTask() && outreachPost.value === null) {
+        showPosts()
+    }
 }
 
 function expandOutreach() {
@@ -375,8 +409,32 @@ async function loadApplyQueue() {
     }
 }
 
+async function restoreOutreachTask() {
+    const session = workStore.session
+
+    if (
+        session === null ||
+        (session.kind !== 'outreach-contact' && session.kind !== 'outreach-draft')
+    ) {
+        return
+    }
+
+    if (postStore.findPost(session.postId) === null) {
+        await postStore.fetchPost(session.postId).catch(() => null)
+    }
+
+    if (!viewMounted || workStore.session?.taskId !== session.taskId) {
+        return
+    }
+
+    selectedPostId.value = session.postId
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+    await outreachStore.restoreActiveTask()
+}
+
 onMounted(() => {
-    void loadApplyQueue()
+    void loadApplyQueue().then(restoreOutreachTask)
 })
 </script>
 
@@ -451,7 +509,7 @@ onMounted(() => {
             </FlowPanel>
 
             <FlowPanel
-                v-if="outreachPost"
+                v-if="outreachPost !== null || hasActiveOutreachTask"
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
                 data-testid="apply-outreach-panel"
@@ -469,6 +527,7 @@ onMounted(() => {
                     @cancel="cancelOutreach"
                     @collapse="collapseOutreach"
                     @discover="discoverAnotherContact"
+                    @dismiss="dismissOutreach"
                     @expand="expandOutreach"
                     @retry-contacts="openOutreach"
                     @show-viewer="showViewer"

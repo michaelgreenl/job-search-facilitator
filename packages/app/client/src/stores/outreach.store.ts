@@ -16,10 +16,10 @@ import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 import { request } from '@/api'
 import { createContactDiscoveryTask, createDraftRevisionTask } from '@/work-tasks'
-import { useWorkStore } from './work.store'
+import { useWorkStore, type WorkSession, type WorkSessionOwner } from './work.store'
 
 type OutreachTaskKind = 'contact' | 'draft'
-type OutreachTaskPhase = 'starting' | 'running' | 'applying'
+type OutreachTaskPhase = 'starting' | 'running' | 'applying' | 'settled'
 
 interface ActiveOutreachTask {
     revision: number
@@ -30,14 +30,33 @@ interface ActiveOutreachTask {
     phase: OutreachTaskPhase
 }
 
+type OutreachWorkSession = Exclude<WorkSession, { kind: 'job-post-import' }>
+
 export const useOutreachStore = defineStore('outreach', () => {
     const workStore = useWorkStore()
-    const postId = shallowRef<string | null>(null)
+    const initialSession =
+        workStore.session?.kind === 'outreach-contact' ||
+        workStore.session?.kind === 'outreach-draft'
+            ? workStore.session
+            : null
+    const postId = shallowRef<string | null>(initialSession?.postId ?? null)
     const contacts = shallowRef<OutreachContact[]>([])
     const contact = shallowRef<OutreachContact | null>(null)
-    const draft = shallowRef('')
+    const draft = shallowRef(initialSession?.kind === 'outreach-draft' ? initialSession.draft : '')
     const assistantReply = shallowRef<string | null>(null)
-    const activeTask = shallowRef<ActiveOutreachTask | null>(null)
+    const activeTask = shallowRef<ActiveOutreachTask | null>(
+        initialSession === null
+            ? null
+            : {
+                  revision: 0,
+                  kind: initialSession.kind === 'outreach-contact' ? 'contact' : 'draft',
+                  postId: initialSession.postId,
+                  contactId:
+                      initialSession.kind === 'outreach-draft' ? initialSession.contactId : null,
+                  taskId: initialSession.taskId,
+                  phase: 'starting',
+              },
+    )
     const contactSaving = shallowRef(false)
     const contactUpdating = shallowRef(false)
     const contactUpdateError = shallowRef<string | null>(null)
@@ -46,9 +65,11 @@ export const useOutreachStore = defineStore('outreach', () => {
     const contactsError = shallowRef<string | null>(null)
     const discovering = computed(() => activeTask.value?.kind === 'contact')
     const drafting = computed(() => activeTask.value?.kind === 'draft')
+    const hasActiveTask = computed(() => activeTask.value !== null)
     let resultRevision = 0
     let contactRequestRevision = 0
     let contactUpdateRevision = 0
+    let restorePromise: Promise<boolean> | null = null
 
     function openForPost(post: string) {
         resultRevision += 1
@@ -79,11 +100,15 @@ export const useOutreachStore = defineStore('outreach', () => {
         )
     }
 
-    async function startTask(task: ActiveOutreachTask, input: StartWorkTaskInput) {
+    async function startTask(
+        task: ActiveOutreachTask,
+        input: StartWorkTaskInput,
+        owner: WorkSessionOwner,
+    ) {
         activeTask.value = task
 
         try {
-            const startedTask = await workStore.startTask(input)
+            const startedTask = await workStore.startTask(input, owner)
             const currentTask = activeTask.value
 
             if (
@@ -107,6 +132,23 @@ export const useOutreachStore = defineStore('outreach', () => {
             return true
         } catch (error) {
             if (activeTask.value?.revision === task.revision) {
+                const currentSession = currentOutreachSession()
+
+                if (
+                    currentSession !== null &&
+                    currentSession.postId === task.postId &&
+                    (task.kind === 'contact'
+                        ? currentSession.kind === 'outreach-contact'
+                        : currentSession.kind === 'outreach-draft' &&
+                          currentSession.contactId === task.contactId)
+                ) {
+                    activeTask.value = {
+                        ...activeTask.value,
+                        taskId: currentSession.taskId,
+                        phase: 'running',
+                    }
+                }
+
                 failResult(
                     task.revision,
                     error instanceof Error ? error.message : 'Could not start outreach task',
@@ -120,6 +162,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     async function startContactDiscovery(post: JobPost) {
         if (
             workStore.taskActive ||
+            workStore.session !== null ||
             contactSaving.value ||
             contactUpdating.value ||
             contactsLoading.value
@@ -138,6 +181,7 @@ export const useOutreachStore = defineStore('outreach', () => {
                 phase: 'starting',
             },
             createContactDiscoveryTask(post),
+            { kind: 'outreach-contact', postId: post.id },
         )
     }
 
@@ -252,7 +296,8 @@ export const useOutreachStore = defineStore('outreach', () => {
             selectedContact === null ||
             !currentDraft.trim() ||
             !request ||
-            workStore.taskActive
+            workStore.taskActive ||
+            workStore.session !== null
         ) {
             return false
         }
@@ -272,7 +317,128 @@ export const useOutreachStore = defineStore('outreach', () => {
                 phase: 'starting',
             },
             createDraftRevisionTask(post, selectedContact, currentDraft, request),
+            {
+                kind: 'outreach-draft',
+                postId: post.id,
+                contactId: selectedContact.id,
+                draft: currentDraft,
+                request,
+            },
         )
+    }
+
+    function currentOutreachSession(): OutreachWorkSession | null {
+        const currentSession = workStore.session
+
+        return currentSession?.kind === 'outreach-contact' ||
+            currentSession?.kind === 'outreach-draft'
+            ? currentSession
+            : null
+    }
+
+    function sessionMatches(task: ActiveOutreachTask) {
+        return currentOutreachSession()?.taskId === task.taskId
+    }
+
+    async function restoreActiveTask() {
+        if (restorePromise !== null) {
+            return restorePromise
+        }
+
+        const restore = async () => {
+            const session = currentOutreachSession()
+
+            if (session === null) {
+                return false
+            }
+
+            const revision = ++resultRevision
+            contactRequestRevision += 1
+            contactUpdateRevision += 1
+            postId.value = session.postId
+            contacts.value = []
+            contact.value = null
+            draft.value = session.kind === 'outreach-draft' ? session.draft : ''
+            assistantReply.value = null
+            contactSaving.value = false
+            contactUpdating.value = false
+            contactUpdateError.value = null
+            resultError.value = null
+            activeTask.value = {
+                revision,
+                kind: session.kind === 'outreach-contact' ? 'contact' : 'draft',
+                postId: session.postId,
+                contactId: session.kind === 'outreach-draft' ? session.contactId : null,
+                taskId: session.taskId,
+                phase: 'starting',
+            }
+
+            let contextReady = false
+
+            try {
+                const savedContacts = await fetchContacts(session.postId)
+
+                if (
+                    savedContacts === null ||
+                    currentOutreachSession()?.taskId !== session.taskId ||
+                    activeTask.value?.revision !== revision
+                ) {
+                    return false
+                }
+
+                if (session.kind === 'outreach-draft') {
+                    const selectedContact = savedContacts.find(({ id }) => id === session.contactId)
+
+                    if (selectedContact === undefined) {
+                        resultError.value = 'The saved outreach contact is no longer available'
+                    } else {
+                        selectContact(selectedContact)
+                        draft.value = session.draft
+                        contextReady = true
+                    }
+                } else {
+                    contextReady = true
+                }
+            } catch (error) {
+                if (currentOutreachSession()?.taskId === session.taskId) {
+                    resultError.value =
+                        error instanceof Error
+                            ? error.message
+                            : 'Could not restore outreach contacts'
+                }
+            }
+
+            try {
+                await workStore.restoreSession()
+            } catch (error) {
+                if (currentOutreachSession()?.taskId === session.taskId) {
+                    resultError.value =
+                        error instanceof Error ? error.message : 'Could not restore outreach task'
+                }
+            }
+
+            const currentTask = activeTask.value
+
+            if (
+                currentTask?.revision !== revision ||
+                currentOutreachSession()?.taskId !== session.taskId
+            ) {
+                return false
+            }
+
+            if (contextReady) {
+                activeTask.value = { ...currentTask, phase: 'running' }
+                applyWorkTask(workStore.task)
+            }
+
+            return true
+        }
+
+        restorePromise = restore().finally(() => {
+            restorePromise = null
+        })
+
+        return restorePromise
     }
 
     async function applyTaskResult(task: ActiveOutreachTask, output: JsonObject) {
@@ -287,13 +453,24 @@ export const useOutreachStore = defineStore('outreach', () => {
             }
 
             if (postId.value !== task.postId) {
-                finishTask(task.revision)
+                finishTask(task)
                 return
             }
 
             contactSaving.value = true
 
             try {
+                const existingContact = contacts.value.find(
+                    ({ profileUrl }) => profileUrl === input.profileUrl,
+                )
+
+                if (existingContact !== undefined) {
+                    selectContact(existingContact)
+                    finishTask(task)
+                    resultError.value = null
+                    return
+                }
+
                 const savedContact = await request(
                     `/job-posts/${encodeURIComponent(task.postId)}/outreach-contacts`,
                     parseOutreachContact,
@@ -317,7 +494,7 @@ export const useOutreachStore = defineStore('outreach', () => {
                     ...contacts.value.filter(({ id }) => id !== savedContact.id),
                 ]
                 selectContact(savedContact)
-                finishTask(task.revision)
+                finishTask(task)
                 resultError.value = null
             } catch (error) {
                 if (
@@ -325,9 +502,10 @@ export const useOutreachStore = defineStore('outreach', () => {
                     resultRevision === task.revision &&
                     activeTask.value?.revision === task.revision
                 ) {
-                    finishTask(task.revision)
-                    resultError.value =
-                        error instanceof Error ? error.message : 'Could not save outreach contact'
+                    failResult(
+                        task.revision,
+                        error instanceof Error ? error.message : 'Could not save outreach contact',
+                    )
                 }
             } finally {
                 if (postId.value === task.postId && resultRevision === task.revision) {
@@ -336,7 +514,7 @@ export const useOutreachStore = defineStore('outreach', () => {
             }
         } else {
             if (postId.value !== task.postId || contact.value?.id !== task.contactId) {
-                finishTask(task.revision)
+                finishTask(task)
                 return
             }
 
@@ -351,25 +529,34 @@ export const useOutreachStore = defineStore('outreach', () => {
 
             draft.value = result.draftMessage
             assistantReply.value = result.response
-            finishTask(task.revision)
+            activeTask.value = { ...task, phase: 'settled' }
             resultError.value = null
         }
     }
 
-    function finishTask(revision: number) {
-        if (activeTask.value?.revision === revision) {
+    function finishTask(task: ActiveOutreachTask) {
+        if (activeTask.value?.revision === task.revision) {
             activeTask.value = null
+
+            if (sessionMatches(task)) {
+                workStore.dismissSession()
+            }
         }
     }
 
     function failResult(revision: number, message: string) {
-        if (activeTask.value?.revision !== revision) {
+        const task = activeTask.value
+
+        if (task?.revision !== revision) {
             return
         }
 
-        activeTask.value = null
         contactSaving.value = false
         resultError.value = message
+
+        if (!sessionMatches(task)) {
+            activeTask.value = null
+        }
     }
 
     function clearTask(revision?: number) {
@@ -396,7 +583,25 @@ export const useOutreachStore = defineStore('outreach', () => {
             return false
         }
 
-        clearTask(activeResultRevision)
+        if (currentOutreachSession() === null) {
+            clearTask(activeResultRevision)
+        }
+
+        return true
+    }
+
+    function dismissActiveTask() {
+        const task = activeTask.value
+
+        if (task === null) {
+            return false
+        }
+
+        if (sessionMatches(task) && !workStore.dismissSession()) {
+            return false
+        }
+
+        clearTask(task.revision)
         return true
     }
 
@@ -437,7 +642,6 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
 
         if (currentTask.status === 'cancelled') {
-            clearTask(task.revision)
             return
         }
 
@@ -451,7 +655,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         void applyTaskResult(applyingTask, currentTask.output)
     }
 
-    watch(() => workStore.task, applyWorkTask)
+    watch(() => workStore.task, applyWorkTask, { immediate: true })
 
     return {
         postId,
@@ -467,14 +671,17 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsError,
         discovering,
         drafting,
+        hasActiveTask,
         openForPost,
         startContactDiscovery,
+        restoreActiveTask,
         fetchContacts,
         selectContact,
         clearContact,
         updateContactMessaged,
         requestDraftRevision,
         cancelActiveTask,
+        dismissActiveTask,
         reset,
     }
 })

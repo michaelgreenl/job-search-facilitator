@@ -56,12 +56,25 @@ export const createApp = (
         response.json(health)
     })
 
-    app.post('/tasks', async (request, response) => {
+    const startTask = async (
+        request: express.Request,
+        response: express.Response,
+        taskId?: string,
+    ) => {
         const input = startWorkTaskInputSchema.safeParse(request.body)
 
         if (!input.success) {
             response.status(BAD_REQUEST).json({ error: 'Invalid request' })
             return
+        }
+
+        if (taskId !== undefined) {
+            const existingTask = taskManager.get(taskId)
+
+            if (existingTask !== null) {
+                response.status(ACCEPTED).json(existingTask)
+                return
+            }
         }
 
         const health = runtime.health
@@ -72,7 +85,7 @@ export const createApp = (
         }
 
         try {
-            response.status(ACCEPTED).json(await taskManager.start(input.data))
+            response.status(ACCEPTED).json(await taskManager.start(input.data, taskId))
         } catch (error) {
             if (error instanceof InvalidWorkOutputSchemaError) {
                 response.status(BAD_REQUEST).json({ error: 'Invalid request' })
@@ -90,6 +103,21 @@ export const createApp = (
                 error: error instanceof Error ? error.message : 'Could not start Work task',
             })
         }
+    }
+
+    app.post('/tasks', async (request, response) => {
+        await startTask(request, response)
+    })
+
+    app.put('/tasks/:id', async (request, response) => {
+        const params = taskIdParamsSchema.safeParse(request.params)
+
+        if (!params.success) {
+            response.status(BAD_REQUEST).json({ error: 'Invalid request' })
+            return
+        }
+
+        await startTask(request, response, params.data.id)
     })
 
     app.get('/tasks/:id', (request, response) => {

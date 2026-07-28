@@ -12,6 +12,34 @@ import { usePostStore } from '../stores/post.store'
 import { useReportStore } from '../stores/report.store'
 import { useWorkStore } from '../stores/work.store'
 
+class MemoryStorage implements Storage {
+    readonly values = new Map<string, string>()
+
+    get length() {
+        return this.values.size
+    }
+
+    clear() {
+        this.values.clear()
+    }
+
+    getItem(key: string) {
+        return this.values.get(key) ?? null
+    }
+
+    key(index: number) {
+        return [...this.values.keys()][index] ?? null
+    }
+
+    removeItem(key: string) {
+        this.values.delete(key)
+    }
+
+    setItem(key: string, value: string) {
+        this.values.set(key, value)
+    }
+}
+
 const post: JobPost = {
     id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',
     sourceKey: 'example:post-1',
@@ -184,6 +212,22 @@ describe('post store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.stubGlobal('fetch', vi.fn())
+        vi.stubGlobal('sessionStorage', new MemoryStorage())
+    })
+
+    it('does not carry the add-post popup into a fresh store', () => {
+        const store = usePostStore()
+
+        store.openAddPostDialog()
+        store.setAddPostUrl('https://example.com/jobs/draft')
+
+        setActivePinia(createPinia())
+        const restoredStore = usePostStore()
+
+        expect(restoredStore.addPostDialog).toEqual({
+            open: false,
+            url: '',
+        })
     })
 
     it('keeps one canonical post across reports, reads, and PATCH responses', async () => {
@@ -316,7 +360,148 @@ describe('post store', () => {
 describe('outreach store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
+        vi.stubGlobal('sessionStorage', new MemoryStorage())
         vi.stubGlobal('fetch', vi.fn())
+    })
+
+    it('restores completed contact discovery without creating a duplicate contact', async () => {
+        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
+        const completedTask: WorkTask = {
+            ...runningTask,
+            id: restoredTaskId,
+            status: 'completed',
+            output: {
+                personName: savedContact.personName,
+                personTitle: savedContact.personTitle,
+                profileUrl: savedContact.profileUrl,
+                relevanceRationale: savedContact.relevanceRationale,
+                draftMessage: savedContact.draftMessage,
+            },
+        }
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 1,
+                session: {
+                    kind: 'outreach-contact',
+                    taskId: restoredTaskId,
+                    postId: post.id,
+                },
+            }),
+        )
+        const fetchMock = vi
+            .mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(completedTask))
+        vi.stubGlobal(
+            'EventSource',
+            class {
+                static readonly CLOSED = 2
+                readonly readyState = 0
+                close() {}
+            },
+        )
+        const store = useOutreachStore()
+
+        await store.restoreActiveTask()
+
+        await vi.waitFor(() => expect(store.contact).toEqual(savedContact))
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(useWorkStore().session).toBeNull()
+    })
+
+    it('restores the selected contact and edited draft for a cancelled revision', async () => {
+        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
+        const editedDraft = 'Edited draft awaiting revision'
+        const cancelledTask: WorkTask = {
+            ...runningTask,
+            id: restoredTaskId,
+            status: 'cancelled',
+        }
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 1,
+                session: {
+                    kind: 'outreach-draft',
+                    taskId: restoredTaskId,
+                    postId: post.id,
+                    contactId: savedContact.id,
+                    draft: editedDraft,
+                    request: 'Make it warmer',
+                },
+            }),
+        )
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(cancelledTask))
+        vi.stubGlobal(
+            'EventSource',
+            class {
+                static readonly CLOSED = 2
+                readonly readyState = 0
+                close() {}
+            },
+        )
+        const store = useOutreachStore()
+
+        await store.restoreActiveTask()
+
+        expect(store.contact).toEqual(savedContact)
+        expect(store.draft).toBe(editedDraft)
+        expect(store.drafting).toBe(true)
+        expect(store.dismissActiveTask()).toBe(true)
+        expect(useWorkStore().session).toBeNull()
+    })
+
+    it('retains a completed draft revision through refresh until it is dismissed', async () => {
+        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
+        const revisedDraft = 'Revised draft from Work'
+        const completedTask: WorkTask = {
+            ...runningTask,
+            id: restoredTaskId,
+            status: 'completed',
+            output: {
+                draftMessage: revisedDraft,
+                response: 'Made the introduction warmer.',
+            },
+        }
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 1,
+                session: {
+                    kind: 'outreach-draft',
+                    taskId: restoredTaskId,
+                    postId: post.id,
+                    contactId: savedContact.id,
+                    draft: savedContact.draftMessage,
+                    request: 'Make it warmer',
+                },
+            }),
+        )
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(completedTask))
+        vi.stubGlobal(
+            'EventSource',
+            class {
+                static readonly CLOSED = 2
+                readonly readyState = 0
+                close() {}
+            },
+        )
+        const store = useOutreachStore()
+
+        await store.restoreActiveTask()
+
+        await vi.waitFor(() => expect(store.draft).toBe(revisedDraft))
+        expect(store.assistantReply).toBe('Made the introduction warmer.')
+        expect(store.hasActiveTask).toBe(true)
+        expect(useWorkStore().session?.taskId).toBe(restoredTaskId)
+
+        expect(store.dismissActiveTask()).toBe(true)
+        expect(useWorkStore().session).toBeNull()
     })
 
     it('updates the selected and saved contact from the messaged PATCH response', async () => {

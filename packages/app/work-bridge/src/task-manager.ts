@@ -107,14 +107,39 @@ const publicTask = (task: StoredTask): WorkTask => {
 
 export class WorkTaskManager {
     private readonly tasks = new Map<string, StoredTask>()
+    private readonly taskStarts = new Map<string, Promise<WorkTask>>()
 
     constructor(private readonly runtime: WorkRuntime) {
         runtime.onEvent((event) => this.handleEvent(event))
     }
 
-    async start(input: StartWorkTaskInput): Promise<WorkTask> {
+    async start(input: StartWorkTaskInput, id: string = randomUUID()): Promise<WorkTask> {
+        const existingTask = this.tasks.get(id)
+
+        if (existingTask !== undefined) {
+            return publicTask(existingTask)
+        }
+
+        const existingStart = this.taskStarts.get(id)
+
+        if (existingStart !== undefined) {
+            return existingStart
+        }
+
+        const taskStart = this.startNewTask(id, input)
+        this.taskStarts.set(id, taskStart)
+
+        try {
+            return await taskStart
+        } finally {
+            if (this.taskStarts.get(id) === taskStart) {
+                this.taskStarts.delete(id)
+            }
+        }
+    }
+
+    private async startNewTask(id: string, input: StartWorkTaskInput): Promise<WorkTask> {
         const outputValidator = compileOutputValidator(input.outputSchema)
-        const id = randomUUID()
         const { threadId, turnId } = await this.runtime.startTask(id, input)
         const task: StoredTask = {
             id,

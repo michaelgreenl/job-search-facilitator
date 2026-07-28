@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
+import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 
-defineProps<{
-    post: JobPost
-    selected: boolean
-}>()
+withDefaults(
+    defineProps<{
+        loading?: boolean
+        post?: JobPost
+        selected?: boolean
+    }>(),
+    {
+        loading: false,
+        post: undefined,
+        selected: false,
+    },
+)
 
 const emit = defineEmits<{
     select: []
@@ -15,30 +24,42 @@ const emit = defineEmits<{
 
 <template>
     <button
+        v-if="loading || post"
         class="post-card"
-        :data-testid="`job-post-card-${post.id}`"
+        :data-testid="loading ? 'job-post-import-progress' : `job-post-card-${post!.id}`"
         :class="{
             'post-card-selected': selected,
-            'post-card-forgone': post.userLabel === 'forgo',
+            'post-card-forgone': post?.userLabel === 'forgo',
         }"
         type="button"
-        :aria-pressed="selected"
+        :aria-busy="loading || undefined"
+        :aria-label="loading ? 'View job-post import progress' : undefined"
+        :aria-pressed="loading ? undefined : selected"
         @click="emit('select')"
     >
-        <div class="post-card-header">
-            <span class="component-label">{{ post.company }}</span>
-            <JobPostLabel
-                :application-status="post.applicationStatus"
-                :user-label="post.userLabel"
-                compact
-            />
-        </div>
-        <strong class="post-role">{{ post.roleTitle }}</strong>
-        <span class="post-company">{{ post.location }}</span>
-        <span class="post-meta" v-if="post.postSource"> · Source - {{ post.postSource }} </span>
-        <span class="post-meta" v-if="post.compensation">
-            · Compensation - {{ post.compensation }}
-        </span>
+        <template v-if="loading">
+            <span class="component-label">Job post</span>
+            <span class="loading-post">
+                <LoadingSpinner />
+                Reviewing job post…
+            </span>
+        </template>
+        <template v-else-if="post">
+            <div class="post-card-header">
+                <span class="component-label">{{ post.company }}</span>
+                <JobPostLabel
+                    :application-status="post.applicationStatus"
+                    :user-label="post.userLabel"
+                    compact
+                />
+            </div>
+            <strong class="post-role">{{ post.roleTitle }}</strong>
+            <span class="post-company">{{ post.location }}</span>
+            <span v-if="post.postSource" class="post-meta"> · Source - {{ post.postSource }} </span>
+            <span v-if="post.compensation" class="post-meta">
+                · Compensation - {{ post.compensation }}
+            </span>
+        </template>
     </button>
 </template>
 
@@ -85,6 +106,14 @@ const emit = defineEmits<{
     font-size: 0.6875rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.loading-post {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    min-height: 2rem;
+    color: $color-ink-secondary;
 }
 
 .post-role {

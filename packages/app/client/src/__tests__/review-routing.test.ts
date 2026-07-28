@@ -8,7 +8,7 @@ import type {
     WorkTask,
 } from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
-import { createApp, type App } from 'vue'
+import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkStore } from '@/stores/work.store'
@@ -236,7 +236,14 @@ const submitJobPostUrl = async (root: HTMLElement, url: string) => {
     })
     input.value = url
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    findTestButton(root, 'start-job-post-import').click()
+    await nextTick()
+    const form = root.querySelector<HTMLFormElement>('[data-testid="job-post-url-form"]')
+
+    if (form === null) {
+        throw new Error('Could not find job post URL form')
+    }
+
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 }
 
 const mountReview = async (
@@ -278,6 +285,7 @@ const mountReview = async (
 
 describe('review route selection', () => {
     beforeEach(() => {
+        sessionStorage.clear()
         vi.stubGlobal('fetch', vi.fn(defaultReviewResponse))
         vi.stubGlobal(
             'matchMedia',
@@ -300,6 +308,7 @@ describe('review route selection', () => {
             root.remove()
         }
 
+        vi.restoreAllMocks()
         vi.unstubAllGlobals()
     })
 
@@ -434,6 +443,115 @@ describe('review route selection', () => {
         })
     })
 
+    it('does not carry an open add-post popup into a fresh view', async () => {
+        const firstMount = await mountReview()
+
+        findTestButton(firstMount.root, 'add-job-post').click()
+        const input = await vi.waitFor(() => {
+            const element = firstMount.root.querySelector<HTMLInputElement>(
+                '[data-testid="job-post-url"]',
+            )
+
+            if (element === null) {
+                throw new Error('Could not find job post URL input')
+            }
+
+            return element
+        })
+        input.value = importOutput.post.postUrl
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        await nextTick()
+
+        firstMount.app.unmount()
+        firstMount.root.remove()
+        mountedReviews.splice(mountedReviews.indexOf(firstMount), 1)
+
+        const restoredMount = await mountReview()
+        const restoredDialog = restoredMount.root.querySelector<HTMLDialogElement>(
+            '[data-testid="job-post-url-dialog"]',
+        )
+
+        expect(restoredDialog?.hasAttribute('open')).toBe(false)
+        expect(
+            restoredMount.root.querySelector<HTMLInputElement>('[data-testid="job-post-url"]')
+                ?.value,
+        ).toBe('')
+    })
+
+    it('restores a cancelled import panel after refresh until it is dismissed', async () => {
+        class SilentEventSource {
+            static readonly CLOSED = 2
+            readonly readyState = 0
+            onopen: (() => void) | null = null
+            onmessage: ((event: { data: string }) => void) | null = null
+            onerror: (() => void) | null = null
+            close() {}
+        }
+
+        vi.stubGlobal('EventSource', SilentEventSource)
+        const taskId = crypto.randomUUID()
+        vi.spyOn(crypto, 'randomUUID').mockReturnValue(taskId)
+        const runningTask = {
+            id: taskId,
+            threadId: 'thread',
+            turnId: 'turn',
+            status: 'running',
+            output: null,
+            error: null,
+        } satisfies WorkTask
+        const cancelledTask = { ...runningTask, status: 'cancelled' } satisfies WorkTask
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const { method, url } = getRequest(input, init)
+
+            if (method === 'GET' && url.endsWith('/health')) {
+                return Promise.resolve(
+                    jsonResponse({ status: 'healthy', capabilities: ['chrome'] }),
+                )
+            }
+
+            if (method === 'PUT' && url.endsWith(`/tasks/${taskId}`)) {
+                return Promise.resolve(jsonResponse(runningTask, 202))
+            }
+
+            if (method === 'POST' && url.endsWith(`/tasks/${taskId}/cancel`)) {
+                return Promise.resolve(jsonResponse(cancelledTask, 202))
+            }
+
+            if (method === 'GET' && url.endsWith(`/tasks/${taskId}`)) {
+                return Promise.resolve(jsonResponse(cancelledTask))
+            }
+
+            return defaultReviewResponse(input, init)
+        })
+        const firstPinia = createPinia()
+        const firstStore = useWorkStore(firstPinia)
+
+        await firstStore.startTask(
+            {
+                prompt: 'Import a job post',
+                outputSchema: { type: 'object' },
+                capabilities: ['chrome'],
+            },
+            {
+                kind: 'job-post-import',
+                url: importOutput.post.postUrl,
+            },
+        )
+        await firstStore.cancelTask()
+
+        const { root } = await mountReview()
+
+        await vi.waitFor(() => {
+            expect(
+                root
+                    .querySelector('[aria-label="Add job post"][data-active]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(root.querySelector('[data-testid="dismiss-job-post-import"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).toBeNull()
+        })
+    })
+
     it('saves matching completed Work output and opens the imported user-added post', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
@@ -457,6 +575,11 @@ describe('review route selection', () => {
             error: null,
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.session = {
+                kind: 'job-post-import',
+                taskId: runningTask.id,
+                url: importOutput.post.postUrl,
+            }
             workStore.task = runningTask
             return runningTask
         })
@@ -507,6 +630,11 @@ describe('review route selection', () => {
             error: null,
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.session = {
+                kind: 'job-post-import',
+                taskId: runningTask.id,
+                url: importOutput.post.postUrl,
+            }
             workStore.task = runningTask
             return runningTask
         })
@@ -526,9 +654,57 @@ describe('review route selection', () => {
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
             expect(postRequestCount).toBe(0)
         })
+
+        findTestButton(root, 'retry-job-post-import').click()
+        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledTimes(2))
     })
 
-    it('keeps a running import intact when cancellation fails and leaves after cancellation', async () => {
+    it('shows a selectable in-progress card after leaving a running import', async () => {
+        const { pinia, root } = await mountReview()
+        const workStore = useWorkStore(pinia)
+        const runningTask = {
+            id: 'visible-import-task',
+            threadId: 'thread',
+            turnId: 'turn',
+            status: 'running',
+            output: null,
+            error: null,
+        } satisfies WorkTask
+        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.session = {
+                kind: 'job-post-import',
+                taskId: runningTask.id,
+                url: importOutput.post.postUrl,
+            }
+            workStore.task = runningTask
+            return runningTask
+        })
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
+
+        findTestButton(root, 'back-from-job-post-import').click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Job posts"]')?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(root.querySelector('[data-testid="job-post-import-progress"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'job-post-import-progress').click()
+
+        await vi.waitFor(() => {
+            expect(
+                root
+                    .querySelector('[aria-label="Add job post"][data-active]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
+        })
+    })
+
+    it('keeps a running import intact when cancellation fails and retains cancellation until dismissal', async () => {
         const { pinia, root } = await mountReview()
         const workStore = useWorkStore(pinia)
         const runningTask = {
@@ -544,6 +720,11 @@ describe('review route selection', () => {
             status: 'cancelled',
         } satisfies WorkTask
         vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
+            workStore.session = {
+                kind: 'job-post-import',
+                taskId: runningTask.id,
+                url: importOutput.post.postUrl,
+            }
             workStore.task = runningTask
             return runningTask
         })
@@ -561,16 +742,31 @@ describe('review route selection', () => {
 
         await vi.waitFor(() => {
             expect(cancelTask).toHaveBeenCalledTimes(1)
-            expect(root.querySelector('[data-testid="job-post-url"]')).not.toBeNull()
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
         })
 
         findTestButton(root, 'cancel-job-post-import').click()
 
         await vi.waitFor(() => {
             expect(cancelTask).toHaveBeenCalledTimes(2)
-            expect(root.querySelector('[data-testid="job-post-url"]')).toBeNull()
-            expect(root.querySelector('[data-testid="user-added-source"]')).not.toBeNull()
+            expect(
+                root.querySelector('[data-testid="job-post-url-dialog"]')?.hasAttribute('open'),
+            ).toBe(false)
+            expect(root.querySelector('[data-testid="dismiss-job-post-import"]')).not.toBeNull()
+            expect(
+                root
+                    .querySelector('[aria-label="Add job post"][data-active]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+        })
+
+        findTestButton(root, 'dismiss-job-post-import').click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector('[aria-label="Review sources"]')?.getAttribute('data-active'),
+            ).toBe('true')
         })
     })
 

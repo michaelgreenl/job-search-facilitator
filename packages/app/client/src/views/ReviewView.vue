@@ -18,6 +18,7 @@ import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
+import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useReportStore } from '@/stores/report.store'
@@ -28,7 +29,6 @@ import { createJobPostImportTask } from '@/work-tasks'
 type ActivePanel = 'sources' | 'posts' | 'viewer' | 'import'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 type ReviewSource = { kind: 'report'; reportId: string } | { kind: 'user-added' }
-type ImportPhase = 'idle' | 'starting' | 'running' | 'saving' | 'issue'
 
 interface ReviewItem {
     post: JobPost
@@ -51,7 +51,9 @@ const router = useRouter()
 const reportStore = useReportStore()
 const postStore = usePostStore()
 const workStore = useWorkStore()
-const activePanel = shallowRef<ActivePanel>('sources')
+const activePanel = shallowRef<ActivePanel>(
+    workStore.session?.kind === 'job-post-import' ? 'import' : 'sources',
+)
 const postFilter = shallowRef<PostFilter>('all')
 const selectedSource = shallowRef<ReviewSource | null>(null)
 const selectedItem = shallowRef<ReviewItem | null>(null)
@@ -61,11 +63,11 @@ const reportsSettled = shallowRef(false)
 const userAddedPostsSettled = shallowRef(false)
 const userAddedLoading = shallowRef(false)
 const userAddedError = shallowRef<string | null>(null)
-const importPhase = shallowRef<ImportPhase>('idle')
-const importTaskId = shallowRef<string | null>(null)
+const importSaving = shallowRef(false)
 const importIssue = shallowRef<string | null>(null)
-const importUrl = shallowRef<string | null>(null)
-const pendingImportInput = shallowRef<CreateUserAddedJobPostInput | null>(null)
+const importDialogIssue = shallowRef<string | null>(null)
+const importingTaskId = shallowRef<string | null>(null)
+const importRetryMode = shallowRef<'save' | 'task' | null>(null)
 let importRevision = 0
 let selectionNavigationPending = false
 let selectionNavigationRevision = 0
@@ -91,28 +93,45 @@ const selectedItems = computed<ReviewItem[]>(() => {
         recommendation: result,
     }))
 })
-const matchingImportTask = computed(() =>
-    workStore.task?.id === importTaskId.value ? workStore.task : null,
+const importSession = computed(() =>
+    workStore.session?.kind === 'job-post-import' ? workStore.session : null,
 )
-const importStarting = computed(() => importPhase.value === 'starting')
-const importRunning = computed(() => importPhase.value === 'running')
-const importSaving = computed(() => importPhase.value === 'saving')
+const matchingImportTask = computed(() =>
+    workStore.task?.id === importSession.value?.taskId ? workStore.task : null,
+)
+const importStarting = computed(
+    () =>
+        importSession.value !== null &&
+        matchingImportTask.value === null &&
+        (workStore.starting || workStore.restoring),
+)
+const importRunning = computed(() => matchingImportTask.value?.status === 'running')
 const importBusy = computed(() => importStarting.value || importRunning.value || importSaving.value)
 const importDisplayIssue = computed(
     () =>
         importIssue.value ??
-        (importRunning.value &&
-        importTaskId.value !== null &&
-        workStore.task?.id !== importTaskId.value
-            ? 'The active Work task no longer matches this import.'
-            : null) ??
         (matchingImportTask.value?.status === 'failed' ? matchingImportTask.value.error : null) ??
-        (matchingImportTask.value !== null ? workStore.error : null),
+        (matchingImportTask.value?.status === 'cancelled'
+            ? 'The job-post import was cancelled.'
+            : null) ??
+        (importSession.value !== null ? workStore.error : null),
 )
 const importRetryAvailable = computed(
-    () => importPhase.value === 'issue' && importDisplayIssue.value !== null,
+    () => importSession.value !== null && !importBusy.value && importDisplayIssue.value !== null,
 )
-const showImportWork = computed(() => importStarting.value || matchingImportTask.value !== null)
+const showImportWork = computed(
+    () =>
+        importSession.value !== null && (importStarting.value || matchingImportTask.value !== null),
+)
+const showImportCard = computed(
+    () =>
+        importSession.value !== null &&
+        (importStarting.value || importRunning.value || importSaving.value),
+)
+const addPostUrl = computed({
+    get: () => postStore.addPostDialog.url,
+    set: (url: string) => postStore.setAddPostUrl(url),
+})
 
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -319,14 +338,6 @@ onUnmounted(() => {
     importRevision += 1
     selectionNavigationRevision += 1
     selectionNavigationPending = false
-
-    if (
-        importTaskId.value !== null &&
-        workStore.task?.id === importTaskId.value &&
-        workStore.task.status === 'running'
-    ) {
-        void workStore.cancelTask().catch(() => undefined)
-    }
 })
 
 function selectReport(reportId: string) {
@@ -364,25 +375,23 @@ function selectUserAdded() {
 }
 
 function showImport() {
-    activePanel.value = 'import'
+    importDialogIssue.value = null
+    postStore.openAddPostDialog()
 }
 
-function clearImportState() {
-    importPhase.value = 'idle'
-    importTaskId.value = null
-    importIssue.value = null
-    importUrl.value = null
-    pendingImportInput.value = null
+function showImportPosts() {
+    const source = { kind: 'user-added' } satisfies ReviewSource
+    selectedSource.value = source
+    selectedItem.value = null
+    postFilter.value = 'all'
+    labelError.value = null
+    activePanel.value = 'posts'
+    pushSelectionState(source)
 }
 
-function invalidateImport() {
-    importRevision += 1
-    clearImportState()
-}
-
-function cancelStartedTask(task: WorkTask) {
-    if (task.status === 'running' && workStore.task?.id === task.id) {
-        void workStore.cancelTask().catch(() => undefined)
+function showImportProgress() {
+    if (importSession.value !== null) {
+        activePanel.value = 'import'
     }
 }
 
@@ -391,23 +400,20 @@ async function saveImportedPost(
     revision: number,
     taskId: string,
 ) {
-    importPhase.value = 'saving'
+    importSaving.value = true
     importIssue.value = null
-    pendingImportInput.value = input
+    importRetryMode.value = 'save'
 
     try {
         const savedItem = await postStore.addUserAddedPost(input)
 
-        if (
-            revision !== importRevision ||
-            importTaskId.value !== taskId ||
-            activePanel.value !== 'import'
-        ) {
+        if (revision !== importRevision || importSession.value?.taskId !== taskId) {
             return
         }
 
         const source = { kind: 'user-added' } satisfies ReviewSource
-        invalidateImport()
+        workStore.dismissSession()
+        importIssue.value = null
         selectedSource.value = source
         selectedItem.value = {
             post: savedItem.post,
@@ -418,158 +424,155 @@ async function saveImportedPost(
         activePanel.value = 'viewer'
         pushSelectionState(source, savedItem.post.id)
     } catch (error) {
-        if (revision === importRevision && importTaskId.value === taskId) {
+        if (revision === importRevision && importSession.value?.taskId === taskId) {
             importIssue.value =
                 error instanceof Error ? error.message : 'Could not save the imported job post'
-            importPhase.value = 'issue'
+        }
+    } finally {
+        if (revision === importRevision) {
+            importSaving.value = false
         }
     }
 }
 
 async function handleImportTask(task: WorkTask, revision = importRevision) {
-    if (revision !== importRevision || task.id !== importTaskId.value) {
+    if (
+        revision !== importRevision ||
+        task.id !== importSession.value?.taskId ||
+        importingTaskId.value === task.id
+    ) {
         return
     }
 
     if (task.status === 'running') {
-        importPhase.value = 'running'
         return
     }
 
     if (task.status === 'failed') {
         importIssue.value = task.error
-        importPhase.value = 'issue'
+        importRetryMode.value = 'task'
         return
     }
 
     if (task.status === 'cancelled') {
         importIssue.value = 'The job-post import was cancelled.'
-        importPhase.value = 'issue'
+        importRetryMode.value = 'task'
         return
     }
 
-    importPhase.value = 'saving'
+    importingTaskId.value = task.id
 
     try {
         const input = parseCreateUserAddedJobPostInput(task.output)
         await saveImportedPost(input, revision, task.id)
     } catch {
-        if (revision === importRevision && importTaskId.value === task.id) {
-            pendingImportInput.value = null
+        if (revision === importRevision && importSession.value?.taskId === task.id) {
             importIssue.value = 'Work did not return a valid job post. Try again.'
-            importPhase.value = 'issue'
+            importRetryMode.value = 'task'
+        }
+    } finally {
+        if (importingTaskId.value === task.id) {
+            importingTaskId.value = null
         }
     }
 }
 
 async function startImport(url: string) {
     if (importBusy.value) {
+        importDialogIssue.value = 'Finish the current job-post import before starting another.'
         return
     }
 
-    importUrl.value = url
-
-    if (workStore.taskActive) {
-        importIssue.value = 'Another Work task is already running. Finish it before adding a post.'
-        importPhase.value = 'issue'
+    if (workStore.taskActive && (importSession.value === null || importSession.value.url !== url)) {
+        importDialogIssue.value =
+            'Another Work task is already running. Finish it before adding a post.'
         return
     }
 
     const revision = ++importRevision
-    importPhase.value = 'starting'
-    importTaskId.value = null
     importIssue.value = null
-    pendingImportInput.value = null
+    importDialogIssue.value = null
+    importRetryMode.value = null
+    postStore.closeAddPostDialog()
+    activePanel.value = 'import'
 
     try {
-        const task = await workStore.startTask(createJobPostImportTask(url))
+        const task = await workStore.startTask(createJobPostImportTask(url), {
+            kind: 'job-post-import',
+            url,
+        })
 
-        if (revision !== importRevision || activePanel.value !== 'import') {
-            cancelStartedTask(task)
-            return
-        }
-
-        importTaskId.value = task.id
+        postStore.clearAddPostDialog()
         await handleImportTask(task, revision)
     } catch (error) {
-        if (revision === importRevision && activePanel.value === 'import') {
+        if (revision === importRevision && importSession.value !== null) {
             importIssue.value =
                 error instanceof Error ? error.message : 'Could not start the job-post import'
-            importPhase.value = 'issue'
+            importRetryMode.value = 'task'
         }
     }
 }
 
 function retryImport() {
-    const input = pendingImportInput.value
-    const taskId = importTaskId.value
-    const revision = importRevision
+    const session = importSession.value
+    const task = matchingImportTask.value
 
-    if (input !== null && taskId !== null) {
-        void saveImportedPost(input, revision, taskId)
-    } else if (importUrl.value !== null) {
-        void startImport(importUrl.value)
+    if (session === null) {
+        return
+    }
+
+    if (task?.status === 'completed' && importRetryMode.value === 'save') {
+        void handleImportTask(task)
+    } else {
+        void startImport(session.url)
     }
 }
 
-async function leaveImport() {
-    if (importStarting.value) {
-        invalidateImport()
-        showSources()
-        return
-    }
-
+async function cancelImport() {
     if (importRunning.value) {
-        const taskId = importTaskId.value
-        const revision = importRevision
-
-        if (taskId === null || workStore.task?.id !== taskId) {
-            importIssue.value = 'The active Work task no longer matches this import.'
-            return
-        }
-
         try {
-            const task = await workStore.cancelTask()
-
-            if (revision !== importRevision || importTaskId.value !== taskId) {
-                return
-            }
-
-            if (task?.id === taskId && task.status === 'cancelled') {
-                invalidateImport()
-                showSources()
-            } else if (task?.id === taskId && task.status === 'running') {
-                importIssue.value = 'Work is still cancelling this import.'
-            }
+            await workStore.cancelTask()
         } catch (error) {
-            if (revision === importRevision && importTaskId.value === taskId) {
-                importIssue.value =
-                    error instanceof Error ? error.message : 'Could not cancel the job-post import'
-            }
+            importIssue.value =
+                error instanceof Error ? error.message : 'Could not cancel the job-post import'
         }
+    }
+}
 
+function dismissImport() {
+    if (!workStore.dismissSession()) {
         return
     }
 
-    invalidateImport()
+    importRevision += 1
+    importIssue.value = null
+    importingTaskId.value = null
+    importRetryMode.value = null
     showSources()
 }
 
 watch(
-    () => workStore.task,
-    (task) => {
-        if (
-            importPhase.value === 'running' &&
-            importTaskId.value !== null &&
-            task?.id !== importTaskId.value
-        ) {
-            importIssue.value = 'The active Work task no longer matches this import.'
-            importPhase.value = 'issue'
+    [() => workStore.session, () => workStore.task] as const,
+    ([session, task]) => {
+        if (session?.kind !== 'job-post-import') {
             return
         }
 
-        if (task !== null && task.id === importTaskId.value && importPhase.value === 'running') {
+        activePanel.value = 'import'
+        postStore.clearAddPostDialog()
+
+        if (task?.id === session.taskId) {
             void handleImportTask(task)
+        }
+    },
+    { immediate: true },
+)
+
+watch(
+    () => postStore.addPostDialog.open,
+    (open) => {
+        if (!open) {
+            importDialogIssue.value = null
         }
     },
 )
@@ -662,11 +665,24 @@ async function loadUserAddedPosts() {
 onMounted(() => {
     void loadReports()
     void loadUserAddedPosts()
+
+    if (importSession.value !== null) {
+        void workStore.restoreSession().catch(() => undefined)
+    }
 })
 </script>
 
 <template>
     <section class="layout-draft" aria-label="Job search review">
+        <JobPostUrlDialog
+            v-model:url="addPostUrl"
+            :open="postStore.addPostDialog.open"
+            :busy="workStore.starting"
+            :issue="importDialogIssue"
+            @close="postStore.closeAddPostDialog"
+            @submit="startImport"
+        />
+
         <div class="layout-panels">
             <FlowPanel
                 class="report-list-panel glass-frame"
@@ -699,19 +715,21 @@ onMounted(() => {
             >
                 <JobPostImportPanel
                     v-if="activePanel === 'import'"
-                    :busy="importBusy"
+                    :back-available="importRunning || importSaving"
+                    :can-dismiss="workStore.canDismissSession"
                     :cancelling="workStore.cancelling"
-                    :issue="showImportWork ? null : importDisplayIssue"
+                    :issue="importDisplayIssue"
                     :retry-available="importRetryAvailable"
                     :running="importRunning"
                     :saving="importSaving"
                     :starting="importStarting"
-                    @back="leaveImport"
-                    @cancel="leaveImport"
+                    @back="showImportPosts"
+                    @cancel="cancelImport"
+                    @dismiss="dismissImport"
                     @retry="retryImport"
-                    @submit="startImport"
-                />
-                <WorkStream v-if="showImportWork" :issue="importDisplayIssue" />
+                >
+                    <WorkStream v-if="showImportWork" :issue="null" />
+                </JobPostImportPanel>
             </FlowPanel>
 
             <FlowPanel
@@ -751,7 +769,9 @@ onMounted(() => {
                     :empty-message="postListEmptyMessage"
                     :loading="postListLoading"
                     :error="postListError"
+                    :pending="selectedSource?.kind === 'user-added' && showImportCard"
                     @select="selectPost"
+                    @select-pending="showImportProgress"
                     @retry="loadUserAddedPosts"
                 />
             </FlowPanel>
