@@ -4,7 +4,7 @@ import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import { restorePersistedWorkSession } from '@/restore-work-session'
-import type { WorkSession } from '@/stores/work.store'
+import type { WorkSession } from '@/stores/work'
 
 const emptyView = defineComponent({ template: '<main />' })
 

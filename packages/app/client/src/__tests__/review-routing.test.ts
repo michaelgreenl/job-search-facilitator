@@ -11,7 +11,7 @@ import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useWorkStore, type WorkSession, type WorkTaskState } from '@/stores/work.store'
+import { useWorkStore, type WorkSession, type WorkTaskState } from '@/stores/work'
 import { createJobPostImportTask } from '@/work-tasks'
 import ReviewView from '../views/ReviewView.vue'
 

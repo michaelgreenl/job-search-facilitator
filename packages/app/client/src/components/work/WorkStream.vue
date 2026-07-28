@@ -6,7 +6,7 @@ import { useWorkTask } from '@/composables/useWorkTask'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
-import type { WorkTaskLane } from '@/stores/work.store'
+import type { WorkTaskLane } from '@/stores/work'
 import WorkActionPrompt from './WorkActionPrompt.vue'
 
 const props = defineProps<{ issue: string | null; lane: WorkTaskLane }>()

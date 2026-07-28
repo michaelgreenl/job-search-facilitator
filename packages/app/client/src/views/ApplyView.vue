@@ -16,8 +16,8 @@ import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
-import { useOutreachStore } from '@/stores/outreach.store'
-import { usePostStore } from '@/stores/post.store'
+import { useOutreachStore } from '@/stores/outreach'
+import { usePostStore } from '@/stores/post'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel

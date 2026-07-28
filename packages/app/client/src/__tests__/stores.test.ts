@@ -7,16 +7,16 @@ import type {
 } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useOutreachStore } from '../stores/outreach.store'
-import { usePostStore } from '../stores/post.store'
-import { useReportStore } from '../stores/report.store'
+import { useOutreachStore } from '../stores/outreach'
+import { usePostStore } from '../stores/post'
+import { useReportStore } from '../stores/report'
 import {
     getWorkTaskLane,
     useWorkStore,
     type WorkSession,
     type WorkSessionOwner,
     type WorkTaskState,
-} from '../stores/work.store'
+} from '../stores/work'
 import { createJobPostImportTask } from '../work-tasks'
 
 class MemoryStorage implements Storage {

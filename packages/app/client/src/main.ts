@@ -3,7 +3,7 @@ import { createApp } from 'vue'
 import { router } from './router/index'
 import App from './App.vue'
 import { restorePersistedWorkSession } from '@/restore-work-session'
-import { useWorkStore } from '@/stores/work.store'
+import { useWorkStore } from '@/stores/work'
 import '@/assets/styles/app.scss'
 
 const app = createApp(App)

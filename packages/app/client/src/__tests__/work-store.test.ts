@@ -2,7 +2,7 @@ import type { StartWorkTaskInput, WorkTask, WorkTaskEvent } from '@job-search-fa
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkTask } from '../composables/useWorkTask'
-import { useWorkStore, type WorkSessionOwner } from '../stores/work.store'
+import { useWorkStore, type WorkSessionOwner } from '../stores/work'
 
 class MemoryStorage implements Storage {
     readonly values = new Map<string, string>()

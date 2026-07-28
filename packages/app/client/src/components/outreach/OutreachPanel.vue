@@ -8,7 +8,7 @@ import { useWorkTask } from '@/composables/useWorkTask'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
-import { useOutreachStore } from '@/stores/outreach.store'
+import { useOutreachStore } from '@/stores/outreach'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'

@@ -5,7 +5,7 @@ import type {
 } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { usePostStore } from '../stores/post.store'
+import { usePostStore } from '../stores/post'
 
 const post: JobPost = {
     id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',

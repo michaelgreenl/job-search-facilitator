@@ -9,7 +9,7 @@ import {
     useWorkStore,
     type WorkSessionOwner,
     type WorkTaskLane,
-} from '@/stores/work.store'
+} from '@/stores/work'
 
 const noEvents: WorkTaskEvent[] = []
 

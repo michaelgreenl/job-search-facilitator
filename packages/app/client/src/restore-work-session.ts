@@ -1,5 +1,5 @@
 import type { Router } from 'vue-router'
-import type { useWorkStore } from '@/stores/work.store'
+import type { useWorkStore } from '@/stores/work'
 
 type WorkStore = ReturnType<typeof useWorkStore>
 

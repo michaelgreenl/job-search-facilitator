@@ -6,7 +6,7 @@ import {
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { request } from '@/api'
-import { usePostStore } from '@/stores/post.store'
+import { usePostStore } from '@/stores/post'
 
 const getJobSearchReports = () => request('/job-search-reports', parseJobSearchReports)
 

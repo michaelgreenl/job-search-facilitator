@@ -10,9 +10,9 @@ import type {
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useOutreachStore } from '@/stores/outreach.store'
-import { usePostStore } from '@/stores/post.store'
-import { useWorkStore } from '@/stores/work.store'
+import { useOutreachStore } from '@/stores/outreach'
+import { usePostStore } from '@/stores/post'
+import { useWorkStore } from '@/stores/work'
 import ApplyView from '../views/ApplyView.vue'
 
 const createPost = (id: string, userLabel: UserLabel): JobPost => ({

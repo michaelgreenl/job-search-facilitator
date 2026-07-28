@@ -17,7 +17,7 @@ import { computed, shallowRef, watch } from 'vue'
 import { request } from '@/api'
 import { useWorkTask } from '@/composables/useWorkTask'
 import { createContactDiscoveryTask, createDraftRevisionTask } from '@/work-tasks'
-import type { WorkSession, WorkSessionOwner } from './work.store'
+import type { WorkSession, WorkSessionOwner } from './work'
 
 type OutreachTaskKind = 'contact' | 'draft'
 type OutreachTaskPhase = 'starting' | 'running' | 'applying' | 'settled'
