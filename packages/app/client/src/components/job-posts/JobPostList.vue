@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
+import { computed } from 'vue'
 
 import JobPostCard from './JobPostCard.vue'
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         posts: readonly JobPost[]
         selectedPostId: string | null
@@ -20,6 +21,10 @@ withDefaults(
         pending: false,
     },
 )
+const orderedPosts = computed(() => [
+    ...props.posts.filter(({ userLabel }) => userLabel !== 'forgo'),
+    ...props.posts.filter(({ userLabel }) => userLabel === 'forgo'),
+])
 
 const emit = defineEmits<{
     select: [postId: string]
@@ -32,13 +37,14 @@ const emit = defineEmits<{
     <ul
         v-if="pending || (!loading && !error && posts.length)"
         class="card-list"
+        data-testid="job-post-list"
         :class="{ 'card-list-status': pending && (loading || error) }"
     >
         <li v-if="pending">
             <JobPostCard loading @select="emit('selectPending')" />
         </li>
         <template v-if="!loading && !error">
-            <li v-for="post in posts" :key="post.id">
+            <li v-for="post in orderedPosts" :key="post.id">
                 <JobPostCard
                     :post="post"
                     :selected="selectedPostId === post.id"
