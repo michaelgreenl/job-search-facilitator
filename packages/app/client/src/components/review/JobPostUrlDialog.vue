@@ -177,12 +177,11 @@ function submit() {
     align-items: center;
     justify-content: center;
     width: 2.25rem;
-    height: 2.25rem;
     margin-left: auto;
     padding: 0;
     color: $color-ink-muted;
     font: inherit;
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     line-height: 1;
     cursor: pointer;
     background: transparent;
@@ -192,7 +191,6 @@ function submit() {
     &:hover,
     &:focus-visible {
         color: $color-ink;
-        background: $color-signal-alpha-12;
     }
 }
 
@@ -240,13 +238,13 @@ function submit() {
     width: 2.75rem;
     height: 2.75rem;
     padding: 0;
-    color: $color-night;
+    color: $color-ink;
     font: inherit;
     font-size: 1.25rem;
     font-weight: 650;
     line-height: 1;
     cursor: pointer;
-    background: $color-signal-light;
+    background: $color-action;
     border: 1px solid transparent;
     border-radius: $radius-md;
 
