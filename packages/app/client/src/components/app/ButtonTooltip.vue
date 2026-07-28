@@ -16,6 +16,7 @@ const tooltipId = `button-tooltip-${useId()}`
 const container = useTemplateRef<HTMLElement>('container')
 const tooltip = useTemplateRef<HTMLElement>('tooltip')
 const visible = shallowRef(false)
+const keyboardInteraction = shallowRef(true)
 const placement = shallowRef<TooltipPlacement>('bottom')
 const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
 
@@ -72,6 +73,22 @@ function hide() {
     visible.value = false
 }
 
+function handleKeyboardInput(event: KeyboardEvent) {
+    if (!event.altKey && !event.ctrlKey && !event.metaKey) {
+        keyboardInteraction.value = true
+    }
+}
+
+function handlePointerInput() {
+    keyboardInteraction.value = false
+}
+
+function handleFocusIn() {
+    if (keyboardInteraction.value) {
+        show()
+    }
+}
+
 function isInsideTrigger(target: EventTarget | null) {
     const element = triggerElement()
 
@@ -97,11 +114,15 @@ function handleViewportChange() {
 }
 
 onMounted(() => {
+    window.addEventListener('keydown', handleKeyboardInput, true)
+    window.addEventListener('pointerdown', handlePointerInput, true)
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, true)
 })
 
 onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeyboardInput, true)
+    window.removeEventListener('pointerdown', handlePointerInput, true)
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange, true)
 })
@@ -113,7 +134,7 @@ onBeforeUnmount(() => {
         class="button-tooltip"
         @mouseover="handleMouseOver"
         @mouseout="handleMouseOut"
-        @focusin="show"
+        @focusin="handleFocusIn"
         @focusout="hide"
         @keydown.esc.stop="hide"
         @click="hide"

@@ -1,5 +1,5 @@
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { createApp, defineComponent, h, nextTick, type App, type Component } from 'vue'
+import { createApp, defineComponent, h, nextTick, shallowRef, type App, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -8,6 +8,8 @@ import AppHeader from '@/components/app/AppHeader.vue'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
+import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
+import UserAddedSourceCard from '@/components/review/UserAddedSourceCard.vue'
 import '@/assets/styles/app.scss'
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
@@ -169,6 +171,56 @@ describe('browser interaction contracts', () => {
         }
 
         expect(hidFocusedElement).toBe(false)
+    })
+
+    it('keeps the add-post tooltip hidden when its dialog restores trigger focus', async () => {
+        const AddJobPostFixture = defineComponent({
+            setup() {
+                const open = shallowRef(false)
+                const url = shallowRef('')
+
+                return () =>
+                    h('div', [
+                        h(UserAddedSourceCard, {
+                            count: 0,
+                            error: null,
+                            loading: false,
+                            selected: false,
+                            onAdd: () => {
+                                open.value = true
+                            },
+                            onRetry: () => undefined,
+                            onSelect: () => undefined,
+                        }),
+                        h(JobPostUrlDialog, {
+                            open: open.value,
+                            url: url.value,
+                            'onUpdate:url': (value: string) => {
+                                url.value = value
+                            },
+                            onClose: () => {
+                                open.value = false
+                            },
+                            onSubmit: () => undefined,
+                        }),
+                    ])
+            },
+        })
+        mountComponent(AddJobPostFixture)
+        const trigger = page.getByTestId('add-job-post')
+        const tooltip = page.getByTestId('button-tooltip-content')
+        const dialog = page.getByTestId('job-post-url-dialog')
+
+        await trigger.hover()
+        await expect.element(tooltip).toBeVisible()
+        await trigger.click()
+        await expect.element(dialog).toBeVisible()
+        await expect.element(tooltip).not.toBeVisible()
+
+        await page.getByTestId('close-job-post-url-dialog').click()
+        await expect.element(dialog).not.toBeVisible()
+        await expect.element(trigger).toHaveFocus()
+        await expect.element(tooltip).not.toBeVisible()
     })
 })
 
