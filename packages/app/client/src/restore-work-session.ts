@@ -5,11 +5,11 @@ type WorkStore = ReturnType<typeof useWorkStore>
 
 export async function restorePersistedWorkSession(
     router: Router,
-    workStore: Pick<WorkStore, 'session' | 'restoreSession'>,
+    workStore: Pick<WorkStore, 'sessions' | 'restoreSessions'>,
 ) {
-    const session = workStore.session
+    const session = workStore.sessions.at(-1)
 
-    if (session === null) {
+    if (session === undefined) {
         return
     }
 
@@ -18,6 +18,6 @@ export async function restorePersistedWorkSession(
     try {
         await router.replace({ name: routeName })
     } finally {
-        void workStore.restoreSession().catch(() => undefined)
+        void workStore.restoreSessions().catch(() => undefined)
     }
 }

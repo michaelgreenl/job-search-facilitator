@@ -12,6 +12,7 @@ import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
+import { useWorkTask } from '@/composables/useWorkTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import FlowPanel from '@/components/layout/FlowPanel.vue'
@@ -23,7 +24,6 @@ import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
 import WorkStream from '@/components/work/WorkStream.vue'
 import { useReportStore } from '@/stores/report.store'
 import { usePostStore } from '@/stores/post.store'
-import { useWorkStore } from '@/stores/work.store'
 import { createJobPostImportTask } from '@/work-tasks'
 
 type ActivePanel = 'sources' | 'posts' | 'viewer' | 'import'
@@ -50,9 +50,9 @@ const router = useRouter()
 
 const reportStore = useReportStore()
 const postStore = usePostStore()
-const workStore = useWorkStore()
+const importWork = useWorkTask('job-post-import')
 const activePanel = shallowRef<ActivePanel>(
-    workStore.session?.kind === 'job-post-import' ? 'import' : 'sources',
+    importWork.session.value === null ? 'sources' : 'import',
 )
 const postFilter = shallowRef<PostFilter>('all')
 const selectedSource = shallowRef<ReviewSource | null>(null)
@@ -93,20 +93,19 @@ const selectedItems = computed<ReviewItem[]>(() => {
         recommendation: result,
     }))
 })
-const importSession = computed(() =>
-    workStore.session?.kind === 'job-post-import' ? workStore.session : null,
-)
-const matchingImportTask = computed(() =>
-    workStore.task?.id === importSession.value?.taskId ? workStore.task : null,
-)
+const importSession = computed(() => {
+    const session = importWork.session.value
+    return session?.kind === 'job-post-import' ? session : null
+})
+const matchingImportTask = importWork.task
 const importStarting = computed(
     () =>
         importSession.value !== null &&
         matchingImportTask.value === null &&
-        (workStore.starting || workStore.restoring),
+        (importWork.starting.value || importWork.restoring.value),
 )
 const importRunning = computed(() => matchingImportTask.value?.status === 'running')
-const importBusy = computed(() => importStarting.value || importRunning.value || importSaving.value)
+const importBusy = computed(() => importWork.taskActive.value || importSaving.value)
 const importDisplayIssue = computed(
     () =>
         importIssue.value ??
@@ -114,7 +113,7 @@ const importDisplayIssue = computed(
         (matchingImportTask.value?.status === 'cancelled'
             ? 'The job-post import was cancelled.'
             : null) ??
-        (importSession.value !== null ? workStore.error : null),
+        (importSession.value !== null ? importWork.error.value : null),
 )
 const importRetryAvailable = computed(
     () => importSession.value !== null && !importBusy.value && importDisplayIssue.value !== null,
@@ -412,7 +411,7 @@ async function saveImportedPost(
         }
 
         const source = { kind: 'user-added' } satisfies ReviewSource
-        workStore.dismissSession()
+        importWork.dismissSession()
         importIssue.value = null
         selectedSource.value = source
         selectedItem.value = {
@@ -483,12 +482,6 @@ async function startImport(url: string) {
         return
     }
 
-    if (workStore.taskActive && (importSession.value === null || importSession.value.url !== url)) {
-        importDialogIssue.value =
-            'Another Work task is already running. Finish it before adding a post.'
-        return
-    }
-
     const revision = ++importRevision
     importIssue.value = null
     importDialogIssue.value = null
@@ -497,7 +490,7 @@ async function startImport(url: string) {
     activePanel.value = 'import'
 
     try {
-        const task = await workStore.startTask(createJobPostImportTask(url), {
+        const task = await importWork.startTask(createJobPostImportTask(url), {
             kind: 'job-post-import',
             url,
         })
@@ -531,7 +524,7 @@ function retryImport() {
 async function cancelImport() {
     if (importRunning.value) {
         try {
-            await workStore.cancelTask()
+            await importWork.cancelTask()
         } catch (error) {
             importIssue.value =
                 error instanceof Error ? error.message : 'Could not cancel the job-post import'
@@ -540,7 +533,7 @@ async function cancelImport() {
 }
 
 function dismissImport() {
-    if (!workStore.dismissSession()) {
+    if (!importWork.dismissSession()) {
         return
     }
 
@@ -552,7 +545,7 @@ function dismissImport() {
 }
 
 watch(
-    [() => workStore.session, () => workStore.task] as const,
+    [importSession, matchingImportTask] as const,
     ([session, task]) => {
         if (session?.kind !== 'job-post-import') {
             return
@@ -667,7 +660,7 @@ onMounted(() => {
     void loadUserAddedPosts()
 
     if (importSession.value !== null) {
-        void workStore.restoreSession().catch(() => undefined)
+        void importWork.restoreSession().catch(() => undefined)
     }
 })
 </script>
@@ -677,7 +670,7 @@ onMounted(() => {
         <JobPostUrlDialog
             v-model:url="addPostUrl"
             :open="postStore.addPostDialog.open"
-            :busy="workStore.starting"
+            :busy="importWork.starting.value"
             :issue="importDialogIssue"
             @close="postStore.closeAddPostDialog"
             @submit="startImport"
@@ -716,8 +709,8 @@ onMounted(() => {
                 <JobPostImportPanel
                     v-if="activePanel === 'import'"
                     :back-available="importRunning || importSaving"
-                    :can-dismiss="workStore.canDismissSession"
-                    :cancelling="workStore.cancelling"
+                    :can-dismiss="importWork.canDismissSession.value"
+                    :cancelling="importWork.cancelling.value"
                     :issue="importDisplayIssue"
                     :retry-available="importRetryAvailable"
                     :running="importRunning"
@@ -728,7 +721,7 @@ onMounted(() => {
                     @dismiss="dismissImport"
                     @retry="retryImport"
                 >
-                    <WorkStream v-if="showImportWork" :issue="null" />
+                    <WorkStream v-if="showImportWork" lane="job-post-import" :issue="null" />
                 </JobPostImportPanel>
             </FlowPanel>
 
