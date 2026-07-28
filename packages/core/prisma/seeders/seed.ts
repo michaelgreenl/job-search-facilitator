@@ -1,8 +1,8 @@
 import { PrismaPg } from '@prisma/adapter-pg'
-import { databaseUrl } from '../prisma.config.ts'
-import { PrismaClient } from '../src/generated/prisma/client.ts'
-import { seedJobPosts } from './seeds/job-posts.ts'
-import { seedSearchReports } from './seeds/search-reports.ts'
+import { databaseUrl } from '../../prisma.config.ts'
+import { PrismaClient } from '../../src/generated/prisma/client.ts'
+import { seedJobPosts } from './job-posts.ts'
+import { seedSearchReports } from './search-reports.ts'
 
 const adapter = new PrismaPg({ connectionString: databaseUrl })
 const prisma = new PrismaClient({ adapter })

@@ -1,5 +1,5 @@
 import { AgentLabel, ResumeType, type Prisma } from '../../src/generated/prisma/client.ts'
-import { jobPostSeeds } from './job-posts.ts'
+import { jobPostSeeds } from '../seeders/job-posts.ts'
 
 interface SearchResultSeed {
     sourceKey: string
