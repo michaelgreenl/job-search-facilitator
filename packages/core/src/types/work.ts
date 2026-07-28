@@ -1,4 +1,4 @@
-import type { IsoDateTime } from './job-post.ts'
+import type { IsoDateTime } from './jobs.ts'
 
 export const WORK_CAPABILITIES = ['chrome'] as const
 
