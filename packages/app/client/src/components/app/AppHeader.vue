@@ -92,17 +92,18 @@ $nav-surface-height: 4.25rem;
 
 .app-header {
     position: absolute;
-    top: -$nav-surface-height;
+    top: 0;
     left: 50%;
     z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
     max-width: calc(100vw - ($space-4 * 2));
-    transform: translateX(-50%);
+    transform: translate(-50%, -$nav-surface-height);
+    transition: transform 220ms ease;
 
     &.is-open {
-        top: 0;
+        transform: translate(-50%, 0);
     }
 }
 
@@ -131,9 +132,8 @@ $nav-surface-height: 4.25rem;
     border-radius: 0 0 $radius-full $radius-full;
     box-shadow: 0 8px 20px $color-black-alpha-24;
     place-items: center;
+    transition: height 140ms ease;
 
-    &:hover,
-    &:focus-visible,
     &[aria-expanded='true'] {
         height: 0.75rem;
     }
@@ -145,6 +145,9 @@ $nav-surface-height: 4.25rem;
     background: $color-ink-muted;
     border-radius: $radius-full;
     box-shadow: 0 0 10px $color-signal-alpha-24;
+    transition:
+        height 140ms ease,
+        background-color 140ms ease;
 
     [aria-expanded='true'] & {
         height: 0.0625rem;
