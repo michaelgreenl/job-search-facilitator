@@ -172,6 +172,7 @@ function clearDateFilter() {
     grid-area: title;
     color: $color-ink-secondary;
     font-weight: 650;
+    white-space: nowrap;
 }
 
 .date-filter {
@@ -253,15 +254,15 @@ function clearDateFilter() {
     justify-self: end;
 }
 
-@container report-list (max-width: 24rem) {
+@container report-list (max-width: 29rem) {
     .report-heading {
         grid-template-areas:
-            'count'
-            'title'
-            'dates';
-        grid-template-columns: minmax(0, 1fr);
+            'title count'
+            'dates dates';
     }
+}
 
+@container report-list (max-width: 24rem) {
     .date-filter {
         width: 100%;
     }
