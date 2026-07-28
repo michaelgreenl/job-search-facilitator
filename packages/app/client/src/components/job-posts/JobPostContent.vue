@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { JobPost, JobRecommendation, ResumeType } from '@job-search-facilitator/core'
+import type { JobPost, ResumeType, StandaloneJobRecommendation } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 
 const props = withDefaults(
     defineProps<{
         post: JobPost
-        recommendation?: JobRecommendation
+        recommendation?: StandaloneJobRecommendation
         showLegitimacy?: boolean
     }>(),
     {

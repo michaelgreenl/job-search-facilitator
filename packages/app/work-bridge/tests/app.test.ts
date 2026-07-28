@@ -51,6 +51,19 @@ describe('Work bridge routes', () => {
         })
     })
 
+    it('reuses a client-specified task without starting the runtime twice', async () => {
+        const runtime = new FakeRuntime()
+        const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')
+        const taskId = '7a669871-290f-4a3f-8874-f1d7cf0f6203'
+
+        const first = await request(app).put(`/tasks/${taskId}`).send(taskInput).expect(202)
+        const repeated = await request(app).put(`/tasks/${taskId}`).send(taskInput).expect(202)
+
+        expect(first.body.id).toBe(taskId)
+        expect(repeated.body).toEqual(first.body)
+        expect(runtime.startAttempts).toBe(1)
+    })
+
     it('reports runtime failure and refuses new tasks without hiding existing task state', async () => {
         const runtime = new FakeRuntime()
         const app = createApp(new WorkTaskManager(runtime), runtime, 'http://localhost')

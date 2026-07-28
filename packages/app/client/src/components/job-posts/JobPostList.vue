@@ -11,21 +11,42 @@ withDefaults(
         loadingMessage?: string
         loading?: boolean
         error?: string | null
+        pending?: boolean
     }>(),
     {
         loadingMessage: 'Loading job posts…',
         loading: false,
         error: null,
+        pending: false,
     },
 )
 
 const emit = defineEmits<{
     select: [postId: string]
+    selectPending: []
     retry: []
 }>()
 </script>
 
 <template>
+    <ul
+        v-if="pending || (!loading && !error && posts.length)"
+        class="card-list"
+        :class="{ 'card-list-status': pending && (loading || error) }"
+    >
+        <li v-if="pending">
+            <JobPostCard loading @select="emit('selectPending')" />
+        </li>
+        <template v-if="!loading && !error">
+            <li v-for="post in posts" :key="post.id">
+                <JobPostCard
+                    :post="post"
+                    :selected="selectedPostId === post.id"
+                    @select="emit('select', post.id)"
+                />
+            </li>
+        </template>
+    </ul>
     <p v-if="loading" class="list-message" role="status">{{ loadingMessage }}</p>
     <template v-else-if="error">
         <p class="list-message" role="alert">{{ error }}</p>
@@ -38,16 +59,7 @@ const emit = defineEmits<{
             Retry
         </button>
     </template>
-    <ul v-else-if="posts.length" class="card-list">
-        <li v-for="post in posts" :key="post.id">
-            <JobPostCard
-                :post="post"
-                :selected="selectedPostId === post.id"
-                @select="emit('select', post.id)"
-            />
-        </li>
-    </ul>
-    <p v-else class="list-message">{{ emptyMessage }}</p>
+    <p v-else-if="!pending && !posts.length" class="list-message">{{ emptyMessage }}</p>
 </template>
 
 <style scoped lang="scss">
@@ -64,6 +76,11 @@ const emit = defineEmits<{
 
     li {
         min-width: 0;
+    }
+
+    &-status {
+        flex: 0 0 auto;
+        padding-bottom: 0;
     }
 }
 

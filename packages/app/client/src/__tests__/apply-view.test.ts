@@ -178,6 +178,8 @@ const chooseJobPostAction = async (root: HTMLElement, value: string) => {
 
 describe('apply view', () => {
     beforeEach(() => {
+        sessionStorage.clear()
+        vi.stubGlobal('crypto', { randomUUID: () => runningWorkTask.id })
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(applyQueueItems)))
     })
 
@@ -412,7 +414,7 @@ describe('apply view', () => {
         )
     })
 
-    it('reconnects a running draft and releases it after a permanent Work failure', async () => {
+    it('keeps a disconnected draft task visible and cancellable', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -479,7 +481,8 @@ describe('apply view', () => {
             expect(
                 root.querySelector('[data-testid="outreach-draft-issue"]')?.getAttribute('role'),
             ).toBe('alert')
-            expect(request.disabled).toBe(false)
+            expect(request.disabled).toBe(true)
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
         })
     })
 
@@ -506,6 +509,125 @@ describe('apply view', () => {
                     ?.getAttribute('data-active'),
             ).toBe('true')
         })
+    })
+
+    it('restores a cancelled outreach task until the user dismisses it', async () => {
+        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 1,
+                session: {
+                    kind: 'outreach-contact',
+                    taskId: cancelledTask.id,
+                    postId: posts[0]!.id,
+                },
+            }),
+        )
+        vi.mocked(fetch).mockImplementation((input) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/apply-queue')) {
+                return Promise.resolve(jsonResponse(applyQueueItems))
+            }
+
+            if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
+                return Promise.resolve(jsonResponse([]))
+            }
+
+            if (url.endsWith(`/tasks/${cancelledTask.id}`)) {
+                return Promise.resolve(jsonResponse(cancelledTask))
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        await vi.waitFor(() => {
+            expect(
+                root
+                    .querySelector('[data-testid="apply-outreach-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(findTestButton(root, 'outreach-dismiss')).not.toBeNull()
+        })
+
+        findTestButton(root, 'outreach-dismiss').click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-dismiss"]')).toBeNull(),
+        )
+        expect(sessionStorage.getItem('job-search-facilitator:work-session')).toBeNull()
+    })
+
+    it('keeps a restored task reachable when its owner post cannot be loaded', async () => {
+        const missingPostId = '30000000-0000-4000-8000-000000000099'
+        sessionStorage.setItem(
+            'job-search-facilitator:work-session',
+            JSON.stringify({
+                version: 1,
+                session: {
+                    kind: 'outreach-contact',
+                    taskId: runningWorkTask.id,
+                    postId: missingPostId,
+                },
+            }),
+        )
+        vi.mocked(fetch).mockImplementation((input) => {
+            const url = fetchUrl(input)
+
+            if (url.endsWith('/api/job-posts/apply-queue')) {
+                return Promise.resolve(jsonResponse(applyQueueItems))
+            }
+
+            if (url.endsWith(`/api/job-posts/${missingPostId}`)) {
+                return Promise.resolve(jsonResponse({}, 500))
+            }
+
+            if (url.endsWith(`/api/job-posts/${missingPostId}/outreach-contacts`)) {
+                return Promise.resolve(jsonResponse([]))
+            }
+
+            if (url.endsWith(`/tasks/${runningWorkTask.id}`)) {
+                return Promise.resolve(jsonResponse(runningWorkTask))
+            }
+
+            if (url.endsWith(`/tasks/${runningWorkTask.id}/cancel`)) {
+                return Promise.resolve(
+                    jsonResponse({ ...runningWorkTask, status: 'cancelled' }, 202),
+                )
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        await vi.waitFor(() => {
+            expect(
+                root
+                    .querySelector('[data-testid="apply-outreach-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'outreach-cancel').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-dismiss"]')).not.toBeNull(),
+        )
+        findTestButton(root, 'outreach-dismiss').click()
+
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="apply-posts-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true'),
+        )
     })
 
     it('does not start discovery after the Apply view unmounts', async () => {

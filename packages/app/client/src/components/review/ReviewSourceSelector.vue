@@ -3,17 +3,25 @@ import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
+import UserAddedSourceCard from './UserAddedSourceCard.vue'
 
 const props = defineProps<{
     reports: readonly JobSearchReport[]
     selectedReportId: string | null
-    loading: boolean
-    error: string | null
+    userAddedSelected: boolean
+    userAddedCount: number
+    userAddedLoading: boolean
+    userAddedError: string | null
+    reportsLoading: boolean
+    reportsError: string | null
 }>()
 
 const emit = defineEmits<{
-    select: [reportId: string]
-    retry: []
+    addPost: []
+    selectReport: [reportId: string]
+    selectUserAdded: []
+    retryReports: []
+    retryUserAdded: []
 }>()
 
 const dateFrom = shallowRef('')
@@ -70,8 +78,20 @@ function clearDateFilter() {
 </script>
 
 <template>
-    <div class="heading">
-        <PanelHeading class="title" eyebrow="Job Search reports" title="Select report to review" />
+    <PanelHeading eyebrow="Review sources" title="Select a source to review" />
+
+    <UserAddedSourceCard
+        :count="userAddedCount"
+        :selected="userAddedSelected"
+        :loading="userAddedLoading"
+        :error="userAddedError"
+        @add="emit('addPost')"
+        @select="emit('selectUserAdded')"
+        @retry="emit('retryUserAdded')"
+    />
+
+    <div class="report-heading">
+        <span class="report-title">Search reports</span>
 
         <fieldset class="date-filter" aria-label="Filter reports by date">
             <div class="date-fields">
@@ -82,7 +102,7 @@ function clearDateFilter() {
                     data-testid="review-date-from"
                     aria-label="Reports from date"
                     :max="dateTo || undefined"
-                    :disabled="loading || reports.length === 0"
+                    :disabled="reportsLoading || reports.length === 0"
                 />
                 <span class="date-separator" aria-hidden="true">–</span>
                 <input
@@ -92,7 +112,7 @@ function clearDateFilter() {
                     data-testid="review-date-to"
                     aria-label="Reports through date"
                     :min="dateFrom || undefined"
-                    :disabled="loading || reports.length === 0"
+                    :disabled="reportsLoading || reports.length === 0"
                 />
                 <button
                     class="date-clear"
@@ -111,14 +131,14 @@ function clearDateFilter() {
         <span class="item-count report-count">{{ countLabel }}</span>
     </div>
 
-    <p v-if="loading" class="list-message" role="status">Loading search reports…</p>
-    <template v-else-if="error">
-        <p class="list-message" role="alert">{{ error }}</p>
+    <p v-if="reportsLoading" class="list-message" role="status">Loading search reports…</p>
+    <template v-else-if="reportsError">
+        <p class="list-message" role="alert">{{ reportsError }}</p>
         <button
             class="retry-button"
             data-testid="review-report-retry"
             type="button"
-            @click="emit('retry')"
+            @click="emit('retryReports')"
         >
             Retry
         </button>
@@ -128,7 +148,7 @@ function clearDateFilter() {
             <SearchReportCard
                 :report="report"
                 :selected="selectedReportId === report.id"
-                @select="emit('select', report.id)"
+                @select="emit('selectReport', report.id)"
             />
         </li>
     </ul>
@@ -138,18 +158,20 @@ function clearDateFilter() {
 </template>
 
 <style scoped lang="scss">
-.heading {
+.report-heading {
     display: grid;
     grid-template-areas:
-        'title count'
+        'count count'
         'title dates';
     grid-template-columns: minmax(0, 1fr) auto;
     gap: $space-2 $space-4;
     align-items: end;
 }
 
-.title {
+.report-title {
     grid-area: title;
+    color: $color-ink-secondary;
+    font-weight: 650;
 }
 
 .date-filter {
@@ -233,28 +255,17 @@ function clearDateFilter() {
 }
 
 @container report-list (max-width: 38rem) {
-    .heading {
-        grid-template-areas:
-            'title title'
-            'dates count';
-        row-gap: $space-4;
-    }
-
-    .date-filter {
-        justify-self: start;
-    }
-
     .date-clear {
         order: 0;
     }
 }
 
 @container report-list (max-width: 24rem) {
-    .heading {
+    .report-heading {
         grid-template-areas:
+            'count'
             'title'
-            'dates'
-            'count';
+            'dates';
         grid-template-columns: minmax(0, 1fr);
     }
 

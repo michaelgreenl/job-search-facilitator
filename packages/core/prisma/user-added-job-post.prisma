@@ -1,0 +1,13 @@
+model UserAddedJobPost {
+  postId               String      @id @db.Uuid
+  agentLabel           AgentLabel
+  fitRationale         String
+  applicationFlow      String
+  keyLegitimacySignals String
+  recommendedResume    ResumeType
+  recommendedAction    String
+  legitimacyNotes      String?
+  createdAt            DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime    @updatedAt @db.Timestamptz(3)
+  post                 JobPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+}

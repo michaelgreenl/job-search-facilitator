@@ -1,7 +1,35 @@
 import type { StartWorkTaskInput, WorkTask, WorkTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useWorkStore } from '../stores/work.store'
+import { useWorkStore, type WorkSessionOwner } from '../stores/work.store'
+
+class MemoryStorage implements Storage {
+    readonly values = new Map<string, string>()
+
+    get length() {
+        return this.values.size
+    }
+
+    clear() {
+        this.values.clear()
+    }
+
+    getItem(key: string) {
+        return this.values.get(key) ?? null
+    }
+
+    key(index: number) {
+        return [...this.values.keys()][index] ?? null
+    }
+
+    removeItem(key: string) {
+        this.values.delete(key)
+    }
+
+    setItem(key: string, value: string) {
+        this.values.set(key, value)
+    }
+}
 
 class FakeEventSource {
     static instances: FakeEventSource[] = []
@@ -95,6 +123,8 @@ describe('work store', () => {
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         vi.stubGlobal('fetch', vi.fn())
+        vi.stubGlobal('sessionStorage', new MemoryStorage())
+        vi.stubGlobal('crypto', { randomUUID: () => startedTask.id })
     })
 
     afterEach(() => {
@@ -152,6 +182,105 @@ describe('work store', () => {
         expect(source.close).toHaveBeenCalledOnce()
     })
 
+    it('restores a persisted task owner and reconnects to the same running task', async () => {
+        const owner = {
+            kind: 'job-post-import',
+            url: 'https://example.com/jobs/imported-role',
+        } satisfies WorkSessionOwner
+        const fetchMock = vi.mocked(fetch)
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse(startedTask))
+        const firstStore = useWorkStore()
+
+        await firstStore.startTask(taskInput, owner)
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            `http://localhost:3001/tasks/${startedTask.id}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(taskInput),
+            },
+        )
+        expect(firstStore.session).toEqual({ ...owner, taskId: startedTask.id })
+
+        setActivePinia(createPinia())
+        const restoredStore = useWorkStore()
+
+        expect(restoredStore.session).toEqual({ ...owner, taskId: startedTask.id })
+        expect(restoredStore.task).toBeNull()
+
+        await restoredStore.restoreSession()
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            3,
+            `http://localhost:3001/tasks/${startedTask.id}`,
+            undefined,
+        )
+        expect(restoredStore.task).toEqual(startedTask)
+        expect(restoredStore.taskActive).toBe(true)
+        expect(FakeEventSource.instances.at(-1)?.url).toBe(
+            `http://localhost:3001/tasks/${startedTask.id}/events`,
+        )
+    })
+
+    it('persists the task owner before the bridge can create its task', async () => {
+        let resolveHealth: ((response: Response) => void) | undefined
+        const healthResponse = new Promise<Response>((resolve) => {
+            resolveHealth = resolve
+        })
+        vi.mocked(fetch)
+            .mockReturnValueOnce(healthResponse)
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+        const store = useWorkStore()
+        const owner = {
+            kind: 'job-post-import',
+            url: 'https://example.com/jobs/imported-role',
+        } satisfies WorkSessionOwner
+
+        const start = store.startTask(taskInput, owner)
+
+        expect(store.session).toEqual({ ...owner, taskId: startedTask.id })
+        expect(store.taskActive).toBe(true)
+
+        resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+        await start
+    })
+
+    it('keeps a cancelled task session through refresh until it is explicitly dismissed', async () => {
+        const owner = {
+            kind: 'outreach-contact',
+            postId: '10000000-0000-4000-8000-000000000001',
+        } satisfies WorkSessionOwner
+        const cancelledTask: WorkTask = { ...startedTask, status: 'cancelled' }
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
+            .mockResolvedValueOnce(jsonResponse(cancelledTask))
+        const firstStore = useWorkStore()
+
+        await firstStore.startTask(taskInput, owner)
+        await firstStore.cancelTask()
+
+        setActivePinia(createPinia())
+        const restoredStore = useWorkStore()
+        await restoredStore.restoreSession()
+
+        expect(restoredStore.task?.status).toBe('cancelled')
+        expect(restoredStore.session).toEqual({ ...owner, taskId: startedTask.id })
+        expect(restoredStore.canDismissSession).toBe(true)
+
+        restoredStore.dismissSession()
+
+        expect(restoredStore.session).toBeNull()
+        setActivePinia(createPinia())
+        expect(useWorkStore().session).toBeNull()
+    })
+
     it('rejects an invalid health response before creating a task or event stream', async () => {
         const fetchMock = vi
             .mocked(fetch)
@@ -187,7 +316,7 @@ describe('work store', () => {
         expect(store.connectionState).toBe('disconnected')
     })
 
-    it('releases a task when the event stream violates its contract', async () => {
+    it('keeps a task cancellable when the event stream violates its contract', async () => {
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
@@ -202,30 +331,49 @@ describe('work store', () => {
             createdAt: '2026-07-18T12:00:00.000Z',
         })
 
-        expect(store.task).toEqual({
-            ...startedTask,
-            status: 'failed',
-            error: 'Work stream returned invalid data',
-        })
-        expect(store.taskActive).toBe(false)
+        expect(store.task).toEqual(startedTask)
+        expect(store.error).toBe('Work stream returned invalid data')
+        expect(store.connectionState).toBe('disconnected')
+        expect(store.taskActive).toBe(true)
     })
 
-    it('releases a task after its event stream closes permanently', async () => {
+    it('keeps a task cancellable and reconnects it after its event stream closes', async () => {
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useWorkStore()
 
-        await store.startTask(taskInput)
+        await store.startTask(taskInput, {
+            kind: 'job-post-import',
+            url: 'https://example.com/jobs/imported-role',
+        })
         const source = FakeEventSource.instances[0]!
+        const replayedActivity = {
+            type: 'activity',
+            message: 'Reading the job post',
+            createdAt: '2026-07-18T12:00:00.000Z',
+        } satisfies WorkTaskEvent
+        source.message(replayedActivity)
         source.disconnect(FakeEventSource.CLOSED)
 
-        expect(store.task).toEqual({
-            ...startedTask,
-            status: 'failed',
-            error: 'Work stream closed before the task finished',
-        })
-        expect(store.taskActive).toBe(false)
+        expect(store.task).toEqual(startedTask)
+        expect(store.events).toEqual([replayedActivity])
+        expect(store.error).toBe('Work stream closed before the task finished')
+        expect(store.connectionState).toBe('disconnected')
+        expect(store.taskActive).toBe(true)
+
+        await store.restoreSession()
+
+        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(FakeEventSource.instances[1]?.url).toBe(
+            `http://localhost:3001/tasks/${startedTask.id}/events`,
+        )
+        expect(store.connectionState).toBe('connecting')
+        expect(store.events).toEqual([])
+
+        FakeEventSource.instances[1]!.message(replayedActivity)
+
+        expect(store.events).toEqual([replayedActivity])
     })
 
     it('cancels a running task and closes its event stream', async () => {

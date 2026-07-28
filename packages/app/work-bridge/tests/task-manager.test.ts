@@ -1,6 +1,7 @@
 import {
     createContactDiscoveryOutputSchema,
     createDraftRevisionOutputSchema,
+    createUserAddedJobPostOutputSchema,
     type StartWorkTaskInput,
 } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
@@ -27,6 +28,28 @@ const input: StartWorkTaskInput = {
 const eventIdentity = {
     threadId: 'thread-id',
     turnId: 'turn-id',
+} as const
+
+const userAddedJobPostOutput = {
+    agentLabel: 'target',
+    fitRationale: 'Strong TypeScript experience',
+    applicationFlow: 'Direct company application',
+    keyLegitimacySignals: 'Listed on the company careers page',
+    recommendedResume: 'frontend',
+    recommendedAction: 'Apply today',
+    legitimacyNotes: null,
+    post: {
+        sourceKey: 'example-source:123',
+        roleTitle: 'Software Engineer',
+        company: 'Example Company',
+        location: 'Detroit, MI',
+        compensation: '$120,000',
+        techStack: 'TypeScript, Vue, Node.js',
+        postSource: 'Example Source',
+        postUrl: 'https://example.com/jobs/123?source=search#apply',
+        applicationUrl: 'https://apply.example.com/jobs/123',
+        postStatus: 'active',
+    },
 } as const
 
 describe('Work task manager', () => {
@@ -117,6 +140,7 @@ describe('Work task manager', () => {
                 response: 'I made the message more specific.',
             },
         ],
+        ['user-added job post', createUserAddedJobPostOutputSchema, userAddedJobPostOutput],
     ] as const)(
         'accepts output satisfying the generated %s contract',
         async (_name, createOutputSchema, output) => {
@@ -146,6 +170,63 @@ describe('Work task manager', () => {
             })
         },
     )
+
+    it('rejects report-only fields from the generated user-added post contract', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start({
+            ...input,
+            outputSchema: createUserAddedJobPostOutputSchema(),
+        })
+
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: JSON.stringify({ ...userAddedJobPostOutput, agentRank: 1 }),
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'failed',
+            output: null,
+            error: expect.any(String),
+        })
+    })
+
+    it('rejects malformed URLs from the generated user-added post contract', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new WorkTaskManager(runtime)
+        const started = await manager.start({
+            ...input,
+            outputSchema: createUserAddedJobPostOutputSchema(),
+        })
+
+        runtime.emit({
+            type: 'final-message',
+            ...eventIdentity,
+            text: JSON.stringify({
+                ...userAddedJobPostOutput,
+                post: { ...userAddedJobPostOutput.post, postUrl: 'https://%' },
+            }),
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            ...eventIdentity,
+            status: 'completed',
+            error: null,
+        })
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'failed',
+            output: null,
+            error: expect.any(String),
+        })
+    })
 
     it.each([
         ['malformed', { type: 'not-a-json-schema-type' }],

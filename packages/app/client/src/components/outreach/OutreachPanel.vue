@@ -16,7 +16,7 @@ import OutreachDraft from './OutreachDraft.vue'
 type PanelView = 'contacts' | 'draft' | 'stream'
 
 const props = defineProps<{
-    post: JobPost
+    post: JobPost | null
     expanded: boolean
 }>()
 
@@ -24,6 +24,7 @@ const emit = defineEmits<{
     cancel: []
     collapse: []
     discover: []
+    dismiss: []
     expand: []
     retryContacts: []
     showViewer: []
@@ -35,6 +36,7 @@ const {
     actionNeedsAttention,
     actionSubmitting,
     cancelling,
+    canDismissSession,
     connectionState,
     error,
     task,
@@ -52,44 +54,54 @@ const {
     discovering,
     drafting,
     draft,
+    hasActiveTask,
     resultError,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
-    contact.value !== null ? 'draft' : discovering.value ? 'stream' : 'contacts',
+    contact.value !== null ? 'draft' : hasActiveTask.value ? 'stream' : 'contacts',
 )
 const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(
-    () =>
-        task.value?.status === 'running' &&
-        (panelView.value === 'stream' || (panelView.value === 'draft' && drafting.value)),
-)
+const canCancel = computed(() => hasActiveTask.value && taskActive.value)
+const canDismiss = computed(() => hasActiveTask.value && canDismissSession.value)
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
-const draftIssue = computed(() => resultError.value ?? (drafting.value ? error.value : null))
+const draftIssue = computed(
+    () => resultError.value ?? (drafting.value ? (error.value ?? task.value?.error ?? null) : null),
+)
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
-    () => props.post.id,
+    () => props.post?.id,
     () => {
         contactFilter.value = 'all'
-        panelView.value = discovering.value ? 'stream' : 'contacts'
+        panelView.value = hasActiveTask.value ? 'stream' : 'contacts'
     },
 )
 
 watch(
-    discovering,
-    (isDiscovering) => {
-        if (isDiscovering) {
-            panelView.value = 'stream'
+    hasActiveTask,
+    (hasTask) => {
+        if (hasTask) {
+            panelView.value = drafting.value && contact.value !== null ? 'draft' : 'stream'
+        } else {
+            panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
     },
     { immediate: true },
 )
 
 watch(contact, (selectedContact) => {
+    if (hasActiveTask.value) {
+        if (drafting.value && selectedContact !== null) {
+            panelView.value = 'draft'
+        }
+
+        return
+    }
+
     if (selectedContact !== null) {
         panelView.value = 'draft'
     } else if (!discovering.value) {
@@ -120,14 +132,21 @@ watch(draft, resetCopyState)
 onBeforeUnmount(resetCopyState)
 
 function submitDraftRequest() {
+    const post = props.post
     const request = draftRequest.value.trim()
 
-    if (contact.value === null || !draft.value.trim() || !request || taskActive.value) {
+    if (
+        post === null ||
+        contact.value === null ||
+        !draft.value.trim() ||
+        !request ||
+        taskActive.value
+    ) {
         return
     }
 
     void outreachStore
-        .requestDraftRevision(props.post, request)
+        .requestDraftRevision(post, request)
         .then((started) => {
             if (started) {
                 draftRequest.value = ''
@@ -194,14 +213,14 @@ async function copyDraft() {
             <div class="outreach-heading-copy">
                 <div class="panel-navigation">
                     <PanelBackButton
-                        v-if="panelView === 'contacts'"
+                        v-if="panelView === 'contacts' && !hasActiveTask"
                         label="Back to job post"
                         test-id="back-to-job-post"
                         mobile-only
                         @back="emit('showViewer')"
                     />
                     <PanelBackButton
-                        v-else-if="!(drafting && taskActive)"
+                        v-else-if="!hasActiveTask"
                         label="Back to saved contacts"
                         test-id="back-to-saved-contacts"
                         @back="showContacts"
@@ -295,6 +314,16 @@ async function copyDraft() {
             @click="emit('cancel')"
         >
             {{ cancelling ? 'Cancelling…' : 'Cancel' }}
+        </button>
+
+        <button
+            v-if="canDismiss"
+            class="cancel-action"
+            data-testid="outreach-dismiss"
+            type="button"
+            @click="emit('dismiss')"
+        >
+            Dismiss
         </button>
     </section>
 </template>

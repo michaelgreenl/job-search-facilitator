@@ -13,7 +13,7 @@ export type JobPostViewerMode =
 import {
     USER_LABELS,
     type JobPost,
-    type JobRecommendation,
+    type StandaloneJobRecommendation,
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -25,7 +25,7 @@ import { USER_LABEL_OPTIONS } from './job-post-labels'
 
 const props = defineProps<{
     post: JobPost
-    recommendation?: JobRecommendation
+    recommendation?: StandaloneJobRecommendation
     labelUpdating: boolean
     labelError: string | null
     mode: JobPostViewerMode

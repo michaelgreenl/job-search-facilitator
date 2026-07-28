@@ -21,10 +21,153 @@ type WorkConnectionState =
     | 'disconnected'
     | 'closed'
 
+export type WorkSessionOwner =
+    | { kind: 'job-post-import'; url: string }
+    | { kind: 'outreach-contact'; postId: string }
+    | {
+          kind: 'outreach-draft'
+          postId: string
+          contactId: string
+          draft: string
+          request: string
+      }
+
+export type WorkSession = WorkSessionOwner & { taskId: string }
+
+const workSessionStorageKey = 'job-search-facilitator:work-session'
+
+const getSessionStorage = () => (typeof sessionStorage === 'undefined' ? null : sessionStorage)
+
+const isNonBlankString = (value: unknown): value is string =>
+    typeof value === 'string' && value.trim().length > 0
+
+const parseWorkSession = (value: unknown): WorkSession | null => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return null
+    }
+
+    const session = value as Record<string, unknown>
+
+    if (!isNonBlankString(session.taskId) || !isNonBlankString(session.kind)) {
+        return null
+    }
+
+    if (session.kind === 'job-post-import' && isNonBlankString(session.url)) {
+        return {
+            kind: session.kind,
+            taskId: session.taskId,
+            url: session.url,
+        }
+    }
+
+    if (session.kind === 'outreach-contact' && isNonBlankString(session.postId)) {
+        return {
+            kind: session.kind,
+            taskId: session.taskId,
+            postId: session.postId,
+        }
+    }
+
+    if (
+        session.kind === 'outreach-draft' &&
+        isNonBlankString(session.postId) &&
+        isNonBlankString(session.contactId) &&
+        typeof session.draft === 'string' &&
+        isNonBlankString(session.request)
+    ) {
+        return {
+            kind: session.kind,
+            taskId: session.taskId,
+            postId: session.postId,
+            contactId: session.contactId,
+            draft: session.draft,
+            request: session.request,
+        }
+    }
+
+    return null
+}
+
+const readWorkSession = (): WorkSession | null => {
+    const storage = getSessionStorage()
+
+    if (storage === null) {
+        return null
+    }
+
+    const removeStoredSession = () => {
+        try {
+            storage.removeItem(workSessionStorageKey)
+        } catch {
+            // Storage may be unavailable even when the browser exposes the API.
+        }
+    }
+
+    try {
+        const stored = storage.getItem(workSessionStorageKey)
+
+        if (stored === null) {
+            return null
+        }
+
+        const value: unknown = JSON.parse(stored)
+
+        if (
+            typeof value !== 'object' ||
+            value === null ||
+            Array.isArray(value) ||
+            !('version' in value) ||
+            value.version !== 1 ||
+            !('session' in value)
+        ) {
+            removeStoredSession()
+            return null
+        }
+
+        const session = parseWorkSession(value.session)
+
+        if (session === null) {
+            removeStoredSession()
+        }
+
+        return session
+    } catch {
+        removeStoredSession()
+        return null
+    }
+}
+
+const writeWorkSession = (session: WorkSession | null) => {
+    const storage = getSessionStorage()
+
+    if (storage === null) {
+        return
+    }
+
+    try {
+        if (session === null) {
+            storage.removeItem(workSessionStorageKey)
+        } else {
+            storage.setItem(workSessionStorageKey, JSON.stringify({ version: 1, session }))
+        }
+    } catch {
+        // A storage failure must not prevent the task from remaining usable in memory.
+    }
+}
+
 const workBridgeUrl = (import.meta.env.VITE_WORK_BRIDGE_URL ?? 'http://localhost:3001').replace(
     /\/$/,
     '',
 )
+
+class WorkRequestError extends Error {
+    constructor(
+        message: string,
+        readonly status: number,
+    ) {
+        super(message)
+    }
+}
 
 const workResponse = async (path: string, init?: RequestInit) => {
     const response = await fetch(`${workBridgeUrl}${path}`, init)
@@ -40,7 +183,10 @@ const workResponse = async (path: string, init?: RequestInit) => {
                 ? body.error
                 : null
 
-        throw new Error(message ?? `Work request failed (${response.status})`)
+        throw new WorkRequestError(
+            message ?? `Work request failed (${response.status})`,
+            response.status,
+        )
     }
 
     return response
@@ -62,20 +208,53 @@ const sendWork = async (path: string, init?: RequestInit): Promise<void> => {
 
 export const useWorkStore = defineStore('work', () => {
     const task = shallowRef<WorkTask | null>(null)
+    const session = shallowRef<WorkSession | null>(readWorkSession())
     const events = ref<WorkTaskEvent[]>([])
     const connectionState = shallowRef<WorkConnectionState>('idle')
     const pendingAction = shallowRef<WorkActionRequired | null>(null)
     const alwaysAllowBrowserActions = shallowRef(false)
     const actionSubmitting = shallowRef(false)
     const cancelling = shallowRef(false)
+    const starting = shallowRef(false)
+    const restoring = shallowRef(false)
+    const sessionUnavailable = shallowRef(false)
     const error = shallowRef<string | null>(null)
     const taskActive = computed(
-        () => connectionState.value === 'connecting' || task.value?.status === 'running',
+        () =>
+            starting.value ||
+            task.value?.status === 'running' ||
+            (session.value !== null && task.value === null && !sessionUnavailable.value),
+    )
+    const canDismissSession = computed(
+        () =>
+            session.value !== null &&
+            (sessionUnavailable.value || (task.value !== null && task.value.status !== 'running')),
     )
     const actionNeedsAttention = computed(
         () => pendingAction.value !== null && !alwaysAllowBrowserActions.value,
     )
     let eventSource: EventSource | null = null
+    let restorePromise: Promise<WorkTask | null> | null = null
+
+    function saveSession(nextSession: WorkSession | null) {
+        session.value = nextSession
+        writeWorkSession(nextSession)
+    }
+
+    function resetReplayState() {
+        events.value = []
+        pendingAction.value = null
+        actionSubmitting.value = false
+    }
+
+    function resetVolatileTaskState() {
+        task.value = null
+        resetReplayState()
+        alwaysAllowBrowserActions.value = false
+        cancelling.value = false
+        sessionUnavailable.value = false
+        error.value = null
+    }
 
     function closeConnection(state: WorkConnectionState) {
         eventSource?.close()
@@ -89,20 +268,17 @@ export const useWorkStore = defineStore('work', () => {
         alwaysAllowBrowserActions.value = false
         actionSubmitting.value = false
         cancelling.value = false
+        sessionUnavailable.value = false
         error.value = null
         closeConnection('closed')
     }
 
-    function failConnectedTask(taskId: string, message: string) {
+    function disconnectConnectedTask(taskId: string, message: string) {
         const currentTask = task.value
 
         if (currentTask?.id === taskId && currentTask.status === 'running') {
-            finishTask({
-                ...currentTask,
-                status: 'failed',
-                output: null,
-                error: message,
-            })
+            error.value = message
+            closeConnection('disconnected')
         }
     }
 
@@ -175,7 +351,7 @@ export const useWorkStore = defineStore('work', () => {
                     })
                 }
             } catch {
-                failConnectedTask(taskId, 'Work stream returned invalid data')
+                disconnectConnectedTask(taskId, 'Work stream returned invalid data')
             }
         }
 
@@ -185,22 +361,57 @@ export const useWorkStore = defineStore('work', () => {
             }
 
             if (source.readyState === EventSource.CLOSED) {
-                failConnectedTask(taskId, 'Work stream closed before the task finished')
+                disconnectConnectedTask(taskId, 'Work stream closed before the task finished')
             } else {
                 connectionState.value = 'reconnecting'
             }
         }
     }
 
-    async function startTask(input: StartWorkTaskInput) {
+    const ownersMatch = (left: WorkSession, right: WorkSessionOwner) => {
+        if (left.kind !== right.kind) {
+            return false
+        }
+
+        if (left.kind === 'job-post-import' && right.kind === 'job-post-import') {
+            return left.url === right.url
+        }
+
+        if (left.kind === 'outreach-contact' && right.kind === 'outreach-contact') {
+            return left.postId === right.postId
+        }
+
+        return (
+            left.kind === 'outreach-draft' &&
+            right.kind === 'outreach-draft' &&
+            left.postId === right.postId &&
+            left.contactId === right.contactId &&
+            left.draft === right.draft &&
+            left.request === right.request
+        )
+    }
+
+    async function startTask(input: StartWorkTaskInput, owner?: WorkSessionOwner) {
+        const previousTask = task.value
+        const currentSession = session.value
         closeConnection('connecting')
-        task.value = null
-        events.value = []
-        pendingAction.value = null
-        alwaysAllowBrowserActions.value = false
-        actionSubmitting.value = false
-        cancelling.value = false
-        error.value = null
+        resetVolatileTaskState()
+        starting.value = true
+
+        const taskId =
+            owner === undefined
+                ? null
+                : currentSession !== null &&
+                    previousTask === null &&
+                    ownersMatch(currentSession, owner)
+                  ? currentSession.taskId
+                  : crypto.randomUUID()
+
+        if (owner !== undefined && taskId !== null) {
+            saveSession({ ...owner, taskId } as WorkSession)
+        }
+
+        let taskRequestStarted = false
 
         try {
             const health = await requestWork('/health', parseWorkHealth)
@@ -213,20 +424,112 @@ export const useWorkStore = defineStore('work', () => {
                 throw new Error(`Work capability is unavailable: ${unavailableCapability}`)
             }
 
-            task.value = await requestWork('/tasks', parseWorkTask, {
-                method: 'POST',
+            const path = taskId === null ? '/tasks' : `/tasks/${encodeURIComponent(taskId)}`
+            taskRequestStarted = true
+            task.value = await requestWork(path, parseWorkTask, {
+                method: taskId === null ? 'POST' : 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(input),
             })
+
+            if (taskId !== null && task.value.id !== taskId) {
+                throw new Error('Work returned a different task than the reserved session')
+            }
+
+            sessionUnavailable.value = false
             connect(task.value.id)
 
             return task.value
         } catch (requestError) {
+            if (
+                owner !== undefined &&
+                (!taskRequestStarted || requestError instanceof WorkRequestError)
+            ) {
+                sessionUnavailable.value = true
+            }
+
             error.value =
                 requestError instanceof Error ? requestError.message : 'Could not start Work task'
             closeConnection('disconnected')
             throw requestError
+        } finally {
+            starting.value = false
         }
+    }
+
+    async function restoreSession() {
+        const currentSession = session.value
+
+        if (currentSession === null) {
+            return null
+        }
+
+        if (task.value?.id === currentSession.taskId) {
+            if (task.value.status === 'running' && eventSource === null) {
+                resetReplayState()
+                error.value = null
+                closeConnection('connecting')
+                connect(task.value.id)
+            }
+
+            return task.value
+        }
+
+        if (restorePromise !== null) {
+            return restorePromise
+        }
+
+        const restore = async () => {
+            closeConnection('connecting')
+            resetVolatileTaskState()
+            restoring.value = true
+
+            try {
+                const currentTask = await requestWork(
+                    `/tasks/${encodeURIComponent(currentSession.taskId)}`,
+                    parseWorkTask,
+                )
+
+                if (session.value?.taskId !== currentSession.taskId) {
+                    return null
+                }
+
+                task.value = currentTask
+                connect(currentTask.id)
+                return currentTask
+            } catch (requestError) {
+                if (session.value?.taskId === currentSession.taskId) {
+                    sessionUnavailable.value =
+                        requestError instanceof WorkRequestError && requestError.status === 404
+                    error.value =
+                        requestError instanceof Error
+                            ? requestError.message
+                            : 'Could not restore Work task'
+                    closeConnection('disconnected')
+                }
+
+                throw requestError
+            } finally {
+                restoring.value = false
+            }
+        }
+
+        restorePromise = restore().finally(() => {
+            restorePromise = null
+        })
+
+        return restorePromise
+    }
+
+    function dismissSession() {
+        if (!canDismissSession.value) {
+            return false
+        }
+
+        closeConnection('idle')
+        resetVolatileTaskState()
+        saveSession(null)
+        return true
     }
 
     async function resolveAction(decision: WorkActionDecision) {
@@ -286,7 +589,10 @@ export const useWorkStore = defineStore('work', () => {
     }
 
     async function cancelTask() {
-        if (task.value?.status !== 'running' || cancelling.value) {
+        const taskId =
+            task.value?.status === 'running' ? task.value.id : (session.value?.taskId ?? null)
+
+        if (taskId === null || cancelling.value) {
             return task.value
         }
 
@@ -294,9 +600,13 @@ export const useWorkStore = defineStore('work', () => {
         error.value = null
 
         try {
-            const currentTask = await requestWork(`/tasks/${task.value.id}/cancel`, parseWorkTask, {
-                method: 'POST',
-            })
+            const currentTask = await requestWork(
+                `/tasks/${encodeURIComponent(taskId)}/cancel`,
+                parseWorkTask,
+                {
+                    method: 'POST',
+                },
+            )
 
             if (currentTask.status !== 'running') {
                 finishTask(currentTask)
@@ -306,6 +616,10 @@ export const useWorkStore = defineStore('work', () => {
 
             return currentTask
         } catch (requestError) {
+            if (requestError instanceof WorkRequestError && requestError.status === 404) {
+                sessionUnavailable.value = true
+            }
+
             error.value =
                 requestError instanceof Error ? requestError.message : 'Could not cancel Work task'
             throw requestError
@@ -316,16 +630,23 @@ export const useWorkStore = defineStore('work', () => {
 
     return {
         task,
+        session,
         events,
         connectionState,
         taskActive,
+        canDismissSession,
         pendingAction,
         alwaysAllowBrowserActions,
         actionNeedsAttention,
         actionSubmitting,
         cancelling,
+        starting,
+        restoring,
+        sessionUnavailable,
         error,
         startTask,
+        restoreSession,
+        dismissSession,
         resolveAction,
         allowBrowserActionsForTask,
         cancelTask,

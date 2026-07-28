@@ -1,4 +1,5 @@
 import type {
+    CreateUserAddedJobPostInput,
     JobPostInput,
     JobSearchResultInput,
     UpsertJobSearchReportInput,
@@ -74,9 +75,23 @@ const createReportInput = (
     return { summary, results }
 }
 
+type UserAddedInputOverrides = Partial<Omit<CreateUserAddedJobPostInput, 'post'>> & {
+    post?: Partial<JobPostInput>
+}
+
+const createUserAddedInput = (
+    overrides: UserAddedInputOverrides = {},
+): CreateUserAddedJobPostInput => {
+    const result = createResultInput(overrides)
+    const { agentRank: _agentRank, ...input } = result
+
+    return input
+}
+
 beforeEach(async () => {
     await prisma.outreachContact.deleteMany()
     await prisma.outreachRun.deleteMany()
+    await prisma.userAddedJobPost.deleteMany()
     await prisma.jobSearchResult.deleteMany()
     await prisma.jobSearchReport.deleteMany()
     await prisma.jobPost.deleteMany()
@@ -87,6 +102,193 @@ afterAll(async () => {
 })
 
 describe('job post repository', () => {
+    it('persists and lists a user-added post without a search report', async () => {
+        const created = await jobPostRepository.upsertUserAdded(createUserAddedInput())
+
+        const [items, postCount, userAddedCount, reportCount, resultCount] = await Promise.all([
+            jobPostRepository.findUserAdded(),
+            prisma.jobPost.count(),
+            prisma.userAddedJobPost.count(),
+            prisma.jobSearchReport.count(),
+            prisma.jobSearchResult.count(),
+        ])
+
+        expect(created.created).toBe(true)
+        expect(items).toEqual([created.item])
+        expect(postCount).toBe(1)
+        expect(userAddedCount).toBe(1)
+        expect(reportCount).toBe(0)
+        expect(resultCount).toBe(0)
+    })
+
+    it('lists user-added posts newest first with a stable post ID tie-break', async () => {
+        const first = await jobPostRepository.upsertUserAdded(
+            createUserAddedInput({ post: { sourceKey: 'example-source:first-added' } }),
+        )
+        const second = await jobPostRepository.upsertUserAdded(
+            createUserAddedInput({ post: { sourceKey: 'example-source:second-added' } }),
+        )
+        const third = await jobPostRepository.upsertUserAdded(
+            createUserAddedInput({ post: { sourceKey: 'example-source:third-added' } }),
+        )
+        const newestAddedAt = new Date('2026-07-21T12:00:00.000Z')
+
+        await Promise.all([
+            prisma.userAddedJobPost.update({
+                where: { postId: first.item.post.id },
+                data: { createdAt: new Date('2026-07-20T12:00:00.000Z') },
+            }),
+            prisma.userAddedJobPost.update({
+                where: { postId: second.item.post.id },
+                data: { createdAt: newestAddedAt },
+            }),
+            prisma.userAddedJobPost.update({
+                where: { postId: third.item.post.id },
+                data: { createdAt: newestAddedAt },
+            }),
+        ])
+
+        const items = await jobPostRepository.findUserAdded()
+        const tiedPostIds = [second.item.post.id, third.item.post.id].sort()
+
+        expect(items.map(({ post }) => post.id)).toEqual([...tiedPostIds, first.item.post.id])
+    })
+
+    it('reuses a report post while preserving user state and refreshing standalone analysis', async () => {
+        const sourceKey = 'example-source:report-and-user-added'
+        const archivedAt = '2026-07-12T12:00:00.000Z'
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-12',
+            createReportInput({
+                results: [createResultInput({ post: { sourceKey } })],
+            }),
+        )
+        const reportPost = report.report.results[0]!.post
+
+        await jobPostRepository.update(reportPost.id, {
+            applicationStatus: 'interviewing',
+            userLabel: 'forgo',
+            archivedAt,
+        })
+
+        const first = await jobPostRepository.upsertUserAdded(
+            createUserAddedInput({
+                recommendedAction: 'Apply after reviewing the team',
+                post: {
+                    sourceKey,
+                    roleTitle: 'Senior Software Engineer',
+                },
+            }),
+        )
+        const refreshedInput = createUserAddedInput({
+            fitRationale: 'Updated standalone fit analysis',
+            recommendedAction: 'Apply through the company site today',
+            post: {
+                sourceKey,
+                roleTitle: 'Staff Software Engineer',
+                company: 'Updated Company',
+                postStatus: 'closed',
+            },
+        })
+        const refreshed = await jobPostRepository.upsertUserAdded(refreshedInput)
+        const [savedReport, listedItems, postCount, userAddedCount, resultCount] =
+            await Promise.all([
+                searchReportRepository.findById(report.report.id),
+                jobPostRepository.findUserAdded(),
+                prisma.jobPost.count(),
+                prisma.userAddedJobPost.count(),
+                prisma.jobSearchResult.count(),
+            ])
+
+        expect(first.created).toBe(true)
+        expect(refreshed.created).toBe(false)
+        expect(refreshed.item).toMatchObject({
+            fitRationale: refreshedInput.fitRationale,
+            recommendedAction: refreshedInput.recommendedAction,
+            addedAt: first.item.addedAt,
+            post: {
+                id: reportPost.id,
+                sourceKey,
+                roleTitle: 'Staff Software Engineer',
+                company: 'Updated Company',
+                postStatus: 'closed',
+                applicationStatus: 'interviewing',
+                userLabel: 'forgo',
+                archivedAt,
+            },
+        })
+        expect(listedItems).toEqual([refreshed.item])
+        expect(savedReport?.results[0]).toMatchObject({
+            recommendedAction: report.report.results[0]!.recommendedAction,
+            post: refreshed.item.post,
+        })
+        expect(postCount).toBe(1)
+        expect(userAddedCount).toBe(1)
+        expect(resultCount).toBe(1)
+    })
+
+    it('keeps standalone membership and analysis when a later report refreshes the post', async () => {
+        const sourceKey = 'example-source:user-added-then-report'
+        const archivedAt = '2026-07-12T12:00:00.000Z'
+        const standaloneInput = createUserAddedInput({
+            fitRationale: 'Standalone fit analysis',
+            recommendedAction: 'Standalone recommendation',
+            post: { sourceKey },
+        })
+        const standalone = await jobPostRepository.upsertUserAdded(standaloneInput)
+
+        await jobPostRepository.update(standalone.item.post.id, {
+            applicationStatus: 'interviewing',
+            userLabel: 'P1',
+            archivedAt,
+        })
+
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-12',
+            createReportInput({
+                results: [
+                    createResultInput({
+                        fitRationale: 'Report-specific fit analysis',
+                        recommendedAction: 'Report recommendation',
+                        post: {
+                            sourceKey,
+                            roleTitle: 'Staff Software Engineer',
+                            company: 'Updated Company',
+                            postStatus: 'closed',
+                        },
+                    }),
+                ],
+            }),
+        )
+        const [items, postCount, userAddedCount] = await Promise.all([
+            jobPostRepository.findUserAdded(),
+            prisma.jobPost.count(),
+            prisma.userAddedJobPost.count(),
+        ])
+
+        expect(report.report.results[0]!.post.id).toBe(standalone.item.post.id)
+        expect(items).toMatchObject([
+            {
+                fitRationale: standaloneInput.fitRationale,
+                recommendedAction: standaloneInput.recommendedAction,
+                addedAt: standalone.item.addedAt,
+                post: {
+                    id: standalone.item.post.id,
+                    roleTitle: 'Staff Software Engineer',
+                    company: 'Updated Company',
+                    postStatus: 'closed',
+                    applicationStatus: 'interviewing',
+                    userLabel: 'P1',
+                    archivedAt,
+                },
+            },
+        ])
+        expect(postCount).toBe(1)
+        expect(userAddedCount).toBe(1)
+    })
+
     it('defines the Apply queue by application status and user label', async () => {
         const userLabels = ['P1', 'P1', 'P2', 'quick-app', 'forgo', null] as const
         const report = await searchReportRepository.upsertById(
