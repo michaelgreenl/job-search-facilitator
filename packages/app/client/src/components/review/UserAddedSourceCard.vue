@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
     count: number
@@ -33,30 +33,24 @@ const countLabel = computed(() => `${props.count} ${props.count === 1 ? 'post' :
                 <span v-else class="source-count">{{ countLabel }}</span>
             </button>
 
-            <ButtonTooltip v-slot="{ tooltipId }" class="add-button-tooltip" label="Add job post">
-                <button
-                    class="add-button"
-                    data-testid="add-job-post"
-                    type="button"
-                    aria-label="Add job post"
-                    :aria-describedby="tooltipId"
-                    @click="emit('add')"
-                >
-                    <span aria-hidden="true">+</span>
-                </button>
-            </ButtonTooltip>
+            <BaseButton
+                class="add-button-tooltip"
+                icon-size="md"
+                preset="primary"
+                tooltip="Add job post"
+                data-testid="add-job-post"
+                aria-label="Add job post"
+                @click="emit('add')"
+            >
+                <span class="add-button-icon" aria-hidden="true">+</span>
+            </BaseButton>
         </div>
 
         <div v-if="error" class="source-error">
             <p class="source-error-message" role="alert">{{ error }}</p>
-            <button
-                class="retry-button"
-                data-testid="review-user-added-retry"
-                type="button"
-                @click="emit('retry')"
-            >
+            <BaseButton data-testid="review-user-added-retry" preset="text" @click="emit('retry')">
                 Retry
-            </button>
+            </BaseButton>
         </div>
     </article>
 </template>
@@ -119,27 +113,8 @@ const countLabel = computed(() => `${props.count} ${props.count === 1 ? 'post' :
     white-space: nowrap;
 }
 
-.add-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
-    color: $color-ink;
-    font: inherit;
+.add-button-icon {
     font-size: 1.25rem;
-    font-weight: 650;
-    line-height: 1;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
 }
 
 .add-button-tooltip {
@@ -151,21 +126,5 @@ const countLabel = computed(() => `${props.count} ${props.count === 1 ? 'post' :
     display: flex;
     gap: $space-2;
     align-items: baseline;
-}
-
-.retry-button {
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 }
 </style>

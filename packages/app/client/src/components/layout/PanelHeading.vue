@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import PanelBackButton from './PanelBackButton.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 
 interface Props {
     eyebrow: string
@@ -21,12 +22,16 @@ const emit = defineEmits<{
 <template>
     <header class="panel-heading">
         <div class="panel-title">
-            <PanelBackButton
+            <BaseButton
                 v-if="props.backLabel"
-                :label="props.backLabel"
-                :test-id="props.backTestId"
-                @back="emit('back')"
-            />
+                preset="back"
+                :tooltip="props.backLabel"
+                :data-testid="props.backTestId"
+                :aria-label="props.backLabel"
+                @click="emit('back')"
+            >
+                <ArrowLeftIcon />
+            </BaseButton>
 
             <span class="eyebrow">{{ props.eyebrow }}</span>
             <component :is="props.titleTag" class="heading">

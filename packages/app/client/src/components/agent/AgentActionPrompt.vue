@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AgentActionDecision, AgentActionRequired } from '@job-search-facilitator/core'
 import { nextTick, shallowRef, useTemplateRef, watch } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
     action: AgentActionRequired
@@ -13,8 +14,8 @@ const emit = defineEmits<{
 }>()
 
 const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
-const alwaysAllowAction = useTemplateRef<HTMLButtonElement>('alwaysAllowAction')
-const alwaysAllowNo = useTemplateRef<HTMLButtonElement>('alwaysAllowNo')
+const alwaysAllowAction = useTemplateRef<{ focus: () => void }>('alwaysAllowAction')
+const alwaysAllowNo = useTemplateRef<{ focus: () => void }>('alwaysAllowNo')
 const confirmingAlwaysAllow = shallowRef(false)
 
 watch(
@@ -61,25 +62,23 @@ function cancelAlwaysAllowConfirmation() {
         </p>
 
         <div class="action-buttons confirmation-buttons">
-            <button
+            <BaseButton
                 ref="alwaysAllowNo"
-                class="action-button"
                 data-testid="agent-action-always-allow-cancel"
-                type="button"
+                preset="outline"
                 :disabled="submitting"
                 @click="cancelAlwaysAllowConfirmation"
             >
                 No
-            </button>
-            <button
-                class="action-button action-button-primary"
+            </BaseButton>
+            <BaseButton
                 data-testid="agent-action-always-allow-confirm"
-                type="button"
+                preset="signal"
                 :disabled="submitting"
                 @click="emit('alwaysAllow')"
             >
                 Yes
-            </button>
+            </BaseButton>
         </div>
     </section>
 
@@ -96,36 +95,33 @@ function cancelAlwaysAllowConfirmation() {
         <p class="action-message">{{ action.message }}</p>
 
         <div class="action-controls">
-            <button
+            <BaseButton
                 ref="alwaysAllowAction"
-                class="action-button"
                 data-testid="agent-action-always-allow"
-                type="button"
+                preset="outline"
                 :disabled="submitting"
                 @click="requestAlwaysAllowConfirmation"
             >
                 Always allow for this task
-            </button>
+            </BaseButton>
 
             <div class="action-buttons">
-                <button
-                    class="action-button"
+                <BaseButton
                     data-testid="agent-action-decline"
-                    type="button"
+                    preset="outline"
                     :disabled="submitting"
                     @click="emit('resolve', 'decline')"
                 >
                     Decline
-                </button>
-                <button
-                    class="action-button action-button-primary"
+                </BaseButton>
+                <BaseButton
                     data-testid="agent-action-approve"
-                    type="button"
+                    preset="signal"
                     :disabled="submitting"
                     @click="emit('resolve', 'approve')"
                 >
                     Allow
-                </button>
+                </BaseButton>
             </div>
         </div>
     </section>
@@ -183,32 +179,5 @@ function cancelAlwaysAllowConfirmation() {
 
 .confirmation-buttons {
     margin-top: $space-3;
-}
-
-.action-button {
-    padding: $space-2 $space-3;
-    color: $color-ink;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 1px solid $color-signal-light-alpha-28;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        border-color: $color-signal-light;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.55;
-    }
-
-    &-primary {
-        color: $color-night;
-        font-weight: 650;
-        background: $color-signal-light;
-        border-color: transparent;
-    }
 }
 </style>

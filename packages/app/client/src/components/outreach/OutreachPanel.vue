@@ -2,9 +2,9 @@
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
-import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import AgentStream from '@/components/agent/AgentStream.vue'
@@ -211,38 +211,40 @@ async function copyDraft() {
         <header>
             <div class="outreach-heading-copy">
                 <div class="panel-navigation">
-                    <PanelBackButton
+                    <BaseButton
                         v-if="panelView === 'contacts' && !hasActiveTask"
-                        label="Back to job post"
-                        test-id="back-to-job-post"
-                        mobile-only
-                        @back="emit('showViewer')"
-                    />
-                    <PanelBackButton
-                        v-else-if="!hasActiveTask"
-                        label="Back to saved contacts"
-                        test-id="back-to-saved-contacts"
-                        @back="showContacts"
-                    />
-
-                    <ButtonTooltip
-                        v-if="panelView === 'draft'"
-                        v-slot="{ tooltipId }"
-                        class="panel-control-desktop"
-                        :label="resizeLabel"
+                        class="panel-navigation-mobile-only"
+                        preset="back"
+                        tooltip="Back to job post"
+                        data-testid="back-to-job-post"
+                        aria-label="Back to job post"
+                        @click="emit('showViewer')"
                     >
-                        <button
-                            class="panel-control panel-control-expand"
-                            type="button"
-                            :aria-label="resizeLabel"
-                            :aria-describedby="tooltipId"
-                            :aria-expanded="expanded"
-                            @click="toggleExpanded"
-                        >
-                            <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                            <ExpandIcon v-else class="panel-control-icon" />
-                        </button>
-                    </ButtonTooltip>
+                        <ArrowLeftIcon />
+                    </BaseButton>
+                    <BaseButton
+                        v-else-if="!hasActiveTask"
+                        preset="back"
+                        tooltip="Back to saved contacts"
+                        data-testid="back-to-saved-contacts"
+                        aria-label="Back to saved contacts"
+                        @click="showContacts"
+                    >
+                        <ArrowLeftIcon />
+                    </BaseButton>
+
+                    <BaseButton
+                        v-if="panelView === 'draft'"
+                        class="panel-control-desktop"
+                        preset="icon"
+                        :tooltip="resizeLabel"
+                        :aria-label="resizeLabel"
+                        :aria-expanded="expanded"
+                        @click="toggleExpanded"
+                    >
+                        <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                        <ExpandIcon v-else class="panel-control-icon" />
+                    </BaseButton>
                 </div>
 
                 <span class="eyebrow">Outreach</span>
@@ -261,24 +263,23 @@ async function copyDraft() {
                 @show-stream="showStream"
             />
 
-            <ButtonTooltip v-slot="{ tooltipId }" class="discover-contact-tooltip" label="Find new">
-                <button
-                    class="discover-contact-button"
-                    type="button"
-                    aria-label="Discover another contact"
-                    :aria-describedby="tooltipId"
-                    :disabled="
-                        taskActive ||
-                        contactsLoading ||
-                        contactSaving ||
-                        contactUpdating ||
-                        contactsError !== null
-                    "
-                    @click="emit('discover')"
-                >
-                    <span aria-hidden="true">+</span>
-                </button>
-            </ButtonTooltip>
+            <BaseButton
+                class="discover-contact-tooltip"
+                icon-size="md"
+                preset="primary"
+                tooltip="Find new"
+                aria-label="Discover another contact"
+                :disabled="
+                    taskActive ||
+                    contactsLoading ||
+                    contactSaving ||
+                    contactUpdating ||
+                    contactsError !== null
+                "
+                @click="emit('discover')"
+            >
+                <span class="discover-contact-icon" aria-hidden="true">+</span>
+            </BaseButton>
         </template>
 
         <template v-else-if="panelView === 'draft' && contact">
@@ -303,27 +304,27 @@ async function copyDraft() {
 
         <AgentStream v-else lane="outreach" :issue="issue" />
 
-        <button
+        <BaseButton
             v-if="canCancel"
             class="cancel-action"
             data-testid="outreach-cancel"
-            type="button"
+            preset="text"
             aria-label="Cancel outreach task"
             :disabled="cancelling"
             @click="emit('cancel')"
         >
             {{ cancelling ? 'Cancelling…' : 'Cancel' }}
-        </button>
+        </BaseButton>
 
-        <button
+        <BaseButton
             v-if="canDismiss"
             class="cancel-action"
             data-testid="outreach-dismiss"
-            type="button"
+            preset="text"
             @click="emit('dismiss')"
         >
             Dismiss
-        </button>
+        </BaseButton>
     </section>
 </template>
 
@@ -350,60 +351,23 @@ async function copyDraft() {
     align-items: center;
 }
 
+.panel-navigation-mobile-only {
+    @include bp-md-tablet {
+        display: none;
+    }
+}
+
 .discover-contact-tooltip {
     align-self: flex-end;
 }
 
-.discover-contact-button {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
-    color: $color-ink;
-    font: inherit;
+.discover-contact-icon {
     font-size: 1.25rem;
-    font-weight: 650;
-    line-height: 1;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.55;
-    }
 }
 
 .cancel-action {
     align-self: flex-start;
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
     font-size: 0.8125rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.5;
-    }
 }
 
 .eyebrow {
@@ -420,37 +384,6 @@ async function copyDraft() {
 
     @include bp-md-tablet {
         display: inline-flex;
-    }
-}
-
-.panel-control {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    color: $color-ink;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-sm;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        background: $color-signal;
-    }
-
-    &-expand {
-        color: $color-ink-muted;
-        background: transparent;
-
-        &:hover,
-        &:focus-visible {
-            color: $color-signal-light;
-            background: transparent;
-        }
     }
 }
 

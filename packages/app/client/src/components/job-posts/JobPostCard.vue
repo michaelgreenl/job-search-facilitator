@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
-import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 
@@ -23,15 +24,15 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <button
+    <BaseButton
         v-if="loading || post"
         class="post-card"
+        preset="card"
         :data-testid="loading ? 'job-post-import-progress' : `job-post-card-${post!.id}`"
         :class="{
             'post-card-selected': selected,
             'post-card-forgone': post?.userLabel === 'forgo',
         }"
-        type="button"
         :aria-busy="loading || undefined"
         :aria-label="loading ? 'View job-post import progress' : undefined"
         :aria-pressed="loading ? undefined : selected"
@@ -60,28 +61,13 @@ const emit = defineEmits<{
                 · Compensation - {{ post.compensation }}
             </span>
         </template>
-    </button>
+    </BaseButton>
 </template>
 
 <style scoped lang="scss">
 .post-card {
-    display: grid;
     gap: $space-1;
-    width: 100%;
     padding: $space-4;
-    color: $color-ink;
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-ink-alpha-9;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal-alpha-9;
-        border-color: $color-signal-alpha-28;
-    }
 
     &-selected {
         background: $color-signal-alpha-12;

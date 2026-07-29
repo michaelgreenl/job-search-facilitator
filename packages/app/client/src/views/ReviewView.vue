@@ -10,18 +10,19 @@ import {
 } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
 import AgentStream from '@/components/agent/AgentStream.vue'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
 import { createJobPostImportTask } from '@/agent-tasks'
@@ -776,12 +777,16 @@ onMounted(() => {
                 :active="activePanel === 'viewer'"
                 :adjacent="activePanel === 'posts'"
             >
-                <PanelBackButton
-                    label="Back to job posts"
-                    mobile-only
-                    test-id="back-to-job-posts"
-                    @back="showPosts"
-                />
+                <BaseButton
+                    class="review-back-mobile-only"
+                    preset="back"
+                    tooltip="Back to job posts"
+                    data-testid="back-to-job-posts"
+                    aria-label="Back to job posts"
+                    @click="showPosts"
+                >
+                    <ArrowLeftIcon />
+                </BaseButton>
                 <JobPostViewer
                     :post="selectedItem.post"
                     :recommendation="selectedItem.recommendation"
@@ -820,6 +825,12 @@ onMounted(() => {
 .job-post-view {
     flex: 2;
     padding: 1.5rem;
+}
+
+.review-back-mobile-only {
+    @include bp-md-tablet {
+        display: none;
+    }
 }
 
 .item-count {

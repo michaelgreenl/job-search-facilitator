@@ -17,6 +17,7 @@ import {
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 
 import JobPostContent from './JobPostContent.vue'
@@ -115,9 +116,9 @@ function selectLabel(value: string) {
 
         <div class="post-actions">
             <div class="primary-actions">
-                <a
+                <BaseButton
                     v-if="postUrl"
-                    class="post-action-button"
+                    as="a"
                     data-testid="post-link"
                     :href="postUrl"
                     target="_blank"
@@ -125,10 +126,10 @@ function selectLabel(value: string) {
                     :aria-label="`Open ${post.roleTitle} in a new tab`"
                 >
                     Open post ↗
-                </a>
-                <a
+                </BaseButton>
+                <BaseButton
                     v-if="applicationActionUrl"
-                    class="post-action-button"
+                    as="a"
                     data-testid="application-link"
                     :href="applicationActionUrl"
                     target="_blank"
@@ -136,7 +137,7 @@ function selectLabel(value: string) {
                     :aria-label="`Open application for ${post.roleTitle} in a new tab`"
                 >
                     Open application ↗
-                </a>
+                </BaseButton>
             </div>
 
             <BaseDropdown
@@ -161,15 +162,13 @@ function selectLabel(value: string) {
         />
 
         <div v-if="applyMode" class="primary-actions primary-actions-outreach">
-            <button
-                class="post-action-button"
-                type="button"
+            <BaseButton
                 data-testid="discover-contacts"
                 :disabled="applyMode.outreachDisabled"
                 @click="emit('openOutreach')"
             >
                 Discover contacts
-            </button>
+            </BaseButton>
         </div>
     </section>
 </template>
@@ -223,31 +222,6 @@ function selectLabel(value: string) {
 
     &-outreach {
         justify-content: flex-end;
-    }
-}
-
-.post-action-button {
-    display: inline-flex;
-    gap: $space-2;
-    align-items: center;
-    padding: $space-2 $space-3;
-    color: $color-ink;
-    font: inherit;
-    font-weight: 650;
-    cursor: pointer;
-    text-decoration: none;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.55;
     }
 }
 

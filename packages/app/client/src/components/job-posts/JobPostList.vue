@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 import JobPostCard from './JobPostCard.vue'
 
@@ -56,14 +57,9 @@ const emit = defineEmits<{
     <p v-if="loading" class="list-message" role="status">{{ loadingMessage }}</p>
     <template v-else-if="error">
         <p class="list-message" role="alert">{{ error }}</p>
-        <button
-            class="retry-button"
-            data-testid="job-post-list-retry"
-            type="button"
-            @click="emit('retry')"
-        >
+        <BaseButton data-testid="job-post-list-retry" preset="text" @click="emit('retry')">
             Retry
-        </button>
+        </BaseButton>
     </template>
     <p v-else-if="!pending && !posts.length" class="list-message">{{ emptyMessage }}</p>
 </template>
@@ -92,22 +88,5 @@ const emit = defineEmits<{
 
 .list-message {
     color: $color-ink-muted;
-}
-
-.retry-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 }
 </style>

@@ -7,15 +7,16 @@ import {
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import BasePanel from '@/components/base/BasePanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
@@ -489,13 +490,20 @@ onMounted(() => {
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
             >
-                <PanelBackButton
+                <BaseButton
                     v-if="!outreachAgent.taskActive.value && activePanel !== 'posts'"
-                    label="Back to job posts"
-                    test-id="back-to-job-posts"
-                    :mobile-only="activePanel === 'viewer' && outreachContact === null"
-                    @back="showPosts"
-                />
+                    preset="back"
+                    tooltip="Back to job posts"
+                    data-testid="back-to-job-posts"
+                    aria-label="Back to job posts"
+                    :class="{
+                        'apply-back-mobile-only':
+                            activePanel === 'viewer' && outreachContact === null,
+                    }"
+                    @click="showPosts"
+                >
+                    <ArrowLeftIcon />
+                </BaseButton>
                 <JobPostViewer
                     :post="selectedPost"
                     :recommendation="selectedRecommendationContext ?? undefined"
@@ -575,6 +583,12 @@ onMounted(() => {
         &-contact {
             flex: 2.5;
         }
+    }
+}
+
+.apply-back-mobile-only {
+    @include bp-md-tablet {
+        display: none;
     }
 }
 

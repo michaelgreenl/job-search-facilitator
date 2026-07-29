@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import OutreachRationale from './OutreachRationale.vue'
 
 const props = withDefaults(

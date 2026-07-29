@@ -5,6 +5,7 @@ export type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
@@ -86,14 +87,9 @@ function selectContactFilter(value: string) {
             <p class="contact-history-error" data-testid="outreach-contacts-error" role="alert">
                 {{ error }}
             </p>
-            <button
-                class="retry-button"
-                data-testid="outreach-contacts-retry"
-                type="button"
-                @click="emit('retry')"
-            >
+            <BaseButton data-testid="outreach-contacts-retry" preset="text" @click="emit('retry')">
                 Retry
-            </button>
+            </BaseButton>
         </template>
 
         <template v-else>
@@ -179,22 +175,5 @@ function selectContactFilter(value: string) {
 
 .contact-history-error {
     color: lighten-color($color-red-600, 20%);
-}
-
-.retry-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef, useId, useTemplateRef, watch } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = withDefaults(
     defineProps<{
@@ -92,15 +93,16 @@ function submit() {
     >
         <header class="dialog-header">
             <h2 :id="titleId" class="dialog-title">Add job post</h2>
-            <button
+            <BaseButton
                 class="close-button"
                 data-testid="close-job-post-url-dialog"
-                type="button"
+                icon-size="md"
+                preset="icon"
                 aria-label="Close add job post"
                 @click="requestClose"
             >
                 <span aria-hidden="true">×</span>
-            </button>
+            </BaseButton>
         </header>
 
         <form class="url-form" data-testid="job-post-url-form" novalidate @submit.prevent="submit">
@@ -121,16 +123,18 @@ function submit() {
                     autofocus
                     @input="urlError = null"
                 />
-                <button
+                <BaseButton
                     class="submit-button"
                     data-testid="start-job-post-import"
+                    icon-size="lg"
+                    preset="primary"
                     type="submit"
                     aria-label="Add job post"
                     title="Add job post"
                     :disabled="busy"
                 >
                     <span aria-hidden="true">→</span>
-                </button>
+                </BaseButton>
             </div>
 
             <p
@@ -173,19 +177,8 @@ function submit() {
 }
 
 .close-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
     margin-left: auto;
-    padding: 0;
-    color: $color-ink-muted;
-    font: inherit;
     font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
     border-radius: $radius-md;
 
     &:hover,
@@ -231,31 +224,11 @@ function submit() {
 }
 
 .submit-button {
-    display: inline-flex;
     flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 2.75rem;
-    height: 2.75rem;
-    padding: 0;
-    color: $color-ink;
-    font: inherit;
     font-size: 1.25rem;
-    font-weight: 650;
-    line-height: 1;
-    cursor: pointer;
-    background: $color-action;
-    border: 1px solid transparent;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
 
     &:disabled {
         cursor: wait;
-        opacity: 0.55;
     }
 }
 

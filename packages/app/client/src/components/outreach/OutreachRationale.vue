@@ -9,6 +9,7 @@ import {
     useTemplateRef,
     watch,
 } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const OVERFLOW_TOLERANCE_PX = 1
 
@@ -105,16 +106,16 @@ onBeforeUnmount(() => {
             {{ rationale }}
         </p>
         <div v-if="showRationaleToggle" class="actions">
-            <button
+            <BaseButton
                 class="toggle"
-                type="button"
+                preset="text"
                 data-testid="outreach-contact-rationale-toggle"
                 :aria-controls="rationaleId"
                 :aria-expanded="descriptionExpanded"
                 @click="toggleRationale"
             >
                 {{ descriptionExpanded ? 'Show less' : 'Show more' }}
-            </button>
+            </BaseButton>
         </div>
     </div>
 </template>
@@ -153,21 +154,8 @@ onBeforeUnmount(() => {
 .toggle {
     position: relative;
     z-index: 2;
-    width: fit-content;
     padding: 0 $space-1 0 0;
     margin-left: auto;
-    color: $color-signal-light;
-    font: inherit;
     font-size: 0.875rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 }
 </style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
 import UserAddedSourceCard from './UserAddedSourceCard.vue'
@@ -95,17 +96,17 @@ function clearDateFilter() {
 
         <fieldset class="date-filter" aria-label="Filter reports by date">
             <div class="date-fields">
-                <button
+                <BaseButton
                     class="date-clear"
                     data-testid="review-date-clear"
                     :class="{ 'is-hidden': !dateFilterActive }"
-                    type="button"
+                    preset="text"
                     aria-label="Clear report dates"
                     :disabled="!dateFilterActive"
                     @click="clearDateFilter"
                 >
                     Clear
-                </button>
+                </BaseButton>
                 <input
                     v-model="dateFrom"
                     class="date-input"
@@ -134,14 +135,9 @@ function clearDateFilter() {
     <p v-if="reportsLoading" class="list-message" role="status">Loading search reports…</p>
     <template v-else-if="reportsError">
         <p class="list-message" role="alert">{{ reportsError }}</p>
-        <button
-            class="retry-button"
-            data-testid="review-report-retry"
-            type="button"
-            @click="emit('retryReports')"
-        >
+        <BaseButton data-testid="review-report-retry" preset="text" @click="emit('retryReports')">
             Retry
-        </button>
+        </BaseButton>
     </template>
     <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
         <li v-for="report in filteredReports" :key="report.id" class="card-item">
@@ -224,22 +220,10 @@ function clearDateFilter() {
 .date-clear {
     flex: 0 0 auto;
     padding: $space-1 0;
-    color: $color-signal-light;
-    font: inherit;
     font-size: 0.75rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
 
     &.is-hidden {
         visibility: hidden;
-    }
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
     }
 }
 
@@ -286,22 +270,5 @@ function clearDateFilter() {
 
 .list-message {
     color: $color-ink-muted;
-}
-
-.retry-button {
-    width: fit-content;
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 }
 </style>

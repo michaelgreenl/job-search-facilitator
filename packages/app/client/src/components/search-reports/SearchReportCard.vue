@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
     report: JobSearchReport
@@ -20,11 +21,11 @@ const reportTime = computed(() =>
 </script>
 
 <template>
-    <button
+    <BaseButton
         class="report-card"
+        preset="card"
         :data-testid="`report-card-${report.id}`"
         :class="{ 'report-card-selected': selected }"
-        type="button"
         :aria-pressed="selected"
         @click="emit('select')"
     >
@@ -36,28 +37,13 @@ const reportTime = computed(() =>
             <span class="report-count">{{ report.results.length }} posts</span>
         </span>
         <span class="report-summary">{{ report.summary }}</span>
-    </button>
+    </BaseButton>
 </template>
 
 <style scoped lang="scss">
 .report-card {
-    display: grid;
     gap: $space-1;
-    width: 100%;
     padding: $space-3 $space-4;
-    color: $color-ink;
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-ink-alpha-9;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal-alpha-9;
-        border-color: $color-signal-alpha-28;
-    }
 
     &-selected {
         background: $color-signal-alpha-12;

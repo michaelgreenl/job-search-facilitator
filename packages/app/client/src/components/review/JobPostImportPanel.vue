@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/base/BaseButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 
 defineProps<{
@@ -48,34 +49,34 @@ const emit = defineEmits<{
         <slot />
 
         <div class="form-actions">
-            <button
+            <BaseButton
                 v-if="running"
                 class="action-button"
                 data-testid="cancel-job-post-import"
-                type="button"
+                preset="text"
                 :disabled="cancelling"
                 @click="emit('cancel')"
             >
                 {{ cancelling ? 'Cancelling…' : 'Cancel import' }}
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
                 v-else-if="retryAvailable"
                 class="action-button"
                 data-testid="retry-job-post-import"
-                type="button"
+                preset="text"
                 @click="emit('retry')"
             >
                 Try again
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
                 v-if="canDismiss"
                 class="action-button"
                 data-testid="dismiss-job-post-import"
-                type="button"
+                preset="text"
                 @click="emit('dismiss')"
             >
                 Dismiss
-            </button>
+            </BaseButton>
         </div>
     </section>
 </template>
@@ -109,20 +110,7 @@ const emit = defineEmits<{
 }
 
 .action-button {
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
     font-size: 0.8125rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
 
     &:disabled {
         cursor: wait;

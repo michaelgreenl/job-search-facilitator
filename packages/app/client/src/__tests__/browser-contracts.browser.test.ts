@@ -4,11 +4,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
-import AppHeader from '@/components/app/AppHeader.vue'
+import AppHeader from '@/components/AppHeader.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import UserAddedSourceCard from '@/components/review/UserAddedSourceCard.vue'
 import '@/assets/styles/app.scss'
 
@@ -225,18 +226,27 @@ describe('browser interaction contracts', () => {
 })
 
 describe('browser layout contracts', () => {
-    it('anchors the back-button tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
+    it('anchors a back-preset tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
         await page.viewport(320, 600)
-        mountComponent(PanelBackButton, {
-            props: {
-                label: 'Back to the previous panel',
-                style: {
-                    boxSizing: 'border-box',
-                    paddingLeft: '120px',
-                    width: '100%',
-                },
-                testId: 'tooltip-back',
-            },
+        const BackButtonFixture = defineComponent({
+            setup: () => () =>
+                h(
+                    BaseButton,
+                    {
+                        preset: 'back',
+                        tooltip: 'Back to the previous panel',
+                        'aria-label': 'Back to the previous panel',
+                        'data-testid': 'tooltip-back',
+                        style: {
+                            boxSizing: 'border-box',
+                            paddingLeft: '120px',
+                            width: '100%',
+                        },
+                    },
+                    { default: () => h(ArrowLeftIcon) },
+                ),
+        })
+        mountComponent(BackButtonFixture, {
             style: {
                 bottom: '16px',
                 position: 'fixed',
@@ -275,7 +285,7 @@ describe('browser layout contracts', () => {
         await expect.element(tooltip).not.toBeVisible()
     })
 
-    it('switches adjacent panels and mobile-only navigation at the shared 848px breakpoint', async () => {
+    it('switches adjacent panels at the shared 848px breakpoint', async () => {
         await page.viewport(847, 768)
         const ResponsiveFixture = defineComponent({
             setup: () => () =>
@@ -285,24 +295,16 @@ describe('browser layout contracts', () => {
                         adjacent: true,
                         'data-testid': 'adjacent-panel',
                     }),
-                    h(PanelBackButton, {
-                        label: 'Back',
-                        mobileOnly: true,
-                        testId: 'mobile-back',
-                    }),
                 ]),
         })
         mountComponent(ResponsiveFixture)
         const adjacentPanel = page.getByTestId('adjacent-panel')
-        const mobileBack = page.getByTestId('mobile-back')
 
         await expect.element(adjacentPanel).not.toBeVisible()
-        await expect.element(mobileBack).toBeVisible()
 
         await page.viewport(848, 768)
 
         await expect.element(adjacentPanel).toBeVisible()
-        await expect.element(mobileBack).not.toBeVisible()
     })
 
     it('offers rationale expansion only when real layout overflows', async () => {
