@@ -2,8 +2,10 @@
 import type { JobPost } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCard from '@/components/base/BaseCard.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
-import JobPostCard from './JobPostCard.vue'
+import JobPostLabel from './JobPostLabel.vue'
 
 const props = withDefaults(
     defineProps<{
@@ -42,15 +44,49 @@ const emit = defineEmits<{
         :class="{ 'card-list-status': pending && (loading || error) }"
     >
         <li v-if="pending">
-            <JobPostCard loading @select="emit('selectPending')" />
+            <BaseCard
+                as="button"
+                class="post-card"
+                data-testid="job-post-import-progress"
+                aria-busy="true"
+                aria-label="View job-post import progress"
+                @click="emit('selectPending')"
+            >
+                <span class="component-label">Job post</span>
+                <span class="loading-post">
+                    <LoadingSpinner />
+                    Reviewing job post…
+                </span>
+            </BaseCard>
         </li>
         <template v-if="!loading && !error">
             <li v-for="post in orderedPosts" :key="post.id">
-                <JobPostCard
-                    :post="post"
+                <BaseCard
+                    as="button"
+                    class="post-card"
+                    :data-testid="`job-post-card-${post.id}`"
+                    :class="{ 'post-card-forgone': post.userLabel === 'forgo' }"
+                    :aria-pressed="selectedPostId === post.id"
                     :selected="selectedPostId === post.id"
-                    @select="emit('select', post.id)"
-                />
+                    @click="emit('select', post.id)"
+                >
+                    <div class="post-card-header">
+                        <span class="component-label">{{ post.company }}</span>
+                        <JobPostLabel
+                            :application-status="post.applicationStatus"
+                            :user-label="post.userLabel"
+                            compact
+                        />
+                    </div>
+                    <strong class="post-role">{{ post.roleTitle }}</strong>
+                    <span class="post-company">{{ post.location }}</span>
+                    <span v-if="post.postSource" class="post-meta">
+                        · Source - {{ post.postSource }}
+                    </span>
+                    <span v-if="post.compensation" class="post-meta">
+                        · Compensation - {{ post.compensation }}
+                    </span>
+                </BaseCard>
             </li>
         </template>
     </ul>
@@ -88,5 +124,57 @@ const emit = defineEmits<{
 
 .list-message {
     color: $color-ink-muted;
+}
+
+.post-card {
+    gap: $space-1;
+    padding: $space-4;
+
+    &-forgone {
+        filter: grayscale(1);
+        opacity: 0.55;
+    }
+}
+
+.post-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.component-label {
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.loading-post {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    min-height: 2rem;
+    color: $color-ink-secondary;
+}
+
+.post-role {
+    text-wrap: balance;
+}
+
+.post-company,
+.post-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.post-company {
+    color: $color-ink-secondary;
+}
+
+.post-meta {
+    color: $color-ink-muted;
+    font-size: 0.8125rem;
 }
 </style>
