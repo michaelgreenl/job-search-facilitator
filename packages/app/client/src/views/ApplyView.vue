@@ -7,7 +7,7 @@ import {
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
@@ -24,7 +24,7 @@ type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
-const postFilterOptions: AppDropdownOption[] = [
+const postFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
     ...applyLabels.map((label) => ({
         value: label,
@@ -454,7 +454,7 @@ onMounted(() => {
 
                         <div class="post-filter">
                             <span>Filter</span>
-                            <AppDropdown
+                            <BaseDropdown
                                 class="post-filter-dropdown"
                                 accessible-label="Filter job posts"
                                 test-id="apply-post-filter"

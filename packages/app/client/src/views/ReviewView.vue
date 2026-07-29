@@ -10,7 +10,7 @@ import {
 } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
@@ -35,7 +35,7 @@ interface ReviewItem {
     recommendation: StandaloneJobRecommendation
 }
 
-const postFilterOptions: AppDropdownOption[] = [
+const postFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
     { value: 'labeled', label: 'Labeled' },
     { value: 'unreviewed', label: 'Unreviewed' },
@@ -743,7 +743,7 @@ onMounted(() => {
 
                         <div class="post-filter">
                             <span>Filter</span>
-                            <AppDropdown
+                            <BaseDropdown
                                 class="post-filter-dropdown"
                                 accessible-label="Filter job posts"
                                 test-id="review-post-filter"

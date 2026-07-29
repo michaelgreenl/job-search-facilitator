@@ -1,5 +1,5 @@
 <script lang="ts">
-export type AppDropdownTone =
+export type BaseDropdownTone =
     | 'default'
     | 'muted'
     | 'priority-high'
@@ -7,10 +7,10 @@ export type AppDropdownTone =
     | 'quick'
     | 'success'
 
-export interface AppDropdownOption {
+export interface BaseDropdownOption {
     value: string
     label: string
-    tone?: AppDropdownTone
+    tone?: BaseDropdownTone
     separatorBefore?: boolean
 }
 </script>
@@ -22,7 +22,7 @@ import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 const props = defineProps<{
     accessibleLabel: string
     disabled: boolean
-    options: readonly AppDropdownOption[]
+    options: readonly BaseDropdownOption[]
     label: string
     testId?: string
 }>()
@@ -109,7 +109,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 </script>
 
 <template>
-    <div ref="root" class="app-dropdown">
+    <div ref="root" class="base-dropdown">
         <button
             ref="trigger"
             class="trigger"
@@ -168,7 +168,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 </template>
 
 <style scoped lang="scss">
-.app-dropdown {
+.base-dropdown {
     position: relative;
     display: inline-flex;
 }

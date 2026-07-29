@@ -3,7 +3,7 @@ import { createApp, defineComponent, h, nextTick, shallowRef, type App, type Com
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import AppHeader from '@/components/app/AppHeader.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
@@ -53,13 +53,13 @@ afterEach(async () => {
 describe('browser interaction contracts', () => {
     it('keeps dropdown keyboard focus inside its menu and restores it after selection', async () => {
         const onSelect = vi.fn()
-        const options: AppDropdownOption[] = [
+        const options: BaseDropdownOption[] = [
             { value: 'P1', label: 'First' },
             { value: 'P2', label: 'Second' },
             { value: 'applied', label: 'Applied' },
             { value: 'clear', label: 'Clear' },
         ]
-        mountComponent(AppDropdown, {
+        mountComponent(BaseDropdown, {
             props: {
                 accessibleLabel: 'Job post label',
                 disabled: false,

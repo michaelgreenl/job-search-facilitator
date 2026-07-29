@@ -17,7 +17,7 @@ import {
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 
 import JobPostContent from './JobPostContent.vue'
 import JobPostLabel from './JobPostLabel.vue'
@@ -62,7 +62,7 @@ const labelPrompt = computed(() => {
     return props.post.userLabel === null ? 'Add label' : 'Change label'
 })
 const postError = computed(() => applyMode.value?.applicationError ?? props.labelError)
-const labelOptions = computed<AppDropdownOption[]>(() => [
+const labelOptions = computed<BaseDropdownOption[]>(() => [
     ...USER_LABEL_OPTIONS,
     ...(applyMode.value !== null
         ? [{ value: 'applied', label: 'Applied', tone: 'success' as const }]
@@ -139,7 +139,7 @@ function selectLabel(value: string) {
                 </a>
             </div>
 
-            <AppDropdown
+            <BaseDropdown
                 class="label-picker-dropdown"
                 accessible-label="Job post label"
                 test-id="job-label"

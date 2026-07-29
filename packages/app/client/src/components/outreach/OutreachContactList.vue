@@ -5,11 +5,11 @@ export type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
-const contactFilterOptions: AppDropdownOption[] = [
+const contactFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
     { value: 'messaged', label: 'Messaged', tone: 'success' },
     { value: 'not-messaged', label: 'Not Messaged', tone: 'muted' },
@@ -62,7 +62,7 @@ function selectContactFilter(value: string) {
                 <h2 id="contact-history-title" class="contact-history-title">Saved contacts</h2>
                 <span class="contact-history-count">{{ filteredContacts.length }}</span>
             </div>
-            <AppDropdown
+            <BaseDropdown
                 class="contact-filter-dropdown"
                 accessible-label="Filter saved contacts"
                 test-id="contact-filter"
