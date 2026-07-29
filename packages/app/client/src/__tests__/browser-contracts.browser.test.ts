@@ -9,8 +9,8 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
+import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
-import UserAddedSourceCard from '@/components/review/UserAddedSourceCard.vue'
 import '@/assets/styles/app.scss'
 
 const mountedApps: Array<{ app: App; root: HTMLElement }> = []
@@ -182,16 +182,22 @@ describe('browser interaction contracts', () => {
 
                 return () =>
                     h('div', [
-                        h(UserAddedSourceCard, {
-                            count: 0,
-                            error: null,
-                            loading: false,
-                            selected: false,
-                            onAdd: () => {
+                        h(ReviewSourceSelector, {
+                            reports: [],
+                            selectedReportId: null,
+                            userAddedSelected: false,
+                            userAddedCount: 0,
+                            userAddedLoading: false,
+                            userAddedError: null,
+                            reportsLoading: false,
+                            reportsError: null,
+                            onAddPost: () => {
                                 open.value = true
                             },
-                            onRetry: () => undefined,
-                            onSelect: () => undefined,
+                            onRetryReports: () => undefined,
+                            onRetryUserAdded: () => undefined,
+                            onSelectReport: () => undefined,
+                            onSelectUserAdded: () => undefined,
                         }),
                         h(JobPostUrlDialog, {
                             open: open.value,

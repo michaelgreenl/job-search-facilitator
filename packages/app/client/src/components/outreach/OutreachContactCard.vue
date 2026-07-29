@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseCard from '@/components/base/BaseCard.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import OutreachRationale from './OutreachRationale.vue'
 
@@ -50,8 +51,9 @@ function toggleMessaged() {
 </script>
 
 <template>
-    <article
+    <BaseCard
         class="contact-card"
+        tone="signal"
         :data-testid="
             contact
                 ? `outreach-contact-${contact.id}`
@@ -59,7 +61,7 @@ function toggleMessaged() {
                   ? 'outreach-contact-loading'
                   : undefined
         "
-        :class="{ 'is-selectable': selectionLabel !== null }"
+        :interactive="selectionLabel !== null"
         :aria-busy="loading || messagedUpdating || undefined"
     >
         <button
@@ -125,22 +127,14 @@ function toggleMessaged() {
                 :rationale="contact.relevanceRationale"
             />
         </template>
-    </article>
+    </BaseCard>
 </template>
 
 <style scoped lang="scss">
 .contact-card {
     position: relative;
-    display: grid;
     gap: $space-1;
     padding: $space-3;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-signal-light-alpha-18;
-    border-radius: $radius-md;
-
-    &.is-selectable:hover {
-        border-color: $color-signal-light-alpha-50;
-    }
 }
 
 .contact-select-button {

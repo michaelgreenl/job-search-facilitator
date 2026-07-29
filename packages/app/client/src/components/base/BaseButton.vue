@@ -1,7 +1,7 @@
 <script lang="ts">
 export type BaseButtonElement = 'a' | 'button'
 export type BaseButtonIconSize = 'sm' | 'md' | 'lg'
-export type BaseButtonPreset = 'back' | 'card' | 'icon' | 'outline' | 'primary' | 'signal' | 'text'
+export type BaseButtonPreset = 'back' | 'icon' | 'outline' | 'primary' | 'signal' | 'text'
 </script>
 
 <script setup lang="ts">
@@ -363,23 +363,6 @@ defineExpose({ focus })
     &:hover,
     &:focus-visible {
         color: $color-signal-light;
-    }
-}
-
-.preset-card {
-    display: grid;
-    width: 100%;
-    color: $color-ink;
-    text-align: start;
-    text-decoration: none;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-ink-alpha-9;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal-alpha-9;
-        border-color: $color-signal-alpha-28;
     }
 }
 

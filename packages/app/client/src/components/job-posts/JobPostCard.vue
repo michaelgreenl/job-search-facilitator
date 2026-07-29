@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { JobPost } from '@job-search-facilitator/core'
+import BaseCard from '@/components/base/BaseCard.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 
@@ -24,18 +24,18 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <BaseButton
+    <BaseCard
         v-if="loading || post"
+        as="button"
         class="post-card"
-        preset="card"
         :data-testid="loading ? 'job-post-import-progress' : `job-post-card-${post!.id}`"
         :class="{
-            'post-card-selected': selected,
             'post-card-forgone': post?.userLabel === 'forgo',
         }"
         :aria-busy="loading || undefined"
         :aria-label="loading ? 'View job-post import progress' : undefined"
         :aria-pressed="loading ? undefined : selected"
+        :selected="selected"
         @click="emit('select')"
     >
         <template v-if="loading">
@@ -61,18 +61,13 @@ const emit = defineEmits<{
                 · Compensation - {{ post.compensation }}
             </span>
         </template>
-    </BaseButton>
+    </BaseCard>
 </template>
 
 <style scoped lang="scss">
 .post-card {
     gap: $space-1;
     padding: $space-4;
-
-    &-selected {
-        background: $color-signal-alpha-12;
-        border-color: $color-signal !important;
-    }
 
     &-forgone {
         filter: grayscale(1);

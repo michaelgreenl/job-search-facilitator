@@ -2,8 +2,7 @@
 import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
-import UserAddedSourceCard from './UserAddedSourceCard.vue'
+import BaseCard from '@/components/base/BaseCard.vue'
 
 const props = defineProps<{
     reports: readonly JobSearchReport[]
@@ -47,6 +46,13 @@ const countLabel = computed(() =>
         ? `${filteredReports.value.length} of ${props.reports.length} reports`
         : `${props.reports.length} reports`,
 )
+const userAddedCountLabel = computed(
+    () => `${props.userAddedCount} ${props.userAddedCount === 1 ? 'post' : 'posts'}`,
+)
+const reportTimeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+})
 const emptyMessage = computed(() => {
     if (props.reports.length === 0) {
         return 'No search reports found.'
@@ -75,18 +81,57 @@ function clearDateFilter() {
     dateFrom.value = ''
     dateTo.value = ''
 }
+
+function formatReportTime(report: JobSearchReport) {
+    return reportTimeFormatter.format(new Date(report.createdAt))
+}
 </script>
 
 <template>
-    <UserAddedSourceCard
-        :count="userAddedCount"
-        :selected="userAddedSelected"
-        :loading="userAddedLoading"
-        :error="userAddedError"
-        @add="emit('addPost')"
-        @select="emit('selectUserAdded')"
-        @retry="emit('retryUserAdded')"
-    />
+    <article class="user-source">
+        <BaseCard
+            as="div"
+            layout="flex"
+            interactive
+            class="user-source-card"
+            :selected="userAddedSelected"
+        >
+            <button
+                class="user-source-select"
+                data-testid="user-added-source"
+                type="button"
+                :aria-pressed="userAddedSelected"
+                @click="emit('selectUserAdded')"
+            >
+                <strong class="source-title">Added by you</strong>
+                <span v-if="userAddedLoading" class="source-count" role="status">Loading…</span>
+                <span v-else class="source-count">{{ userAddedCountLabel }}</span>
+            </button>
+
+            <BaseButton
+                class="add-button-tooltip"
+                icon-size="md"
+                preset="primary"
+                tooltip="Add job post"
+                data-testid="add-job-post"
+                aria-label="Add job post"
+                @click="emit('addPost')"
+            >
+                <span class="add-button-icon" aria-hidden="true">+</span>
+            </BaseButton>
+        </BaseCard>
+
+        <div v-if="userAddedError" class="source-error">
+            <p class="source-error-message" role="alert">{{ userAddedError }}</p>
+            <BaseButton
+                data-testid="review-user-added-retry"
+                preset="text"
+                @click="emit('retryUserAdded')"
+            >
+                Retry
+            </BaseButton>
+        </div>
+    </article>
 
     <div class="report-heading">
         <span class="report-title">Search reports</span>
@@ -138,11 +183,23 @@ function clearDateFilter() {
     </template>
     <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
         <li v-for="report in filteredReports" :key="report.id" class="card-item">
-            <SearchReportCard
-                :report="report"
+            <BaseCard
+                as="button"
+                class="report-card"
+                :data-testid="`report-card-${report.id}`"
+                :aria-pressed="selectedReportId === report.id"
                 :selected="selectedReportId === report.id"
-                @select="emit('selectReport', report.id)"
-            />
+                @click="emit('selectReport', report.id)"
+            >
+                <span class="report-card-heading">
+                    <span>
+                        <strong>{{ report.reportDate }} </strong>
+                        <small>&nbsp;&nbsp;· {{ formatReportTime(report) }}</small>
+                    </span>
+                    <span class="report-card-count">{{ report.results.length }} posts</span>
+                </span>
+                <span class="report-card-summary">{{ report.summary }}</span>
+            </BaseCard>
         </li>
     </ul>
     <p v-else class="list-message" data-testid="report-empty-state">
@@ -151,6 +208,61 @@ function clearDateFilter() {
 </template>
 
 <style scoped lang="scss">
+.user-source {
+    display: grid;
+    gap: $space-2;
+}
+
+.user-source-card {
+    align-items: center;
+}
+
+.user-source-select {
+    display: grid;
+    flex: 1 1 auto;
+    gap: $space-1;
+    align-self: stretch;
+    justify-items: start;
+    min-width: 0;
+    padding: $space-4;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+}
+
+.source-title {
+    text-wrap: balance;
+}
+
+.source-count,
+.source-error-message {
+    margin: 0;
+    color: $color-ink-muted;
+    font-size: 0.8125rem;
+}
+
+.source-count {
+    white-space: nowrap;
+}
+
+.add-button-icon {
+    font-size: 1.25rem;
+}
+
+.add-button-tooltip {
+    flex: 0 0 auto;
+    margin-inline: auto $space-4;
+}
+
+.source-error {
+    display: flex;
+    gap: $space-2;
+    align-items: baseline;
+}
+
 .report-heading {
     display: grid;
     grid-template-areas:
@@ -233,6 +345,35 @@ function clearDateFilter() {
 .report-count {
     grid-area: count;
     justify-self: end;
+}
+
+.report-card {
+    gap: $space-1;
+    padding: $space-3 $space-4;
+}
+
+.report-card-heading {
+    display: flex;
+    gap: $space-3;
+    justify-content: space-between;
+}
+
+.report-card-count,
+.report-card-summary {
+    color: $color-ink-muted;
+}
+
+.report-card-count {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.report-card-summary {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.875rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 @container report-list (max-width: 29rem) {
