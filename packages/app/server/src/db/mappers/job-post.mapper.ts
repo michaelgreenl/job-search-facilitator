@@ -3,11 +3,21 @@ import type {
     JobPost,
     JobPostInput,
     PostStatus,
+    UserAddedJobPost,
     UserLabel,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
+import { toStandaloneJobRecommendation } from './search-report.mapper.ts'
 
 type PrismaJobPost = Prisma.JobPostGetPayload<object>
+
+export const userAddedJobPostInclude = {
+    post: true,
+} satisfies Prisma.UserAddedJobPostInclude
+
+type PrismaUserAddedJobPost = Prisma.UserAddedJobPostGetPayload<{
+    include: typeof userAddedJobPostInclude
+}>
 
 const applicationStatusToApi = {
     NOT_APPLIED: 'not-applied',
@@ -68,6 +78,13 @@ export const toJobPost = (post: PrismaJobPost): JobPost => ({
     archivedAt: post.archivedAt?.toISOString() ?? null,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
+})
+
+export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPost => ({
+    ...toStandaloneJobRecommendation(item),
+    post: toJobPost(item.post),
+    addedAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
 })
 
 export const toPrismaApplicationStatus = (status: ApplicationStatus) =>

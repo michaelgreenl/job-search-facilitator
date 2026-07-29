@@ -14,16 +14,14 @@ import {
     toPrismaApplicationStatus,
     toPrismaPostStatus,
     toPrismaUserLabel,
+    toUserAddedJobPost,
+    userAddedJobPostInclude,
 } from '../mappers/job-post.mapper.ts'
 import {
     toJobRecommendation,
     toPrismaAgentLabel,
     toPrismaResumeType,
 } from '../mappers/search-report.mapper.ts'
-import {
-    toUserAddedJobPost,
-    userAddedJobPostInclude,
-} from '../mappers/user-added-job-post.mapper.ts'
 import { prisma } from '../prisma.ts'
 
 export interface UserAddedJobPostUpsertResult {
