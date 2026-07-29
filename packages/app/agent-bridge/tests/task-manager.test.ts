@@ -2,17 +2,17 @@ import {
     createContactDiscoveryOutputSchema,
     createDraftRevisionOutputSchema,
     createUserAddedJobPostOutputSchema,
-    type StartWorkTaskInput,
+    type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
 import {
-    InvalidWorkOutputSchemaError,
-    WorkTaskManager,
-    type WorkTaskStreamEvent,
+    InvalidAgentOutputSchemaError,
+    AgentTaskManager,
+    type AgentTaskStreamEvent,
 } from '../src/task-manager.ts'
 import { FakeRuntime } from './fake-runtime.ts'
 
-const input: StartWorkTaskInput = {
+const input: StartAgentTaskInput = {
     prompt: 'Find contacts',
     outputSchema: {
         type: 'object',
@@ -52,12 +52,12 @@ const userAddedJobPostOutput = {
     },
 } as const
 
-describe('Work task manager', () => {
+describe('Agent task manager', () => {
     it('delivers live events only while a listener is subscribed', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
-        const streamedEvents: WorkTaskStreamEvent[] = []
+        const streamedEvents: AgentTaskStreamEvent[] = []
         const connection = manager.connect(started.id, (event) => streamedEvents.push(event))
 
         runtime.emit({
@@ -81,7 +81,7 @@ describe('Work task manager', () => {
 
     it('stores final structured output and replays its ordered event sequence', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         runtime.emit({
@@ -145,7 +145,7 @@ describe('Work task manager', () => {
         'accepts output satisfying the generated %s contract',
         async (_name, createOutputSchema, output) => {
             const runtime = new FakeRuntime()
-            const manager = new WorkTaskManager(runtime)
+            const manager = new AgentTaskManager(runtime)
             const started = await manager.start({
                 ...input,
                 outputSchema: createOutputSchema(),
@@ -173,7 +173,7 @@ describe('Work task manager', () => {
 
     it('rejects report-only fields from the generated user-added post contract', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start({
             ...input,
             outputSchema: createUserAddedJobPostOutputSchema(),
@@ -200,7 +200,7 @@ describe('Work task manager', () => {
 
     it('rejects malformed URLs from the generated user-added post contract', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start({
             ...input,
             outputSchema: createUserAddedJobPostOutputSchema(),
@@ -254,20 +254,20 @@ describe('Work task manager', () => {
         ],
     ])('rejects a %s output schema before starting the runtime', async (_kind, outputSchema) => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
 
         await expect(
             manager.start({
                 ...input,
-                outputSchema: outputSchema as StartWorkTaskInput['outputSchema'],
+                outputSchema: outputSchema as StartAgentTaskInput['outputSchema'],
             }),
-        ).rejects.toBeInstanceOf(InvalidWorkOutputSchemaError)
+        ).rejects.toBeInstanceOf(InvalidAgentOutputSchemaError)
         expect(runtime.startAttempts).toBe(0)
     })
 
     it('marks boundaries between fragmented reasoning summary sections', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         for (const [summaryIndex, delta] of [
@@ -299,7 +299,7 @@ describe('Work task manager', () => {
 
     it('fails a completed turn whose final output is not JSON', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         runtime.emit({ type: 'final-message', ...eventIdentity, text: 'not json' })
@@ -319,7 +319,7 @@ describe('Work task manager', () => {
 
     it('fails a completed turn whose output does not match the requested schema', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         runtime.emit({ type: 'final-message', ...eventIdentity, text: '{"wrong":true}' })
@@ -344,7 +344,7 @@ describe('Work task manager', () => {
 
     it('preserves the runtime error when a turn fails', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         runtime.emit({
@@ -362,7 +362,7 @@ describe('Work task manager', () => {
 
     it('interrupts a running task and records cancellation as a terminal event', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         const result = await manager.cancel(started.id)
@@ -387,7 +387,7 @@ describe('Work task manager', () => {
                     finishInterrupt = resolve
                 }),
         )
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         const firstCancellation = manager.cancel(started.id)
@@ -416,7 +416,7 @@ describe('Work task manager', () => {
                     rejectInterrupt = reject
                 }),
         )
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         const cancellation = manager.cancel(started.id)
@@ -450,7 +450,7 @@ describe('Work task manager', () => {
         const runtime = new FakeRuntime(async () => {
             throw new Error('Could not interrupt turn')
         })
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         await expect(manager.cancel(started.id)).rejects.toThrow('Could not interrupt turn')
@@ -469,7 +469,7 @@ describe('Work task manager', () => {
 
     it('records an interrupted turn as cancelled instead of failed', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
 
         runtime.emit({
@@ -491,7 +491,7 @@ describe('Work task manager', () => {
 
     it('fails running tasks once when the runtime fails and preserves completed tasks', async () => {
         const runtime = new FakeRuntime()
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
         const completed = await manager.start(input)
 
         runtime.emit({
@@ -507,7 +507,10 @@ describe('Work task manager', () => {
         })
 
         const running = await manager.start(input)
-        const failure = { type: 'runtime-failed', error: new Error('Work runtime exited') } as const
+        const failure = {
+            type: 'runtime-failed',
+            error: new Error('Agent runtime exited'),
+        } as const
 
         runtime.emit(failure)
         runtime.emit(failure)
@@ -520,7 +523,7 @@ describe('Work task manager', () => {
         expect(manager.get(running.id)).toMatchObject({
             status: 'failed',
             output: null,
-            error: 'Work runtime exited',
+            error: 'Agent runtime exited',
         })
         expect(
             manager

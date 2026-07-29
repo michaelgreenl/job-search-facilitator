@@ -4,13 +4,13 @@ import type {
     DraftRevisionResult,
     OutreachContact,
 } from '../types/outreach.ts'
-import type { WorkOutputSchema } from '../types/work.ts'
+import type { AgentOutputSchema } from '../types/agent.ts'
 import {
     createParser,
     isoDateTimeSchema,
     linkedInProfileUrlSchema,
     nonBlankStringSchema,
-    toWorkOutputSchema,
+    toAgentOutputSchema,
 } from './shared.ts'
 
 const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
@@ -26,20 +26,20 @@ const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     updatedAt: isoDateTimeSchema,
 })
 
-const workOutputTextSchema = z.string().regex(/\S/)
-const linkedInWorkOutputSchema = z
+const agentOutputTextSchema = z.string().regex(/\S/)
+const linkedInAgentOutputSchema = z
     .string()
     .regex(/^\s*https:\/\/(?:[^./\s]+\.)*linkedin\.com\/in\/\S+\s*$/)
 const contactDiscoveryWireSchema = z.strictObject({
-    personName: workOutputTextSchema,
-    personTitle: workOutputTextSchema,
-    profileUrl: linkedInWorkOutputSchema,
-    relevanceRationale: workOutputTextSchema,
-    draftMessage: workOutputTextSchema,
+    personName: agentOutputTextSchema,
+    personTitle: agentOutputTextSchema,
+    profileUrl: linkedInAgentOutputSchema,
+    relevanceRationale: agentOutputTextSchema,
+    draftMessage: agentOutputTextSchema,
 })
 const draftRevisionWireSchema = z.strictObject({
-    draftMessage: workOutputTextSchema,
-    response: workOutputTextSchema,
+    draftMessage: agentOutputTextSchema,
+    response: agentOutputTextSchema,
 })
 
 const contactDiscoveryResultSchema: z.ZodType<ContactDiscoveryResult> =
@@ -58,13 +58,13 @@ const draftRevisionResultSchema: z.ZodType<DraftRevisionResult> = draftRevisionW
     }),
 )
 
-const contactDiscoveryOutputSchema = toWorkOutputSchema(contactDiscoveryWireSchema)
-const draftRevisionOutputSchema = toWorkOutputSchema(draftRevisionWireSchema)
+const contactDiscoveryOutputSchema = toAgentOutputSchema(contactDiscoveryWireSchema)
+const draftRevisionOutputSchema = toAgentOutputSchema(draftRevisionWireSchema)
 
-export const createContactDiscoveryOutputSchema = (): WorkOutputSchema =>
+export const createContactDiscoveryOutputSchema = (): AgentOutputSchema =>
     structuredClone(contactDiscoveryOutputSchema)
 
-export const createDraftRevisionOutputSchema = (): WorkOutputSchema =>
+export const createDraftRevisionOutputSchema = (): AgentOutputSchema =>
     structuredClone(draftRevisionOutputSchema)
 
 export const parseContactDiscoveryResult = createParser(

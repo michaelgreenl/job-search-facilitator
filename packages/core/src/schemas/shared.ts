@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { JsonObject, WorkOutputSchema } from '../types/work.ts'
+import type { JsonObject, AgentOutputSchema } from '../types/agent.ts'
 
 export type RuntimeParser<T> = (value: unknown) => T
 
-const WORK_OUTPUT_SCHEMA_DIALECT = 'http://json-schema.org/draft-07/schema#'
+const AGENT_OUTPUT_SCHEMA_DIALECT = 'http://json-schema.org/draft-07/schema#'
 
 export const createParser =
     <T>(name: string, schema: z.ZodType<T>): RuntimeParser<T> =>
@@ -34,7 +34,7 @@ export const linkedInProfileUrlSchema = z.url().refine((value) => {
 })
 export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), z.unknown())
 
-export const toWorkOutputSchema = (schema: z.ZodType): WorkOutputSchema => {
+export const toAgentOutputSchema = (schema: z.ZodType): AgentOutputSchema => {
     const { $schema, ...jsonSchema } = z.toJSONSchema(schema, {
         target: 'draft-07',
         io: 'input',
@@ -42,11 +42,11 @@ export const toWorkOutputSchema = (schema: z.ZodType): WorkOutputSchema => {
 
     if (
         jsonSchema.type !== 'object' ||
-        $schema !== WORK_OUTPUT_SCHEMA_DIALECT ||
+        $schema !== AGENT_OUTPUT_SCHEMA_DIALECT ||
         jsonSchema.$async === true
     ) {
-        throw new Error('Could not create a supported Work output schema')
+        throw new Error('Could not create a supported Agent output schema')
     }
 
-    return jsonSchema as WorkOutputSchema
+    return jsonSchema as AgentOutputSchema
 }

@@ -16,13 +16,13 @@ import {
     type UpdateJobPostResult,
     type UserAddedJobPost,
 } from '../types/jobs.ts'
-import type { WorkOutputSchema } from '../types/work.ts'
+import type { AgentOutputSchema } from '../types/agent.ts'
 import {
     createParser,
     httpUrlSchema,
     isoDateTimeSchema,
     nonBlankStringSchema,
-    toWorkOutputSchema,
+    toAgentOutputSchema,
 } from './shared.ts'
 
 const nonBlankInputStringSchema = z.string().regex(/\S/).trim()
@@ -131,9 +131,9 @@ const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({
     results: z.array(jobSearchResultSchema),
 })
 
-const userAddedJobPostOutputSchema = toWorkOutputSchema(createUserAddedJobPostInputSchema)
+const userAddedJobPostOutputSchema = toAgentOutputSchema(createUserAddedJobPostInputSchema)
 
-export const createUserAddedJobPostOutputSchema = (): WorkOutputSchema =>
+export const createUserAddedJobPostOutputSchema = (): AgentOutputSchema =>
     structuredClone(userAddedJobPostOutputSchema)
 
 export const parseCreateUserAddedJobPostInput = createParser<CreateUserAddedJobPostInput>(

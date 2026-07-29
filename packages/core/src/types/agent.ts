@@ -1,49 +1,49 @@
 import type { IsoDateTime } from './jobs.ts'
 
-export const WORK_CAPABILITIES = ['chrome'] as const
+export const AGENT_CAPABILITIES = ['chrome'] as const
 
-export type WorkCapability = (typeof WORK_CAPABILITIES)[number]
+export type AgentCapability = (typeof AGENT_CAPABILITIES)[number]
 
 export type JsonObject = Record<string, unknown>
 
 /**
- * Work output uses the bridge's synchronous JSON Schema draft-07 subset with
+ * Agent output uses the bridge's synchronous JSON Schema draft-07 subset with
  * an object at its root. Dialect markers and format keywords are unsupported.
  */
-export type WorkOutputSchema = {
+export type AgentOutputSchema = {
     [keyword: string]: unknown
     type: 'object'
     $async?: false
     $schema?: never
 }
 
-export type WorkActionDecision = 'approve' | 'decline'
+export type AgentActionDecision = 'approve' | 'decline'
 
-export interface WorkActionRequired {
+export interface AgentActionRequired {
     id: string
     kind: 'browser-origin'
     message: string
     origin: string
 }
 
-export interface StartWorkTaskInput {
+export interface StartAgentTaskInput {
     prompt: string
-    outputSchema: WorkOutputSchema
-    capabilities: WorkCapability[]
+    outputSchema: AgentOutputSchema
+    capabilities: AgentCapability[]
 }
 
-export interface WorkHealthResponse {
+export interface AgentHealthResponse {
     status: 'healthy'
-    capabilities: WorkCapability[]
+    capabilities: AgentCapability[]
 }
 
-interface WorkTaskIdentity {
+interface AgentTaskIdentity {
     id: string
     threadId: string
     turnId: string
 }
 
-export type WorkTask = WorkTaskIdentity &
+export type AgentTask = AgentTaskIdentity &
     (
         | { status: 'running'; output: null; error: null }
         | { status: 'completed'; output: JsonObject; error: null }
@@ -51,7 +51,7 @@ export type WorkTask = WorkTaskIdentity &
         | { status: 'cancelled'; output: null; error: null }
     )
 
-export type WorkTaskEvent =
+export type AgentTaskEvent =
     | { type: 'activity'; message: string; createdAt: IsoDateTime }
     | {
           type: 'message'
@@ -59,7 +59,7 @@ export type WorkTaskEvent =
           startsNewStatement: boolean
           createdAt: IsoDateTime
       }
-    | { type: 'action-required'; action: WorkActionRequired; createdAt: IsoDateTime }
+    | { type: 'action-required'; action: AgentActionRequired; createdAt: IsoDateTime }
     | { type: 'action-resolved'; actionId: string; createdAt: IsoDateTime }
     | { type: 'completed'; output: JsonObject; createdAt: IsoDateTime }
     | { type: 'failed'; error: string; createdAt: IsoDateTime }

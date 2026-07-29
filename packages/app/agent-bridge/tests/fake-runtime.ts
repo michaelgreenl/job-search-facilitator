@@ -1,22 +1,22 @@
-import type { StartWorkTaskInput, WorkActionDecision } from '@job-search-facilitator/core'
+import type { StartAgentTaskInput, AgentActionDecision } from '@job-search-facilitator/core'
 import type {
-    StartedWorkTask,
-    WorkRuntime,
-    WorkRuntimeEvent,
-    WorkRuntimeHealth,
+    StartedAgentTask,
+    AgentRuntime,
+    AgentRuntimeEvent,
+    AgentRuntimeHealth,
 } from '../src/app-server.ts'
 
-export class FakeRuntime implements WorkRuntime {
-    health: WorkRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
+export class FakeRuntime implements AgentRuntime {
+    health: AgentRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
     startAttempts = 0
-    readonly decisions: Array<{ actionId: string; decision: WorkActionDecision }> = []
+    readonly decisions: Array<{ actionId: string; decision: AgentActionDecision }> = []
     readonly interruptions: Array<{ threadId: string; turnId: string }> = []
-    private readonly eventListeners = new Set<(event: WorkRuntimeEvent) => void>()
+    private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
     private startError: Error | null = null
 
     constructor(private readonly onInterrupt: () => Promise<void> = async () => {}) {}
 
-    async startTask(_taskId: string, _input: StartWorkTaskInput): Promise<StartedWorkTask> {
+    async startTask(_taskId: string, _input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.startAttempts += 1
 
         if (this.startError !== null) {
@@ -34,17 +34,17 @@ export class FakeRuntime implements WorkRuntime {
         await this.onInterrupt()
     }
 
-    resolveAction(actionId: string, decision: WorkActionDecision): boolean {
+    resolveAction(actionId: string, decision: AgentActionDecision): boolean {
         this.decisions.push({ actionId, decision })
         return true
     }
 
-    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void {
+    onEvent(listener: (event: AgentRuntimeEvent) => void): () => void {
         this.eventListeners.add(listener)
         return () => this.eventListeners.delete(listener)
     }
 
-    emit(event: WorkRuntimeEvent) {
+    emit(event: AgentRuntimeEvent) {
         if (event.type === 'runtime-failed') {
             this.health = {
                 status: 'unavailable',

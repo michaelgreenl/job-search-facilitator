@@ -1,4 +1,4 @@
-import { WORK_CAPABILITIES } from '@job-search-facilitator/core'
+import { AGENT_CAPABILITIES } from '@job-search-facilitator/core'
 import {
     ACCEPTED,
     BAD_REQUEST,
@@ -10,35 +10,35 @@ import {
 import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
-import type { WorkRuntime } from './app-server.ts'
+import type { AgentRuntime } from './app-server.ts'
 import {
-    InvalidWorkOutputSchemaError,
-    type WorkTaskManager,
-    type WorkTaskStreamEvent,
+    InvalidAgentOutputSchemaError,
+    type AgentTaskManager,
+    type AgentTaskStreamEvent,
 } from './task-manager.ts'
 
-const startWorkTaskInputSchema = z.strictObject({
+const startAgentTaskInputSchema = z.strictObject({
     prompt: z.string().trim().min(1),
     outputSchema: z.looseObject({
         type: z.literal('object'),
         $async: z.literal(false).optional(),
     }),
-    capabilities: z.array(z.enum(WORK_CAPABILITIES)).default([]),
+    capabilities: z.array(z.enum(AGENT_CAPABILITIES)).default([]),
 })
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })
 const taskActionParamsSchema = z.strictObject({ id: z.uuid(), actionId: z.uuid() })
 const taskActionInputSchema = z.strictObject({ decision: z.enum(['approve', 'decline']) })
 
-const taskNotFound = { error: 'Work task not found' }
+const taskNotFound = { error: 'Agent task not found' }
 
-const sendEvent = (response: express.Response, { id, event }: WorkTaskStreamEvent) => {
+const sendEvent = (response: express.Response, { id, event }: AgentTaskStreamEvent) => {
     response.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
 }
 
 export const createApp = (
-    taskManager: WorkTaskManager,
-    runtime: WorkRuntime,
+    taskManager: AgentTaskManager,
+    runtime: AgentRuntime,
     clientOrigin: string,
 ) => {
     const app = express()
@@ -61,7 +61,7 @@ export const createApp = (
         response: express.Response,
         taskId?: string,
     ) => {
-        const input = startWorkTaskInputSchema.safeParse(request.body)
+        const input = startAgentTaskInputSchema.safeParse(request.body)
 
         if (!input.success) {
             response.status(BAD_REQUEST).json({ error: 'Invalid request' })
@@ -87,7 +87,7 @@ export const createApp = (
         try {
             response.status(ACCEPTED).json(await taskManager.start(input.data, taskId))
         } catch (error) {
-            if (error instanceof InvalidWorkOutputSchemaError) {
+            if (error instanceof InvalidAgentOutputSchemaError) {
                 response.status(BAD_REQUEST).json({ error: 'Invalid request' })
                 return
             }
@@ -100,7 +100,7 @@ export const createApp = (
             }
 
             response.status(SERVER_ERROR).json({
-                error: error instanceof Error ? error.message : 'Could not start Work task',
+                error: error instanceof Error ? error.message : 'Could not start Agent task',
             })
         }
     }
@@ -155,14 +155,14 @@ export const createApp = (
             }
 
             if (!result.accepted) {
-                response.status(CONFLICT).json({ error: 'Work task is not running' })
+                response.status(CONFLICT).json({ error: 'Agent task is not running' })
                 return
             }
 
             response.status(ACCEPTED).json(result.task)
         } catch (error) {
             response.status(SERVER_ERROR).json({
-                error: error instanceof Error ? error.message : 'Could not cancel Work task',
+                error: error instanceof Error ? error.message : 'Could not cancel Agent task',
             })
         }
     })
@@ -177,7 +177,7 @@ export const createApp = (
         }
 
         if (!taskManager.resolveAction(params.data.id, params.data.actionId, input.data.decision)) {
-            response.status(NOT_FOUND).json({ error: 'Work action not found' })
+            response.status(NOT_FOUND).json({ error: 'Agent action not found' })
             return
         }
 

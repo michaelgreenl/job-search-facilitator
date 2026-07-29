@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { WorkActionDecision } from '@job-search-facilitator/core'
+import type { AgentActionDecision } from '@job-search-facilitator/core'
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
-import { useWorkTask } from '@/composables/useWorkTask'
+import { useAgentTask } from '@/composables/useAgentTask'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
-import type { WorkTaskLane } from '@/stores/work'
-import WorkActionPrompt from './WorkActionPrompt.vue'
+import type { AgentTaskLane } from '@/stores/agent'
+import AgentActionPrompt from './AgentActionPrompt.vue'
 
-const props = defineProps<{ issue: string | null; lane: WorkTaskLane }>()
+const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
 
 const {
     actionNeedsAttention,
@@ -18,9 +18,9 @@ const {
     events,
     pendingAction,
     taskActive,
-    resolveAction: resolveWorkAction,
+    resolveAction: resolveAgentAction,
     allowBrowserActionsForTask: allowBrowserActions,
-} = useWorkTask(props.lane)
+} = useAgentTask(props.lane)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -125,8 +125,8 @@ watch(
     { immediate: true },
 )
 
-function resolveAction(decision: WorkActionDecision) {
-    void resolveWorkAction(decision).catch(() => undefined)
+function resolveAction(decision: AgentActionDecision) {
+    void resolveAgentAction(decision).catch(() => undefined)
 }
 
 function allowBrowserActionsForTask() {
@@ -135,30 +135,30 @@ function allowBrowserActionsForTask() {
 </script>
 
 <template>
-    <div class="work-updates">
-        <p v-if="issue" ref="issueMessage" class="work-error" role="alert" tabindex="-1">
+    <div class="agent-updates">
+        <p v-if="issue" ref="issueMessage" class="agent-error" role="alert" tabindex="-1">
             {{ issue }}
         </p>
         <p
             v-if="connectionState === 'reconnecting'"
-            class="work-reconnect"
-            data-testid="work-reconnect-status"
+            class="agent-reconnect"
+            data-testid="agent-reconnect-status"
             role="status"
         >
-            Reconnecting to Work…
+            Reconnecting to Agent…
         </p>
 
         <div
             ref="progress"
-            data-testid="work-progress"
-            class="work-progress"
-            :class="{ 'work-progress-following': followingLatest }"
+            data-testid="agent-progress"
+            class="agent-progress"
+            :class="{ 'agent-progress-following': followingLatest }"
             @scroll.passive="handleScroll"
         >
             <ul
                 v-if="streamItems.length"
                 class="activity-list"
-                aria-label="Work activity"
+                aria-label="Agent activity"
                 aria-live="polite"
                 :aria-busy="taskActive"
                 role="log"
@@ -166,7 +166,7 @@ function allowBrowserActionsForTask() {
                 <li
                     v-for="(item, index) in streamItems"
                     :key="`${index}:${item.type}`"
-                    :data-testid="`work-stream-${item.type}`"
+                    :data-testid="`agent-stream-${item.type}`"
                     class="activity-item"
                     :class="{ 'activity-item-commentary': item.type === 'commentary' }"
                 >
@@ -176,12 +176,12 @@ function allowBrowserActionsForTask() {
                             visiblePendingAction === null &&
                             index === latestActivityIndex
                         "
-                        data-testid="work-progress-indicator"
+                        data-testid="agent-progress-indicator"
                         class="activity-progress"
                         aria-hidden="true"
                     ></span>
                     <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
-                    <span data-testid="work-stream-copy" class="activity-copy">
+                    <span data-testid="agent-stream-copy" class="activity-copy">
                         {{ item.message }}
                     </span>
                 </li>
@@ -189,7 +189,7 @@ function allowBrowserActionsForTask() {
         </div>
     </div>
 
-    <WorkActionPrompt
+    <AgentActionPrompt
         v-if="visiblePendingAction"
         :action="visiblePendingAction"
         :submitting="actionSubmitting"
@@ -199,25 +199,25 @@ function allowBrowserActionsForTask() {
 </template>
 
 <style scoped lang="scss">
-.work-updates {
+.agent-updates {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
 }
 
-.work-error {
+.agent-error {
     margin: 0;
     color: lighten-color($color-red-600, 20%);
 }
 
-.work-reconnect {
+.agent-reconnect {
     margin: 0;
     color: $color-ink-muted;
     font-size: 0.875rem;
 }
 
-.work-progress {
+.agent-progress {
     display: flex;
     flex: 1;
     flex-direction: column;

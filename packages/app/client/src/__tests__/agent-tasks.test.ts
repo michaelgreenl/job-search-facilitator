@@ -4,7 +4,7 @@ import {
     createContactDiscoveryTask,
     createDraftRevisionTask,
     createJobPostImportTask,
-} from '../work-tasks'
+} from '../agent-tasks'
 
 const post: JobPost = {
     id: 'post-id',
@@ -46,7 +46,7 @@ const draftTask = createDraftRevisionTask(
 )
 const importTask = createJobPostImportTask('https://example.com/jobs/post-id')
 
-describe('outreach work tasks', () => {
+describe('outreach agent tasks', () => {
     it('defines the contact discovery capability and output contract', () => {
         expect(discoveryTask.capabilities).toEqual(['chrome'])
         expect(discoveryTask.outputSchema.required).toEqual([

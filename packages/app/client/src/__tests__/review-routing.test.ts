@@ -5,14 +5,14 @@ import type {
     JobPost,
     JobSearchReport,
     UserAddedJobPost,
-    WorkTask,
+    AgentTask,
 } from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useWorkStore, type WorkSession, type WorkTaskState } from '@/stores/work'
-import { createJobPostImportTask } from '@/work-tasks'
+import { useAgentStore, type AgentSession, type AgentTaskState } from '@/stores/agent'
+import { createJobPostImportTask } from '@/agent-tasks'
 import ReviewView from '../views/ReviewView.vue'
 
 const createPost = (id: string, roleTitle: string): JobPost => ({
@@ -175,9 +175,9 @@ interface MountedReview {
 }
 
 const mountedReviews: MountedReview[] = []
-type WorkStore = ReturnType<typeof useWorkStore>
+type AgentStore = ReturnType<typeof useAgentStore>
 
-const createWorkTaskState = (task: WorkTask): WorkTaskState => ({
+const createAgentTaskState = (task: AgentTask): AgentTaskState => ({
     taskId: task.id,
     task,
     events: [],
@@ -192,33 +192,37 @@ const createWorkTaskState = (task: WorkTask): WorkTaskState => ({
     error: null,
 })
 
-const seedImportWork = (workStore: WorkStore, task: WorkTask, url = importOutput.post.postUrl) => {
+const seedImportAgent = (
+    agentStore: AgentStore,
+    task: AgentTask,
+    url = importOutput.post.postUrl,
+) => {
     const session = {
         kind: 'job-post-import',
         taskId: task.id,
         url,
-    } satisfies WorkSession
+    } satisfies AgentSession
 
-    workStore.sessions = [
-        ...workStore.sessions.filter(({ kind }) => kind !== 'job-post-import'),
+    agentStore.sessions = [
+        ...agentStore.sessions.filter(({ kind }) => kind !== 'job-post-import'),
         session,
     ]
-    workStore.taskStates = {
-        ...workStore.taskStates,
-        [task.id]: createWorkTaskState(task),
+    agentStore.taskStates = {
+        ...agentStore.taskStates,
+        [task.id]: createAgentTaskState(task),
     }
 }
 
-const updateImportWorkTask = (workStore: WorkStore, task: WorkTask) => {
-    const session = workStore.getSession('job-post-import')
-    const currentState = workStore.getTaskState(task.id)
+const updateImportAgentTask = (agentStore: AgentStore, task: AgentTask) => {
+    const session = agentStore.getSession('job-post-import')
+    const currentState = agentStore.getTaskState(task.id)
 
     if (session?.taskId !== task.id || currentState === null) {
         throw new Error(`Could not update unseeded import task "${task.id}"`)
     }
 
-    workStore.taskStates = {
-        ...workStore.taskStates,
+    agentStore.taskStates = {
+        ...agentStore.taskStates,
         [task.id]: {
             ...currentState,
             task,
@@ -483,9 +487,9 @@ describe('review route selection', () => {
         })
     })
 
-    it('opens the add form and rejects a non-http URL before starting Work', async () => {
+    it('opens the add form and rejects a non-http URL before starting Agent', async () => {
         const { pinia, root } = await mountReview()
-        const startTask = vi.spyOn(useWorkStore(pinia), 'startTask')
+        const startTask = vi.spyOn(useAgentStore(pinia), 'startTask')
 
         await submitJobPostUrl(root, 'javascript:alert(1)')
 
@@ -513,12 +517,12 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
+        } satisfies AgentTask
         const outreachSession = {
             kind: 'outreach-contact',
             taskId: outreachTask.id,
             postId: firstPost.id,
-        } satisfies WorkSession
+        } satisfies AgentSession
         const importTaskId = '40000000-0000-4000-8000-000000000001'
         const importTask = {
             id: importTaskId,
@@ -527,7 +531,7 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
+        } satisfies AgentTask
         vi.spyOn(crypto, 'randomUUID').mockReturnValue(importTaskId)
         vi.mocked(fetch).mockImplementation((input, init) => {
             const { method, url } = getRequest(input, init)
@@ -549,14 +553,14 @@ describe('review route selection', () => {
             return defaultReviewResponse(input, init)
         })
         sessionStorage.setItem(
-            'job-search-facilitator:work-session',
+            'job-search-facilitator:agent-session',
             JSON.stringify({ version: 2, sessions: [outreachSession] }),
         )
         const { pinia, root } = await mountReview()
-        const workStore = useWorkStore(pinia)
-        await workStore.restoreTask(outreachTask.id)
-        expect(workStore.getTaskState(outreachTask.id)?.task?.status).toBe('running')
-        const startTask = vi.spyOn(workStore, 'startTask')
+        const agentStore = useAgentStore(pinia)
+        await agentStore.restoreTask(outreachTask.id)
+        expect(agentStore.getTaskState(outreachTask.id)?.task?.status).toBe('running')
+        const startTask = vi.spyOn(agentStore, 'startTask')
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
 
@@ -568,14 +572,14 @@ describe('review route selection', () => {
                     url: importOutput.post.postUrl,
                 },
             )
-            expect(workStore.getSession('job-post-import')).toEqual({
+            expect(agentStore.getSession('job-post-import')).toEqual({
                 kind: 'job-post-import',
                 taskId: importTask.id,
                 url: importOutput.post.postUrl,
             })
-            expect(workStore.getTaskState(importTask.id)?.task).toEqual(importTask)
-            expect(workStore.getSession('outreach')).toEqual(outreachSession)
-            expect(workStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
+            expect(agentStore.getTaskState(importTask.id)?.task).toEqual(importTask)
+            expect(agentStore.getSession('outreach')).toEqual(outreachSession)
+            expect(agentStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
         })
     })
 
@@ -634,8 +638,8 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
-        const cancelledTask = { ...runningTask, status: 'cancelled' } satisfies WorkTask
+        } satisfies AgentTask
+        const cancelledTask = { ...runningTask, status: 'cancelled' } satisfies AgentTask
         vi.mocked(fetch).mockImplementation((input, init) => {
             const { method, url } = getRequest(input, init)
 
@@ -660,7 +664,7 @@ describe('review route selection', () => {
             return defaultReviewResponse(input, init)
         })
         const firstPinia = createPinia()
-        const firstStore = useWorkStore(firstPinia)
+        const firstStore = useAgentStore(firstPinia)
 
         await firstStore.startTask(
             {
@@ -688,7 +692,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('saves matching completed Work output and opens the imported user-added post', async () => {
+    it('saves matching completed Agent output and opens the imported user-added post', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
             const { method, url } = getRequest(input, init)
@@ -701,7 +705,7 @@ describe('review route selection', () => {
             return defaultReviewResponse(input, init)
         })
         const { pinia, root, router } = await mountReview()
-        const workStore = useWorkStore(pinia)
+        const agentStore = useAgentStore(pinia)
         const runningTask = {
             id: 'import-task',
             threadId: 'thread',
@@ -709,17 +713,17 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            seedImportWork(workStore, runningTask)
+        } satisfies AgentTask
+        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
+            seedImportAgent(agentStore, runningTask)
             return runningTask
         })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
 
-        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
 
-        updateImportWorkTask(workStore, {
+        updateImportAgentTask(agentStore, {
             ...runningTask,
             status: 'completed',
             output: importOutput,
@@ -738,7 +742,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('keeps invalid completed Work output away from persistence and exposes retry', async () => {
+    it('keeps invalid completed Agent output away from persistence and exposes retry', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
             const { method, url } = getRequest(input, init)
@@ -751,7 +755,7 @@ describe('review route selection', () => {
             return defaultReviewResponse(input, init)
         })
         const { pinia, root } = await mountReview()
-        const workStore = useWorkStore(pinia)
+        const agentStore = useAgentStore(pinia)
         const runningTask = {
             id: 'invalid-import-task',
             threadId: 'thread',
@@ -759,16 +763,16 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            seedImportWork(workStore, runningTask)
+        } satisfies AgentTask
+        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
+            seedImportAgent(agentStore, runningTask)
             return runningTask
         })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
-        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
 
-        updateImportWorkTask(workStore, {
+        updateImportAgentTask(agentStore, {
             ...runningTask,
             status: 'completed',
             output: { unexpected: true },
@@ -782,12 +786,12 @@ describe('review route selection', () => {
         })
 
         findTestButton(root, 'retry-job-post-import').click()
-        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledTimes(2))
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledTimes(2))
     })
 
     it('shows a selectable in-progress card after leaving a running import', async () => {
         const { pinia, root } = await mountReview()
-        const workStore = useWorkStore(pinia)
+        const agentStore = useAgentStore(pinia)
         const runningTask = {
             id: 'visible-import-task',
             threadId: 'thread',
@@ -795,14 +799,14 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            seedImportWork(workStore, runningTask)
+        } satisfies AgentTask
+        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
+            seedImportAgent(agentStore, runningTask)
             return runningTask
         })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
-        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
 
         findTestButton(root, 'back-from-job-post-import').click()
 
@@ -827,7 +831,7 @@ describe('review route selection', () => {
 
     it('keeps a running import intact when cancellation fails and retains cancellation until dismissal', async () => {
         const { pinia, root } = await mountReview()
-        const workStore = useWorkStore(pinia)
+        const agentStore = useAgentStore(pinia)
         const runningTask = {
             id: 'cancel-import-task',
             threadId: 'thread',
@@ -835,25 +839,25 @@ describe('review route selection', () => {
             status: 'running',
             output: null,
             error: null,
-        } satisfies WorkTask
+        } satisfies AgentTask
         const cancelledTask = {
             ...runningTask,
             status: 'cancelled',
-        } satisfies WorkTask
-        vi.spyOn(workStore, 'startTask').mockImplementation(async () => {
-            seedImportWork(workStore, runningTask)
+        } satisfies AgentTask
+        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
+            seedImportAgent(agentStore, runningTask)
             return runningTask
         })
         const cancelTask = vi
-            .spyOn(workStore, 'cancelTask')
+            .spyOn(agentStore, 'cancelTask')
             .mockRejectedValueOnce(new Error('Could not cancel import'))
             .mockImplementationOnce(async () => {
-                updateImportWorkTask(workStore, cancelledTask)
+                updateImportAgentTask(agentStore, cancelledTask)
                 return cancelledTask
             })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
-        await vi.waitFor(() => expect(workStore.startTask).toHaveBeenCalledOnce())
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
         findTestButton(root, 'cancel-job-post-import').click()
 
         await vi.waitFor(() => {

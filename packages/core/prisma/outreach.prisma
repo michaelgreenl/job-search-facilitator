@@ -10,9 +10,9 @@ model OutreachRun {
   jobPostId             String            @db.Uuid
   requestedContactCount Int
   status                OutreachRunStatus @default(PENDING)
-  workTaskId            String?           @db.Uuid
-  workThreadId          String?
-  workTurnId            String?
+  agentTaskId            String?           @db.Uuid
+  agentThreadId          String?
+  agentTurnId            String?
   error                 String?
   completedAt           DateTime?         @db.Timestamptz(3)
   createdAt             DateTime          @default(now()) @db.Timestamptz(3)

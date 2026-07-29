@@ -46,9 +46,9 @@ export const createOutreachRunInputSchema = z.strictObject({
 export const updateOutreachRunInputSchema = z.discriminatedUnion('status', [
     z.strictObject({
         status: z.literal('running'),
-        workTaskId: z.uuid(),
-        workThreadId: nonBlankString,
-        workTurnId: nonBlankString,
+        agentTaskId: z.uuid(),
+        agentThreadId: nonBlankString,
+        agentTurnId: nonBlankString,
     }),
     z.strictObject({ status: z.literal('completed') }),
     z.strictObject({

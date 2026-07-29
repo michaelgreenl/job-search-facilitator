@@ -22,4 +22,4 @@ export {
     parseOutreachContacts,
 } from './outreach.ts'
 export type { RuntimeParser } from './shared.ts'
-export { parseWorkHealth, parseWorkTask, parseWorkTaskEvent } from './work.ts'
+export { parseAgentHealth, parseAgentTask, parseAgentTaskEvent } from './agent.ts'

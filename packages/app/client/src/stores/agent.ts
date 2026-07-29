@@ -1,19 +1,19 @@
 import {
-    parseWorkHealth,
-    parseWorkTask,
-    parseWorkTaskEvent,
+    parseAgentHealth,
+    parseAgentTask,
+    parseAgentTaskEvent,
     type RuntimeParser,
-    type StartWorkTaskInput,
-    type WorkActionDecision,
-    type WorkActionRequired,
-    type WorkTask,
-    type WorkTaskEvent,
+    type StartAgentTaskInput,
+    type AgentActionDecision,
+    type AgentActionRequired,
+    type AgentTask,
+    type AgentTaskEvent,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
 import { parseJsonResponse } from '@/api'
 
-export type WorkConnectionState =
+export type AgentConnectionState =
     | 'idle'
     | 'connecting'
     | 'connected'
@@ -21,9 +21,9 @@ export type WorkConnectionState =
     | 'disconnected'
     | 'closed'
 
-export type WorkTaskLane = 'job-post-import' | 'outreach'
+export type AgentTaskLane = 'job-post-import' | 'outreach'
 
-export type WorkSessionOwner =
+export type AgentSessionOwner =
     | { kind: 'job-post-import'; url: string }
     | { kind: 'outreach-contact'; postId: string }
     | {
@@ -34,14 +34,14 @@ export type WorkSessionOwner =
           request: string
       }
 
-export type WorkSession = WorkSessionOwner & { taskId: string }
+export type AgentSession = AgentSessionOwner & { taskId: string }
 
-export interface WorkTaskState {
+export interface AgentTaskState {
     taskId: string
-    task: WorkTask | null
-    events: WorkTaskEvent[]
-    connectionState: WorkConnectionState
-    pendingAction: WorkActionRequired | null
+    task: AgentTask | null
+    events: AgentTaskEvent[]
+    connectionState: AgentConnectionState
+    pendingAction: AgentActionRequired | null
     alwaysAllowBrowserActions: boolean
     actionSubmitting: boolean
     cancelling: boolean
@@ -51,12 +51,12 @@ export interface WorkTaskState {
     error: string | null
 }
 
-const workSessionStorageKey = 'job-search-facilitator:work-session'
+const agentSessionStorageKey = 'job-search-facilitator:agent-session'
 
-export const getWorkTaskLane = (owner: WorkSessionOwner): WorkTaskLane =>
+export const getAgentTaskLane = (owner: AgentSessionOwner): AgentTaskLane =>
     owner.kind === 'job-post-import' ? 'job-post-import' : 'outreach'
 
-const createTaskState = (taskId: string): WorkTaskState => ({
+const createTaskState = (taskId: string): AgentTaskState => ({
     taskId,
     task: null,
     events: [],
@@ -76,7 +76,7 @@ const getSessionStorage = () => (typeof sessionStorage === 'undefined' ? null : 
 const isNonBlankString = (value: unknown): value is string =>
     typeof value === 'string' && value.trim().length > 0
 
-const parseWorkSession = (value: unknown): WorkSession | null => {
+const parseAgentSession = (value: unknown): AgentSession | null => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return null
     }
@@ -123,13 +123,13 @@ const parseWorkSession = (value: unknown): WorkSession | null => {
     return null
 }
 
-const parseStoredSessions = (value: unknown): WorkSession[] | null => {
+const parseStoredSessions = (value: unknown): AgentSession[] | null => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return null
     }
 
     if ('version' in value && value.version === 1 && 'session' in value) {
-        const session = parseWorkSession(value.session)
+        const session = parseAgentSession(value.session)
         return session === null ? null : [session]
     }
 
@@ -142,22 +142,22 @@ const parseStoredSessions = (value: unknown): WorkSession[] | null => {
     }
 
     const validSessions = value.sessions
-        .map(parseWorkSession)
-        .filter((session): session is WorkSession => session !== null)
+        .map(parseAgentSession)
+        .filter((session): session is AgentSession => session !== null)
 
     if (value.sessions.length > 0 && validSessions.length === 0) {
         return null
     }
 
     const taskIds = new Set(validSessions.map(({ taskId }) => taskId))
-    const lanes = new Set(validSessions.map(getWorkTaskLane))
+    const lanes = new Set(validSessions.map(getAgentTaskLane))
 
     return taskIds.size === validSessions.length && lanes.size === validSessions.length
         ? validSessions
         : null
 }
 
-const readWorkSessions = (): WorkSession[] => {
+const readAgentSessions = (): AgentSession[] => {
     const storage = getSessionStorage()
 
     if (storage === null) {
@@ -166,14 +166,14 @@ const readWorkSessions = (): WorkSession[] => {
 
     const removeStoredSessions = () => {
         try {
-            storage.removeItem(workSessionStorageKey)
+            storage.removeItem(agentSessionStorageKey)
         } catch {
             // Storage may be unavailable even when the browser exposes the API.
         }
     }
 
     try {
-        const stored = storage.getItem(workSessionStorageKey)
+        const stored = storage.getItem(agentSessionStorageKey)
 
         if (stored === null) {
             return []
@@ -193,7 +193,7 @@ const readWorkSessions = (): WorkSession[] => {
     }
 }
 
-const writeWorkSessions = (sessions: WorkSession[]) => {
+const writeAgentSessions = (sessions: AgentSession[]) => {
     const storage = getSessionStorage()
 
     if (storage === null) {
@@ -202,16 +202,16 @@ const writeWorkSessions = (sessions: WorkSession[]) => {
 
     try {
         if (sessions.length === 0) {
-            storage.removeItem(workSessionStorageKey)
+            storage.removeItem(agentSessionStorageKey)
         } else {
-            storage.setItem(workSessionStorageKey, JSON.stringify({ version: 2, sessions }))
+            storage.setItem(agentSessionStorageKey, JSON.stringify({ version: 2, sessions }))
         }
     } catch {
         // A storage failure must not prevent tasks from remaining usable in memory.
     }
 }
 
-const ownersMatch = (left: WorkSession, right: WorkSessionOwner) => {
+const ownersMatch = (left: AgentSession, right: AgentSessionOwner) => {
     if (left.kind !== right.kind) {
         return false
     }
@@ -234,25 +234,25 @@ const ownersMatch = (left: WorkSession, right: WorkSessionOwner) => {
     )
 }
 
-const taskStateActive = (state: WorkTaskState) =>
+const taskStateActive = (state: AgentTaskState) =>
     state.starting ||
     state.restoring ||
     state.task?.status === 'running' ||
     (state.task === null && state.error === null && !state.sessionUnavailable)
 
-const taskStateCanDismiss = (state: WorkTaskState) =>
+const taskStateCanDismiss = (state: AgentTaskState) =>
     !state.starting &&
     !state.restoring &&
     (state.sessionUnavailable ||
         (state.task === null && state.error !== null) ||
         (state.task !== null && state.task.status !== 'running'))
 
-const workBridgeUrl = (import.meta.env.VITE_WORK_BRIDGE_URL ?? 'http://localhost:3001').replace(
+const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://localhost:3001').replace(
     /\/$/,
     '',
 )
 
-class WorkRequestError extends Error {
+class AgentRequestError extends Error {
     constructor(
         message: string,
         readonly status: number,
@@ -261,8 +261,8 @@ class WorkRequestError extends Error {
     }
 }
 
-const workResponse = async (path: string, init?: RequestInit) => {
-    const response = await fetch(`${workBridgeUrl}${path}`, init)
+const agentResponse = async (path: string, init?: RequestInit) => {
+    const response = await fetch(`${agentBridgeUrl}${path}`, init)
 
     if (!response.ok) {
         const body: unknown = await response.json().catch(() => null)
@@ -275,8 +275,8 @@ const workResponse = async (path: string, init?: RequestInit) => {
                 ? body.error
                 : null
 
-        throw new WorkRequestError(
-            message ?? `Work request failed (${response.status})`,
+        throw new AgentRequestError(
+            message ?? `Agent request failed (${response.status})`,
             response.status,
         )
     }
@@ -284,39 +284,39 @@ const workResponse = async (path: string, init?: RequestInit) => {
     return response
 }
 
-const requestWork = async <T>(
+const requestAgent = async <T>(
     path: string,
     parser: RuntimeParser<T>,
     init?: RequestInit,
 ): Promise<T> => {
-    const response = await workResponse(path, init)
+    const response = await agentResponse(path, init)
 
-    return parseJsonResponse(response, parser, `Work ${path}`)
+    return parseJsonResponse(response, parser, `Agent ${path}`)
 }
 
-const sendWork = async (path: string, init?: RequestInit): Promise<void> => {
-    await workResponse(path, init)
+const sendAgent = async (path: string, init?: RequestInit): Promise<void> => {
+    await agentResponse(path, init)
 }
 
-const assertTaskIdentity = (task: WorkTask, taskId: string) => {
+const assertTaskIdentity = (task: AgentTask, taskId: string) => {
     if (task.id !== taskId) {
-        throw new Error('Work returned a different task than the reserved session')
+        throw new Error('Agent returned a different task than the reserved session')
     }
 }
 
-export const useWorkStore = defineStore('work', () => {
-    const initialSessions = readWorkSessions()
-    const sessions = shallowRef<WorkSession[]>(initialSessions)
-    const taskStates = shallowRef<Record<string, WorkTaskState>>(
+export const useAgentStore = defineStore('agent', () => {
+    const initialSessions = readAgentSessions()
+    const sessions = shallowRef<AgentSession[]>(initialSessions)
+    const taskStates = shallowRef<Record<string, AgentTaskState>>(
         Object.fromEntries(
             initialSessions.map(({ taskId }) => [taskId, createTaskState(taskId)] as const),
         ),
     )
     const eventSources = new Map<string, EventSource>()
-    const restorePromises = new Map<string, Promise<WorkTask | null>>()
+    const restorePromises = new Map<string, Promise<AgentTask | null>>()
 
-    function getSession(lane: WorkTaskLane) {
-        return sessions.value.find((session) => getWorkTaskLane(session) === lane) ?? null
+    function getSession(lane: AgentTaskLane) {
+        return sessions.value.find((session) => getAgentTaskLane(session) === lane) ?? null
     }
 
     function getTaskState(taskId: string) {
@@ -325,7 +325,7 @@ export const useWorkStore = defineStore('work', () => {
 
     function updateTaskState(
         taskId: string,
-        update: Partial<WorkTaskState> | ((state: WorkTaskState) => WorkTaskState),
+        update: Partial<AgentTaskState> | ((state: AgentTaskState) => AgentTaskState),
     ) {
         const state = taskStates.value[taskId]
 
@@ -339,7 +339,7 @@ export const useWorkStore = defineStore('work', () => {
         return nextState
     }
 
-    function setTaskState(state: WorkTaskState) {
+    function setTaskState(state: AgentTaskState) {
         taskStates.value = { ...taskStates.value, [state.taskId]: state }
     }
 
@@ -349,27 +349,27 @@ export const useWorkStore = defineStore('work', () => {
         taskStates.value = nextStates
     }
 
-    function saveSession(nextSession: WorkSession) {
-        const lane = getWorkTaskLane(nextSession)
+    function saveSession(nextSession: AgentSession) {
+        const lane = getAgentTaskLane(nextSession)
         sessions.value = [
-            ...sessions.value.filter((session) => getWorkTaskLane(session) !== lane),
+            ...sessions.value.filter((session) => getAgentTaskLane(session) !== lane),
             nextSession,
         ]
-        writeWorkSessions(sessions.value)
+        writeAgentSessions(sessions.value)
     }
 
     function removeSession(taskId: string) {
         sessions.value = sessions.value.filter((session) => session.taskId !== taskId)
-        writeWorkSessions(sessions.value)
+        writeAgentSessions(sessions.value)
     }
 
-    function closeConnection(taskId: string, connectionState: WorkConnectionState) {
+    function closeConnection(taskId: string, connectionState: AgentConnectionState) {
         eventSources.get(taskId)?.close()
         eventSources.delete(taskId)
         updateTaskState(taskId, { connectionState })
     }
 
-    function finishTask(currentTask: WorkTask) {
+    function finishTask(currentTask: AgentTask) {
         updateTaskState(currentTask.id, {
             task: currentTask,
             pendingAction: null,
@@ -394,7 +394,7 @@ export const useWorkStore = defineStore('work', () => {
     function connect(taskId: string) {
         closeConnection(taskId, 'connecting')
         const source = new EventSource(
-            `${workBridgeUrl}/tasks/${encodeURIComponent(taskId)}/events`,
+            `${agentBridgeUrl}/tasks/${encodeURIComponent(taskId)}/events`,
         )
         eventSources.set(taskId, source)
 
@@ -415,7 +415,7 @@ export const useWorkStore = defineStore('work', () => {
                 }
 
                 const value: unknown = JSON.parse(data)
-                const event = parseWorkTaskEvent(value)
+                const event = parseAgentTaskEvent(value)
                 const state = updateTaskState(taskId, (currentState) => ({
                     ...currentState,
                     events: [...currentState.events, event],
@@ -471,7 +471,7 @@ export const useWorkStore = defineStore('work', () => {
                     })
                 }
             } catch {
-                disconnectConnectedTask(taskId, 'Work stream returned invalid data')
+                disconnectConnectedTask(taskId, 'Agent stream returned invalid data')
             }
         }
 
@@ -481,20 +481,20 @@ export const useWorkStore = defineStore('work', () => {
             }
 
             if (source.readyState === EventSource.CLOSED) {
-                disconnectConnectedTask(taskId, 'Work stream closed before the task finished')
+                disconnectConnectedTask(taskId, 'Agent stream closed before the task finished')
             } else {
                 updateTaskState(taskId, { connectionState: 'reconnecting' })
             }
         }
     }
 
-    async function startTask(input: StartWorkTaskInput, owner: WorkSessionOwner) {
-        const lane = getWorkTaskLane(owner)
+    async function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner) {
+        const lane = getAgentTaskLane(owner)
         const currentSession = getSession(lane)
         const currentState = currentSession === null ? null : getTaskState(currentSession.taskId)
 
         if (currentState !== null && taskStateActive(currentState)) {
-            throw new Error(`Another ${lane} Work task is already active`)
+            throw new Error(`Another ${lane} Agent task is already active`)
         }
 
         const reuseReservedTask =
@@ -509,7 +509,7 @@ export const useWorkStore = defineStore('work', () => {
             removeTaskState(currentSession.taskId)
         }
 
-        saveSession({ ...owner, taskId } as WorkSession)
+        saveSession({ ...owner, taskId } as AgentSession)
         setTaskState({
             ...createTaskState(taskId),
             connectionState: 'connecting',
@@ -518,19 +518,19 @@ export const useWorkStore = defineStore('work', () => {
         let taskRequestStarted = false
 
         try {
-            const health = await requestWork('/health', parseWorkHealth)
+            const health = await requestAgent('/health', parseAgentHealth)
             const unavailableCapability = input.capabilities.find(
                 (capability) => !health.capabilities.includes(capability),
             )
 
             if (unavailableCapability !== undefined) {
-                throw new Error(`Work capability is unavailable: ${unavailableCapability}`)
+                throw new Error(`Agent capability is unavailable: ${unavailableCapability}`)
             }
 
             taskRequestStarted = true
-            const currentTask = await requestWork(
+            const currentTask = await requestAgent(
                 `/tasks/${encodeURIComponent(taskId)}`,
-                parseWorkTask,
+                parseAgentTask,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -561,11 +561,11 @@ export const useWorkStore = defineStore('work', () => {
             if (getSession(lane)?.taskId === taskId) {
                 updateTaskState(taskId, {
                     sessionUnavailable:
-                        !taskRequestStarted || requestError instanceof WorkRequestError,
+                        !taskRequestStarted || requestError instanceof AgentRequestError,
                     error:
                         requestError instanceof Error
                             ? requestError.message
-                            : 'Could not start Work task',
+                            : 'Could not start Agent task',
                 })
                 closeConnection(taskId, 'disconnected')
             }
@@ -613,9 +613,9 @@ export const useWorkStore = defineStore('work', () => {
             })
 
             try {
-                const currentTask = await requestWork(
+                const currentTask = await requestAgent(
                     `/tasks/${encodeURIComponent(taskId)}`,
-                    parseWorkTask,
+                    parseAgentTask,
                 )
 
                 assertTaskIdentity(currentTask, taskId)
@@ -641,11 +641,12 @@ export const useWorkStore = defineStore('work', () => {
                 if (sessions.value.some((candidate) => candidate.taskId === taskId)) {
                     updateTaskState(taskId, {
                         sessionUnavailable:
-                            requestError instanceof WorkRequestError && requestError.status === 404,
+                            requestError instanceof AgentRequestError &&
+                            requestError.status === 404,
                         error:
                             requestError instanceof Error
                                 ? requestError.message
-                                : 'Could not restore Work task',
+                                : 'Could not restore Agent task',
                     })
                     closeConnection(taskId, 'disconnected')
                 }
@@ -680,7 +681,7 @@ export const useWorkStore = defineStore('work', () => {
         return true
     }
 
-    async function resolveAction(taskId: string, decision: WorkActionDecision) {
+    async function resolveAction(taskId: string, decision: AgentActionDecision) {
         const state = getTaskState(taskId)
         const currentTask = state?.task ?? null
         const currentAction = state?.pendingAction ?? null
@@ -692,7 +693,7 @@ export const useWorkStore = defineStore('work', () => {
         updateTaskState(taskId, { actionSubmitting: true, error: null })
 
         try {
-            await sendWork(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
+            await sendAgent(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ decision }),
@@ -708,7 +709,7 @@ export const useWorkStore = defineStore('work', () => {
                     error:
                         requestError instanceof Error
                             ? requestError.message
-                            : 'Could not resolve Work action',
+                            : 'Could not resolve Agent action',
                     actionSubmitting: false,
                 })
             }
@@ -750,9 +751,9 @@ export const useWorkStore = defineStore('work', () => {
         updateTaskState(taskId, { cancelling: true, error: null })
 
         try {
-            const currentTask = await requestWork(
+            const currentTask = await requestAgent(
                 `/tasks/${encodeURIComponent(taskId)}/cancel`,
-                parseWorkTask,
+                parseAgentTask,
                 {
                     method: 'POST',
                 },
@@ -770,11 +771,11 @@ export const useWorkStore = defineStore('work', () => {
         } catch (requestError) {
             updateTaskState(taskId, {
                 sessionUnavailable:
-                    requestError instanceof WorkRequestError && requestError.status === 404,
+                    requestError instanceof AgentRequestError && requestError.status === 404,
                 error:
                     requestError instanceof Error
                         ? requestError.message
-                        : 'Could not cancel Work task',
+                        : 'Could not cancel Agent task',
             })
             throw requestError
         } finally {

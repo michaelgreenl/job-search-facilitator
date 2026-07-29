@@ -97,7 +97,7 @@ const copyFeedbackId = useId()
                 data-testid="outreach-draft-reconnect"
                 role="status"
             >
-                Reconnecting to Work…
+                Reconnecting to Agent…
             </p>
             <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
                 {{ issue }}

@@ -1,11 +1,11 @@
 import { z } from 'zod'
 import {
-    WORK_CAPABILITIES,
-    type WorkActionRequired,
-    type WorkHealthResponse,
-    type WorkTask,
-    type WorkTaskEvent,
-} from '../types/work.ts'
+    AGENT_CAPABILITIES,
+    type AgentActionRequired,
+    type AgentHealthResponse,
+    type AgentTask,
+    type AgentTaskEvent,
+} from '../types/agent.ts'
 import {
     createParser,
     httpUrlSchema,
@@ -14,47 +14,47 @@ import {
     nonBlankStringSchema,
 } from './shared.ts'
 
-const workTaskIdentity = {
+const agentTaskIdentity = {
     id: z.uuid(),
     threadId: nonBlankStringSchema,
     turnId: nonBlankStringSchema,
 }
 
-const workTaskSchema: z.ZodType<WorkTask> = z.discriminatedUnion('status', [
+const agentTaskSchema: z.ZodType<AgentTask> = z.discriminatedUnion('status', [
     z.looseObject({
-        ...workTaskIdentity,
+        ...agentTaskIdentity,
         status: z.literal('running'),
         output: z.null(),
         error: z.null(),
     }),
     z.looseObject({
-        ...workTaskIdentity,
+        ...agentTaskIdentity,
         status: z.literal('completed'),
         output: jsonObjectSchema,
         error: z.null(),
     }),
     z.looseObject({
-        ...workTaskIdentity,
+        ...agentTaskIdentity,
         status: z.literal('failed'),
         output: z.null(),
         error: nonBlankStringSchema,
     }),
     z.looseObject({
-        ...workTaskIdentity,
+        ...agentTaskIdentity,
         status: z.literal('cancelled'),
         output: z.null(),
         error: z.null(),
     }),
 ])
 
-const workActionRequiredSchema: z.ZodType<WorkActionRequired> = z.looseObject({
+const agentActionRequiredSchema: z.ZodType<AgentActionRequired> = z.looseObject({
     id: z.uuid(),
     kind: z.literal('browser-origin'),
     message: nonBlankStringSchema,
     origin: httpUrlSchema,
 })
 
-const workTaskEventSchema: z.ZodType<WorkTaskEvent> = z.discriminatedUnion('type', [
+const agentTaskEventSchema: z.ZodType<AgentTaskEvent> = z.discriminatedUnion('type', [
     z.looseObject({
         type: z.literal('activity'),
         message: nonBlankStringSchema,
@@ -68,7 +68,7 @@ const workTaskEventSchema: z.ZodType<WorkTaskEvent> = z.discriminatedUnion('type
     }),
     z.looseObject({
         type: z.literal('action-required'),
-        action: workActionRequiredSchema,
+        action: agentActionRequiredSchema,
         createdAt: isoDateTimeSchema,
     }),
     z.looseObject({
@@ -92,11 +92,11 @@ const workTaskEventSchema: z.ZodType<WorkTaskEvent> = z.discriminatedUnion('type
     }),
 ])
 
-const workHealthSchema: z.ZodType<WorkHealthResponse> = z.looseObject({
+const agentHealthSchema: z.ZodType<AgentHealthResponse> = z.looseObject({
     status: z.literal('healthy'),
-    capabilities: z.array(z.enum(WORK_CAPABILITIES)),
+    capabilities: z.array(z.enum(AGENT_CAPABILITIES)),
 })
 
-export const parseWorkHealth = createParser('Work health', workHealthSchema)
-export const parseWorkTask = createParser('Work task', workTaskSchema)
-export const parseWorkTaskEvent = createParser('Work task event', workTaskEventSchema)
+export const parseAgentHealth = createParser('Agent health', agentHealthSchema)
+export const parseAgentTask = createParser('Agent task', agentTaskSchema)
+export const parseAgentTaskEvent = createParser('Agent task event', agentTaskEventSchema)

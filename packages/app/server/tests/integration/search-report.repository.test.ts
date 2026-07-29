@@ -424,7 +424,7 @@ describe('job post repository', () => {
 })
 
 describe('outreach run repository', () => {
-    it('persists the Work task lifecycle for a job post', async () => {
+    it('persists the Agent task lifecycle for a job post', async () => {
         const report = await searchReportRepository.upsertById(
             '11111111-1111-4111-8111-111111111111',
             '2026-07-18',
@@ -440,9 +440,9 @@ describe('outreach run repository', () => {
 
         const running = await outreachRunRepository.update(created!.id, {
             status: 'running',
-            workTaskId: '22222222-2222-4222-8222-222222222222',
-            workThreadId: 'thread-id',
-            workTurnId: 'turn-id',
+            agentTaskId: '22222222-2222-4222-8222-222222222222',
+            agentThreadId: 'thread-id',
+            agentTurnId: 'turn-id',
         })
         const completed = await outreachRunRepository.update(created!.id, {
             status: 'completed',
@@ -450,9 +450,9 @@ describe('outreach run repository', () => {
 
         expect(running).toMatchObject({
             status: 'running',
-            workTaskId: '22222222-2222-4222-8222-222222222222',
-            workThreadId: 'thread-id',
-            workTurnId: 'turn-id',
+            agentTaskId: '22222222-2222-4222-8222-222222222222',
+            agentThreadId: 'thread-id',
+            agentTurnId: 'turn-id',
         })
         expect(completed).toMatchObject({
             status: 'completed',

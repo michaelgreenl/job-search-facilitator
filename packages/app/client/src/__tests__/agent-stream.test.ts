@@ -1,19 +1,19 @@
 /** @vitest-environment jsdom */
 
-import type { WorkTask, WorkTaskEvent } from '@job-search-facilitator/core'
+import type { AgentTask, AgentTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WorkStream from '../components/work/WorkStream.vue'
+import AgentStream from '../components/agent/AgentStream.vue'
 import {
-    useWorkStore,
-    type WorkSession,
-    type WorkTaskLane,
-    type WorkTaskState,
-} from '../stores/work'
+    useAgentStore,
+    type AgentSession,
+    type AgentTaskLane,
+    type AgentTaskState,
+} from '../stores/agent'
 
 const createdAt = '2026-07-20T12:00:00.000Z'
-const runningTask: WorkTask = {
+const runningTask: AgentTask = {
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
     status: 'running',
     threadId: 'thread-id',
@@ -21,7 +21,7 @@ const runningTask: WorkTask = {
     output: null,
     error: null,
 }
-const outreachTask: WorkTask = {
+const outreachTask: AgentTask = {
     ...runningTask,
     id: 'a8314bdd-2a1c-48f3-8982-a57fd8b04f5c',
     threadId: 'outreach-thread-id',
@@ -31,12 +31,12 @@ const importSession = {
     kind: 'job-post-import',
     taskId: runningTask.id,
     url: 'https://example.com/job',
-} satisfies WorkSession
+} satisfies AgentSession
 const outreachSession = {
     kind: 'outreach-contact',
     taskId: outreachTask.id,
     postId: 'post-1',
-} satisfies WorkSession
+} satisfies AgentSession
 const laneContent = {
     'job-post-import': {
         taskId: importSession.taskId,
@@ -48,12 +48,12 @@ const laneContent = {
         activity: 'Researching the outreach contact.',
         action: 'Allow access for outreach research?',
     },
-} satisfies Record<WorkTaskLane, { taskId: string; activity: string; action: string }>
+} satisfies Record<AgentTaskLane, { taskId: string; activity: string; action: string }>
 
-type WorkStore = ReturnType<typeof useWorkStore>
-type TaskStateUpdate = Partial<Omit<WorkTaskState, 'taskId'>>
+type AgentStore = ReturnType<typeof useAgentStore>
+type TaskStateUpdate = Partial<Omit<AgentTaskState, 'taskId'>>
 
-const createTaskState = (taskId: string, update: TaskStateUpdate = {}): WorkTaskState => ({
+const createTaskState = (taskId: string, update: TaskStateUpdate = {}): AgentTaskState => ({
     taskId,
     task: null,
     events: [],
@@ -69,11 +69,11 @@ const createTaskState = (taskId: string, update: TaskStateUpdate = {}): WorkTask
     ...update,
 })
 
-function updateTaskState(store: WorkStore, taskId: string, update: TaskStateUpdate) {
+function updateTaskState(store: AgentStore, taskId: string, update: TaskStateUpdate) {
     const currentState = store.taskStates[taskId]
 
     if (currentState === undefined) {
-        throw new Error(`Missing Work task state for ${taskId}`)
+        throw new Error(`Missing Agent task state for ${taskId}`)
     }
 
     store.taskStates = {
@@ -82,41 +82,41 @@ function updateTaskState(store: WorkStore, taskId: string, update: TaskStateUpda
     }
 }
 
-function appendEvent(store: WorkStore, taskId: string, event: WorkTaskEvent) {
+function appendEvent(store: AgentStore, taskId: string, event: AgentTaskEvent) {
     const currentState = store.taskStates[taskId]
 
     if (currentState === undefined) {
-        throw new Error(`Missing Work task state for ${taskId}`)
+        throw new Error(`Missing Agent task state for ${taskId}`)
     }
 
     updateTaskState(store, taskId, { events: [...currentState.events, event] })
 }
 
-interface MountWorkStreamOptions {
+interface MountAgentStreamOptions {
     issue?: string | null
-    lane?: WorkTaskLane
-    sessions?: WorkSession[]
-    taskStates?: Record<string, WorkTaskState>
+    lane?: AgentTaskLane
+    sessions?: AgentSession[]
+    taskStates?: Record<string, AgentTaskState>
 }
 
-describe('work stream', () => {
+describe('agent stream', () => {
     const mounted: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
 
-    function mountWorkStream({
+    function mountAgentStream({
         issue = null,
         lane = 'job-post-import',
         sessions = [importSession],
         taskStates = {
             [importSession.taskId]: createTaskState(importSession.taskId),
         },
-    }: MountWorkStreamOptions = {}) {
+    }: MountAgentStreamOptions = {}) {
         const pinia = createPinia()
         setActivePinia(pinia)
-        const store = useWorkStore()
+        const store = useAgentStore()
         store.sessions = sessions
         store.taskStates = taskStates
         const root = document.createElement('div')
-        const app = createApp(WorkStream, { issue, lane })
+        const app = createApp(AgentStream, { issue, lane })
         document.body.append(root)
         app.use(pinia)
         app.mount(root)
@@ -125,7 +125,7 @@ describe('work stream', () => {
         const taskId = store.getSession(lane)?.taskId
 
         if (taskId === undefined) {
-            throw new Error(`Missing Work session for ${lane}`)
+            throw new Error(`Missing Agent session for ${lane}`)
         }
 
         return { root, store, taskId }
@@ -139,7 +139,7 @@ describe('work stream', () => {
     })
 
     it('renders fragmented reasoning sections as clean, separate statements', async () => {
-        const { root, store, taskId } = mountWorkStream()
+        const { root, store, taskId } = mountAgentStream()
 
         updateTaskState(store, taskId, {
             events: [
@@ -152,25 +152,25 @@ describe('work stream', () => {
                     startsNewStatement: false,
                     createdAt,
                 },
-            ] satisfies WorkTaskEvent[],
+            ] satisfies AgentTaskEvent[],
         })
         await nextTick()
 
-        expect(root.querySelectorAll('[data-testid="work-stream-commentary"]')).toHaveLength(1)
-        expect(root.querySelector('[data-testid="work-stream-copy"]')?.textContent).toBe(
+        expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(1)
+        expect(root.querySelector('[data-testid="agent-stream-copy"]')?.textContent).toBe(
             'Reviewing the role\nFinding the **right** person',
         )
     })
 
     it.each([{ lane: 'job-post-import' }, { lane: 'outreach' }] satisfies Array<{
-        lane: WorkTaskLane
+        lane: AgentTaskLane
     }>)(
-        'isolates $lane activity and actions from simultaneous work in the other lane',
+        'isolates $lane activity and actions from simultaneous agent in the other lane',
         async ({ lane }) => {
             const selected = laneContent[lane]
             const excluded =
                 laneContent[lane === 'job-post-import' ? 'outreach' : 'job-post-import']
-            const { root, store } = mountWorkStream({
+            const { root, store } = mountAgentStream({
                 lane,
                 sessions: [importSession, outreachSession],
                 taskStates: {
@@ -213,25 +213,25 @@ describe('work stream', () => {
             const resolveAction = vi.spyOn(store, 'resolveAction').mockResolvedValue()
 
             await vi.waitFor(() => {
-                expect(root.querySelector('[data-testid="work-stream-copy"]')?.textContent).toBe(
+                expect(root.querySelector('[data-testid="agent-stream-copy"]')?.textContent).toBe(
                     selected.activity,
                 )
                 expect(
-                    root.querySelector('[data-testid="work-action-prompt"]')?.textContent,
+                    root.querySelector('[data-testid="agent-action-prompt"]')?.textContent,
                 ).toContain(selected.action)
             })
 
             expect(root.textContent).not.toContain(excluded.activity)
             expect(root.textContent).not.toContain(excluded.action)
 
-            root.querySelector<HTMLButtonElement>('[data-testid="work-action-approve"]')?.click()
+            root.querySelector<HTMLButtonElement>('[data-testid="agent-action-approve"]')?.click()
 
             expect(resolveAction).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
         },
     )
 
     it('replaces the latest activity icon with progress without attaching it to commentary', async () => {
-        const { root, store, taskId } = mountWorkStream()
+        const { root, store, taskId } = mountAgentStream()
         updateTaskState(store, taskId, {
             task: runningTask,
             events: [
@@ -247,15 +247,15 @@ describe('work stream', () => {
         })
         await nextTick()
 
-        const activityItems = root.querySelectorAll('[data-testid="work-stream-activity"]')
-        const commentaryItem = root.querySelector('[data-testid="work-stream-commentary"]')
+        const activityItems = root.querySelectorAll('[data-testid="agent-stream-activity"]')
+        const commentaryItem = root.querySelector('[data-testid="agent-stream-commentary"]')
         const latestActivity = activityItems.item(activityItems.length - 1)
 
-        expect(root.querySelectorAll('[data-testid="work-progress-indicator"]')).toHaveLength(1)
+        expect(root.querySelectorAll('[data-testid="agent-progress-indicator"]')).toHaveLength(1)
         expect(
-            latestActivity.querySelector('[data-testid="work-progress-indicator"]'),
+            latestActivity.querySelector('[data-testid="agent-progress-indicator"]'),
         ).not.toBeNull()
-        expect(commentaryItem?.querySelector('[data-testid="work-progress-indicator"]')).toBeNull()
+        expect(commentaryItem?.querySelector('[data-testid="agent-progress-indicator"]')).toBeNull()
 
         appendEvent(store, taskId, {
             type: 'activity',
@@ -264,21 +264,21 @@ describe('work stream', () => {
         })
         await nextTick()
 
-        const updatedActivityItems = root.querySelectorAll('[data-testid="work-stream-activity"]')
+        const updatedActivityItems = root.querySelectorAll('[data-testid="agent-stream-activity"]')
         const newestActivity = updatedActivityItems.item(updatedActivityItems.length - 1)
 
-        expect(latestActivity.querySelector('[data-testid="work-progress-indicator"]')).toBeNull()
+        expect(latestActivity.querySelector('[data-testid="agent-progress-indicator"]')).toBeNull()
         expect(
-            newestActivity.querySelector('[data-testid="work-progress-indicator"]'),
+            newestActivity.querySelector('[data-testid="agent-progress-indicator"]'),
         ).not.toBeNull()
     })
 
     it('follows new updates until the user scrolls up and resumes at the bottom', async () => {
-        const { root, store, taskId } = mountWorkStream()
-        const progress = root.querySelector<HTMLElement>('[data-testid="work-progress"]')
+        const { root, store, taskId } = mountAgentStream()
+        const progress = root.querySelector<HTMLElement>('[data-testid="agent-progress"]')
 
         if (progress === null) {
-            throw new Error('Could not find work progress viewport')
+            throw new Error('Could not find agent progress viewport')
         }
 
         let scrollHeight = 180
@@ -345,7 +345,7 @@ describe('work stream', () => {
     })
 
     it('routes required actions and resets confirmation for the next action', async () => {
-        const { root, store, taskId } = mountWorkStream()
+        const { root, store, taskId } = mountAgentStream()
         const resolveAction = vi.spyOn(store, 'resolveAction').mockResolvedValue()
         const allowBrowserActions = vi
             .spyOn(store, 'allowBrowserActionsForTask')
@@ -361,17 +361,17 @@ describe('work stream', () => {
         })
 
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="work-action-prompt"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-action-prompt"]')).toBe(
                 document.activeElement,
             ),
         )
 
-        root.querySelector<HTMLButtonElement>('[data-testid="work-action-approve"]')?.click()
+        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-approve"]')?.click()
         expect(resolveAction).toHaveBeenCalledExactlyOnceWith(taskId, 'approve')
 
-        root.querySelector<HTMLButtonElement>('[data-testid="work-action-always-allow"]')?.click()
+        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-always-allow"]')?.click()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="work-action-always-allow-cancel"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-action-always-allow-cancel"]')).toBe(
                 document.activeElement,
             ),
         )
@@ -385,41 +385,41 @@ describe('work stream', () => {
             },
         })
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="work-action-prompt"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-action-prompt"]')).toBe(
                 document.activeElement,
             ),
         )
 
-        root.querySelector<HTMLButtonElement>('[data-testid="work-action-always-allow"]')?.click()
+        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-always-allow"]')?.click()
         await nextTick()
         root.querySelector<HTMLButtonElement>(
-            '[data-testid="work-action-always-allow-confirm"]',
+            '[data-testid="agent-action-always-allow-confirm"]',
         )?.click()
 
         expect(allowBrowserActions).toHaveBeenCalledExactlyOnceWith(taskId)
     })
 
-    it('focuses a Work issue so the failure is announced', async () => {
-        const { root } = mountWorkStream({ issue: 'Could not cancel task' })
+    it('focuses an Agent issue so the failure is announced', async () => {
+        const { root } = mountAgentStream({ issue: 'Could not cancel task' })
 
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')).toBe(document.activeElement)
         })
     })
 
-    it('announces reconnecting until the Work stream reconnects', async () => {
-        const { root, store, taskId } = mountWorkStream()
+    it('announces reconnecting until the Agent stream reconnects', async () => {
+        const { root, store, taskId } = mountAgentStream()
 
         updateTaskState(store, taskId, { connectionState: 'reconnecting' })
         await nextTick()
 
         expect(
-            root.querySelector('[data-testid="work-reconnect-status"]')?.getAttribute('role'),
+            root.querySelector('[data-testid="agent-reconnect-status"]')?.getAttribute('role'),
         ).toBe('status')
 
         updateTaskState(store, taskId, { connectionState: 'connected' })
         await nextTick()
 
-        expect(root.querySelector('[data-testid="work-reconnect-status"]')).toBeNull()
+        expect(root.querySelector('[data-testid="agent-reconnect-status"]')).toBeNull()
     })
 })

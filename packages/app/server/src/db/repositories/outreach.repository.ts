@@ -38,9 +38,9 @@ const toOutreachRun = (run: PrismaOutreachRun): OutreachRun => ({
     jobPostId: run.jobPostId,
     requestedContactCount: run.requestedContactCount as OutreachRun['requestedContactCount'],
     status: statusToApi[run.status],
-    workTaskId: run.workTaskId,
-    workThreadId: run.workThreadId,
-    workTurnId: run.workTurnId,
+    agentTaskId: run.agentTaskId,
+    agentThreadId: run.agentThreadId,
+    agentTurnId: run.agentTurnId,
     error: run.error,
     completedAt: run.completedAt?.toISOString() ?? null,
     createdAt: run.createdAt.toISOString(),
@@ -133,9 +133,9 @@ export const outreachRunRepository: OutreachRunRepository = {
             input.status === 'running'
                 ? {
                       status: 'RUNNING',
-                      workTaskId: input.workTaskId,
-                      workThreadId: input.workThreadId,
-                      workTurnId: input.workTurnId,
+                      agentTaskId: input.agentTaskId,
+                      agentThreadId: input.agentThreadId,
+                      agentTurnId: input.agentTurnId,
                       error: null,
                       completedAt: null,
                   }

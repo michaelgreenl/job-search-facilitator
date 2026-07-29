@@ -12,7 +12,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
-import { useWorkStore } from '@/stores/work'
+import { useAgentStore } from '@/stores/agent'
 import ApplyView from '../views/ApplyView.vue'
 
 const createPost = (id: string, userLabel: UserLabel): JobPost => ({
@@ -60,7 +60,7 @@ const createApplyQueueItem = (
     recommendationContext: JobRecommendationContext | null = null,
 ): ApplyQueueItem => ({ post, recommendationContext })
 
-const runningWorkTask = {
+const runningAgentTask = {
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
     status: 'running',
     threadId: 'thread-id',
@@ -180,7 +180,7 @@ const chooseJobPostAction = async (root: HTMLElement, value: string) => {
 describe('apply view', () => {
     beforeEach(() => {
         sessionStorage.clear()
-        vi.stubGlobal('crypto', { randomUUID: () => runningWorkTask.id })
+        vi.stubGlobal('crypto', { randomUUID: () => runningAgentTask.id })
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(applyQueueItems)))
     })
 
@@ -381,12 +381,12 @@ describe('apply view', () => {
         ).toBe('true')
     })
 
-    it('shows a Work failure while revising an outreach draft', async () => {
+    it('shows an Agent failure while revising an outreach draft', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
-            .mockResolvedValueOnce(jsonResponse({ error: 'Work bridge unavailable' }, 503))
+            .mockResolvedValueOnce(jsonResponse({ error: 'Agent bridge unavailable' }, 503))
         const root = await mountApplyView()
 
         await selectPost(root, posts[0]!.id)
@@ -421,7 +421,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -455,7 +455,7 @@ describe('apply view', () => {
             const instance = FakeEventSource.instances[0]
 
             if (instance === undefined) {
-                throw new Error('Could not find the Work event stream')
+                throw new Error('Could not find the Agent event stream')
             }
 
             return instance
@@ -493,7 +493,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(runningWorkTask, 202))
+            .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
@@ -503,7 +503,7 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(1)
-            expect(root.querySelector('[data-testid="work-progress"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="agent-progress"]')).not.toBeNull()
             expect(
                 root
                     .querySelector('[data-testid="apply-outreach-panel"]')
@@ -514,9 +514,9 @@ describe('apply view', () => {
 
     it('starts contact discovery while a persisted job import task is active', async () => {
         const importTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb4'
-        const runningImportTask = { ...runningWorkTask, id: importTaskId }
+        const runningImportTask = { ...runningAgentTask, id: importTaskId }
         sessionStorage.setItem(
-            'job-search-facilitator:work-session',
+            'job-search-facilitator:agent-session',
             JSON.stringify({
                 version: 2,
                 sessions: [
@@ -551,8 +551,8 @@ describe('apply view', () => {
                     )
                 }
 
-                if (url.endsWith(`/tasks/${runningWorkTask.id}`) && init?.method === 'PUT') {
-                    return Promise.resolve(jsonResponse(runningWorkTask, 202))
+                if (url.endsWith(`/tasks/${runningAgentTask.id}`) && init?.method === 'PUT') {
+                    return Promise.resolve(jsonResponse(runningAgentTask, 202))
                 }
 
                 throw new Error(`Unexpected request: ${url}`)
@@ -560,15 +560,15 @@ describe('apply view', () => {
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
         const pinia = createPinia()
-        const workStore = useWorkStore(pinia)
-        await workStore.restoreTask(importTaskId)
+        const agentStore = useAgentStore(pinia)
+        await agentStore.restoreTask(importTaskId)
         const root = await mountApplyView(pinia)
 
-        expect(workStore.getSession('job-post-import')).toMatchObject({
+        expect(agentStore.getSession('job-post-import')).toMatchObject({
             kind: 'job-post-import',
             taskId: importTaskId,
         })
-        expect(workStore.getTaskState(importTaskId)).toMatchObject({
+        expect(agentStore.getTaskState(importTaskId)).toMatchObject({
             task: runningImportTask,
         })
         expect(FakeEventSource.instances).toHaveLength(1)
@@ -582,30 +582,32 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(2)
-            expect(workStore.getSession('job-post-import')).toMatchObject({
+            expect(agentStore.getSession('job-post-import')).toMatchObject({
                 kind: 'job-post-import',
                 taskId: importTaskId,
             })
-            expect(workStore.getTaskState(importTaskId)).toMatchObject({
+            expect(agentStore.getTaskState(importTaskId)).toMatchObject({
                 task: runningImportTask,
             })
-            expect(workStore.getSession('outreach')).toMatchObject({
+            expect(agentStore.getSession('outreach')).toMatchObject({
                 kind: 'outreach-contact',
-                taskId: runningWorkTask.id,
+                taskId: runningAgentTask.id,
                 postId: posts[0]!.id,
             })
-            expect(workStore.getTaskState(runningWorkTask.id)?.task).toMatchObject(runningWorkTask)
+            expect(agentStore.getTaskState(runningAgentTask.id)?.task).toMatchObject(
+                runningAgentTask,
+            )
             expect(FakeEventSource.instances.map(({ url }) => url)).toEqual([
                 `http://localhost:3001/tasks/${importTaskId}/events`,
-                `http://localhost:3001/tasks/${runningWorkTask.id}/events`,
+                `http://localhost:3001/tasks/${runningAgentTask.id}/events`,
             ])
         })
     })
 
     it('restores a cancelled outreach task until the user dismisses it', async () => {
-        const cancelledTask = { ...runningWorkTask, status: 'cancelled' as const }
+        const cancelledTask = { ...runningAgentTask, status: 'cancelled' as const }
         sessionStorage.setItem(
-            'job-search-facilitator:work-session',
+            'job-search-facilitator:agent-session',
             JSON.stringify({
                 version: 1,
                 session: {
@@ -650,18 +652,18 @@ describe('apply view', () => {
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-dismiss"]')).toBeNull(),
         )
-        expect(sessionStorage.getItem('job-search-facilitator:work-session')).toBeNull()
+        expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
     })
 
     it('keeps a restored task reachable when its owner post cannot be loaded', async () => {
         const missingPostId = '30000000-0000-4000-8000-000000000099'
         sessionStorage.setItem(
-            'job-search-facilitator:work-session',
+            'job-search-facilitator:agent-session',
             JSON.stringify({
                 version: 1,
                 session: {
                     kind: 'outreach-contact',
-                    taskId: runningWorkTask.id,
+                    taskId: runningAgentTask.id,
                     postId: missingPostId,
                 },
             }),
@@ -681,13 +683,13 @@ describe('apply view', () => {
                 return Promise.resolve(jsonResponse([]))
             }
 
-            if (url.endsWith(`/tasks/${runningWorkTask.id}`)) {
-                return Promise.resolve(jsonResponse(runningWorkTask))
+            if (url.endsWith(`/tasks/${runningAgentTask.id}`)) {
+                return Promise.resolve(jsonResponse(runningAgentTask))
             }
 
-            if (url.endsWith(`/tasks/${runningWorkTask.id}/cancel`)) {
+            if (url.endsWith(`/tasks/${runningAgentTask.id}/cancel`)) {
                 return Promise.resolve(
-                    jsonResponse({ ...runningWorkTask, status: 'cancelled' }, 202),
+                    jsonResponse({ ...runningAgentTask, status: 'cancelled' }, 202),
                 )
             }
 
@@ -742,7 +744,7 @@ describe('apply view', () => {
                 )
             }
             if (url.endsWith('/tasks') && init?.method === 'POST') {
-                return Promise.resolve(jsonResponse(runningWorkTask, 202))
+                return Promise.resolve(jsonResponse(runningAgentTask, 202))
             }
 
             throw new Error(`Unexpected request: ${url}`)

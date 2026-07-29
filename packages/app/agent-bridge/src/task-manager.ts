@@ -1,41 +1,41 @@
 import { randomUUID } from 'node:crypto'
 import type {
     JsonObject,
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkActionRequired,
-    WorkTask,
-    WorkTaskEvent,
+    StartAgentTaskInput,
+    AgentActionDecision,
+    AgentActionRequired,
+    AgentTask,
+    AgentTaskEvent,
 } from '@job-search-facilitator/core'
 import { Ajv, type ValidateFunction } from 'ajv'
-import type { WorkRuntime, WorkRuntimeAction, WorkRuntimeEvent } from './app-server.ts'
+import type { AgentRuntime, AgentRuntimeAction, AgentRuntimeEvent } from './app-server.ts'
 
 interface StoredTask {
     id: string
-    status: WorkTask['status']
+    status: AgentTask['status']
     threadId: string
     turnId: string
     output: JsonObject | null
     error: string | null
-    capabilities: StartWorkTaskInput['capabilities']
+    capabilities: StartAgentTaskInput['capabilities']
     cancellation: Promise<void> | null
-    events: WorkTaskStreamEvent[]
-    listeners: Set<(event: WorkTaskStreamEvent) => void>
+    events: AgentTaskStreamEvent[]
+    listeners: Set<(event: AgentTaskStreamEvent) => void>
     finalMessages: string[]
     outputValidator: ValidateFunction<JsonObject>
-    pendingAction: WorkActionRequired | null
+    pendingAction: AgentActionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
 }
 
-export interface WorkTaskConnection {
-    task: WorkTask
-    events: WorkTaskStreamEvent[]
+export interface AgentTaskConnection {
+    task: AgentTask
+    events: AgentTaskStreamEvent[]
     unsubscribe: () => void
 }
 
-export interface WorkTaskStreamEvent {
+export interface AgentTaskStreamEvent {
     id: number
-    event: WorkTaskEvent
+    event: AgentTaskEvent
 }
 
 const isStructuredOutput = (value: unknown): value is JsonObject =>
@@ -49,10 +49,10 @@ const containsDialectMarker = (value: unknown): boolean =>
 
 const outputSchemaValidator = new Ajv({ addUsedSchema: false, strict: true })
 
-export class InvalidWorkOutputSchemaError extends Error {
+export class InvalidAgentOutputSchemaError extends Error {
     constructor() {
-        super('Invalid Work output schema')
-        this.name = 'InvalidWorkOutputSchemaError'
+        super('Invalid Agent output schema')
+        this.name = 'InvalidAgentOutputSchemaError'
     }
 }
 
@@ -63,23 +63,23 @@ const compileOutputValidator = (schema: unknown): ValidateFunction<JsonObject> =
         schema.$async === true ||
         containsDialectMarker(schema)
     ) {
-        throw new InvalidWorkOutputSchemaError()
+        throw new InvalidAgentOutputSchemaError()
     }
 
     try {
         const validator = outputSchemaValidator.compile<JsonObject>(schema)
 
         if ('$async' in validator) {
-            throw new InvalidWorkOutputSchemaError()
+            throw new InvalidAgentOutputSchemaError()
         }
 
         return validator
     } catch {
-        throw new InvalidWorkOutputSchemaError()
+        throw new InvalidAgentOutputSchemaError()
     }
 }
 
-const publicTask = (task: StoredTask): WorkTask => {
+const publicTask = (task: StoredTask): AgentTask => {
     const identity = {
         id: task.id,
         threadId: task.threadId,
@@ -102,18 +102,18 @@ const publicTask = (task: StoredTask): WorkTask => {
         return { ...identity, status: task.status, output: null, error: null }
     }
 
-    throw new Error('Work task state is inconsistent')
+    throw new Error('Agent task state is inconsistent')
 }
 
-export class WorkTaskManager {
+export class AgentTaskManager {
     private readonly tasks = new Map<string, StoredTask>()
-    private readonly taskStarts = new Map<string, Promise<WorkTask>>()
+    private readonly taskStarts = new Map<string, Promise<AgentTask>>()
 
-    constructor(private readonly runtime: WorkRuntime) {
+    constructor(private readonly runtime: AgentRuntime) {
         runtime.onEvent((event) => this.handleEvent(event))
     }
 
-    async start(input: StartWorkTaskInput, id: string = randomUUID()): Promise<WorkTask> {
+    async start(input: StartAgentTaskInput, id: string = randomUUID()): Promise<AgentTask> {
         const existingTask = this.tasks.get(id)
 
         if (existingTask !== undefined) {
@@ -138,7 +138,7 @@ export class WorkTaskManager {
         }
     }
 
-    private async startNewTask(id: string, input: StartWorkTaskInput): Promise<WorkTask> {
+    private async startNewTask(id: string, input: StartAgentTaskInput): Promise<AgentTask> {
         const outputValidator = compileOutputValidator(input.outputSchema)
         const { threadId, turnId } = await this.runtime.startTask(id, input)
         const task: StoredTask = {
@@ -168,13 +168,13 @@ export class WorkTaskManager {
         return publicTask(task)
     }
 
-    get(id: string): WorkTask | null {
+    get(id: string): AgentTask | null {
         const task = this.tasks.get(id)
 
         return task === undefined ? null : publicTask(task)
     }
 
-    async cancel(id: string): Promise<{ accepted: boolean; task: WorkTask } | null> {
+    async cancel(id: string): Promise<{ accepted: boolean; task: AgentTask } | null> {
         const task = this.tasks.get(id)
 
         if (task === undefined) {
@@ -203,7 +203,7 @@ export class WorkTaskManager {
         return { accepted: true, task: publicTask(task) }
     }
 
-    resolveAction(id: string, actionId: string, decision: WorkActionDecision): boolean {
+    resolveAction(id: string, actionId: string, decision: AgentActionDecision): boolean {
         const task = this.tasks.get(id)
 
         if (task?.pendingAction?.id !== actionId) {
@@ -215,9 +215,9 @@ export class WorkTaskManager {
 
     connect(
         id: string,
-        listener: (event: WorkTaskStreamEvent) => void,
+        listener: (event: AgentTaskStreamEvent) => void,
         afterEventId = 0,
-    ): WorkTaskConnection | null {
+    ): AgentTaskConnection | null {
         const task = this.tasks.get(id)
 
         if (task === undefined) {
@@ -233,7 +233,7 @@ export class WorkTaskManager {
         }
     }
 
-    private handleEvent(event: WorkRuntimeEvent): void {
+    private handleEvent(event: AgentRuntimeEvent): void {
         if (event.type === 'runtime-failed') {
             for (const task of this.tasks.values()) {
                 if (task.status === 'running') {
@@ -310,7 +310,7 @@ export class WorkTaskManager {
         }
     }
 
-    private handleActionRequired({ threadId, turnId, ...action }: WorkRuntimeAction): void {
+    private handleActionRequired({ threadId, turnId, ...action }: AgentRuntimeAction): void {
         const task = [...this.tasks.values()].find(
             (candidate) =>
                 candidate.threadId === threadId &&
@@ -333,7 +333,7 @@ export class WorkTaskManager {
 
     private completeTurn(
         task: StoredTask,
-        status: Extract<WorkRuntimeEvent, { type: 'turn-completed' }>['status'],
+        status: Extract<AgentRuntimeEvent, { type: 'turn-completed' }>['status'],
         error: string | null,
     ): void {
         if (status === 'interrupted') {
@@ -342,14 +342,14 @@ export class WorkTaskManager {
         }
 
         if (status !== 'completed') {
-            this.fail(task, error ?? 'Work task did not complete')
+            this.fail(task, error ?? 'Agent task did not complete')
             return
         }
 
         const finalMessage = task.finalMessages.at(-1)
 
         if (finalMessage === undefined) {
-            this.fail(task, 'Work task returned no final result')
+            this.fail(task, 'Agent task returned no final result')
             return
         }
 
@@ -358,17 +358,17 @@ export class WorkTaskManager {
         try {
             output = JSON.parse(finalMessage)
         } catch {
-            this.fail(task, 'Work task returned invalid structured output')
+            this.fail(task, 'Agent task returned invalid structured output')
             return
         }
 
         if (!isStructuredOutput(output)) {
-            this.fail(task, 'Work task returned invalid structured output')
+            this.fail(task, 'Agent task returned invalid structured output')
             return
         }
 
         if (!task.outputValidator(output)) {
-            this.fail(task, 'Work task returned output that did not match its schema')
+            this.fail(task, 'Agent task returned output that did not match its schema')
             return
         }
 
@@ -403,7 +403,7 @@ export class WorkTaskManager {
         this.emit(task, { type: 'failed', error, createdAt: new Date().toISOString() })
     }
 
-    private emit(task: StoredTask, event: WorkTaskEvent): void {
+    private emit(task: StoredTask, event: AgentTaskEvent): void {
         const streamEvent = { id: (task.events.at(-1)?.id ?? 0) + 1, event }
         task.events.push(streamEvent)
 

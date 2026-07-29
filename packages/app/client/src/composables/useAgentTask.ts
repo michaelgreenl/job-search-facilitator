@@ -1,24 +1,24 @@
 import type {
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkTaskEvent,
+    StartAgentTaskInput,
+    AgentActionDecision,
+    AgentTaskEvent,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import {
-    getWorkTaskLane,
-    useWorkStore,
-    type WorkSessionOwner,
-    type WorkTaskLane,
-} from '@/stores/work'
+    getAgentTaskLane,
+    useAgentStore,
+    type AgentSessionOwner,
+    type AgentTaskLane,
+} from '@/stores/agent'
 
-const noEvents: WorkTaskEvent[] = []
+const noEvents: AgentTaskEvent[] = []
 
-export function useWorkTask(lane: WorkTaskLane) {
-    const workStore = useWorkStore()
-    const session = computed(() => workStore.getSession(lane))
+export function useAgentTask(lane: AgentTaskLane) {
+    const agentStore = useAgentStore()
+    const session = computed(() => agentStore.getSession(lane))
     const state = computed(() => {
         const taskId = session.value?.taskId
-        return taskId === undefined ? null : workStore.getTaskState(taskId)
+        return taskId === undefined ? null : agentStore.getTaskState(taskId)
     })
     const task = computed(() => state.value?.task ?? null)
     const events = computed(() => state.value?.events ?? noEvents)
@@ -60,37 +60,37 @@ export function useWorkTask(lane: WorkTaskLane) {
         return session.value?.taskId ?? null
     }
 
-    function startTask(input: StartWorkTaskInput, owner: WorkSessionOwner) {
-        if (getWorkTaskLane(owner) !== lane) {
-            throw new Error(`Work owner does not belong to the ${lane} task lane`)
+    function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner) {
+        if (getAgentTaskLane(owner) !== lane) {
+            throw new Error(`Agent owner does not belong to the ${lane} task lane`)
         }
 
-        return workStore.startTask(input, owner)
+        return agentStore.startTask(input, owner)
     }
 
     function restoreSession() {
         const taskId = currentTaskId()
-        return taskId === null ? Promise.resolve(null) : workStore.restoreTask(taskId)
+        return taskId === null ? Promise.resolve(null) : agentStore.restoreTask(taskId)
     }
 
     function dismissSession() {
         const taskId = currentTaskId()
-        return taskId !== null && workStore.dismissSession(taskId)
+        return taskId !== null && agentStore.dismissSession(taskId)
     }
 
-    function resolveAction(decision: WorkActionDecision) {
+    function resolveAction(decision: AgentActionDecision) {
         const taskId = currentTaskId()
-        return taskId === null ? Promise.resolve() : workStore.resolveAction(taskId, decision)
+        return taskId === null ? Promise.resolve() : agentStore.resolveAction(taskId, decision)
     }
 
     function allowBrowserActionsForTask() {
         const taskId = currentTaskId()
-        return taskId === null ? Promise.resolve() : workStore.allowBrowserActionsForTask(taskId)
+        return taskId === null ? Promise.resolve() : agentStore.allowBrowserActionsForTask(taskId)
     }
 
     function cancelTask() {
         const taskId = currentTaskId()
-        return taskId === null ? Promise.resolve(null) : workStore.cancelTask(taskId)
+        return taskId === null ? Promise.resolve(null) : agentStore.cancelTask(taskId)
     }
 
     return {

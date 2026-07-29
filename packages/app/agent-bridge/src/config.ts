@@ -10,5 +10,5 @@ export const env = {
     PORT: Number(process.env.PORT ?? 3001),
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
     CODEX_BIN: process.env.CODEX_BIN ?? (existsSync(bundledCodex) ? bundledCodex : 'codex'),
-    WORK_CWD: process.env.WORK_CWD ?? repositoryRoot,
+    AGENT_CWD: process.env.AGENT_CWD ?? repositoryRoot,
 }

@@ -39,7 +39,7 @@ const emit = defineEmits<{
             data-testid="job-post-start-status"
             role="status"
         >
-            Starting Work…
+            Starting Agent…
         </p>
         <p v-if="issue" class="form-error" data-testid="job-post-import-error" role="alert">
             {{ issue }}

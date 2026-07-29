@@ -8,7 +8,7 @@ import {
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
-import { useWorkTask } from '@/composables/useWorkTask'
+import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
@@ -35,7 +35,7 @@ const postFilterOptions: AppDropdownOption[] = [
 const isPostFilter = (value: string): value is PostFilter =>
     value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
-const outreachWork = useWorkTask('outreach')
+const outreachAgent = useAgentTask('outreach')
 const outreachStore = useOutreachStore()
 const {
     postId: outreachPostId,
@@ -108,8 +108,8 @@ const outreachActionDisabled = computed(
         contactSaving.value ||
         contactUpdating.value ||
         hasActiveOutreachTask.value ||
-        outreachWork.session.value !== null ||
-        (outreachWork.taskActive.value &&
+        outreachAgent.session.value !== null ||
+        (outreachAgent.taskActive.value &&
             (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
 )
 const applyViewerMode = computed<JobPostViewerMode>(() => ({
@@ -215,7 +215,7 @@ async function startContactDiscovery(post: JobPost) {
     if (
         !viewMounted ||
         hasActiveOutreachTask.value ||
-        outreachWork.taskActive.value ||
+        outreachAgent.taskActive.value ||
         contactSaving.value ||
         contactUpdating.value ||
         contactsLoading.value ||
@@ -255,7 +255,7 @@ async function openOutreach() {
         return
     }
 
-    if (outreachWork.taskActive.value) {
+    if (outreachAgent.taskActive.value) {
         if (outreachStore.postId === post.id) {
             outreachExpanded.value = false
             activePanel.value = 'outreach'
@@ -273,7 +273,7 @@ async function openOutreach() {
 
         if (
             !viewMounted ||
-            outreachWork.taskActive.value ||
+            outreachAgent.taskActive.value ||
             savedContacts === null ||
             outreachStore.postId !== post.id ||
             selectedPostId.value !== post.id ||
@@ -410,7 +410,7 @@ async function loadApplyQueue() {
 }
 
 async function restoreOutreachTask() {
-    const session = outreachWork.session.value
+    const session = outreachAgent.session.value
 
     if (
         session === null ||
@@ -423,7 +423,7 @@ async function restoreOutreachTask() {
         await postStore.fetchPost(session.postId).catch(() => null)
     }
 
-    if (!viewMounted || outreachWork.session.value?.taskId !== session.taskId) {
+    if (!viewMounted || outreachAgent.session.value?.taskId !== session.taskId) {
         return
     }
 
@@ -490,7 +490,7 @@ onMounted(() => {
                 "
             >
                 <PanelBackButton
-                    v-if="!outreachWork.taskActive.value && activePanel !== 'posts'"
+                    v-if="!outreachAgent.taskActive.value && activePanel !== 'posts'"
                     label="Back to job posts"
                     test-id="back-to-job-posts"
                     :mobile-only="activePanel === 'viewer' && outreachContact === null"

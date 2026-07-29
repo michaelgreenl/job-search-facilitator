@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { CodexAppServer, type WorkRuntimeEvent } from '../src/app-server.ts'
-import { WorkTaskManager } from '../src/task-manager.ts'
+import { CodexAppServer, type AgentRuntimeEvent } from '../src/app-server.ts'
+import { AgentTaskManager } from '../src/task-manager.ts'
 
 const createFakeProcess = ({
     completeTaskImmediately = false,
@@ -232,7 +232,7 @@ describe('Codex app server client', () => {
         const runtime = new CodexAppServer('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
-        const events: WorkRuntimeEvent[] = []
+        const events: AgentRuntimeEvent[] = []
 
         runtime.onEvent((event) => events.push(event))
         await runtime.start()
@@ -298,7 +298,7 @@ describe('Codex app server client', () => {
         const runtime = new CodexAppServer('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
-        const events: WorkRuntimeEvent[] = []
+        const events: AgentRuntimeEvent[] = []
 
         runtime.onEvent((event) => events.push(event))
         await runtime.start()
@@ -410,12 +410,12 @@ describe('Codex app server client', () => {
         fake.respond({ id: request?.id, result: { thread: {} } })
 
         await expect(task).rejects.toThrow(
-            'Work runtime returned invalid response for "thread/start"',
+            'Agent runtime returned invalid response for "thread/start"',
         )
         expect(runtime.health).toEqual({
             status: 'unavailable',
             capabilities: [],
-            error: 'Work runtime returned invalid response for "thread/start"',
+            error: 'Agent runtime returned invalid response for "thread/start"',
         })
     })
 
@@ -424,7 +424,7 @@ describe('Codex app server client', () => {
         const runtime = new CodexAppServer('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
-        const events: WorkRuntimeEvent[] = []
+        const events: AgentRuntimeEvent[] = []
 
         runtime.onEvent((event) => events.push(event))
         await runtime.start()
@@ -442,7 +442,7 @@ describe('Codex app server client', () => {
             {
                 type: 'runtime-failed',
                 error: expect.objectContaining({
-                    message: 'Work runtime returned invalid "turn/completed" notification',
+                    message: 'Agent runtime returned invalid "turn/completed" notification',
                 }),
             },
         ])
@@ -454,7 +454,7 @@ describe('Codex app server client', () => {
         const runtime = new CodexAppServer('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
 
         await runtime.start()
         const task = await manager.start({
@@ -472,7 +472,7 @@ describe('Codex app server client', () => {
         expect(runtime.health).toEqual({
             status: 'unavailable',
             capabilities: [],
-            error: 'Work runtime exited with code 17',
+            error: 'Agent runtime exited with code 17',
         })
     })
 
@@ -481,7 +481,7 @@ describe('Codex app server client', () => {
         const runtime = new CodexAppServer('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
 
         await runtime.start()
         const task = await manager.start({
@@ -524,7 +524,7 @@ describe('Codex app server client', () => {
             spawnProcess: () => fake.process,
             exitDrainTimeoutMs: 10,
         })
-        const manager = new WorkTaskManager(runtime)
+        const manager = new AgentTaskManager(runtime)
 
         await runtime.start()
         const task = await manager.start({
@@ -538,7 +538,7 @@ describe('Codex app server client', () => {
 
         expect(manager.get(task.id)).toMatchObject({
             status: 'failed',
-            error: 'Work runtime exited with code 17',
+            error: 'Agent runtime exited with code 17',
         })
     })
 
@@ -552,7 +552,7 @@ describe('Codex app server client', () => {
 
         fake.respond({ id: request?.id, method: 'unexpected', result: {} })
 
-        await expect(start).rejects.toThrow('Work runtime returned an invalid JSON-RPC message')
+        await expect(start).rejects.toThrow('Agent runtime returned an invalid JSON-RPC message')
     })
 
     it('reports stdin failure with bounded private stderr diagnostics', async () => {
@@ -578,7 +578,7 @@ describe('Codex app server client', () => {
         fake.process.emit('close', null, null)
 
         await expect(exit).resolves.toMatchObject({ message: 'broken pipe' })
-        expect(diagnostics).toEqual(['Work runtime stderr before failure:\n89abcdeftail'])
+        expect(diagnostics).toEqual(['Agent runtime stderr before failure:\n89abcdeftail'])
         runtime.close()
         expect(runtime.health).toEqual({
             status: 'unavailable',
@@ -604,7 +604,7 @@ describe('Codex app server client', () => {
         fake.endStdout()
 
         await expect(failure).resolves.toMatchObject({
-            message: 'Work runtime protocol stream closed unexpectedly',
+            message: 'Agent runtime protocol stream closed unexpectedly',
         })
         expect(runtime.health.status).toBe('unavailable')
     })
@@ -617,12 +617,12 @@ describe('Codex app server client', () => {
         })
 
         await expect(runtime.start()).rejects.toThrow(
-            'Work runtime request "initialize" timed out after 10ms',
+            'Agent runtime request "initialize" timed out after 10ms',
         )
         expect(runtime.health).toEqual({
             status: 'unavailable',
             capabilities: [],
-            error: 'Work runtime request "initialize" timed out after 10ms',
+            error: 'Agent runtime request "initialize" timed out after 10ms',
         })
     })
 })

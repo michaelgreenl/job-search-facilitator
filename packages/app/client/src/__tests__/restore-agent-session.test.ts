@@ -3,8 +3,8 @@
 import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { restorePersistedWorkSession } from '@/restore-work-session'
-import type { WorkSession } from '@/stores/work'
+import { restorePersistedAgentSession } from '@/restore-agent-session'
+import type { AgentSession } from '@/stores/agent'
 
 const emptyView = defineComponent({ template: '<main />' })
 
@@ -18,14 +18,14 @@ const createTestRouter = () =>
         ],
     })
 
-describe('persisted Work session startup', () => {
+describe('persisted Agent session startup', () => {
     it.each([
         {
             session: {
                 kind: 'job-post-import',
                 taskId: 'task-import',
                 url: 'https://example.com/job',
-            } satisfies WorkSession,
+            } satisfies AgentSession,
             routeName: 'review',
         },
         {
@@ -33,7 +33,7 @@ describe('persisted Work session startup', () => {
                 kind: 'outreach-contact',
                 taskId: 'task-outreach',
                 postId: 'post-1',
-            } satisfies WorkSession,
+            } satisfies AgentSession,
             routeName: 'apply',
         },
     ])('opens $routeName and reconnects its owner task', async ({ session, routeName }) => {
@@ -42,7 +42,7 @@ describe('persisted Work session startup', () => {
 
         const restoreSessions = vi.fn().mockResolvedValue(undefined)
 
-        await restorePersistedWorkSession(router, {
+        await restorePersistedAgentSession(router, {
             sessions: [session],
             restoreSessions,
         })
@@ -51,7 +51,7 @@ describe('persisted Work session startup', () => {
         expect(restoreSessions).toHaveBeenCalledOnce()
     })
 
-    it('opens the route for the most recently persisted session and restores all work', async () => {
+    it('opens the route for the most recently persisted session and restores all tasks', async () => {
         const router = createTestRouter()
         await router.push('/results')
         const restoreSessions = vi.fn().mockResolvedValue(undefined)
@@ -66,9 +66,9 @@ describe('persisted Work session startup', () => {
                 taskId: 'task-import',
                 url: 'https://example.com/job',
             },
-        ] satisfies WorkSession[]
+        ] satisfies AgentSession[]
 
-        await restorePersistedWorkSession(router, { sessions, restoreSessions })
+        await restorePersistedAgentSession(router, { sessions, restoreSessions })
 
         expect(router.currentRoute.value.name).toBe('review')
         expect(restoreSessions).toHaveBeenCalledOnce()

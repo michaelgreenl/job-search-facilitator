@@ -13,9 +13,9 @@ export interface OutreachRun {
     jobPostId: string
     requestedContactCount: OutreachContactCount
     status: OutreachRunStatus
-    workTaskId: string | null
-    workThreadId: string | null
-    workTurnId: string | null
+    agentTaskId: string | null
+    agentThreadId: string | null
+    agentTurnId: string | null
     error: string | null
     completedAt: IsoDateTime | null
     createdAt: IsoDateTime
@@ -30,9 +30,9 @@ export interface CreateOutreachRunInput {
 export type UpdateOutreachRunInput =
     | {
           status: 'running'
-          workTaskId: string
-          workThreadId: string
-          workTurnId: string
+          agentTaskId: string
+          agentThreadId: string
+          agentTurnId: string
       }
     | {
           status: 'completed'

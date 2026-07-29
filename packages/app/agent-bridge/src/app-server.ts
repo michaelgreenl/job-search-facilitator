@@ -4,10 +4,10 @@ import { isAbsolute } from 'node:path'
 import { createInterface, type Interface } from 'node:readline'
 import type {
     JsonObject,
-    StartWorkTaskInput,
-    WorkActionDecision,
-    WorkActionRequired,
-    WorkCapability,
+    StartAgentTaskInput,
+    AgentActionDecision,
+    AgentActionRequired,
+    AgentCapability,
 } from '@job-search-facilitator/core'
 import { z } from 'zod'
 
@@ -30,8 +30,8 @@ interface PendingRequest {
 
 interface PendingAction {
     requestId: RpcId
-    action: WorkRuntimeAction
-    decision: WorkActionDecision | null
+    action: AgentRuntimeAction
+    decision: AgentActionDecision | null
 }
 
 type SpawnProcess = (
@@ -48,22 +48,22 @@ interface CodexAppServerOptions {
     diagnosticBufferSize?: number
 }
 
-export type WorkRuntimeHealth =
-    | { status: 'healthy'; capabilities: WorkCapability[] }
+export type AgentRuntimeHealth =
+    | { status: 'healthy'; capabilities: AgentCapability[] }
     | { status: 'unavailable'; capabilities: []; error: string }
 
-export interface StartedWorkTask {
+export interface StartedAgentTask {
     threadId: string
     turnId: string
 }
 
-export interface WorkRuntimeAction extends WorkActionRequired {
+export interface AgentRuntimeAction extends AgentActionRequired {
     threadId: string
     turnId: string | null
 }
 
-export type WorkRuntimeEvent =
-    | { type: 'action-required'; action: WorkRuntimeAction }
+export type AgentRuntimeEvent =
+    | { type: 'action-required'; action: AgentRuntimeAction }
     | { type: 'action-resolved'; threadId: string; actionId: string }
     | {
           type: 'activity'
@@ -89,17 +89,17 @@ export type WorkRuntimeEvent =
       }
     | { type: 'runtime-failed'; error: Error }
 
-export interface WorkRuntime {
-    readonly health: WorkRuntimeHealth
-    startTask(taskId: string, input: StartWorkTaskInput): Promise<StartedWorkTask>
+export interface AgentRuntime {
+    readonly health: AgentRuntimeHealth
+    startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask>
     interruptTask(threadId: string, turnId: string): Promise<void>
-    resolveAction(actionId: string, decision: WorkActionDecision): boolean
-    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void
+    resolveAction(actionId: string, decision: AgentActionDecision): boolean
+    onEvent(listener: (event: AgentRuntimeEvent) => void): () => void
 }
 
 const pluginIds = {
     chrome: 'chrome@openai-bundled',
-} satisfies Record<WorkCapability, string>
+} satisfies Record<AgentCapability, string>
 
 const rpcIdSchema = z.union([z.string(), z.number().int()])
 const rpcErrorSchema = z.object({ code: z.number().int(), message: z.string() })
@@ -168,7 +168,7 @@ const stringValue = (value: unknown): string | null =>
 
 const rpcIdKey = (id: RpcId) => `${typeof id}:${id}`
 
-const browserOriginAction = (params: unknown): WorkRuntimeAction | null => {
+const browserOriginAction = (params: unknown): AgentRuntimeAction | null => {
     if (!isObject(params)) {
         return null
     }
@@ -203,17 +203,17 @@ const browserOriginAction = (params: unknown): WorkRuntimeAction | null => {
     }
 }
 
-export class CodexAppServer implements WorkRuntime {
+export class CodexAppServer implements AgentRuntime {
     private process: ChildProcessWithoutNullStreams | null = null
     private output: Interface | null = null
     private requestId = 0
     private readonly pendingRequests = new Map<RpcId, PendingRequest>()
     private readonly pendingActions = new Map<string, PendingAction>()
     private readonly actionIdsByRequest = new Map<string, string>()
-    private readonly capabilityRoots = new Map<WorkCapability, string>()
-    private readonly queuedEvents: WorkRuntimeEvent[] = []
+    private readonly capabilityRoots = new Map<AgentCapability, string>()
+    private readonly queuedEvents: AgentRuntimeEvent[] = []
     private eventFlushScheduled = false
-    private readonly eventListeners = new Set<(event: WorkRuntimeEvent) => void>()
+    private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
     private readonly spawnProcess: SpawnProcess
     private readonly requestTimeoutMs: number
     private readonly exitDrainTimeoutMs: number
@@ -225,7 +225,7 @@ export class CodexAppServer implements WorkRuntime {
     private exitDrainTimeout: ReturnType<typeof setTimeout> | null = null
     private startAttempted = false
     private ready = false
-    private runtimeError = new Error('Work runtime has not started')
+    private runtimeError = new Error('Agent runtime has not started')
 
     constructor(
         private readonly binary: string,
@@ -239,15 +239,15 @@ export class CodexAppServer implements WorkRuntime {
         }: CodexAppServerOptions = {},
     ) {
         if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
-            throw new Error('Work runtime request timeout must be a positive integer')
+            throw new Error('Agent runtime request timeout must be a positive integer')
         }
 
         if (!Number.isSafeInteger(exitDrainTimeoutMs) || exitDrainTimeoutMs <= 0) {
-            throw new Error('Work runtime exit drain timeout must be a positive integer')
+            throw new Error('Agent runtime exit drain timeout must be a positive integer')
         }
 
         if (!Number.isSafeInteger(diagnosticBufferSize) || diagnosticBufferSize <= 0) {
-            throw new Error('Work runtime diagnostic buffer size must be a positive integer')
+            throw new Error('Agent runtime diagnostic buffer size must be a positive integer')
         }
 
         this.spawnProcess = spawnProcess
@@ -257,7 +257,7 @@ export class CodexAppServer implements WorkRuntime {
         this.diagnosticBufferSize = diagnosticBufferSize
     }
 
-    get health(): WorkRuntimeHealth {
+    get health(): AgentRuntimeHealth {
         return this.ready
             ? { status: 'healthy', capabilities: [...this.capabilityRoots.keys()] }
             : {
@@ -273,12 +273,12 @@ export class CodexAppServer implements WorkRuntime {
         }
 
         if (this.startAttempted) {
-            throw new Error('Work runtime cannot restart in-process; restart the Work bridge')
+            throw new Error('Agent runtime cannot restart in-process; restart the Agent bridge')
         }
 
         this.startAttempted = true
         this.ready = false
-        this.runtimeError = new Error('Work runtime is starting')
+        this.runtimeError = new Error('Agent runtime is starting')
         this.stderrTail = ''
         this.diagnosticPending = false
         this.processExitError = null
@@ -292,7 +292,7 @@ export class CodexAppServer implements WorkRuntime {
             })
         } catch (error) {
             this.runtimeError =
-                error instanceof Error ? error : new Error('Could not start Work runtime')
+                error instanceof Error ? error : new Error('Could not start Agent runtime')
             throw this.runtimeError
         }
 
@@ -303,7 +303,7 @@ export class CodexAppServer implements WorkRuntime {
             if (this.process === child) {
                 const error =
                     this.processExitError ??
-                    new Error('Work runtime protocol stream closed unexpectedly')
+                    new Error('Agent runtime protocol stream closed unexpectedly')
                 this.handleExit(error, this.processExitError === null)
             }
         })
@@ -316,7 +316,7 @@ export class CodexAppServer implements WorkRuntime {
         child.once('close', () => {
             if (this.process === child) {
                 this.handleExit(
-                    this.processExitError ?? new Error('Work runtime process closed unexpectedly'),
+                    this.processExitError ?? new Error('Agent runtime process closed unexpectedly'),
                     false,
                 )
             }
@@ -328,8 +328,8 @@ export class CodexAppServer implements WorkRuntime {
                 child,
                 new Error(
                     code !== null
-                        ? `Work runtime exited with code ${code}`
-                        : `Work runtime exited with signal ${signal ?? 'unknown'}`,
+                        ? `Agent runtime exited with code ${code}`
+                        : `Agent runtime exited with signal ${signal ?? 'unknown'}`,
                 ),
             )
         })
@@ -362,20 +362,20 @@ export class CodexAppServer implements WorkRuntime {
         } catch (error) {
             if (this.process !== null) {
                 this.handleExit(
-                    error instanceof Error ? error : new Error('Could not start Work runtime'),
+                    error instanceof Error ? error : new Error('Could not start Agent runtime'),
                 )
             }
             throw error
         }
     }
 
-    async startTask(taskId: string, input: StartWorkTaskInput): Promise<StartedWorkTask> {
+    async startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.assertReady()
         const selectedCapabilityRoots = input.capabilities.map((capability) => {
             const path = this.capabilityRoots.get(capability)
 
             if (path === undefined) {
-                throw new Error(`Work capability is unavailable: ${capability}`)
+                throw new Error(`Agent capability is unavailable: ${capability}`)
             }
 
             return {
@@ -425,7 +425,7 @@ export class CodexAppServer implements WorkRuntime {
         this.assertReady()
     }
 
-    resolveAction(actionId: string, decision: WorkActionDecision): boolean {
+    resolveAction(actionId: string, decision: AgentActionDecision): boolean {
         if (!this.ready) {
             return false
         }
@@ -453,7 +453,7 @@ export class CodexAppServer implements WorkRuntime {
         return true
     }
 
-    onEvent(listener: (event: WorkRuntimeEvent) => void): () => void {
+    onEvent(listener: (event: AgentRuntimeEvent) => void): () => void {
         this.eventListeners.add(listener)
         return () => this.eventListeners.delete(listener)
     }
@@ -470,7 +470,7 @@ export class CodexAppServer implements WorkRuntime {
         this.output = null
         this.diagnosticPending = false
         this.clearExitDrainTimeout()
-        const error = this.processExitError ?? new Error('Work runtime closed')
+        const error = this.processExitError ?? new Error('Agent runtime closed')
         this.processExitError = null
         child.kill()
         this.ready = false
@@ -490,7 +490,7 @@ export class CodexAppServer implements WorkRuntime {
         )
         const plugins = response.marketplaces.flatMap(({ plugins }) => plugins)
 
-        for (const capability of Object.keys(pluginIds) as WorkCapability[]) {
+        for (const capability of Object.keys(pluginIds) as AgentCapability[]) {
             const plugin = plugins.find(({ id }) => id === pluginIds[capability])
 
             if (
@@ -517,7 +517,7 @@ export class CodexAppServer implements WorkRuntime {
 
                 this.handleExit(
                     new Error(
-                        `Work runtime request "${method}" timed out after ${this.requestTimeoutMs}ms`,
+                        `Agent runtime request "${method}" timed out after ${this.requestTimeoutMs}ms`,
                     ),
                 )
             }, this.requestTimeoutMs)
@@ -543,14 +543,14 @@ export class CodexAppServer implements WorkRuntime {
             } catch (error) {
                 clearTimeout(timeout)
                 this.pendingRequests.delete(id)
-                reject(error instanceof Error ? error : new Error('Could not send Work request'))
+                reject(error instanceof Error ? error : new Error('Could not send Agent request'))
             }
         })
     }
 
     private send(message: OutgoingRpcMessage): void {
         if (this.process === null || this.processExitError !== null) {
-            throw new Error('Work runtime is not running')
+            throw new Error('Agent runtime is not running')
         }
 
         this.process.stdin.write(`${JSON.stringify(message)}\n`)
@@ -562,12 +562,12 @@ export class CodexAppServer implements WorkRuntime {
         try {
             message = JSON.parse(line)
         } catch {
-            this.handleExit(new Error('Work runtime returned malformed JSON'))
+            this.handleExit(new Error('Agent runtime returned malformed JSON'))
             return
         }
 
         if (!isObject(message)) {
-            this.handleExit(new Error('Work runtime returned an invalid JSON-RPC message'))
+            this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC message'))
             return
         }
 
@@ -583,7 +583,7 @@ export class CodexAppServer implements WorkRuntime {
                 hasResult ||
                 hasError
             ) {
-                this.handleExit(new Error('Work runtime returned an invalid JSON-RPC message'))
+                this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC message'))
                 return
             }
 
@@ -595,7 +595,7 @@ export class CodexAppServer implements WorkRuntime {
             const id = rpcIdSchema.safeParse(message.id)
 
             if (!id.success) {
-                this.handleExit(new Error('Work runtime returned an invalid JSON-RPC message'))
+                this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC message'))
                 return
             }
 
@@ -604,14 +604,14 @@ export class CodexAppServer implements WorkRuntime {
         }
 
         if (!hasId) {
-            this.handleExit(new Error('Work runtime returned an invalid JSON-RPC message'))
+            this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC message'))
             return
         }
 
         const id = rpcIdSchema.safeParse(message.id)
 
         if (!id.success || hasResult === hasError) {
-            this.handleExit(new Error('Work runtime returned an invalid JSON-RPC response'))
+            this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC response'))
             return
         }
 
@@ -625,7 +625,7 @@ export class CodexAppServer implements WorkRuntime {
             const rpcError = rpcErrorSchema.safeParse(message.error)
 
             if (!rpcError.success) {
-                this.handleExit(new Error('Work runtime returned an invalid JSON-RPC response'))
+                this.handleExit(new Error('Agent runtime returned an invalid JSON-RPC response'))
                 return
             }
 
@@ -633,7 +633,7 @@ export class CodexAppServer implements WorkRuntime {
             clearTimeout(pending.timeout)
             pending.reject(
                 new Error(
-                    `Work runtime request "${pending.method}" failed: ${rpcError.data.message}`,
+                    `Agent runtime request "${pending.method}" failed: ${rpcError.data.message}`,
                 ),
             )
             return
@@ -641,7 +641,7 @@ export class CodexAppServer implements WorkRuntime {
 
         if (!pending.resolveResult(message.result)) {
             this.handleExit(
-                new Error(`Work runtime returned invalid response for "${pending.method}"`),
+                new Error(`Agent runtime returned invalid response for "${pending.method}"`),
             )
             return
         }
@@ -743,7 +743,7 @@ export class CodexAppServer implements WorkRuntime {
                 commandExecution: 'local-read',
                 collabAgentToolCall: 'delegation',
             }[notification.item.type] as
-                | Extract<WorkRuntimeEvent, { type: 'activity' }>['activity']
+                | Extract<AgentRuntimeEvent, { type: 'activity' }>['activity']
                 | undefined
 
             if (activity !== undefined) {
@@ -848,10 +848,10 @@ export class CodexAppServer implements WorkRuntime {
     }
 
     private failNotification(method: string): void {
-        this.handleExit(new Error(`Work runtime returned invalid "${method}" notification`))
+        this.handleExit(new Error(`Agent runtime returned invalid "${method}" notification`))
     }
 
-    private queueEvent(event: WorkRuntimeEvent): void {
+    private queueEvent(event: AgentRuntimeEvent): void {
         this.queuedEvents.push(event)
 
         if (this.eventFlushScheduled) {
@@ -950,7 +950,7 @@ export class CodexAppServer implements WorkRuntime {
         }
 
         try {
-            this.diagnosticSink(`Work runtime stderr before failure:\n${diagnostic}`)
+            this.diagnosticSink(`Agent runtime stderr before failure:\n${diagnostic}`)
         } catch {
             // Diagnostics must not interfere with runtime failure handling.
         }

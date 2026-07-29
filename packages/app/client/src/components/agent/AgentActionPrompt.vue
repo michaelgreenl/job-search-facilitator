@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { WorkActionDecision, WorkActionRequired } from '@job-search-facilitator/core'
+import type { AgentActionDecision, AgentActionRequired } from '@job-search-facilitator/core'
 import { nextTick, shallowRef, useTemplateRef, watch } from 'vue'
 
 const props = defineProps<{
-    action: WorkActionRequired
+    action: AgentActionRequired
     submitting: boolean
 }>()
 
 const emit = defineEmits<{
     alwaysAllow: []
-    resolve: [decision: WorkActionDecision]
+    resolve: [decision: AgentActionDecision]
 }>()
 
 const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
@@ -48,7 +48,7 @@ function cancelAlwaysAllowConfirmation() {
     <section
         v-if="confirmingAlwaysAllow"
         class="action-required"
-        data-testid="work-action-confirmation"
+        data-testid="agent-action-confirmation"
         role="alertdialog"
         aria-labelledby="always-allow-title"
         aria-describedby="always-allow-message"
@@ -64,7 +64,7 @@ function cancelAlwaysAllowConfirmation() {
             <button
                 ref="alwaysAllowNo"
                 class="action-button"
-                data-testid="work-action-always-allow-cancel"
+                data-testid="agent-action-always-allow-cancel"
                 type="button"
                 :disabled="submitting"
                 @click="cancelAlwaysAllowConfirmation"
@@ -73,7 +73,7 @@ function cancelAlwaysAllowConfirmation() {
             </button>
             <button
                 class="action-button action-button-primary"
-                data-testid="work-action-always-allow-confirm"
+                data-testid="agent-action-always-allow-confirm"
                 type="button"
                 :disabled="submitting"
                 @click="emit('alwaysAllow')"
@@ -87,7 +87,7 @@ function cancelAlwaysAllowConfirmation() {
         v-else
         ref="actionRequired"
         class="action-required"
-        data-testid="work-action-prompt"
+        data-testid="agent-action-prompt"
         aria-labelledby="action-title"
         tabindex="-1"
     >
@@ -99,7 +99,7 @@ function cancelAlwaysAllowConfirmation() {
             <button
                 ref="alwaysAllowAction"
                 class="action-button"
-                data-testid="work-action-always-allow"
+                data-testid="agent-action-always-allow"
                 type="button"
                 :disabled="submitting"
                 @click="requestAlwaysAllowConfirmation"
@@ -110,7 +110,7 @@ function cancelAlwaysAllowConfirmation() {
             <div class="action-buttons">
                 <button
                     class="action-button"
-                    data-testid="work-action-decline"
+                    data-testid="agent-action-decline"
                     type="button"
                     :disabled="submitting"
                     @click="emit('resolve', 'decline')"
@@ -119,7 +119,7 @@ function cancelAlwaysAllowConfirmation() {
                 </button>
                 <button
                     class="action-button action-button-primary"
-                    data-testid="work-action-approve"
+                    data-testid="agent-action-approve"
                     type="button"
                     :disabled="submitting"
                     @click="emit('resolve', 'approve')"
