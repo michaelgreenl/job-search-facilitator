@@ -167,7 +167,7 @@ function selectLabel(value: string) {
                 :disabled="applyMode.outreachDisabled"
                 @click="emit('openOutreach')"
             >
-                Discover contacts
+                Outreach
             </BaseButton>
         </div>
     </section>
