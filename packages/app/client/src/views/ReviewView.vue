@@ -17,7 +17,6 @@ import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import PanelHeading from '@/components/layout/PanelHeading.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
@@ -683,6 +682,8 @@ onMounted(() => {
                 :active="activePanel === 'sources'"
                 :adjacent="activePanel === 'import'"
                 aria-label="Review sources"
+                eyebrow="Review sources"
+                title="Select a source to review"
             >
                 <ReviewSourceSelector
                     :reports="reportStore.reports"
@@ -706,10 +707,14 @@ onMounted(() => {
                 :active="activePanel === 'import'"
                 :adjacent="false"
                 aria-label="Add job post"
+                eyebrow="Job post import"
+                title="Add job post"
+                :back-label="importRunning || importSaving ? 'Back to added job posts' : undefined"
+                back-test-id="back-from-job-post-import"
+                @back="showImportPosts"
             >
                 <JobPostImportPanel
                     v-if="activePanel === 'import'"
-                    :back-available="importRunning || importSaving"
                     :can-dismiss="importAgent.canDismissSession.value"
                     :cancelling="importAgent.cancelling.value"
                     :issue="importDisplayIssue"
@@ -717,7 +722,6 @@ onMounted(() => {
                     :running="importRunning"
                     :saving="importSaving"
                     :starting="importStarting"
-                    @back="showImportPosts"
                     @cancel="cancelImport"
                     @dismiss="dismissImport"
                     @retry="retryImport"
@@ -731,31 +735,28 @@ onMounted(() => {
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'sources' || activePanel === 'viewer'"
                 aria-label="Job posts"
+                eyebrow="Job posts"
+                :title="selectedSourceTitle"
+                :back-label="activePanel === 'sources' ? undefined : 'Back to review sources'"
+                back-test-id="back-to-reports"
+                @back="showSources"
             >
-                <PanelHeading
-                    eyebrow="Job posts"
-                    :title="selectedSourceTitle"
-                    :back-label="activePanel === 'sources' ? undefined : 'Back to review sources'"
-                    back-test-id="back-to-reports"
-                    @back="showSources"
-                >
-                    <template #controls>
-                        <span class="item-count">{{ postCountLabel }}</span>
+                <template #controls>
+                    <span class="item-count">{{ postCountLabel }}</span>
 
-                        <div class="post-filter">
-                            <span>Filter</span>
-                            <BaseDropdown
-                                class="post-filter-dropdown"
-                                accessible-label="Filter job posts"
-                                test-id="review-post-filter"
-                                :disabled="selectedSource === null"
-                                :options="postFilterOptions"
-                                :label="postFilterLabel"
-                                @select="selectPostFilter"
-                            />
-                        </div>
-                    </template>
-                </PanelHeading>
+                    <div class="post-filter">
+                        <span>Filter</span>
+                        <BaseDropdown
+                            class="post-filter-dropdown"
+                            accessible-label="Filter job posts"
+                            test-id="review-post-filter"
+                            :disabled="selectedSource === null"
+                            :options="postFilterOptions"
+                            :label="postFilterLabel"
+                            @select="selectPostFilter"
+                        />
+                    </div>
+                </template>
 
                 <JobPostList
                     :posts="filteredPosts"

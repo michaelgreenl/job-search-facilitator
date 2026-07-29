@@ -2,7 +2,6 @@
 import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import PanelHeading from '@/components/layout/PanelHeading.vue'
 import SearchReportCard from '@/components/search-reports/SearchReportCard.vue'
 import UserAddedSourceCard from './UserAddedSourceCard.vue'
 
@@ -79,8 +78,6 @@ function clearDateFilter() {
 </script>
 
 <template>
-    <PanelHeading eyebrow="Review sources" title="Select a source to review" />
-
     <UserAddedSourceCard
         :count="userAddedCount"
         :selected="userAddedSelected"

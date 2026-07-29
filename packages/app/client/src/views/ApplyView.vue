@@ -14,7 +14,6 @@ import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import BasePanel from '@/components/base/BasePanel.vue'
-import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
@@ -448,25 +447,26 @@ onMounted(() => {
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'viewer' && outreachContact === null"
                 aria-label="Job posts"
+                eyebrow="Apply"
+                title="Queue"
+                title-tag="h1"
             >
-                <PanelHeading eyebrow="Apply" title="Queue" title-tag="h1">
-                    <template #controls>
-                        <span class="item-count">{{ filteredPosts.length }} posts</span>
+                <template #controls>
+                    <span class="item-count">{{ filteredPosts.length }} posts</span>
 
-                        <div class="post-filter">
-                            <span>Filter</span>
-                            <BaseDropdown
-                                class="post-filter-dropdown"
-                                accessible-label="Filter job posts"
-                                test-id="apply-post-filter"
-                                :disabled="false"
-                                :options="postFilterOptions"
-                                :label="postFilterLabel"
-                                @select="selectPostFilter"
-                            />
-                        </div>
-                    </template>
-                </PanelHeading>
+                    <div class="post-filter">
+                        <span>Filter</span>
+                        <BaseDropdown
+                            class="post-filter-dropdown"
+                            accessible-label="Filter job posts"
+                            test-id="apply-post-filter"
+                            :disabled="false"
+                            :options="postFilterOptions"
+                            :label="postFilterLabel"
+                            @select="selectPostFilter"
+                        />
+                    </div>
+                </template>
 
                 <JobPostList
                     :posts="filteredPosts"

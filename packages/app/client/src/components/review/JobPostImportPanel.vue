@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import BaseButton from '@/components/base/BaseButton.vue'
-import PanelHeading from '@/components/layout/PanelHeading.vue'
 
 defineProps<{
-    backAvailable: boolean
     canDismiss: boolean
     cancelling: boolean
     issue: string | null
@@ -14,7 +12,6 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-    back: []
     cancel: []
     dismiss: []
     retry: []
@@ -23,14 +20,6 @@ const emit = defineEmits<{
 
 <template>
     <section class="job-post-import-panel">
-        <PanelHeading
-            eyebrow="Job post import"
-            title="Add job post"
-            :back-label="backAvailable ? 'Back to added job posts' : undefined"
-            back-test-id="back-from-job-post-import"
-            @back="emit('back')"
-        />
-
         <p v-if="saving" class="save-status" data-testid="job-post-save-status" role="status">
             Saving job post…
         </p>
@@ -84,9 +73,9 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .job-post-import-panel {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: $space-4;
-    height: 100%;
     min-height: 0;
 }
 
