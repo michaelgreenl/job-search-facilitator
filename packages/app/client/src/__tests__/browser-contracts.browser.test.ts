@@ -9,7 +9,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
-import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
+import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import '@/assets/styles/app.scss'
 
@@ -182,7 +182,7 @@ describe('browser interaction contracts', () => {
 
                 return () =>
                     h('div', [
-                        h(ReviewSourceSelector, {
+                        h(ReviewSourcePanel, {
                             reports: [],
                             selectedReportId: null,
                             userAddedSelected: false,

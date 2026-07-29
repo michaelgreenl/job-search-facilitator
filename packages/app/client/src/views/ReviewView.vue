@@ -19,7 +19,7 @@ import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/Jo
 import BasePanel from '@/components/base/BasePanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
-import ReviewSourceSelector from '@/components/review/ReviewSourceSelector.vue'
+import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import AgentStream from '@/components/agent/AgentStream.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useReportStore } from '@/stores/report'
@@ -633,7 +633,7 @@ async function loadReports() {
     try {
         await reportStore.fetchReports()
     } catch {
-        // The report store owns the error rendered by ReviewSourceSelector.
+        // The report store owns the error rendered by ReviewSourcePanel.
     } finally {
         reportsSettled.value = true
         restoreRouteSelection()
@@ -685,7 +685,7 @@ onMounted(() => {
                 eyebrow="Review sources"
                 title="Select a source to review"
             >
-                <ReviewSourceSelector
+                <ReviewSourcePanel
                     :reports="reportStore.reports"
                     :selected-report-id="selectedReport?.id ?? null"
                     :user-added-selected="selectedSource?.kind === 'user-added'"
