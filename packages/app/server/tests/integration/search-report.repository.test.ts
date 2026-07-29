@@ -6,8 +6,10 @@ import type {
 } from '@job-search-facilitator/core'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { jobPostRepository } from '../../src/db/repositories/job-post.repository.ts'
-import { outreachContactRepository } from '../../src/db/repositories/outreach-contact.repository.ts'
-import { outreachRunRepository } from '../../src/db/repositories/outreach-run.repository.ts'
+import {
+    outreachContactRepository,
+    outreachRunRepository,
+} from '../../src/db/repositories/outreach.repository.ts'
 import { searchReportRepository } from '../../src/db/repositories/search-report.repository.ts'
 import { prisma } from '../../src/db/prisma.ts'
 

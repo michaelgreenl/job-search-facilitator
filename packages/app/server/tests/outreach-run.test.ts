@@ -6,8 +6,8 @@ import type {
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import { createOutreachRunRouter } from '../src/api/routes/outreach-run.route.ts'
-import type { OutreachRunRepository } from '../src/db/repositories/outreach-run.repository.ts'
+import { createOutreachRunRouter } from '../src/api/routes/outreach.route.ts'
+import type { OutreachRunRepository } from '../src/db/repositories/outreach.repository.ts'
 
 const existingRun: OutreachRun = {
     id: '11111111-1111-4111-8111-111111111111',

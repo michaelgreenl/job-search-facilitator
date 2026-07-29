@@ -6,8 +6,8 @@ import type {
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import { createOutreachContactRouter } from '../src/api/routes/outreach-contact.route.ts'
-import type { OutreachContactRepository } from '../src/db/repositories/outreach-contact.repository.ts'
+import { createOutreachContactRouter } from '../src/api/routes/outreach.route.ts'
+import type { OutreachContactRepository } from '../src/db/repositories/outreach.repository.ts'
 
 const jobPostId = '22222222-2222-4222-8222-222222222222'
 const existingContact: OutreachContact = {
