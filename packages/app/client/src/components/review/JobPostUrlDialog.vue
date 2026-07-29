@@ -96,7 +96,7 @@ function submit() {
             <BaseButton
                 class="close-button"
                 data-testid="close-job-post-url-dialog"
-                icon-size="md"
+                icon-size="sm"
                 preset="icon"
                 aria-label="Close add job post"
                 @click="requestClose"
@@ -153,7 +153,7 @@ function submit() {
 <style scoped lang="scss">
 .job-post-url-dialog {
     width: min(25rem, calc(100vw - (#{$space-6} * 2)));
-    padding: $space-4;
+    padding: $space-3 $space-4 $space-4;
     color: $color-ink;
     border-radius: $radius-lg;
 
@@ -167,7 +167,7 @@ function submit() {
     display: flex;
     gap: $space-3;
     align-items: center;
-    margin-bottom: $space-3;
+    margin-bottom: $space-2;
 }
 
 .dialog-title {
