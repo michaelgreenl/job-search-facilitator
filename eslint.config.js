@@ -6,7 +6,7 @@ import pluginOxlint from 'eslint-plugin-oxlint'
 import pluginVue from 'eslint-plugin-vue'
 
 export default defineConfigWithVueTs(
-    globalIgnores(['**/dist/**', '**/node_modules/**', 'packages/core/src/generated/**']),
+    globalIgnores(['**/dist/**', '**/node_modules/**', 'packages/core/src/types/generated/**']),
     js.configs.recommended,
     ...pluginVue.configs['flat/essential'],
     vueTsConfigs.recommended,
