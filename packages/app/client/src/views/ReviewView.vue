@@ -666,7 +666,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <section class="layout-draft" aria-label="Job search review">
+    <section class="review-layout" aria-label="Job search review">
         <JobPostUrlDialog
             v-model:url="addPostUrl"
             :open="postStore.addPostDialog.open"
@@ -802,7 +802,7 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
-.layout-draft {
+.review-layout {
     display: flex;
     flex-direction: column;
     flex: 1;
