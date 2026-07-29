@@ -12,7 +12,7 @@ import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
-import FlowPanel from '@/components/layout/FlowPanel.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
@@ -441,7 +441,7 @@ onMounted(() => {
 <template>
     <section class="apply-layout" aria-label="Job applications">
         <div class="apply-panels">
-            <FlowPanel
+            <BasePanel
                 class="apply-panel apply-post-list glass-frame"
                 data-testid="apply-posts-panel"
                 :active="activePanel === 'posts'"
@@ -477,9 +477,9 @@ onMounted(() => {
                     @select="selectPost"
                     @retry="loadApplyQueue"
                 />
-            </FlowPanel>
+            </BasePanel>
 
-            <FlowPanel
+            <BasePanel
                 v-if="selectedPost"
                 as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
@@ -506,9 +506,9 @@ onMounted(() => {
                     @open-outreach="openOutreach"
                     @mark-applied="markApplied"
                 />
-            </FlowPanel>
+            </BasePanel>
 
-            <FlowPanel
+            <BasePanel
                 v-if="outreachPost !== null || hasActiveOutreachTask"
                 as="aside"
                 class="apply-panel apply-outreach glass-frame"
@@ -532,7 +532,7 @@ onMounted(() => {
                     @retry-contacts="openOutreach"
                     @show-viewer="showViewer"
                 />
-            </FlowPanel>
+            </BasePanel>
         </div>
     </section>
 </template>

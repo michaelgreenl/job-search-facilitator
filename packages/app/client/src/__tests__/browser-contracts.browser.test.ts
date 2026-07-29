@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
 import AppHeader from '@/components/app/AppHeader.vue'
-import FlowPanel from '@/components/layout/FlowPanel.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
@@ -280,7 +280,7 @@ describe('browser layout contracts', () => {
         const ResponsiveFixture = defineComponent({
             setup: () => () =>
                 h('div', [
-                    h(FlowPanel, {
+                    h(BasePanel, {
                         active: false,
                         adjacent: true,
                         'data-testid': 'adjacent-panel',

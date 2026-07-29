@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
     <component
         :is="props.as"
         v-bind="$attrs"
-        class="flow-panel"
+        class="base-panel"
         :data-active="props.active"
         :class="{
             'is-active': props.active,
@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
 </template>
 
 <style scoped lang="scss">
-.flow-panel {
+.base-panel {
     display: none;
     flex: 1;
     flex-direction: column;

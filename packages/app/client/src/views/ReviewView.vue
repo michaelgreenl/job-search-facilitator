@@ -15,7 +15,7 @@ import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostList from '@/components/job-posts/JobPostList.vue'
 import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
-import FlowPanel from '@/components/layout/FlowPanel.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 import PanelBackButton from '@/components/layout/PanelBackButton.vue'
 import PanelHeading from '@/components/layout/PanelHeading.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
@@ -677,7 +677,7 @@ onMounted(() => {
         />
 
         <div class="layout-panels">
-            <FlowPanel
+            <BasePanel
                 class="report-list-panel glass-frame"
                 :active="activePanel === 'sources'"
                 :adjacent="activePanel === 'import'"
@@ -698,9 +698,9 @@ onMounted(() => {
                     @retry-reports="loadReports"
                     @retry-user-added="loadUserAddedPosts"
                 />
-            </FlowPanel>
+            </BasePanel>
 
-            <FlowPanel
+            <BasePanel
                 class="import-panel glass-frame"
                 :active="activePanel === 'import'"
                 :adjacent="false"
@@ -723,9 +723,9 @@ onMounted(() => {
                 >
                     <AgentStream v-if="showImportAgent" lane="job-post-import" :issue="null" />
                 </JobPostImportPanel>
-            </FlowPanel>
+            </BasePanel>
 
-            <FlowPanel
+            <BasePanel
                 class="glass-frame"
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'sources' || activePanel === 'viewer'"
@@ -767,9 +767,9 @@ onMounted(() => {
                     @select-pending="showImportProgress"
                     @retry="loadUserAddedPosts"
                 />
-            </FlowPanel>
+            </BasePanel>
 
-            <FlowPanel
+            <BasePanel
                 v-if="selectedItem"
                 as="aside"
                 class="job-post-view glass-frame"
@@ -790,7 +790,7 @@ onMounted(() => {
                     :mode="reviewViewerMode"
                     @update-label="updateUserLabel"
                 />
-            </FlowPanel>
+            </BasePanel>
         </div>
     </section>
 </template>
