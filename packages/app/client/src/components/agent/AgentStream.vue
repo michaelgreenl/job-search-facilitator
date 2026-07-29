@@ -7,7 +7,7 @@ import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import type { AgentTaskLane } from '@/stores/agent'
-import AgentActionPrompt from './AgentActionPrompt.vue'
+import AgentActionPrompt from './AgentPermissionPrompt.vue'
 
 const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
 
