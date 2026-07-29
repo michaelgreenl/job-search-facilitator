@@ -17,9 +17,9 @@ export type AgentOutputSchema = {
     $schema?: never
 }
 
-export type AgentActionDecision = 'approve' | 'decline'
+export type AgentPermissionDecision = 'approve' | 'decline'
 
-export interface AgentActionRequired {
+export interface AgentPermissionRequired {
     id: string
     kind: 'browser-origin'
     message: string
@@ -59,7 +59,7 @@ export type AgentTaskEvent =
           startsNewStatement: boolean
           createdAt: IsoDateTime
       }
-    | { type: 'action-required'; action: AgentActionRequired; createdAt: IsoDateTime }
+    | { type: 'action-required'; action: AgentPermissionRequired; createdAt: IsoDateTime }
     | { type: 'action-resolved'; actionId: string; createdAt: IsoDateTime }
     | { type: 'completed'; output: JsonObject; createdAt: IsoDateTime }
     | { type: 'failed'; error: string; createdAt: IsoDateTime }

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import {
     AGENT_CAPABILITIES,
-    type AgentActionRequired,
+    type AgentPermissionRequired,
     type AgentHealthResponse,
     type AgentTask,
     type AgentTaskEvent,
@@ -47,7 +47,7 @@ const agentTaskSchema: z.ZodType<AgentTask> = z.discriminatedUnion('status', [
     }),
 ])
 
-const agentActionRequiredSchema: z.ZodType<AgentActionRequired> = z.looseObject({
+const agentPermissionRequiredSchema: z.ZodType<AgentPermissionRequired> = z.looseObject({
     id: z.uuid(),
     kind: z.literal('browser-origin'),
     message: nonBlankStringSchema,
@@ -68,7 +68,7 @@ const agentTaskEventSchema: z.ZodType<AgentTaskEvent> = z.discriminatedUnion('ty
     }),
     z.looseObject({
         type: z.literal('action-required'),
-        action: agentActionRequiredSchema,
+        action: agentPermissionRequiredSchema,
         createdAt: isoDateTimeSchema,
     }),
     z.looseObject({

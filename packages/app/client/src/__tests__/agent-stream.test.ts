@@ -217,14 +217,16 @@ describe('agent stream', () => {
                     selected.activity,
                 )
                 expect(
-                    root.querySelector('[data-testid="agent-action-prompt"]')?.textContent,
+                    root.querySelector('[data-testid="agent-permission-prompt"]')?.textContent,
                 ).toContain(selected.action)
             })
 
             expect(root.textContent).not.toContain(excluded.activity)
             expect(root.textContent).not.toContain(excluded.action)
 
-            root.querySelector<HTMLButtonElement>('[data-testid="agent-action-approve"]')?.click()
+            root.querySelector<HTMLButtonElement>(
+                '[data-testid="agent-permission-approve"]',
+            )?.click()
 
             expect(resolveAction).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
         },
@@ -361,17 +363,19 @@ describe('agent stream', () => {
         })
 
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="agent-action-prompt"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-permission-prompt"]')).toBe(
                 document.activeElement,
             ),
         )
 
-        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-approve"]')?.click()
+        root.querySelector<HTMLButtonElement>('[data-testid="agent-permission-approve"]')?.click()
         expect(resolveAction).toHaveBeenCalledExactlyOnceWith(taskId, 'approve')
 
-        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-always-allow"]')?.click()
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="agent-permission-always-allow"]',
+        )?.click()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="agent-action-always-allow-cancel"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-permission-always-allow-cancel"]')).toBe(
                 document.activeElement,
             ),
         )
@@ -385,15 +389,17 @@ describe('agent stream', () => {
             },
         })
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="agent-action-prompt"]')).toBe(
+            expect(root.querySelector('[data-testid="agent-permission-prompt"]')).toBe(
                 document.activeElement,
             ),
         )
 
-        root.querySelector<HTMLButtonElement>('[data-testid="agent-action-always-allow"]')?.click()
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="agent-permission-always-allow"]',
+        )?.click()
         await nextTick()
         root.querySelector<HTMLButtonElement>(
-            '[data-testid="agent-action-always-allow-confirm"]',
+            '[data-testid="agent-permission-always-allow-confirm"]',
         )?.click()
 
         expect(allowBrowserActions).toHaveBeenCalledExactlyOnceWith(taskId)

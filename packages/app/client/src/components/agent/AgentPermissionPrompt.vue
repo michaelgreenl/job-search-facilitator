@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import type { AgentActionDecision, AgentActionRequired } from '@job-search-facilitator/core'
+import type { AgentPermissionDecision, AgentPermissionRequired } from '@job-search-facilitator/core'
 import { nextTick, shallowRef, useTemplateRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
-    action: AgentActionRequired
+    action: AgentPermissionRequired
     submitting: boolean
 }>()
 
 const emit = defineEmits<{
     alwaysAllow: []
-    resolve: [decision: AgentActionDecision]
+    resolve: [decision: AgentPermissionDecision]
 }>()
 
 const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
@@ -49,7 +49,7 @@ function cancelAlwaysAllowConfirmation() {
     <section
         v-if="confirmingAlwaysAllow"
         class="action-required"
-        data-testid="agent-action-confirmation"
+        data-testid="agent-permission-confirmation"
         role="alertdialog"
         aria-labelledby="always-allow-title"
         aria-describedby="always-allow-message"
@@ -64,7 +64,7 @@ function cancelAlwaysAllowConfirmation() {
         <div class="action-buttons confirmation-buttons">
             <BaseButton
                 ref="alwaysAllowNo"
-                data-testid="agent-action-always-allow-cancel"
+                data-testid="agent-permission-always-allow-cancel"
                 preset="outline"
                 :disabled="submitting"
                 @click="cancelAlwaysAllowConfirmation"
@@ -72,7 +72,7 @@ function cancelAlwaysAllowConfirmation() {
                 No
             </BaseButton>
             <BaseButton
-                data-testid="agent-action-always-allow-confirm"
+                data-testid="agent-permission-always-allow-confirm"
                 preset="signal"
                 :disabled="submitting"
                 @click="emit('alwaysAllow')"
@@ -86,7 +86,7 @@ function cancelAlwaysAllowConfirmation() {
         v-else
         ref="actionRequired"
         class="action-required"
-        data-testid="agent-action-prompt"
+        data-testid="agent-permission-prompt"
         aria-labelledby="action-title"
         tabindex="-1"
     >
@@ -97,7 +97,7 @@ function cancelAlwaysAllowConfirmation() {
         <div class="action-controls">
             <BaseButton
                 ref="alwaysAllowAction"
-                data-testid="agent-action-always-allow"
+                data-testid="agent-permission-always-allow"
                 preset="outline"
                 :disabled="submitting"
                 @click="requestAlwaysAllowConfirmation"
@@ -107,7 +107,7 @@ function cancelAlwaysAllowConfirmation() {
 
             <div class="action-buttons">
                 <BaseButton
-                    data-testid="agent-action-decline"
+                    data-testid="agent-permission-decline"
                     preset="outline"
                     :disabled="submitting"
                     @click="emit('resolve', 'decline')"
@@ -115,7 +115,7 @@ function cancelAlwaysAllowConfirmation() {
                     Decline
                 </BaseButton>
                 <BaseButton
-                    data-testid="agent-action-approve"
+                    data-testid="agent-permission-approve"
                     preset="signal"
                     :disabled="submitting"
                     @click="emit('resolve', 'approve')"

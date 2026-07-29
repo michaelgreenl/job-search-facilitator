@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type {
     JsonObject,
     StartAgentTaskInput,
-    AgentActionDecision,
-    AgentActionRequired,
+    AgentPermissionDecision,
+    AgentPermissionRequired,
     AgentTask,
     AgentTaskEvent,
 } from '@job-search-facilitator/core'
@@ -23,7 +23,7 @@ interface StoredTask {
     listeners: Set<(event: AgentTaskStreamEvent) => void>
     finalMessages: string[]
     outputValidator: ValidateFunction<JsonObject>
-    pendingAction: AgentActionRequired | null
+    pendingAction: AgentPermissionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
 }
 
@@ -203,7 +203,7 @@ export class AgentTaskManager {
         return { accepted: true, task: publicTask(task) }
     }
 
-    resolveAction(id: string, actionId: string, decision: AgentActionDecision): boolean {
+    resolveAction(id: string, actionId: string, decision: AgentPermissionDecision): boolean {
         const task = this.tasks.get(id)
 
         if (task?.pendingAction?.id !== actionId) {

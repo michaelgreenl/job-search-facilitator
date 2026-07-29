@@ -5,8 +5,8 @@ import { createInterface, type Interface } from 'node:readline'
 import type {
     JsonObject,
     StartAgentTaskInput,
-    AgentActionDecision,
-    AgentActionRequired,
+    AgentPermissionDecision,
+    AgentPermissionRequired,
     AgentCapability,
 } from '@job-search-facilitator/core'
 import { z } from 'zod'
@@ -31,7 +31,7 @@ interface PendingRequest {
 interface PendingAction {
     requestId: RpcId
     action: AgentRuntimeAction
-    decision: AgentActionDecision | null
+    decision: AgentPermissionDecision | null
 }
 
 type SpawnProcess = (
@@ -57,7 +57,7 @@ export interface StartedAgentTask {
     turnId: string
 }
 
-export interface AgentRuntimeAction extends AgentActionRequired {
+export interface AgentRuntimeAction extends AgentPermissionRequired {
     threadId: string
     turnId: string | null
 }
@@ -93,7 +93,7 @@ export interface AgentRuntime {
     readonly health: AgentRuntimeHealth
     startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask>
     interruptTask(threadId: string, turnId: string): Promise<void>
-    resolveAction(actionId: string, decision: AgentActionDecision): boolean
+    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean
     onEvent(listener: (event: AgentRuntimeEvent) => void): () => void
 }
 
@@ -425,7 +425,7 @@ export class CodexAppServer implements AgentRuntime {
         this.assertReady()
     }
 
-    resolveAction(actionId: string, decision: AgentActionDecision): boolean {
+    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean {
         if (!this.ready) {
             return false
         }

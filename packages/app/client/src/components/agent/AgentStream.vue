@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentActionDecision } from '@job-search-facilitator/core'
+import type { AgentPermissionDecision } from '@job-search-facilitator/core'
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import { useAgentTask } from '@/composables/useAgentTask'
@@ -7,7 +7,7 @@ import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import type { AgentTaskLane } from '@/stores/agent'
-import AgentActionPrompt from './AgentPermissionPrompt.vue'
+import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 
 const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
 
@@ -18,7 +18,7 @@ const {
     events,
     pendingAction,
     taskActive,
-    resolveAction: resolveAgentAction,
+    resolveAction: resolveAgentPermission,
     allowBrowserActionsForTask: allowBrowserActions,
 } = useAgentTask(props.lane)
 
@@ -125,8 +125,8 @@ watch(
     { immediate: true },
 )
 
-function resolveAction(decision: AgentActionDecision) {
-    void resolveAgentAction(decision).catch(() => undefined)
+function resolveAction(decision: AgentPermissionDecision) {
+    void resolveAgentPermission(decision).catch(() => undefined)
 }
 
 function allowBrowserActionsForTask() {
@@ -189,7 +189,7 @@ function allowBrowserActionsForTask() {
         </div>
     </div>
 
-    <AgentActionPrompt
+    <AgentPermissionPrompt
         v-if="visiblePendingAction"
         :action="visiblePendingAction"
         :submitting="actionSubmitting"

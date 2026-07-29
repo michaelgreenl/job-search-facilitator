@@ -1,6 +1,6 @@
 import type {
     StartAgentTaskInput,
-    AgentActionDecision,
+    AgentPermissionDecision,
     AgentTaskEvent,
 } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -78,7 +78,7 @@ export function useAgentTask(lane: AgentTaskLane) {
         return taskId !== null && agentStore.dismissSession(taskId)
     }
 
-    function resolveAction(decision: AgentActionDecision) {
+    function resolveAction(decision: AgentPermissionDecision) {
         const taskId = currentTaskId()
         return taskId === null ? Promise.resolve() : agentStore.resolveAction(taskId, decision)
     }

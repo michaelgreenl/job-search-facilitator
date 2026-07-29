@@ -1,4 +1,4 @@
-import type { StartAgentTaskInput, AgentActionDecision } from '@job-search-facilitator/core'
+import type { StartAgentTaskInput, AgentPermissionDecision } from '@job-search-facilitator/core'
 import type {
     StartedAgentTask,
     AgentRuntime,
@@ -9,7 +9,7 @@ import type {
 export class FakeRuntime implements AgentRuntime {
     health: AgentRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
     startAttempts = 0
-    readonly decisions: Array<{ actionId: string; decision: AgentActionDecision }> = []
+    readonly decisions: Array<{ actionId: string; decision: AgentPermissionDecision }> = []
     readonly interruptions: Array<{ threadId: string; turnId: string }> = []
     private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
     private startError: Error | null = null
@@ -34,7 +34,7 @@ export class FakeRuntime implements AgentRuntime {
         await this.onInterrupt()
     }
 
-    resolveAction(actionId: string, decision: AgentActionDecision): boolean {
+    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean {
         this.decisions.push({ actionId, decision })
         return true
     }

@@ -4,8 +4,8 @@ import {
     parseAgentTaskEvent,
     type RuntimeParser,
     type StartAgentTaskInput,
-    type AgentActionDecision,
-    type AgentActionRequired,
+    type AgentPermissionDecision,
+    type AgentPermissionRequired,
     type AgentTask,
     type AgentTaskEvent,
 } from '@job-search-facilitator/core'
@@ -41,7 +41,7 @@ export interface AgentTaskState {
     task: AgentTask | null
     events: AgentTaskEvent[]
     connectionState: AgentConnectionState
-    pendingAction: AgentActionRequired | null
+    pendingAction: AgentPermissionRequired | null
     alwaysAllowBrowserActions: boolean
     actionSubmitting: boolean
     cancelling: boolean
@@ -681,7 +681,7 @@ export const useAgentStore = defineStore('agent', () => {
         return true
     }
 
-    async function resolveAction(taskId: string, decision: AgentActionDecision) {
+    async function resolveAction(taskId: string, decision: AgentPermissionDecision) {
         const state = getTaskState(taskId)
         const currentTask = state?.task ?? null
         const currentAction = state?.pendingAction ?? null
