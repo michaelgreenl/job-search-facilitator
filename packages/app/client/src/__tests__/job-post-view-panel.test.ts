@@ -3,7 +3,7 @@
 import type { JobPost, StandaloneJobRecommendation } from '@job-search-facilitator/core'
 import { createApp } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import JobPostViewer from '@/components/job-posts/JobPostViewer.vue'
+import JobPostViewPanel from '@/components/job-posts/JobPostViewPanel.vue'
 
 const post = {
     id: 'post-id',
@@ -45,7 +45,9 @@ function mountViewer(
     const root = document.createElement('div')
     document.body.append(root)
 
-    const app = createApp(JobPostViewer, {
+    const app = createApp(JobPostViewPanel, {
+        active: true,
+        adjacent: false,
         post: { ...post, ...overrides },
         recommendation: options.recommendation,
         labelUpdating: false,
@@ -71,7 +73,7 @@ async function openLabelOptions(root: HTMLElement) {
     )
 }
 
-describe('JobPostViewer', () => {
+describe('JobPostViewPanel', () => {
     afterEach(() => {
         for (const { app, root } of mountedApps.splice(0)) {
             app.unmount()

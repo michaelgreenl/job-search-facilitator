@@ -3,8 +3,11 @@ import type { JobSearchReport } from '@job-search-facilitator/core'
 import { computed, shallowRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 const props = defineProps<{
+    active: boolean
+    adjacent: boolean
     reports: readonly JobSearchReport[]
     selectedReportId: string | null
     userAddedSelected: boolean
@@ -88,126 +91,144 @@ function formatReportTime(report: JobSearchReport) {
 </script>
 
 <template>
-    <article class="user-source">
-        <BaseCard
-            as="div"
-            layout="flex"
-            interactive
-            class="user-source-card"
-            :selected="userAddedSelected"
-        >
-            <button
-                class="user-source-select"
-                data-testid="user-added-source"
-                type="button"
-                :aria-pressed="userAddedSelected"
-                @click="emit('selectUserAdded')"
+    <BasePanel
+        class="report-list-panel"
+        :active="active"
+        :adjacent="adjacent"
+        aria-label="Review sources"
+        eyebrow="Review sources"
+        title="Select a source to review"
+    >
+        <article class="user-source">
+            <BaseCard
+                as="div"
+                layout="flex"
+                interactive
+                class="user-source-card"
+                :selected="userAddedSelected"
             >
-                <strong class="source-title">Added by you</strong>
-                <span v-if="userAddedLoading" class="source-count" role="status">Loading…</span>
-                <span v-else class="source-count">{{ userAddedCountLabel }}</span>
-            </button>
+                <button
+                    class="user-source-select"
+                    data-testid="user-added-source"
+                    type="button"
+                    :aria-pressed="userAddedSelected"
+                    @click="emit('selectUserAdded')"
+                >
+                    <strong class="source-title">Added by you</strong>
+                    <span v-if="userAddedLoading" class="source-count" role="status">Loading…</span>
+                    <span v-else class="source-count">{{ userAddedCountLabel }}</span>
+                </button>
 
-            <BaseButton
-                class="add-button-tooltip"
-                icon-size="md"
-                preset="primary"
-                tooltip="Add job post"
-                data-testid="add-job-post"
-                aria-label="Add job post"
-                @click="emit('addPost')"
-            >
-                <span class="add-button-icon" aria-hidden="true">+</span>
-            </BaseButton>
-        </BaseCard>
+                <BaseButton
+                    class="add-button-tooltip"
+                    icon-size="md"
+                    preset="primary"
+                    tooltip="Add job post"
+                    data-testid="add-job-post"
+                    aria-label="Add job post"
+                    @click="emit('addPost')"
+                >
+                    <span class="add-button-icon" aria-hidden="true">+</span>
+                </BaseButton>
+            </BaseCard>
 
-        <div v-if="userAddedError" class="source-error">
-            <p class="source-error-message" role="alert">{{ userAddedError }}</p>
+            <div v-if="userAddedError" class="source-error">
+                <p class="source-error-message" role="alert">{{ userAddedError }}</p>
+                <BaseButton
+                    data-testid="review-user-added-retry"
+                    preset="text"
+                    @click="emit('retryUserAdded')"
+                >
+                    Retry
+                </BaseButton>
+            </div>
+        </article>
+
+        <div class="report-heading">
+            <span class="report-title">Search reports</span>
+
+            <fieldset class="date-filter" aria-label="Filter reports by date">
+                <div class="date-fields">
+                    <BaseButton
+                        class="date-clear"
+                        data-testid="review-date-clear"
+                        :class="{ 'is-hidden': !dateFilterActive }"
+                        preset="text"
+                        aria-label="Clear report dates"
+                        :disabled="!dateFilterActive"
+                        @click="clearDateFilter"
+                    >
+                        Clear
+                    </BaseButton>
+                    <input
+                        v-model="dateFrom"
+                        class="date-input"
+                        type="date"
+                        data-testid="review-date-from"
+                        aria-label="Reports from date"
+                        :max="dateTo || undefined"
+                        :disabled="reportsLoading || reports.length === 0"
+                    />
+                    <span class="date-separator" aria-hidden="true">–</span>
+                    <input
+                        v-model="dateTo"
+                        class="date-input"
+                        type="date"
+                        data-testid="review-date-to"
+                        aria-label="Reports through date"
+                        :min="dateFrom || undefined"
+                        :disabled="reportsLoading || reports.length === 0"
+                    />
+                </div>
+            </fieldset>
+
+            <span class="item-count report-count">{{ countLabel }}</span>
+        </div>
+
+        <p v-if="reportsLoading" class="list-message" role="status">Loading search reports…</p>
+        <template v-else-if="reportsError">
+            <p class="list-message" role="alert">{{ reportsError }}</p>
             <BaseButton
-                data-testid="review-user-added-retry"
+                data-testid="review-report-retry"
                 preset="text"
-                @click="emit('retryUserAdded')"
+                @click="emit('retryReports')"
             >
                 Retry
             </BaseButton>
-        </div>
-    </article>
-
-    <div class="report-heading">
-        <span class="report-title">Search reports</span>
-
-        <fieldset class="date-filter" aria-label="Filter reports by date">
-            <div class="date-fields">
-                <BaseButton
-                    class="date-clear"
-                    data-testid="review-date-clear"
-                    :class="{ 'is-hidden': !dateFilterActive }"
-                    preset="text"
-                    aria-label="Clear report dates"
-                    :disabled="!dateFilterActive"
-                    @click="clearDateFilter"
+        </template>
+        <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
+            <li v-for="report in filteredReports" :key="report.id" class="card-item">
+                <BaseCard
+                    as="button"
+                    class="report-card"
+                    :data-testid="`report-card-${report.id}`"
+                    :aria-pressed="selectedReportId === report.id"
+                    :selected="selectedReportId === report.id"
+                    @click="emit('selectReport', report.id)"
                 >
-                    Clear
-                </BaseButton>
-                <input
-                    v-model="dateFrom"
-                    class="date-input"
-                    type="date"
-                    data-testid="review-date-from"
-                    aria-label="Reports from date"
-                    :max="dateTo || undefined"
-                    :disabled="reportsLoading || reports.length === 0"
-                />
-                <span class="date-separator" aria-hidden="true">–</span>
-                <input
-                    v-model="dateTo"
-                    class="date-input"
-                    type="date"
-                    data-testid="review-date-to"
-                    aria-label="Reports through date"
-                    :min="dateFrom || undefined"
-                    :disabled="reportsLoading || reports.length === 0"
-                />
-            </div>
-        </fieldset>
-
-        <span class="item-count report-count">{{ countLabel }}</span>
-    </div>
-
-    <p v-if="reportsLoading" class="list-message" role="status">Loading search reports…</p>
-    <template v-else-if="reportsError">
-        <p class="list-message" role="alert">{{ reportsError }}</p>
-        <BaseButton data-testid="review-report-retry" preset="text" @click="emit('retryReports')">
-            Retry
-        </BaseButton>
-    </template>
-    <ul v-else-if="filteredReports.length" class="card-list" data-testid="report-list">
-        <li v-for="report in filteredReports" :key="report.id" class="card-item">
-            <BaseCard
-                as="button"
-                class="report-card"
-                :data-testid="`report-card-${report.id}`"
-                :aria-pressed="selectedReportId === report.id"
-                :selected="selectedReportId === report.id"
-                @click="emit('selectReport', report.id)"
-            >
-                <span class="report-card-heading">
-                    <span>
-                        <strong>{{ report.reportDate }} </strong>
-                        <small>&nbsp;&nbsp;· {{ formatReportTime(report) }}</small>
+                    <span class="report-card-heading">
+                        <span>
+                            <strong>{{ report.reportDate }} </strong>
+                            <small>&nbsp;&nbsp;· {{ formatReportTime(report) }}</small>
+                        </span>
+                        <span class="report-card-count">{{ report.results.length }} posts</span>
                     </span>
-                    <span class="report-card-count">{{ report.results.length }} posts</span>
-                </span>
-                <span class="report-card-summary">{{ report.summary }}</span>
-            </BaseCard>
-        </li>
-    </ul>
-    <p v-else class="list-message" data-testid="report-empty-state">
-        {{ emptyMessage }}
-    </p>
+                    <span class="report-card-summary">{{ report.summary }}</span>
+                </BaseCard>
+            </li>
+        </ul>
+        <p v-else class="list-message" data-testid="report-empty-state">
+            {{ emptyMessage }}
+        </p>
+    </BasePanel>
 </template>
 
 <style scoped lang="scss">
+.report-list-panel {
+    container-name: report-list;
+    container-type: inline-size;
+}
+
 .user-source {
     display: grid;
     gap: $space-2;

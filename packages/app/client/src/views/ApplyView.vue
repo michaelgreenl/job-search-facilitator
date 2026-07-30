@@ -7,15 +7,14 @@ import {
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
-import JobPostList from '@/components/job-posts/JobPostList.vue'
-import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
+import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobPostViewPanel, {
+    type JobPostViewPanelMode,
+} from '@/components/job-posts/JobPostViewPanel.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
-import BasePanel from '@/components/base/BasePanel.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
-import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
@@ -112,7 +111,7 @@ const outreachActionDisabled = computed(
         (outreachAgent.taskActive.value &&
             (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
 )
-const applyViewerMode = computed<JobPostViewerMode>(() => ({
+const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
     applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
     applicationError: applicationError.value,
@@ -441,7 +440,7 @@ onMounted(() => {
 <template>
     <section class="apply-layout" aria-label="Job applications">
         <div class="apply-panels">
-            <BasePanel
+            <JobPostListPanel
                 class="apply-panel apply-post-list glass-frame"
                 data-testid="apply-posts-panel"
                 :active="activePanel === 'posts'"
@@ -450,6 +449,14 @@ onMounted(() => {
                 eyebrow="Apply"
                 title="Queue"
                 title-tag="h1"
+                :posts="filteredPosts"
+                :selected-post-id="selectedPostId"
+                :loading="listLoading"
+                :error="listError"
+                loading-message="Loading Apply queue…"
+                empty-message="No job posts match this filter."
+                @select="selectPost"
+                @retry="loadApplyQueue"
             >
                 <template #controls>
                     <span class="item-count">{{ filteredPosts.length }} posts</span>
@@ -467,58 +474,35 @@ onMounted(() => {
                         />
                     </div>
                 </template>
+            </JobPostListPanel>
 
-                <JobPostList
-                    :posts="filteredPosts"
-                    :selected-post-id="selectedPostId"
-                    :loading="listLoading"
-                    :error="listError"
-                    loading-message="Loading Apply queue…"
-                    empty-message="No job posts match this filter."
-                    @select="selectPost"
-                    @retry="loadApplyQueue"
-                />
-            </BasePanel>
-
-            <BasePanel
+            <JobPostViewPanel
                 v-if="selectedPost"
-                as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
                 data-testid="apply-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
-            >
-                <BaseButton
-                    v-if="!outreachAgent.taskActive.value && activePanel !== 'posts'"
-                    preset="back"
-                    tooltip="Back to job posts"
-                    data-testid="back-to-job-posts"
-                    aria-label="Back to job posts"
-                    :class="{
-                        'apply-back-mobile-only':
-                            activePanel === 'viewer' && outreachContact === null,
-                    }"
-                    @click="showPosts"
-                >
-                    <ArrowLeftIcon />
-                </BaseButton>
-                <JobPostViewer
-                    :post="selectedPost"
-                    :recommendation="selectedRecommendationContext ?? undefined"
-                    :label-updating="labelUpdating || applyQueuePostIds === null"
-                    :label-error="labelError"
-                    :mode="applyViewerMode"
-                    @update-label="updateUserLabel"
-                    @open-outreach="openOutreach"
-                    @mark-applied="markApplied"
-                />
-            </BasePanel>
+                :back-label="
+                    !outreachAgent.taskActive.value && activePanel !== 'posts'
+                        ? 'Back to job posts'
+                        : undefined
+                "
+                :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
+                :post="selectedPost"
+                :recommendation="selectedRecommendationContext ?? undefined"
+                :label-updating="labelUpdating || applyQueuePostIds === null"
+                :label-error="labelError"
+                :mode="applyViewerMode"
+                @back="showPosts"
+                @update-label="updateUserLabel"
+                @open-outreach="openOutreach"
+                @mark-applied="markApplied"
+            />
 
-            <BasePanel
+            <OutreachPanel
                 v-if="outreachPost !== null || hasActiveOutreachTask"
-                as="aside"
                 class="apply-panel apply-outreach glass-frame"
                 data-testid="apply-outreach-panel"
                 :class="{
@@ -528,19 +512,16 @@ onMounted(() => {
                 :adjacent="
                     activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
                 "
-            >
-                <OutreachPanel
-                    :post="outreachPost"
-                    :expanded="outreachExpanded"
-                    @cancel="cancelOutreach"
-                    @collapse="collapseOutreach"
-                    @discover="discoverAnotherContact"
-                    @dismiss="dismissOutreach"
-                    @expand="expandOutreach"
-                    @retry-contacts="openOutreach"
-                    @show-viewer="showViewer"
-                />
-            </BasePanel>
+                :post="outreachPost"
+                :expanded="outreachExpanded"
+                @cancel="cancelOutreach"
+                @collapse="collapseOutreach"
+                @discover="discoverAnotherContact"
+                @dismiss="dismissOutreach"
+                @expand="expandOutreach"
+                @retry-contacts="openOutreach"
+                @show-viewer="showViewer"
+            />
         </div>
     </section>
 </template>
@@ -583,12 +564,6 @@ onMounted(() => {
         &-contact {
             flex: 2.5;
         }
-    }
-}
-
-.apply-back-mobile-only {
-    @include bp-md-tablet {
-        display: none;
     }
 }
 

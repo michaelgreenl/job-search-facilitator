@@ -3,6 +3,7 @@ import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
@@ -16,6 +17,8 @@ import OutreachDraft from './OutreachDraft.vue'
 type PanelView = 'contacts' | 'draft' | 'stream'
 
 const props = defineProps<{
+    active: boolean
+    adjacent: boolean
     post: JobPost | null
     expanded: boolean
 }>()
@@ -207,125 +210,127 @@ async function copyDraft() {
 </script>
 
 <template>
-    <section class="outreach-panel" aria-label="Outreach">
-        <header>
-            <div class="outreach-heading-copy">
-                <div class="panel-navigation">
-                    <BaseButton
-                        v-if="panelView === 'contacts' && !hasActiveTask"
-                        class="panel-navigation-mobile-only"
-                        preset="back"
-                        tooltip="Back to job post"
-                        data-testid="back-to-job-post"
-                        aria-label="Back to job post"
-                        @click="emit('showViewer')"
-                    >
-                        <ArrowLeftIcon />
-                    </BaseButton>
-                    <BaseButton
-                        v-else-if="!hasActiveTask"
-                        preset="back"
-                        tooltip="Back to saved contacts"
-                        data-testid="back-to-saved-contacts"
-                        aria-label="Back to saved contacts"
-                        @click="showContacts"
-                    >
-                        <ArrowLeftIcon />
-                    </BaseButton>
+    <BasePanel as="aside" :active="active" :adjacent="adjacent">
+        <section class="outreach-panel" aria-label="Outreach">
+            <header>
+                <div class="outreach-heading-copy">
+                    <div class="panel-navigation">
+                        <BaseButton
+                            v-if="panelView === 'contacts' && !hasActiveTask"
+                            class="panel-navigation-mobile-only"
+                            preset="back"
+                            tooltip="Back to job post"
+                            data-testid="back-to-job-post"
+                            aria-label="Back to job post"
+                            @click="emit('showViewer')"
+                        >
+                            <ArrowLeftIcon />
+                        </BaseButton>
+                        <BaseButton
+                            v-else-if="!hasActiveTask"
+                            preset="back"
+                            tooltip="Back to saved contacts"
+                            data-testid="back-to-saved-contacts"
+                            aria-label="Back to saved contacts"
+                            @click="showContacts"
+                        >
+                            <ArrowLeftIcon />
+                        </BaseButton>
 
-                    <BaseButton
-                        v-if="panelView === 'draft'"
-                        class="panel-control-desktop"
-                        preset="icon"
-                        :tooltip="resizeLabel"
-                        :aria-label="resizeLabel"
-                        :aria-expanded="expanded"
-                        @click="toggleExpanded"
-                    >
-                        <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                        <ExpandIcon v-else class="panel-control-icon" />
-                    </BaseButton>
+                        <BaseButton
+                            v-if="panelView === 'draft'"
+                            class="panel-control-desktop"
+                            preset="icon"
+                            :tooltip="resizeLabel"
+                            :aria-label="resizeLabel"
+                            :aria-expanded="expanded"
+                            @click="toggleExpanded"
+                        >
+                            <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                            <ExpandIcon v-else class="panel-control-icon" />
+                        </BaseButton>
+                    </div>
+
+                    <span class="eyebrow">Outreach</span>
                 </div>
+            </header>
 
-                <span class="eyebrow">Outreach</span>
-            </div>
-        </header>
+            <template v-if="panelView === 'contacts'">
+                <OutreachContactList
+                    v-model:filter="contactFilter"
+                    :contacts="contacts"
+                    :discovering="discovering && taskActive"
+                    :error="contactsError"
+                    :loading="contactsLoading"
+                    @retry="emit('retryContacts')"
+                    @select="selectContact"
+                    @show-stream="showStream"
+                />
 
-        <template v-if="panelView === 'contacts'">
-            <OutreachContactList
-                v-model:filter="contactFilter"
-                :contacts="contacts"
-                :discovering="discovering && taskActive"
-                :error="contactsError"
-                :loading="contactsLoading"
-                @retry="emit('retryContacts')"
-                @select="selectContact"
-                @show-stream="showStream"
-            />
+                <BaseButton
+                    class="discover-contact-tooltip"
+                    icon-size="md"
+                    preset="primary"
+                    tooltip="Find new"
+                    aria-label="Discover another contact"
+                    :disabled="
+                        taskActive ||
+                        contactsLoading ||
+                        contactSaving ||
+                        contactUpdating ||
+                        contactsError !== null
+                    "
+                    @click="emit('discover')"
+                >
+                    <span class="discover-contact-icon" aria-hidden="true">+</span>
+                </BaseButton>
+            </template>
+
+            <template v-else-if="panelView === 'draft' && contact">
+                <OutreachDraft
+                    v-model:draft="draft"
+                    v-model:request="draftRequest"
+                    :contact="contact"
+                    :assistant-reply="assistantReply"
+                    :running="taskActive"
+                    :requesting-changes="drafting && taskActive"
+                    :copy-state="copyState"
+                    :expanded="expanded"
+                    :issue="draftIssue"
+                    :messaged-error="contactUpdateError"
+                    :messaged-updating="contactUpdating"
+                    :reconnecting="connectionState === 'reconnecting'"
+                    @submit="submitDraftRequest"
+                    @copy="copyDraft"
+                    @update-messaged="updateMessaged"
+                />
+            </template>
+
+            <AgentStream v-else lane="outreach" :issue="issue" />
 
             <BaseButton
-                class="discover-contact-tooltip"
-                icon-size="md"
-                preset="primary"
-                tooltip="Find new"
-                aria-label="Discover another contact"
-                :disabled="
-                    taskActive ||
-                    contactsLoading ||
-                    contactSaving ||
-                    contactUpdating ||
-                    contactsError !== null
-                "
-                @click="emit('discover')"
+                v-if="canCancel"
+                class="cancel-action"
+                data-testid="outreach-cancel"
+                preset="text"
+                aria-label="Cancel outreach task"
+                :disabled="cancelling"
+                @click="emit('cancel')"
             >
-                <span class="discover-contact-icon" aria-hidden="true">+</span>
+                {{ cancelling ? 'Cancelling…' : 'Cancel' }}
             </BaseButton>
-        </template>
 
-        <template v-else-if="panelView === 'draft' && contact">
-            <OutreachDraft
-                v-model:draft="draft"
-                v-model:request="draftRequest"
-                :contact="contact"
-                :assistant-reply="assistantReply"
-                :running="taskActive"
-                :requesting-changes="drafting && taskActive"
-                :copy-state="copyState"
-                :expanded="expanded"
-                :issue="draftIssue"
-                :messaged-error="contactUpdateError"
-                :messaged-updating="contactUpdating"
-                :reconnecting="connectionState === 'reconnecting'"
-                @submit="submitDraftRequest"
-                @copy="copyDraft"
-                @update-messaged="updateMessaged"
-            />
-        </template>
-
-        <AgentStream v-else lane="outreach" :issue="issue" />
-
-        <BaseButton
-            v-if="canCancel"
-            class="cancel-action"
-            data-testid="outreach-cancel"
-            preset="text"
-            aria-label="Cancel outreach task"
-            :disabled="cancelling"
-            @click="emit('cancel')"
-        >
-            {{ cancelling ? 'Cancelling…' : 'Cancel' }}
-        </BaseButton>
-
-        <BaseButton
-            v-if="canDismiss"
-            class="cancel-action"
-            data-testid="outreach-dismiss"
-            preset="text"
-            @click="emit('dismiss')"
-        >
-            Dismiss
-        </BaseButton>
-    </section>
+            <BaseButton
+                v-if="canDismiss"
+                class="cancel-action"
+                data-testid="outreach-dismiss"
+                preset="text"
+                @click="emit('dismiss')"
+            >
+                Dismiss
+            </BaseButton>
+        </section>
+    </BasePanel>
 </template>
 
 <style scoped lang="scss">

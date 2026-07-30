@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
-import OutreachRationale from './OutreachRationale.vue'
+import { useDescriptionOverflow } from '@/composables/useDescriptionOverflow'
 
 const props = withDefaults(
     defineProps<{
@@ -42,6 +43,17 @@ const selectionLabel = computed(() => {
 
     return props.contact ? `Open outreach draft for ${props.contact.personName}` : null
 })
+const {
+    descriptionElement,
+    descriptionId,
+    expanded: descriptionExpanded,
+    showToggle: showDescriptionToggle,
+    toggleExpanded: toggleDescription,
+    userExpanded: descriptionUserExpanded,
+} = useDescriptionOverflow(
+    () => props.contact?.relevanceRationale ?? '',
+    () => props.expanded,
+)
 
 function toggleMessaged() {
     if (props.contact) {
@@ -121,11 +133,29 @@ function toggleMessaged() {
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
-            <OutreachRationale
-                :key="contact.id"
-                :expanded="expanded"
-                :rationale="contact.relevanceRationale"
-            />
+            <div class="rationale-copy">
+                <p
+                    :id="descriptionId"
+                    ref="descriptionElement"
+                    class="rationale-text"
+                    data-testid="outreach-contact-rationale"
+                    :class="{ 'is-clamped': !descriptionExpanded }"
+                >
+                    {{ contact.relevanceRationale }}
+                </p>
+                <div v-if="showDescriptionToggle" class="rationale-actions">
+                    <BaseButton
+                        class="rationale-toggle"
+                        preset="text"
+                        data-testid="outreach-contact-rationale-toggle"
+                        :aria-controls="descriptionId"
+                        :aria-expanded="descriptionUserExpanded"
+                        @click="toggleDescription"
+                    >
+                        {{ descriptionUserExpanded ? 'Show less' : 'Show more' }}
+                    </BaseButton>
+                </div>
+            </div>
         </template>
     </BaseCard>
 </template>
@@ -241,6 +271,44 @@ function toggleMessaged() {
 
 .person-title {
     color: $color-ink-secondary;
+}
+
+.rationale-copy {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rationale-text {
+    margin: 0;
+    color: $color-ink-secondary;
+    font-size: 0.875rem;
+
+    &.is-clamped {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+    }
+}
+
+.rationale-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    min-width: 0;
+    margin-top: $space-2;
+}
+
+.rationale-toggle {
+    position: relative;
+    z-index: 2;
+    padding: 0 $space-1 0 0;
+    margin-left: auto;
+    font-size: 0.875rem;
 }
 
 .loading-contact {

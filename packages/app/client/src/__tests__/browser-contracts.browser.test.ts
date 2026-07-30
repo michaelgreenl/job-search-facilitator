@@ -183,6 +183,8 @@ describe('browser interaction contracts', () => {
                 return () =>
                     h('div', [
                         h(ReviewSourcePanel, {
+                            active: true,
+                            adjacent: false,
                             reports: [],
                             selectedReportId: null,
                             userAddedSelected: false,

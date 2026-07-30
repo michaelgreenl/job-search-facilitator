@@ -10,18 +10,17 @@ import {
 } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useAgentTask } from '@/composables/useAgentTask'
-import JobPostList from '@/components/job-posts/JobPostList.vue'
-import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
+import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobPostViewPanel, {
+    type JobPostViewPanelMode,
+} from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import AgentStream from '@/components/agent/AgentStream.vue'
-import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
 import { createJobPostImportTask } from '@/agent-tasks'
@@ -71,7 +70,7 @@ const importRetryMode = shallowRef<'save' | 'task' | null>(null)
 let importRevision = 0
 let selectionNavigationPending = false
 let selectionNavigationRevision = 0
-const reviewViewerMode = { kind: 'review' } satisfies JobPostViewerMode
+const reviewViewerMode = { kind: 'review' } satisfies JobPostViewPanelMode
 
 const selectedReport = computed(() => {
     const source = selectedSource.value
@@ -677,60 +676,45 @@ onMounted(() => {
         />
 
         <div class="layout-panels">
-            <BasePanel
+            <ReviewSourcePanel
                 class="report-list-panel glass-frame"
                 :active="activePanel === 'sources'"
                 :adjacent="activePanel === 'import'"
-                aria-label="Review sources"
-                eyebrow="Review sources"
-                title="Select a source to review"
-            >
-                <ReviewSourcePanel
-                    :reports="reportStore.reports"
-                    :selected-report-id="selectedReport?.id ?? null"
-                    :user-added-selected="selectedSource?.kind === 'user-added'"
-                    :user-added-count="postStore.userAddedPosts.length"
-                    :user-added-loading="userAddedLoading"
-                    :user-added-error="userAddedError"
-                    :reports-loading="reportStore.loading"
-                    :reports-error="reportStore.error"
-                    @add-post="showImport"
-                    @select-report="selectReport"
-                    @select-user-added="selectUserAdded"
-                    @retry-reports="loadReports"
-                    @retry-user-added="loadUserAddedPosts"
-                />
-            </BasePanel>
+                :reports="reportStore.reports"
+                :selected-report-id="selectedReport?.id ?? null"
+                :user-added-selected="selectedSource?.kind === 'user-added'"
+                :user-added-count="postStore.userAddedPosts.length"
+                :user-added-loading="userAddedLoading"
+                :user-added-error="userAddedError"
+                :reports-loading="reportStore.loading"
+                :reports-error="reportStore.error"
+                @add-post="showImport"
+                @select-report="selectReport"
+                @select-user-added="selectUserAdded"
+                @retry-reports="loadReports"
+                @retry-user-added="loadUserAddedPosts"
+            />
 
-            <BasePanel
+            <JobPostImportPanel
                 class="import-panel glass-frame"
                 :active="activePanel === 'import'"
                 :adjacent="false"
-                aria-label="Add job post"
-                eyebrow="Job post import"
-                title="Add job post"
-                :back-label="importRunning || importSaving ? 'Back to added job posts' : undefined"
-                back-test-id="back-from-job-post-import"
+                :can-dismiss="importAgent.canDismissSession.value"
+                :cancelling="importAgent.cancelling.value"
+                :issue="importDisplayIssue"
+                :retry-available="importRetryAvailable"
+                :running="importRunning"
+                :saving="importSaving"
+                :starting="importStarting"
                 @back="showImportPosts"
+                @cancel="cancelImport"
+                @dismiss="dismissImport"
+                @retry="retryImport"
             >
-                <JobPostImportPanel
-                    v-if="activePanel === 'import'"
-                    :can-dismiss="importAgent.canDismissSession.value"
-                    :cancelling="importAgent.cancelling.value"
-                    :issue="importDisplayIssue"
-                    :retry-available="importRetryAvailable"
-                    :running="importRunning"
-                    :saving="importSaving"
-                    :starting="importStarting"
-                    @cancel="cancelImport"
-                    @dismiss="dismissImport"
-                    @retry="retryImport"
-                >
-                    <AgentStream v-if="showImportAgent" lane="job-post-import" :issue="null" />
-                </JobPostImportPanel>
-            </BasePanel>
+                <AgentStream v-if="showImportAgent" lane="job-post-import" :issue="null" />
+            </JobPostImportPanel>
 
-            <BasePanel
+            <JobPostListPanel
                 class="glass-frame"
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'sources' || activePanel === 'viewer'"
@@ -739,7 +723,16 @@ onMounted(() => {
                 :title="selectedSourceTitle"
                 :back-label="activePanel === 'sources' ? undefined : 'Back to review sources'"
                 back-test-id="back-to-reports"
+                :posts="filteredPosts"
+                :selected-post-id="selectedItem?.post.id ?? null"
+                :empty-message="postListEmptyMessage"
+                :loading="postListLoading"
+                :error="postListError"
+                :pending="selectedSource?.kind === 'user-added' && showImportCard"
                 @back="showSources"
+                @select="selectPost"
+                @select-pending="showImportProgress"
+                @retry="loadUserAddedPosts"
             >
                 <template #controls>
                     <span class="item-count">{{ postCountLabel }}</span>
@@ -757,46 +750,23 @@ onMounted(() => {
                         />
                     </div>
                 </template>
+            </JobPostListPanel>
 
-                <JobPostList
-                    :posts="filteredPosts"
-                    :selected-post-id="selectedItem?.post.id ?? null"
-                    :empty-message="postListEmptyMessage"
-                    :loading="postListLoading"
-                    :error="postListError"
-                    :pending="selectedSource?.kind === 'user-added' && showImportCard"
-                    @select="selectPost"
-                    @select-pending="showImportProgress"
-                    @retry="loadUserAddedPosts"
-                />
-            </BasePanel>
-
-            <BasePanel
+            <JobPostViewPanel
                 v-if="selectedItem"
-                as="aside"
                 class="job-post-view glass-frame"
                 :active="activePanel === 'viewer'"
                 :adjacent="activePanel === 'posts'"
-            >
-                <BaseButton
-                    class="review-back-mobile-only"
-                    preset="back"
-                    tooltip="Back to job posts"
-                    data-testid="back-to-job-posts"
-                    aria-label="Back to job posts"
-                    @click="showPosts"
-                >
-                    <ArrowLeftIcon />
-                </BaseButton>
-                <JobPostViewer
-                    :post="selectedItem.post"
-                    :recommendation="selectedItem.recommendation"
-                    :label-updating="labelUpdating"
-                    :label-error="labelError"
-                    :mode="reviewViewerMode"
-                    @update-label="updateUserLabel"
-                />
-            </BasePanel>
+                back-label="Back to job posts"
+                back-mobile-only
+                :post="selectedItem.post"
+                :recommendation="selectedItem.recommendation"
+                :label-updating="labelUpdating"
+                :label-error="labelError"
+                :mode="reviewViewerMode"
+                @back="showPosts"
+                @update-label="updateUserLabel"
+            />
         </div>
     </section>
 </template>
@@ -818,20 +788,9 @@ onMounted(() => {
     min-width: 0;
 }
 
-.import-panel {
-    overflow: hidden;
-    padding-bottom: $space-5;
-}
-
 .job-post-view {
     flex: 2;
     padding: 1.5rem;
-}
-
-.review-back-mobile-only {
-    @include bp-md-tablet {
-        display: none;
-    }
 }
 
 .item-count {
@@ -842,11 +801,6 @@ onMounted(() => {
     background: transparent;
     border: 0;
     border-radius: 0;
-}
-
-.report-list-panel {
-    container-name: report-list;
-    container-type: inline-size;
 }
 
 .post-filter {
