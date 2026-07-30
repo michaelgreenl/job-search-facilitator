@@ -10,7 +10,9 @@ import {
 } from '@job-search-facilitator/core'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import BasePopUp from '@/components/base/BasePopUp.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
 import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
@@ -18,7 +20,6 @@ import JobPostViewPanel, {
     type JobPostViewPanelMode,
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
-import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
@@ -64,6 +65,7 @@ const userAddedError = shallowRef<string | null>(null)
 const importSaving = shallowRef(false)
 const importIssue = shallowRef<string | null>(null)
 const importDialogIssue = shallowRef<string | null>(null)
+const importUrlError = shallowRef<string | null>(null)
 const importingTaskId = shallowRef<string | null>(null)
 const importRetryMode = shallowRef<'save' | 'task' | null>(null)
 let importRevision = 0
@@ -125,6 +127,7 @@ const addPostUrl = computed({
     get: () => postStore.addPostDialog.url,
     set: (url: string) => postStore.setAddPostUrl(url),
 })
+const importPopUpError = computed(() => importUrlError.value ?? importDialogIssue.value)
 
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -371,6 +374,23 @@ function showImport() {
     postStore.openAddPostDialog()
 }
 
+function submitImportUrl() {
+    const value = addPostUrl.value.trim()
+
+    try {
+        const parsedUrl = new URL(value)
+
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            throw new Error()
+        }
+
+        importUrlError.value = null
+        void startImport(parsedUrl.href)
+    } catch {
+        importUrlError.value = 'Enter a valid http or https job-post URL.'
+    }
+}
+
 function showImportPosts() {
     const source = { kind: 'user-added' } satisfies ReviewSource
     selectedSource.value = source
@@ -546,6 +566,7 @@ watch(
     (open) => {
         if (!open) {
             importDialogIssue.value = null
+            importUrlError.value = null
         }
     },
 )
@@ -669,14 +690,56 @@ onMounted(() => {
 
 <template>
     <section class="review-layout" aria-label="Job search review">
-        <JobPostUrlDialog
-            v-model:url="addPostUrl"
+        <BasePopUp
+            data-testid="job-post-url-dialog"
             :open="postStore.addPostDialog.open"
-            :busy="importAgent.starting.value"
-            :issue="importDialogIssue"
+            heading="Add job post"
+            close-label="Close add job post"
+            close-test-id="close-job-post-url-dialog"
+            :error="importPopUpError"
+            error-test-id="job-post-url-error"
             @close="postStore.closeAddPostDialog"
-            @submit="startImport"
-        />
+        >
+            <template #default="{ errorId }">
+                <form
+                    class="url-form"
+                    data-testid="job-post-url-form"
+                    novalidate
+                    @submit.prevent="submitImportUrl"
+                >
+                    <div class="url-entry">
+                        <input
+                            id="job-post-url"
+                            v-model="addPostUrl"
+                            class="url-input"
+                            data-testid="job-post-url"
+                            type="url"
+                            inputmode="url"
+                            autocomplete="url"
+                            aria-label="Job post URL"
+                            placeholder="Job post URL for agent to review"
+                            :aria-describedby="importPopUpError ? errorId : undefined"
+                            :aria-invalid="importPopUpError !== null"
+                            :disabled="importAgent.starting.value"
+                            autofocus
+                            @input="importUrlError = null"
+                        />
+                        <BaseButton
+                            class="submit-button"
+                            data-testid="start-job-post-import"
+                            icon-size="lg"
+                            preset="primary"
+                            type="submit"
+                            aria-label="Add job post"
+                            title="Add job post"
+                            :disabled="importAgent.starting.value"
+                        >
+                            <span aria-hidden="true">→</span>
+                        </BaseButton>
+                    </div>
+                </form>
+            </template>
+        </BasePopUp>
 
         <div class="layout-panels">
             <ReviewSourcePanel
@@ -790,6 +853,51 @@ onMounted(() => {
 .job-post-view {
     flex: 2;
     padding: 1.5rem;
+}
+
+.url-form {
+    display: grid;
+    gap: $space-2;
+}
+
+.url-entry {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+}
+
+.url-input {
+    flex: 1 1 auto;
+    height: 2.75rem;
+    min-width: 0;
+    padding: $space-2 $space-3;
+    color: $color-ink;
+    font: inherit;
+    background: $color-ink-alpha-6;
+    border: 1px solid $color-ink-alpha-16;
+    border-radius: $radius-md;
+
+    &::placeholder {
+        color: $color-ink-muted;
+    }
+
+    &:focus-visible {
+        border-color: $color-signal-light;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.55;
+    }
+}
+
+.submit-button {
+    flex: 0 0 auto;
+    font-size: 1.25rem;
+
+    &:disabled {
+        cursor: wait;
+    }
 }
 
 .item-count {

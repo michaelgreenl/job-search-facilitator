@@ -7,9 +7,9 @@ import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDro
 import AppHeader from '@/components/AppHeader.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import BasePopUp from '@/components/base/BasePopUp.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
-import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import '@/assets/styles/app.scss'
@@ -179,7 +179,6 @@ describe('browser interaction contracts', () => {
         const AddJobPostFixture = defineComponent({
             setup() {
                 const open = shallowRef(false)
-                const url = shallowRef('')
 
                 return () =>
                     h('div', [
@@ -202,17 +201,26 @@ describe('browser interaction contracts', () => {
                             onSelectReport: () => undefined,
                             onSelectUserAdded: () => undefined,
                         }),
-                        h(JobPostUrlDialog, {
-                            open: open.value,
-                            url: url.value,
-                            'onUpdate:url': (value: string) => {
-                                url.value = value
+                        h(
+                            BasePopUp,
+                            {
+                                open: open.value,
+                                heading: 'Add job post',
+                                closeLabel: 'Close add job post',
+                                closeTestId: 'close-job-post-url-dialog',
+                                'data-testid': 'job-post-url-dialog',
+                                onClose: () => {
+                                    open.value = false
+                                },
                             },
-                            onClose: () => {
-                                open.value = false
+                            {
+                                default: () =>
+                                    h('input', {
+                                        autofocus: true,
+                                        'aria-label': 'Job post URL',
+                                    }),
                             },
-                            onSubmit: () => undefined,
-                        }),
+                        ),
                     ])
             },
         })

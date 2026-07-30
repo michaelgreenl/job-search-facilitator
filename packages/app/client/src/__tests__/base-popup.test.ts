@@ -2,29 +2,27 @@
 
 import { createApp, defineComponent, h, nextTick, shallowRef, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
+import BasePopUp from '@/components/base/BasePopUp.vue'
 
-interface MountedDialog {
+interface MountedPopUp {
     app: App
     dialog: HTMLDialogElement
+    error: ReturnType<typeof shallowRef<string | null>>
     onClose: ReturnType<typeof vi.fn>
-    onSubmit: ReturnType<typeof vi.fn>
     open: ReturnType<typeof shallowRef<boolean>>
     root: HTMLElement
-    url: ReturnType<typeof shallowRef<string>>
 }
 
-const mountedDialogs: MountedDialog[] = []
+const mountedPopUps: MountedPopUp[] = []
 const nativeShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
 const nativeClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 
-function mountDialog(initiallyOpen = true) {
+function mountPopUp(initiallyOpen = true) {
     const open = shallowRef(initiallyOpen)
-    const url = shallowRef('')
+    const error = shallowRef<string | null>(null)
     const onClose = vi.fn(() => {
         open.value = false
     })
-    const onSubmit = vi.fn()
     const root = document.createElement('div')
 
     document.body.append(root)
@@ -33,55 +31,44 @@ function mountDialog(initiallyOpen = true) {
         defineComponent({
             setup() {
                 return () =>
-                    h(JobPostUrlDialog, {
-                        open: open.value,
-                        url: url.value,
-                        'onUpdate:url': (value: string) => {
-                            url.value = value
+                    h(
+                        BasePopUp,
+                        {
+                            open: open.value,
+                            heading: 'Pop-up heading',
+                            error: error.value,
+                            errorTestId: 'pop-up-error',
+                            closeTestId: 'close-pop-up',
+                            'data-testid': 'base-pop-up',
+                            onClose,
                         },
-                        onClose,
-                        onSubmit,
-                    })
+                        {
+                            default: ({ errorId }: { errorId: string }) =>
+                                h('input', {
+                                    'aria-describedby': error.value ? errorId : undefined,
+                                    'data-testid': 'pop-up-input',
+                                }),
+                        },
+                    )
             },
         }),
     )
 
     app.mount(root)
 
-    const dialog = root.querySelector<HTMLDialogElement>('[data-testid="job-post-url-dialog"]')
+    const dialog = root.querySelector<HTMLDialogElement>('[data-testid="base-pop-up"]')
 
     if (dialog === null) {
-        throw new Error('Could not mount the job-post URL dialog')
+        throw new Error('Could not mount the base pop-up')
     }
 
-    const mounted = { app, dialog, onClose, onSubmit, open, root, url }
-    mountedDialogs.push(mounted)
+    const mounted = { app, dialog, error, onClose, open, root }
+    mountedPopUps.push(mounted)
 
     return mounted
 }
 
-function setUrl(root: HTMLElement, value: string) {
-    const input = root.querySelector<HTMLInputElement>('[data-testid="job-post-url"]')
-
-    if (input === null) {
-        throw new Error('Could not find the job-post URL input')
-    }
-
-    input.value = value
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
-function submit(root: HTMLElement) {
-    const form = root.querySelector<HTMLFormElement>('[data-testid="job-post-url-form"]')
-
-    if (form === null) {
-        throw new Error('Could not find the job-post URL form')
-    }
-
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-}
-
-describe('JobPostUrlDialog', () => {
+describe('BasePopUp', () => {
     beforeEach(() => {
         Object.defineProperties(HTMLDialogElement.prototype, {
             showModal: {
@@ -101,7 +88,7 @@ describe('JobPostUrlDialog', () => {
     })
 
     afterEach(() => {
-        for (const { app, root } of mountedDialogs.splice(0)) {
+        for (const { app, root } of mountedPopUps.splice(0)) {
             app.unmount()
             root.remove()
         }
@@ -120,7 +107,7 @@ describe('JobPostUrlDialog', () => {
     })
 
     it('syncs its native open state and requests close through its controlled contract', async () => {
-        const { dialog, onClose, open, root } = mountDialog(false)
+        const { dialog, onClose, open, root } = mountPopUp(false)
 
         expect(dialog.open).toBe(false)
 
@@ -129,12 +116,10 @@ describe('JobPostUrlDialog', () => {
 
         expect(dialog.open).toBe(true)
 
-        const closeButton = root.querySelector<HTMLButtonElement>(
-            '[data-testid="close-job-post-url-dialog"]',
-        )
+        const closeButton = root.querySelector<HTMLButtonElement>('[data-testid="close-pop-up"]')
 
         if (closeButton === null) {
-            throw new Error('Could not find the dialog close button')
+            throw new Error('Could not find the pop-up close button')
         }
 
         closeButton.click()
@@ -152,26 +137,19 @@ describe('JobPostUrlDialog', () => {
         expect(dialog.open).toBe(false)
     })
 
-    it('updates the controlled URL and emits a normalized HTTP URL on submit', async () => {
-        const { onSubmit, root, url } = mountDialog()
+    it('renders slotted body content and connects it to the error prop', async () => {
+        const { error, root } = mountPopUp()
+        const input = root.querySelector<HTMLInputElement>('[data-testid="pop-up-input"]')
 
-        setUrl(root, 'HTTPS://EXAMPLE.COM/jobs/123')
-        await nextTick()
-        submit(root)
+        expect(input).not.toBeNull()
+        expect(root.querySelector('[data-testid="pop-up-error"]')).toBeNull()
 
-        expect(url.value).toBe('HTTPS://EXAMPLE.COM/jobs/123')
-        expect(onSubmit).toHaveBeenCalledExactlyOnceWith('https://example.com/jobs/123')
-    })
-
-    it('rejects a non-HTTP URL without submitting it', async () => {
-        const { onSubmit, root } = mountDialog()
-
-        setUrl(root, 'javascript:alert(1)')
-        await nextTick()
-        submit(root)
+        error.value = 'Could not complete the action.'
         await nextTick()
 
-        expect(onSubmit).not.toHaveBeenCalled()
-        expect(root.querySelector('[data-testid="job-post-url-error"]')).not.toBeNull()
+        const errorMessage = root.querySelector<HTMLElement>('[data-testid="pop-up-error"]')
+
+        expect(errorMessage).not.toBeNull()
+        expect(input?.getAttribute('aria-describedby')).toBe(errorMessage?.id)
     })
 })

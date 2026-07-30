@@ -512,7 +512,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('starts a job-post import while a persisted outreach task remains active', async () => {
+    it('normalizes and starts a job-post import while a persisted outreach task remains active', async () => {
         class SilentEventSource {
             static readonly CLOSED = 2
             readonly readyState = 0
@@ -575,7 +575,7 @@ describe('review route selection', () => {
         expect(agentStore.getTaskState(outreachTask.id)?.task?.status).toBe('running')
         const startTask = vi.spyOn(agentStore, 'startTask')
 
-        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await submitJobPostUrl(root, importOutput.post.postUrl.replace('https://', 'HTTPS://'))
 
         await vi.waitFor(() => {
             expect(startTask).toHaveBeenCalledWith(
