@@ -11,6 +11,7 @@ interface Props {
     titleTag?: 'h1' | 'h2'
     backLabel?: string
     backTestId?: string
+    backMobileOnly?: boolean
 }
 
 defineOptions({ inheritAttrs: false })
@@ -36,27 +37,42 @@ const emit = defineEmits<{
             'is-adjacent': props.adjacent,
         }"
     >
-        <header v-if="props.title !== undefined" class="panel-heading">
-            <div class="panel-title">
-                <BaseButton
-                    v-if="props.backLabel"
-                    preset="back"
-                    :tooltip="props.backLabel"
-                    :data-testid="props.backTestId"
-                    :aria-label="props.backLabel"
-                    @click="emit('back')"
-                >
-                    <ArrowLeftIcon />
-                </BaseButton>
+        <div
+            v-if="props.backLabel || $slots.controls"
+            class="panel-controls"
+            :class="{
+                'panel-controls-mobile-only': props.backMobileOnly && !$slots.controls,
+            }"
+        >
+            <BaseButton
+                v-if="props.backLabel"
+                preset="back"
+                :tooltip="props.backLabel"
+                :data-testid="props.backTestId"
+                :aria-label="props.backLabel"
+                :class="{ 'panel-back-mobile-only': props.backMobileOnly }"
+                @click="emit('back')"
+            >
+                <ArrowLeftIcon />
+            </BaseButton>
 
+            <slot name="controls" />
+        </div>
+
+        <header
+            v-if="props.eyebrow !== undefined || props.title !== undefined"
+            class="panel-heading"
+            data-testid="panel-heading"
+        >
+            <div class="panel-title">
                 <span v-if="props.eyebrow" class="eyebrow">{{ props.eyebrow }}</span>
-                <component :is="props.titleTag" class="heading">
+                <component v-if="props.title !== undefined" :is="props.titleTag" class="heading">
                     {{ props.title }}
                 </component>
             </div>
 
-            <div v-if="$slots.controls" class="panel-controls">
-                <slot name="controls" />
+            <div v-if="$slots['heading-controls']" class="panel-heading-controls">
+                <slot name="heading-controls" />
             </div>
         </header>
 
@@ -97,6 +113,25 @@ const emit = defineEmits<{
     justify-content: space-between;
 }
 
+.panel-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-3;
+    align-items: center;
+}
+
+.panel-controls-mobile-only {
+    @include bp-md-tablet {
+        display: none;
+    }
+}
+
+.panel-back-mobile-only {
+    @include bp-md-tablet {
+        display: none;
+    }
+}
+
 .panel-title {
     display: grid;
     gap: $space-1;
@@ -120,7 +155,7 @@ const emit = defineEmits<{
     text-wrap: balance;
 }
 
-.panel-controls {
+.panel-heading-controls {
     display: flex;
     flex-flow: column wrap;
     gap: $space-1;

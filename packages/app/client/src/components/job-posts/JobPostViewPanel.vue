@@ -21,7 +21,6 @@ import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
@@ -148,19 +147,15 @@ function selectLabel(value: string) {
 </script>
 
 <template>
-    <BasePanel as="aside" :active="active" :adjacent="adjacent">
-        <BaseButton
-            v-if="backLabel"
-            preset="back"
-            :tooltip="backLabel"
-            data-testid="back-to-job-posts"
-            :aria-label="backLabel"
-            :class="{ 'back-mobile-only': backMobileOnly }"
-            @click="emit('back')"
-        >
-            <ArrowLeftIcon />
-        </BaseButton>
-
+    <BasePanel
+        as="aside"
+        :active="active"
+        :adjacent="adjacent"
+        :back-label="backLabel"
+        back-test-id="back-to-job-posts"
+        :back-mobile-only="backMobileOnly"
+        @back="emit('back')"
+    >
         <section
             class="post-viewer"
             data-testid="job-post-viewer"
@@ -308,12 +303,6 @@ function selectLabel(value: string) {
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
-}
-
-.back-mobile-only {
-    @include bp-md-tablet {
-        display: none;
-    }
 }
 
 .component-label {

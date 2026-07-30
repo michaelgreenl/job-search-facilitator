@@ -59,8 +59,8 @@ const emit = defineEmits<{
         :back-test-id="backTestId"
         @back="emit('back')"
     >
-        <template v-if="$slots.controls" #controls>
-            <slot name="controls" />
+        <template v-if="$slots['heading-controls']" #heading-controls>
+            <slot name="heading-controls" />
         </template>
 
         <ul

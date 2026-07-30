@@ -734,7 +734,7 @@ onMounted(() => {
                 @select-pending="showImportProgress"
                 @retry="loadUserAddedPosts"
             >
-                <template #controls>
+                <template #heading-controls>
                     <span class="item-count">{{ postCountLabel }}</span>
 
                     <div class="post-filter">

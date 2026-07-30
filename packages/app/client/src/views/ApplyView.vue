@@ -458,7 +458,7 @@ onMounted(() => {
                 @select="selectPost"
                 @retry="loadApplyQueue"
             >
-                <template #controls>
+                <template #heading-controls>
                     <span class="item-count">{{ filteredPosts.length }} posts</span>
 
                     <div class="post-filter">

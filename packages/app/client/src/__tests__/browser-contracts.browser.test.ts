@@ -7,6 +7,7 @@ import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDro
 import AppHeader from '@/components/AppHeader.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
@@ -313,6 +314,35 @@ describe('browser layout contracts', () => {
         await page.viewport(848, 768)
 
         await expect.element(adjacentPanel).toBeVisible()
+    })
+
+    it('keeps shared panel spacing below the job-post list back control', async () => {
+        const root = mountComponent(JobPostListPanel, {
+            props: {
+                active: true,
+                adjacent: false,
+                eyebrow: 'Job posts',
+                title: 'Saved posts',
+                backLabel: 'Back to sources',
+                backTestId: 'job-post-list-back-contract',
+                posts: [],
+                selectedPostId: null,
+                emptyMessage: 'No posts',
+            },
+        })
+        await flushLayout()
+
+        const backButton = page.getByTestId('job-post-list-back-contract')
+        const heading = root.querySelector<HTMLElement>('[data-testid="panel-heading"]')
+
+        if (heading === null) {
+            throw new Error('Could not find panel heading')
+        }
+
+        const backButtonRect = backButton.element().getBoundingClientRect()
+        const headingRect = heading.getBoundingClientRect()
+
+        expect(headingRect.top - backButtonRect.bottom).toBeGreaterThanOrEqual(16)
     })
 
     it('offers rationale expansion only when real layout overflows', async () => {

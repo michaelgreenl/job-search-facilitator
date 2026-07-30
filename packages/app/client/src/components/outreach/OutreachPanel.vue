@@ -5,7 +5,6 @@ import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
-import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import AgentStream from '@/components/agent/AgentStream.vue'
@@ -70,6 +69,16 @@ let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 const canCancel = computed(() => hasActiveTask.value && taskActive.value)
 const canDismiss = computed(() => hasActiveTask.value && canDismissSession.value)
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+const backLabel = computed(() => {
+    if (hasActiveTask.value) {
+        return undefined
+    }
+
+    return panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts'
+})
+const backTestId = computed(() =>
+    panelView.value === 'contacts' ? 'back-to-job-post' : 'back-to-saved-contacts',
+)
 const draftIssue = computed(
     () => resultError.value ?? (drafting.value ? (error.value ?? task.value?.error ?? null) : null),
 )
@@ -174,6 +183,14 @@ function showContacts() {
     }
 }
 
+function goBack() {
+    if (panelView.value === 'contacts') {
+        emit('showViewer')
+    } else {
+        showContacts()
+    }
+}
+
 function showStream() {
     panelView.value = 'stream'
 }
@@ -210,51 +227,31 @@ async function copyDraft() {
 </script>
 
 <template>
-    <BasePanel as="aside" :active="active" :adjacent="adjacent">
+    <BasePanel
+        as="aside"
+        :active="active"
+        :adjacent="adjacent"
+        eyebrow="Outreach"
+        :back-label="backLabel"
+        :back-test-id="backTestId"
+        :back-mobile-only="panelView === 'contacts'"
+        @back="goBack"
+    >
+        <template v-if="panelView === 'draft'" #controls>
+            <BaseButton
+                class="panel-control-desktop"
+                preset="icon"
+                :tooltip="resizeLabel"
+                :aria-label="resizeLabel"
+                :aria-expanded="expanded"
+                @click="toggleExpanded"
+            >
+                <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                <ExpandIcon v-else class="panel-control-icon" />
+            </BaseButton>
+        </template>
+
         <section class="outreach-panel" aria-label="Outreach">
-            <header>
-                <div class="outreach-heading-copy">
-                    <div class="panel-navigation">
-                        <BaseButton
-                            v-if="panelView === 'contacts' && !hasActiveTask"
-                            class="panel-navigation-mobile-only"
-                            preset="back"
-                            tooltip="Back to job post"
-                            data-testid="back-to-job-post"
-                            aria-label="Back to job post"
-                            @click="emit('showViewer')"
-                        >
-                            <ArrowLeftIcon />
-                        </BaseButton>
-                        <BaseButton
-                            v-else-if="!hasActiveTask"
-                            preset="back"
-                            tooltip="Back to saved contacts"
-                            data-testid="back-to-saved-contacts"
-                            aria-label="Back to saved contacts"
-                            @click="showContacts"
-                        >
-                            <ArrowLeftIcon />
-                        </BaseButton>
-
-                        <BaseButton
-                            v-if="panelView === 'draft'"
-                            class="panel-control-desktop"
-                            preset="icon"
-                            :tooltip="resizeLabel"
-                            :aria-label="resizeLabel"
-                            :aria-expanded="expanded"
-                            @click="toggleExpanded"
-                        >
-                            <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                            <ExpandIcon v-else class="panel-control-icon" />
-                        </BaseButton>
-                    </div>
-
-                    <span class="eyebrow">Outreach</span>
-                </div>
-            </header>
-
             <template v-if="panelView === 'contacts'">
                 <OutreachContactList
                     v-model:filter="contactFilter"
@@ -342,26 +339,6 @@ async function copyDraft() {
     min-height: 0;
 }
 
-.outreach-heading-copy {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-}
-
-.panel-navigation {
-    display: flex;
-    gap: $space-3;
-    align-items: center;
-}
-
-.panel-navigation-mobile-only {
-    @include bp-md-tablet {
-        display: none;
-    }
-}
-
 .discover-contact-tooltip {
     align-self: flex-end;
 }
@@ -375,16 +352,7 @@ async function copyDraft() {
     font-size: 0.8125rem;
 }
 
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
-.panel-navigation > .panel-control-desktop {
+.panel-control-desktop {
     display: none;
 
     @include bp-md-tablet {
