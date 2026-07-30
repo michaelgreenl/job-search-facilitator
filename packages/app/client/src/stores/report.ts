@@ -1,17 +1,8 @@
-import {
-    parseJobSearchReport,
-    parseJobSearchReports,
-    type JobSearchReport,
-} from '@job-search-facilitator/core'
+import type { JobSearchReport } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { request } from '@/api'
+import { fetchJobSearchReport, fetchJobSearchReports } from '@/services/reports'
 import { usePostStore } from '@/stores/post'
-
-const getJobSearchReports = () => request('/job-search-reports', parseJobSearchReports)
-
-const getJobSearchReport = (reportId: string) =>
-    request(`/job-search-reports/${encodeURIComponent(reportId)}`, parseJobSearchReport)
 
 export const useReportStore = defineStore('reports', () => {
     const postStore = usePostStore()
@@ -32,7 +23,7 @@ export const useReportStore = defineStore('reports', () => {
         error.value = null
 
         try {
-            reports.value = (await getJobSearchReports()).map(canonicalizeReportPosts)
+            reports.value = (await fetchJobSearchReports()).map(canonicalizeReportPosts)
         } catch (requestError) {
             error.value = requestError instanceof Error ? requestError.message : 'Request failed'
             throw requestError
@@ -46,7 +37,7 @@ export const useReportStore = defineStore('reports', () => {
         error.value = null
 
         try {
-            const report = canonicalizeReportPosts(await getJobSearchReport(reportId))
+            const report = canonicalizeReportPosts(await fetchJobSearchReport(reportId))
             const index = reports.value.findIndex(({ id }) => id === report.id)
 
             if (index === -1) {

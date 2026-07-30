@@ -11,8 +11,8 @@ import { createPinia, type Pinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createJobPostImportTask } from '@/features/job-post-import/job-post-import-task'
 import { useAgentStore, type AgentSession, type AgentTaskState } from '@/stores/agent'
-import { createJobPostImportTask } from '@/agent-tasks'
 import ReviewView from '../views/ReviewView.vue'
 
 const createPost = (id: string, roleTitle: string): JobPost => ({

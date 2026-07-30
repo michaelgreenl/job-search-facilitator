@@ -17,7 +17,7 @@ import {
     type AgentSessionOwner,
     type AgentTaskState,
 } from '../stores/agent'
-import { createJobPostImportTask } from '../agent-tasks'
+import { createJobPostImportTask } from '../features/job-post-import/job-post-import-task'
 
 class MemoryStorage implements Storage {
     readonly values = new Map<string, string>()

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
     createContactDiscoveryTask,
     createDraftRevisionTask,
-    createJobPostImportTask,
-} from '../agent-tasks'
+} from '../features/outreach/outreach-tasks'
+import { createJobPostImportTask } from '../features/job-post-import/job-post-import-task'
 
 const post: JobPost = {
     id: 'post-id',

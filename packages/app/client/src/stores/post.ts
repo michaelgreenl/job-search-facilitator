@@ -1,10 +1,4 @@
 import {
-    parseApplyQueueItems,
-    parseJobPost,
-    parseJobPosts,
-    parseUserAddedJobPost,
-    parseUserAddedJobPosts,
-    parseUpdateJobPostResult,
     type ApplyQueueItem,
     type CreateUserAddedJobPostInput,
     type JobPost,
@@ -13,29 +7,14 @@ import {
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { request } from '@/api'
-
-const getJobPosts = () => request('/job-posts', parseJobPosts)
-
-const getApplyQueue = () => request('/job-posts/apply-queue', parseApplyQueueItems)
-
-const getUserAddedPosts = () => request('/job-posts/user-added', parseUserAddedJobPosts)
-
-const postUserAddedPost = (input: CreateUserAddedJobPostInput) =>
-    request('/job-posts', parseUserAddedJobPost, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-
-const getJobPost = (id: string) => request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost)
-
-const patchJobPost = (id: string, input: UpdateJobPostInput) =>
-    request(`/job-posts/${encodeURIComponent(id)}`, parseUpdateJobPostResult, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-    })
+import {
+    createUserAddedJobPost,
+    fetchApplyQueue as requestApplyQueue,
+    fetchJobPost as requestJobPost,
+    fetchJobPosts as requestJobPosts,
+    fetchUserAddedJobPosts,
+    updateJobPost as requestJobPostUpdate,
+} from '@/services/job-posts'
 
 interface AddPostDialogState {
     open: boolean
@@ -141,29 +120,29 @@ export const usePostStore = defineStore('posts', () => {
         }
     }
 
-    const fetchPosts = () => load(getJobPosts, upsertPosts)
+    const fetchPosts = () => load(requestJobPosts, upsertPosts)
 
-    const fetchApplyQueue = () => load(getApplyQueue, upsertApplyQueue)
+    const fetchApplyQueue = () => load(requestApplyQueue, upsertApplyQueue)
 
     const fetchUserAddedPosts = () => {
         const requestMutationRevision = userAddedMutationRevision
 
-        return load(getUserAddedPosts, (items) =>
+        return load(fetchUserAddedJobPosts, (items) =>
             replaceUserAddedPosts(items, requestMutationRevision),
         )
     }
 
     const addUserAddedPost = (input: CreateUserAddedJobPostInput) =>
-        load(() => postUserAddedPost(input), saveUserAddedPost)
+        load(() => createUserAddedJobPost(input), saveUserAddedPost)
 
-    const fetchPost = (id: string) => load(() => getJobPost(id), upsertPost)
+    const fetchPost = (id: string) => load(() => requestJobPost(id), upsertPost)
 
     async function updatePost(id: string, input: UpdateJobPostInput) {
         loading.value = true
         error.value = null
 
         try {
-            const result = await patchJobPost(id, input)
+            const result = await requestJobPostUpdate(id, input)
             return {
                 ...result,
                 post: savePost(result.post),

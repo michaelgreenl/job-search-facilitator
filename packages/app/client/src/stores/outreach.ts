@@ -1,22 +1,31 @@
 import {
     parseContactDiscoveryResult,
     parseDraftRevisionResult,
-    parseOutreachContact,
-    parseOutreachContacts,
     type ContactDiscoveryResult,
     type DraftRevisionResult,
     type JobPost,
     type JsonObject,
     type OutreachContact,
     type StartAgentTaskInput,
-    type UpdateOutreachContactInput,
     type AgentTask,
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
-import { request } from '@/api'
 import { useAgentTask } from '@/composables/useAgentTask'
-import { createContactDiscoveryTask, createDraftRevisionTask } from '@/agent-tasks'
+import {
+    clearOutreachContactListReturn,
+    readOutreachContactListReturn,
+    writeOutreachContactListReturn,
+} from '@/features/outreach/outreach-contact-list-return'
+import {
+    createContactDiscoveryTask,
+    createDraftRevisionTask,
+} from '@/features/outreach/outreach-tasks'
+import {
+    createOutreachContact,
+    fetchOutreachContacts,
+    updateOutreachContact,
+} from '@/services/outreach'
 import type { AgentSession, AgentSessionOwner } from './agent'
 
 type OutreachTaskKind = 'contact' | 'draft'
@@ -33,47 +42,6 @@ interface ActiveOutreachTask {
 
 type OutreachAgentSession = Exclude<AgentSession, { kind: 'job-post-import' }>
 
-const contactListReturnStorageKey = 'job-search-facilitator:outreach-contact-list-return'
-
-const getSessionStorage = () => {
-    try {
-        return globalThis.sessionStorage ?? null
-    } catch {
-        return null
-    }
-}
-
-const readContactListReturn = () => {
-    const storage = getSessionStorage()
-
-    if (storage === null) {
-        return null
-    }
-
-    try {
-        const postId = storage.getItem(contactListReturnStorageKey)
-        return postId?.trim() ? postId : null
-    } catch {
-        return null
-    }
-}
-
-const writeContactListReturn = (postId: string) => {
-    try {
-        getSessionStorage()?.setItem(contactListReturnStorageKey, postId)
-    } catch {
-        // The current panel remains usable when storage is unavailable.
-    }
-}
-
-const removeContactListReturn = () => {
-    try {
-        getSessionStorage()?.removeItem(contactListReturnStorageKey)
-    } catch {
-        // The current panel remains usable when storage is unavailable.
-    }
-}
-
 export const useOutreachStore = defineStore('outreach', () => {
     const agentTask = useAgentTask('outreach')
     const initialSession =
@@ -81,7 +49,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         agentTask.session.value?.kind === 'outreach-draft'
             ? agentTask.session.value
             : null
-    const returnPostId = initialSession === null ? readContactListReturn() : null
+    const returnPostId = initialSession === null ? readOutreachContactListReturn() : null
     const postId = shallowRef<string | null>(initialSession?.postId ?? returnPostId)
     const contacts = shallowRef<OutreachContact[]>([])
     const contact = shallowRef<OutreachContact | null>(null)
@@ -117,7 +85,7 @@ export const useOutreachStore = defineStore('outreach', () => {
 
     function clearContactListReturn() {
         restoreContactListPending.value = false
-        removeContactListReturn()
+        clearOutreachContactListReturn()
     }
 
     function openForPost(post: string) {
@@ -245,10 +213,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactsError.value = null
 
         try {
-            const savedContacts = await request(
-                `/job-posts/${encodeURIComponent(post)}/outreach-contacts`,
-                parseOutreachContacts,
-            )
+            const savedContacts = await fetchOutreachContacts(post)
 
             if (postId.value !== post || contactRequestRevision !== requestRevision) {
                 return null
@@ -312,20 +277,12 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
 
         const updateRevision = ++contactUpdateRevision
-        const input: UpdateOutreachContactInput = { messaged }
+        const input = { messaged }
         contactUpdating.value = true
         contactUpdateError.value = null
 
         try {
-            const updatedContact = await request(
-                `/job-posts/${encodeURIComponent(activePostId)}/outreach-contacts/${encodeURIComponent(contactId)}`,
-                parseOutreachContact,
-                {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(input),
-                },
-            )
+            const updatedContact = await updateOutreachContact(activePostId, contactId, input)
 
             if (postId.value !== activePostId || contactUpdateRevision !== updateRevision) {
                 return null
@@ -543,15 +500,7 @@ export const useOutreachStore = defineStore('outreach', () => {
                     return
                 }
 
-                const savedContact = await request(
-                    `/job-posts/${encodeURIComponent(task.postId)}/outreach-contacts`,
-                    parseOutreachContact,
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(input),
-                    },
-                )
+                const savedContact = await createOutreachContact(task.postId, input)
 
                 if (
                     postId.value !== task.postId ||
@@ -657,7 +606,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
 
         if (activeTask.value?.revision === activeResultRevision) {
-            writeContactListReturn(currentTask.postId)
+            writeOutreachContactListReturn(currentTask.postId)
         }
 
         if (currentOutreachSession() === null) {

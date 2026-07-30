@@ -21,9 +21,9 @@ import JobPostViewPanel, {
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
+import { createJobPostImportTask } from '@/features/job-post-import/job-post-import-task'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
-import { createJobPostImportTask } from '@/agent-tasks'
 
 type ActivePanel = 'sources' | 'posts' | 'viewer' | 'import'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
