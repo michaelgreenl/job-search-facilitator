@@ -410,9 +410,10 @@ describe('apply view', () => {
         await nextTick()
         findTestButton(root, 'outreach-draft-submit').click()
 
-        await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="outreach-draft-issue"]')).not.toBeNull(),
-        )
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull()
+        })
     })
 
     it('keeps a disconnected draft task visible and cancellable', async () => {
@@ -461,28 +462,23 @@ describe('apply view', () => {
             return instance
         })
         source.open()
-        expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).toBeNull()
+        expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull()
         source.disconnect()
 
         await vi.waitFor(() =>
             expect(
-                root
-                    .querySelector('[data-testid="outreach-draft-reconnect"]')
-                    ?.getAttribute('role'),
+                root.querySelector('[data-testid="agent-reconnect-status"]')?.getAttribute('role'),
             ).toBe('status'),
         )
 
         source.open()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="outreach-draft-reconnect"]')).toBeNull(),
+            expect(root.querySelector('[data-testid="agent-reconnect-status"]')).toBeNull(),
         )
 
         source.fail()
         await vi.waitFor(() => {
-            expect(
-                root.querySelector('[data-testid="outreach-draft-issue"]')?.getAttribute('role'),
-            ).toBe('alert')
-            expect(request.disabled).toBe(true)
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
             expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
         })
     })
@@ -604,19 +600,8 @@ describe('apply view', () => {
         })
     })
 
-    it('restores a cancelled outreach task until the user dismisses it', async () => {
-        const cancelledTask = { ...runningAgentTask, status: 'cancelled' as const }
-        sessionStorage.setItem(
-            'job-search-facilitator:agent-session',
-            JSON.stringify({
-                version: 1,
-                session: {
-                    kind: 'outreach-contact',
-                    taskId: cancelledTask.id,
-                    postId: posts[0]!.id,
-                },
-            }),
-        )
+    it('restores the contact list without restoring a cancelled outreach task', async () => {
+        sessionStorage.setItem('job-search-facilitator:outreach-contact-list-return', posts[0]!.id)
         vi.mocked(fetch).mockImplementation((input) => {
             const url = fetchUrl(input)
 
@@ -626,10 +611,6 @@ describe('apply view', () => {
 
             if (url.endsWith(`/api/job-posts/${posts[0]!.id}/outreach-contacts`)) {
                 return Promise.resolve(jsonResponse([]))
-            }
-
-            if (url.endsWith(`/tasks/${cancelledTask.id}`)) {
-                return Promise.resolve(jsonResponse(cancelledTask))
             }
 
             throw new Error(`Unexpected request: ${url}`)
@@ -644,15 +625,63 @@ describe('apply view', () => {
                     .querySelector('[data-testid="apply-outreach-panel"]')
                     ?.getAttribute('data-active'),
             ).toBe('true')
-            expect(findTestButton(root, 'outreach-dismiss')).not.toBeNull()
+            expect(root.querySelector('[data-testid="outreach-contact-list"]')).not.toBeNull()
+            expect(findTestButton(root, 'back-to-job-post')).not.toBeNull()
         })
 
-        findTestButton(root, 'outreach-dismiss').click()
+        expect(
+            sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return'),
+        ).toBeNull()
+        expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
+    })
+
+    it('keeps active outreach navigable while preserving its task session', async () => {
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
+        FakeEventSource.instances = []
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
 
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="outreach-dismiss"]')).toBeNull(),
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull(),
         )
-        expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
+        findTestButton(root, 'back-to-saved-contacts').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-contact-list"]')).not.toBeNull(),
+        )
+
+        findTestButton(root, 'back-to-job-post').click()
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="apply-viewer-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true'),
+        )
+        expect(findTestButton(root, 'back-to-job-posts')).not.toBeNull()
+
+        findTestButton(root, 'back-to-job-posts').click()
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="apply-posts-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true'),
+        )
+
+        expect(useAgentStore(pinia).getSession('outreach')).toMatchObject({
+            taskId: runningAgentTask.id,
+            postId: posts[0]!.id,
+        })
+        expect(sessionStorage.getItem('job-search-facilitator:agent-session')).not.toBeNull()
     })
 
     it('keeps a restored task reachable when its owner post cannot be loaded', async () => {
@@ -710,9 +739,9 @@ describe('apply view', () => {
 
         findTestButton(root, 'outreach-cancel').click()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="outreach-dismiss"]')).not.toBeNull(),
+            expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull(),
         )
-        findTestButton(root, 'outreach-dismiss').click()
+        findTestButton(root, 'back-to-saved-contacts').click()
 
         await vi.waitFor(() =>
             expect(

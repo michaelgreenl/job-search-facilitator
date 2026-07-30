@@ -20,7 +20,6 @@ import JobPostViewPanel, {
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import JobPostUrlDialog from '@/components/review/JobPostUrlDialog.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
-import AgentStream from '@/components/agent/AgentStream.vue'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
 import { createJobPostImportTask } from '@/agent-tasks'
@@ -116,10 +115,6 @@ const importDisplayIssue = computed(
 )
 const importRetryAvailable = computed(
     () => importSession.value !== null && !importBusy.value && importDisplayIssue.value !== null,
-)
-const showImportAgent = computed(
-    () =>
-        importSession.value !== null && (importStarting.value || matchingImportTask.value !== null),
 )
 const showImportCard = computed(
     () =>
@@ -531,18 +526,6 @@ async function cancelImport() {
     }
 }
 
-function dismissImport() {
-    if (!importAgent.dismissSession()) {
-        return
-    }
-
-    importRevision += 1
-    importIssue.value = null
-    importingTaskId.value = null
-    importRetryMode.value = null
-    showSources()
-}
-
 watch(
     [importSession, matchingImportTask] as const,
     ([session, task]) => {
@@ -550,7 +533,6 @@ watch(
             return
         }
 
-        activePanel.value = 'import'
         postStore.clearAddPostDialog()
 
         if (task?.id === session.taskId) {
@@ -659,7 +641,29 @@ onMounted(() => {
     void loadUserAddedPosts()
 
     if (importSession.value !== null) {
-        void importAgent.restoreSession().catch(() => undefined)
+        const restoringTaskId = importSession.value.taskId
+
+        void importAgent
+            .restoreSession()
+            .then((task) => {
+                if (
+                    task?.status !== 'cancelled' ||
+                    importSession.value?.taskId !== restoringTaskId
+                ) {
+                    return
+                }
+
+                importAgent.dismissSession()
+                importRevision += 1
+                importIssue.value = null
+                importingTaskId.value = null
+                importRetryMode.value = null
+
+                if (activePanel.value === 'import') {
+                    showImportPosts()
+                }
+            })
+            .catch(() => undefined)
     }
 })
 </script>
@@ -699,7 +703,6 @@ onMounted(() => {
                 class="import-panel glass-frame"
                 :active="activePanel === 'import'"
                 :adjacent="false"
-                :can-dismiss="importAgent.canDismissSession.value"
                 :cancelling="importAgent.cancelling.value"
                 :issue="importDisplayIssue"
                 :retry-available="importRetryAvailable"
@@ -708,11 +711,8 @@ onMounted(() => {
                 :starting="importStarting"
                 @back="showImportPosts"
                 @cancel="cancelImport"
-                @dismiss="dismissImport"
                 @retry="retryImport"
-            >
-                <AgentStream v-if="showImportAgent" lane="job-post-import" :issue="null" />
-            </JobPostImportPanel>
+            />
 
             <JobPostListPanel
                 class="glass-frame"

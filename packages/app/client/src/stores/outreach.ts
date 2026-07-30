@@ -20,7 +20,7 @@ import { createContactDiscoveryTask, createDraftRevisionTask } from '@/agent-tas
 import type { AgentSession, AgentSessionOwner } from './agent'
 
 type OutreachTaskKind = 'contact' | 'draft'
-type OutreachTaskPhase = 'starting' | 'running' | 'applying' | 'settled'
+type OutreachTaskPhase = 'starting' | 'running' | 'applying'
 
 interface ActiveOutreachTask {
     revision: number
@@ -33,6 +33,47 @@ interface ActiveOutreachTask {
 
 type OutreachAgentSession = Exclude<AgentSession, { kind: 'job-post-import' }>
 
+const contactListReturnStorageKey = 'job-search-facilitator:outreach-contact-list-return'
+
+const getSessionStorage = () => {
+    try {
+        return globalThis.sessionStorage ?? null
+    } catch {
+        return null
+    }
+}
+
+const readContactListReturn = () => {
+    const storage = getSessionStorage()
+
+    if (storage === null) {
+        return null
+    }
+
+    try {
+        const postId = storage.getItem(contactListReturnStorageKey)
+        return postId?.trim() ? postId : null
+    } catch {
+        return null
+    }
+}
+
+const writeContactListReturn = (postId: string) => {
+    try {
+        getSessionStorage()?.setItem(contactListReturnStorageKey, postId)
+    } catch {
+        // The current panel remains usable when storage is unavailable.
+    }
+}
+
+const removeContactListReturn = () => {
+    try {
+        getSessionStorage()?.removeItem(contactListReturnStorageKey)
+    } catch {
+        // The current panel remains usable when storage is unavailable.
+    }
+}
+
 export const useOutreachStore = defineStore('outreach', () => {
     const agentTask = useAgentTask('outreach')
     const initialSession =
@@ -40,7 +81,8 @@ export const useOutreachStore = defineStore('outreach', () => {
         agentTask.session.value?.kind === 'outreach-draft'
             ? agentTask.session.value
             : null
-    const postId = shallowRef<string | null>(initialSession?.postId ?? null)
+    const returnPostId = initialSession === null ? readContactListReturn() : null
+    const postId = shallowRef<string | null>(initialSession?.postId ?? returnPostId)
     const contacts = shallowRef<OutreachContact[]>([])
     const contact = shallowRef<OutreachContact | null>(null)
     const draft = shallowRef(initialSession?.kind === 'outreach-draft' ? initialSession.draft : '')
@@ -64,6 +106,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     const resultError = shallowRef<string | null>(null)
     const contactsLoading = shallowRef(false)
     const contactsError = shallowRef<string | null>(null)
+    const restoreContactListPending = shallowRef(returnPostId !== null)
     const discovering = computed(() => activeTask.value?.kind === 'contact')
     const drafting = computed(() => activeTask.value?.kind === 'draft')
     const hasActiveTask = computed(() => activeTask.value !== null)
@@ -72,7 +115,14 @@ export const useOutreachStore = defineStore('outreach', () => {
     let contactUpdateRevision = 0
     let restorePromise: Promise<boolean> | null = null
 
+    function clearContactListReturn() {
+        restoreContactListPending.value = false
+        removeContactListReturn()
+    }
+
     function openForPost(post: string) {
+        clearContactListReturn()
+        clearInactiveTask()
         resultRevision += 1
         contactRequestRevision += 1
         contactUpdateRevision += 1
@@ -219,6 +269,24 @@ export const useOutreachStore = defineStore('outreach', () => {
                 contactsLoading.value = false
             }
         }
+    }
+
+    async function restoreContactList() {
+        const activePostId = postId.value
+
+        if (!restoreContactListPending.value || activePostId === null) {
+            return false
+        }
+
+        try {
+            await fetchContacts(activePostId)
+        } catch {
+            // The contact list owns and displays its loading error.
+        } finally {
+            clearContactListReturn()
+        }
+
+        return true
     }
 
     function selectContact(selectedContact: OutreachContact) {
@@ -533,7 +601,7 @@ export const useOutreachStore = defineStore('outreach', () => {
 
             draft.value = result.draftMessage
             assistantReply.value = result.response
-            activeTask.value = { ...task, phase: 'settled' }
+            finishTask(task)
             resultError.value = null
         }
     }
@@ -575,9 +643,10 @@ export const useOutreachStore = defineStore('outreach', () => {
     }
 
     async function cancelActiveTask() {
-        const activeResultRevision = activeTask.value?.revision
+        const currentTask = activeTask.value
+        const activeResultRevision = currentTask?.revision
 
-        if (activeResultRevision === undefined) {
+        if (currentTask === null || activeResultRevision === undefined) {
             return false
         }
 
@@ -587,6 +656,10 @@ export const useOutreachStore = defineStore('outreach', () => {
             return false
         }
 
+        if (activeTask.value?.revision === activeResultRevision) {
+            writeContactListReturn(currentTask.postId)
+        }
+
         if (currentOutreachSession() === null) {
             clearTask(activeResultRevision)
         }
@@ -594,22 +667,25 @@ export const useOutreachStore = defineStore('outreach', () => {
         return true
     }
 
-    function dismissActiveTask() {
-        const task = activeTask.value
-
-        if (task === null) {
+    function clearInactiveTask() {
+        if (agentTask.taskActive.value) {
             return false
         }
 
-        if (sessionMatches(task) && !agentTask.dismissSession()) {
+        if (agentTask.session.value !== null && !agentTask.dismissSession()) {
             return false
         }
 
-        clearTask(task.revision)
+        if (activeTask.value !== null) {
+            clearTask(activeTask.value.revision)
+        }
+
         return true
     }
 
     function reset() {
+        clearContactListReturn()
+        clearInactiveTask()
         resultRevision += 1
         contactRequestRevision += 1
         contactUpdateRevision += 1
@@ -671,6 +747,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         contactUpdating,
         contactUpdateError,
         resultError,
+        restoreContactListPending,
         contactsLoading,
         contactsError,
         discovering,
@@ -679,13 +756,14 @@ export const useOutreachStore = defineStore('outreach', () => {
         openForPost,
         startContactDiscovery,
         restoreActiveTask,
+        restoreContactList,
         fetchContacts,
         selectContact,
         clearContact,
         updateContactMessaged,
         requestDraftRevision,
         cancelActiveTask,
-        dismissActiveTask,
+        clearInactiveTask,
         reset,
     }
 })

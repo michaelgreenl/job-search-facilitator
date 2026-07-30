@@ -618,7 +618,7 @@ describe('review route selection', () => {
         ).toBe('')
     })
 
-    it('restores a cancelled import panel after refresh until it is dismissed', async () => {
+    it('does not restore a cancelled import after refresh', async () => {
         class SilentEventSource {
             static readonly CLOSED = 2
             readonly readyState = 0
@@ -657,10 +657,6 @@ describe('review route selection', () => {
                 return Promise.resolve(jsonResponse(cancelledTask, 202))
             }
 
-            if (method === 'GET' && url.endsWith(`/tasks/${taskId}`)) {
-                return Promise.resolve(jsonResponse(cancelledTask))
-            }
-
             return defaultReviewResponse(input, init)
         })
         const firstPinia = createPinia()
@@ -678,16 +674,14 @@ describe('review route selection', () => {
             },
         )
         await firstStore.cancelTask(taskId)
+        expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
 
         const { root } = await mountReview()
 
         await vi.waitFor(() => {
             expect(
-                root
-                    .querySelector('[aria-label="Add job post"][data-active]')
-                    ?.getAttribute('data-active'),
+                root.querySelector('[aria-label="Review sources"]')?.getAttribute('data-active'),
             ).toBe('true')
-            expect(root.querySelector('[data-testid="dismiss-job-post-import"]')).not.toBeNull()
             expect(root.querySelector('[data-testid="cancel-job-post-import"]')).toBeNull()
         })
     })
@@ -816,7 +810,6 @@ describe('review route selection', () => {
             ).toBe('true')
             expect(root.querySelector('[data-testid="job-post-import-progress"]')).not.toBeNull()
         })
-
         findTestButton(root, 'job-post-import-progress').click()
 
         await vi.waitFor(() => {
@@ -829,7 +822,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('keeps a running import intact when cancellation fails and retains cancellation until dismissal', async () => {
+    it('keeps a running import intact when cancellation fails and allows leaving after cancellation', async () => {
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
         const runningTask = {
@@ -875,7 +868,9 @@ describe('review route selection', () => {
             expect(
                 root.querySelector('[data-testid="job-post-url-dialog"]')?.hasAttribute('open'),
             ).toBe(false)
-            expect(root.querySelector('[data-testid="dismiss-job-post-import"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="back-from-job-post-import"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="retry-job-post-import"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).toBeNull()
             expect(
                 root
                     .querySelector('[aria-label="Add job post"][data-active]')
@@ -883,11 +878,11 @@ describe('review route selection', () => {
             ).toBe('true')
         })
 
-        findTestButton(root, 'dismiss-job-post-import').click()
+        findTestButton(root, 'back-from-job-post-import').click()
 
         await vi.waitFor(() => {
             expect(
-                root.querySelector('[aria-label="Review sources"]')?.getAttribute('data-active'),
+                root.querySelector('[aria-label="Job posts"]')?.getAttribute('data-active'),
             ).toBe('true')
         })
     })

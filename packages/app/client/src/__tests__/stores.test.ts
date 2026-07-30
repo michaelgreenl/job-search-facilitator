@@ -463,7 +463,7 @@ describe('outreach store', () => {
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 
-    it('restores the selected contact and edited draft for a cancelled revision', async () => {
+    it('restores cancelled draft context until the stream is left', async () => {
         const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
         const editedDraft = 'Edited draft awaiting revision'
         const cancelledTask: AgentTask = {
@@ -503,11 +503,11 @@ describe('outreach store', () => {
         expect(store.contact).toEqual(savedContact)
         expect(store.draft).toBe(editedDraft)
         expect(store.drafting).toBe(true)
-        expect(store.dismissActiveTask()).toBe(true)
+        expect(store.clearInactiveTask()).toBe(true)
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 
-    it('retains a completed draft revision through refresh until it is dismissed', async () => {
+    it('applies a completed draft revision and clears its task automatically', async () => {
         const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
         const revisedDraft = 'Revised draft from Agent'
         const completedTask: AgentTask = {
@@ -550,10 +550,7 @@ describe('outreach store', () => {
 
         await vi.waitFor(() => expect(store.draft).toBe(revisedDraft))
         expect(store.assistantReply).toBe('Made the introduction warmer.')
-        expect(store.hasActiveTask).toBe(true)
-        expect(useAgentStore().getSession('outreach')?.taskId).toBe(restoredTaskId)
-
-        expect(store.dismissActiveTask()).toBe(true)
+        expect(store.hasActiveTask).toBe(false)
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 
@@ -842,7 +839,7 @@ describe('outreach store', () => {
         expect(store.assistantReply).toBeNull()
     })
 
-    it('retains cancelled outreach until it is dismissed', async () => {
+    it('keeps cancelled outreach visible until the stream is left', async () => {
         const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
         let resolveCancellation: ((task: AgentTask) => void) | undefined
         const cancellationResponse = new Promise<AgentTask>((resolve) => {
@@ -867,7 +864,10 @@ describe('outreach store', () => {
         expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
         expect(store.discovering).toBe(true)
         expect(agentStore.getSession('outreach')?.taskId).toBe(runningTask.id)
-        expect(store.dismissActiveTask()).toBe(true)
+        expect(sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return')).toBe(
+            post.id,
+        )
+        expect(store.clearInactiveTask()).toBe(true)
         expect(store.discovering).toBe(false)
     })
 
@@ -888,7 +888,7 @@ describe('outreach store', () => {
         expect(store.discovering).toBe(true)
     })
 
-    it('retains failed outreach until it is dismissed', async () => {
+    it('clears failed outreach when the stream is left', async () => {
         const agentStore = useAgentStore()
         vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
             return seedTask(runningTask, owner)
@@ -904,7 +904,7 @@ describe('outreach store', () => {
         })
         expect(fetch).not.toHaveBeenCalled()
         expect(store.discovering).toBe(true)
-        expect(store.dismissActiveTask()).toBe(true)
+        expect(store.clearInactiveTask()).toBe(true)
         expect(store.discovering).toBe(false)
     })
 

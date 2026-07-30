@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import BaseButton from '@/components/base/BaseButton.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
+import { computed } from 'vue'
+import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 
-defineProps<{
+const props = defineProps<{
     active: boolean
     adjacent: boolean
-    canDismiss: boolean
     cancelling: boolean
     issue: string | null
     retryAvailable: boolean
@@ -16,115 +15,39 @@ defineProps<{
 
 const emit = defineEmits<{
     cancel: []
-    dismiss: []
     retry: []
     back: []
 }>()
+
+const statusMessage = computed(() =>
+    props.saving ? 'Saving job post…' : props.starting ? 'Starting Agent…' : null,
+)
+const statusTestId = computed(() =>
+    props.saving ? 'job-post-save-status' : props.starting ? 'job-post-start-status' : undefined,
+)
 </script>
 
 <template>
-    <BasePanel
-        class="import-panel"
+    <AgentTaskPanel
         :active="active"
         :adjacent="adjacent"
         aria-label="Add job post"
+        lane="job-post-import"
         eyebrow="Job post import"
         title="Add job post"
-        :back-label="running || saving ? 'Back to added job posts' : undefined"
+        back-label="Back to added job posts"
         back-test-id="back-from-job-post-import"
+        :cancelling="cancelling"
+        :running="running"
+        :issue="issue"
+        :status-message="statusMessage"
+        :status-test-id="statusTestId"
+        cancel-label="Cancel import"
+        cancel-test-id="cancel-job-post-import"
+        :retry-available="retryAvailable"
+        retry-test-id="retry-job-post-import"
         @back="emit('back')"
-    >
-        <div v-if="active" class="job-post-import-panel">
-            <p v-if="saving" class="save-status" data-testid="job-post-save-status" role="status">
-                Saving job post…
-            </p>
-            <p
-                v-else-if="starting"
-                class="save-status"
-                data-testid="job-post-start-status"
-                role="status"
-            >
-                Starting Agent…
-            </p>
-            <p v-if="issue" class="form-error" data-testid="job-post-import-error" role="alert">
-                {{ issue }}
-            </p>
-
-            <slot />
-
-            <div class="form-actions">
-                <BaseButton
-                    v-if="running"
-                    class="action-button"
-                    data-testid="cancel-job-post-import"
-                    preset="text"
-                    :disabled="cancelling"
-                    @click="emit('cancel')"
-                >
-                    {{ cancelling ? 'Cancelling…' : 'Cancel import' }}
-                </BaseButton>
-                <BaseButton
-                    v-else-if="retryAvailable"
-                    class="action-button"
-                    data-testid="retry-job-post-import"
-                    preset="text"
-                    @click="emit('retry')"
-                >
-                    Try again
-                </BaseButton>
-                <BaseButton
-                    v-if="canDismiss"
-                    class="action-button"
-                    data-testid="dismiss-job-post-import"
-                    preset="text"
-                    @click="emit('dismiss')"
-                >
-                    Dismiss
-                </BaseButton>
-            </div>
-        </div>
-    </BasePanel>
+        @cancel="emit('cancel')"
+        @retry="emit('retry')"
+    />
 </template>
-
-<style scoped lang="scss">
-.import-panel {
-    overflow: hidden;
-    padding-bottom: $space-5;
-}
-
-.job-post-import-panel {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-4;
-    min-height: 0;
-}
-
-.form-error,
-.save-status {
-    margin: 0;
-}
-
-.form-error {
-    color: lighten-color($color-red-600, 20%);
-}
-
-.save-status {
-    color: $color-ink-muted;
-}
-
-.form-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $space-2;
-}
-
-.action-button {
-    font-size: 0.8125rem;
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.5;
-    }
-}
-</style>

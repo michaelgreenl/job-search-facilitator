@@ -2,12 +2,12 @@
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import { useAgentTask } from '@/composables/useAgentTask'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
-import AgentStream from '@/components/agent/AgentStream.vue'
 import { useOutreachStore } from '@/stores/outreach'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
@@ -22,27 +22,19 @@ const props = defineProps<{
     expanded: boolean
 }>()
 
+defineOptions({ inheritAttrs: false })
+
 const emit = defineEmits<{
     cancel: []
     collapse: []
     discover: []
-    dismiss: []
     expand: []
     retryContacts: []
     showViewer: []
 }>()
 
 const outreachStore = useOutreachStore()
-const {
-    actionNeedsAttention,
-    actionSubmitting,
-    cancelling,
-    canDismissSession,
-    connectionState,
-    error,
-    task,
-    taskActive,
-} = useAgentTask('outreach')
+const { cancelling, connectionState, error, starting, task, taskActive } = useAgentTask('outreach')
 const {
     assistantReply,
     contact,
@@ -67,17 +59,15 @@ const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => hasActiveTask.value && taskActive.value)
-const canDismiss = computed(() => hasActiveTask.value && canDismissSession.value)
 const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
-const backLabel = computed(() => {
-    if (hasActiveTask.value) {
-        return undefined
-    }
-
-    return panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts'
-})
+const backLabel = computed(() =>
+    panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
+)
 const backTestId = computed(() =>
     panelView.value === 'contacts' ? 'back-to-job-post' : 'back-to-saved-contacts',
+)
+const statusMessage = computed(() =>
+    contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
 )
 const draftIssue = computed(
     () => resultError.value ?? (drafting.value ? (error.value ?? task.value?.error ?? null) : null),
@@ -96,7 +86,7 @@ watch(
     hasActiveTask,
     (hasTask) => {
         if (hasTask) {
-            panelView.value = drafting.value && contact.value !== null ? 'draft' : 'stream'
+            panelView.value = 'stream'
         } else {
             panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
@@ -119,16 +109,6 @@ watch(contact, (selectedContact) => {
         panelView.value = 'contacts'
     }
 })
-
-watch(
-    [actionNeedsAttention, actionSubmitting],
-    ([needsAttention, submitting]) => {
-        if (needsAttention && !submitting) {
-            panelView.value = 'stream'
-        }
-    },
-    { immediate: true },
-)
 
 function resetCopyState() {
     if (copyResetTimer !== null) {
@@ -175,8 +155,13 @@ function toggleExpanded() {
 }
 
 function showContacts() {
+    outreachStore.clearInactiveTask()
     outreachStore.clearContact()
     panelView.value = 'contacts'
+
+    if (props.post === null) {
+        emit('showViewer')
+    }
 
     if (props.expanded) {
         emit('collapse')
@@ -227,7 +212,30 @@ async function copyDraft() {
 </script>
 
 <template>
+    <AgentTaskPanel
+        v-if="panelView === 'stream'"
+        v-bind="$attrs"
+        as="aside"
+        :active="active"
+        :adjacent="adjacent"
+        lane="outreach"
+        eyebrow="Outreach"
+        back-label="Back to saved contacts"
+        back-test-id="back-to-saved-contacts"
+        :cancelling="cancelling"
+        :running="canCancel"
+        :issue="issue"
+        :status-message="statusMessage"
+        status-test-id="outreach-task-status"
+        cancel-label="Cancel outreach"
+        cancel-test-id="outreach-cancel"
+        @back="showContacts"
+        @cancel="emit('cancel')"
+    />
+
     <BasePanel
+        v-else
+        v-bind="$attrs"
         as="aside"
         :active="active"
         :adjacent="adjacent"
@@ -302,30 +310,6 @@ async function copyDraft() {
                     @update-messaged="updateMessaged"
                 />
             </template>
-
-            <AgentStream v-else lane="outreach" :issue="issue" />
-
-            <BaseButton
-                v-if="canCancel"
-                class="cancel-action"
-                data-testid="outreach-cancel"
-                preset="text"
-                aria-label="Cancel outreach task"
-                :disabled="cancelling"
-                @click="emit('cancel')"
-            >
-                {{ cancelling ? 'Cancelling…' : 'Cancel' }}
-            </BaseButton>
-
-            <BaseButton
-                v-if="canDismiss"
-                class="cancel-action"
-                data-testid="outreach-dismiss"
-                preset="text"
-                @click="emit('dismiss')"
-            >
-                Dismiss
-            </BaseButton>
         </section>
     </BasePanel>
 </template>
@@ -345,11 +329,6 @@ async function copyDraft() {
 
 .discover-contact-icon {
     font-size: 1.25rem;
-}
-
-.cancel-action {
-    align-self: flex-start;
-    font-size: 0.8125rem;
 }
 
 .panel-control-desktop {

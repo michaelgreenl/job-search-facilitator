@@ -314,6 +314,11 @@ export const useAgentStore = defineStore('agent', () => {
     )
     const eventSources = new Map<string, EventSource>()
     const restorePromises = new Map<string, Promise<AgentTask | null>>()
+    const nonRestorableTaskIds = new Set<string>()
+
+    function persistSessions() {
+        writeAgentSessions(sessions.value.filter(({ taskId }) => !nonRestorableTaskIds.has(taskId)))
+    }
 
     function getSession(lane: AgentTaskLane) {
         return sessions.value.find((session) => getAgentTaskLane(session) === lane) ?? null
@@ -351,16 +356,18 @@ export const useAgentStore = defineStore('agent', () => {
 
     function saveSession(nextSession: AgentSession) {
         const lane = getAgentTaskLane(nextSession)
+        nonRestorableTaskIds.delete(nextSession.taskId)
         sessions.value = [
             ...sessions.value.filter((session) => getAgentTaskLane(session) !== lane),
             nextSession,
         ]
-        writeAgentSessions(sessions.value)
+        persistSessions()
     }
 
     function removeSession(taskId: string) {
         sessions.value = sessions.value.filter((session) => session.taskId !== taskId)
-        writeAgentSessions(sessions.value)
+        nonRestorableTaskIds.delete(taskId)
+        persistSessions()
     }
 
     function closeConnection(taskId: string, connectionState: AgentConnectionState) {
@@ -380,6 +387,11 @@ export const useAgentStore = defineStore('agent', () => {
             error: null,
         })
         closeConnection(currentTask.id, 'closed')
+
+        if (currentTask.status === 'cancelled') {
+            nonRestorableTaskIds.add(currentTask.id)
+            persistSessions()
+        }
     }
 
     function disconnectConnectedTask(taskId: string, message: string) {

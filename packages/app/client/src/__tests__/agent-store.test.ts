@@ -429,7 +429,6 @@ describe('agent store', () => {
         const restore = store.restoreTask(startedTask.id)
 
         expect(importAgent.taskActive.value).toBe(true)
-        expect(importAgent.canDismissSession.value).toBe(false)
         expect(store.dismissSession(startedTask.id)).toBe(false)
 
         resolveRestore?.(jsonResponse({ ...nextTask, status: 'cancelled' }))
@@ -455,7 +454,6 @@ describe('agent store', () => {
         expect(outreachSource.close).not.toHaveBeenCalled()
 
         expect(importAgent.taskActive.value).toBe(false)
-        expect(importAgent.canDismissSession.value).toBe(true)
         expect(importAgent.dismissSession()).toBe(true)
         expect(store.getSession('job-post-import')).toBeNull()
 
@@ -523,7 +521,6 @@ describe('agent store', () => {
             taskId: startedTask.id,
         })
         expect(outreachAgent.taskActive.value).toBe(true)
-        expect(outreachAgent.canDismissSession.value).toBe(false)
 
         await store.restoreSessions()
 
@@ -613,34 +610,29 @@ describe('agent store', () => {
         expect(sessionStorage.getItem(agentSessionStorageKey)).toBeNull()
     })
 
-    it('keeps a cancelled task session through refresh until it is explicitly dismissed', async () => {
+    it('keeps a cancelled task in memory without restoring it after refresh', async () => {
         const cancelledTask: AgentTask = { ...startedTask, status: 'cancelled' }
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
             .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
-            .mockResolvedValueOnce(jsonResponse(cancelledTask))
         const firstStore = useAgentStore()
 
         await firstStore.startTask(taskInput, outreachOwner)
         await firstStore.cancelTask(startedTask.id)
 
-        setActivePinia(createPinia())
-        const restoredStore = useAgentStore()
-        await restoredStore.restoreTask(startedTask.id)
-
-        expect(restoredStore.getTaskState(startedTask.id)?.task?.status).toBe('cancelled')
-        expect(restoredStore.getSession('outreach')).toEqual({
+        expect(firstStore.getTaskState(startedTask.id)?.task?.status).toBe('cancelled')
+        expect(firstStore.getSession('outreach')).toEqual({
             ...outreachOwner,
             taskId: startedTask.id,
         })
+        expect(sessionStorage.getItem(agentSessionStorageKey)).toBeNull()
 
-        expect(restoredStore.dismissSession(startedTask.id)).toBe(true)
-
-        expect(restoredStore.getSession('outreach')).toBeNull()
-        expect(restoredStore.getTaskState(startedTask.id)).toBeNull()
         setActivePinia(createPinia())
-        expect(useAgentStore().sessions).toEqual([])
+        const refreshedStore = useAgentStore()
+
+        expect(refreshedStore.sessions).toEqual([])
+        expect(refreshedStore.getTaskState(startedTask.id)).toBeNull()
     })
 
     it('rejects an invalid health response before creating a task or event stream', async () => {

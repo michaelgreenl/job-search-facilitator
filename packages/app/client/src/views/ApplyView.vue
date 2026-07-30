@@ -43,10 +43,14 @@ const {
     contactUpdating,
     contactsLoading,
     hasActiveTask: hasActiveOutreachTask,
+    restoreContactListPending,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
 const activePanel = shallowRef<ActivePanel>(
-    outreachPostId.value !== null && hasActiveOutreachTask.value ? 'outreach' : 'posts',
+    outreachPostId.value !== null &&
+        (hasActiveOutreachTask.value || restoreContactListPending.value)
+        ? 'outreach'
+        : 'posts',
 )
 const outreachExpanded = shallowRef(false)
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
@@ -101,15 +105,13 @@ const selectedRecommendationContext = computed(() =>
 const outreachPost = computed(() =>
     outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
 )
+const outreachTaskInProgress = computed(() => outreachAgent.taskActive.value || contactSaving.value)
 const outreachActionDisabled = computed(
     () =>
         contactsLoading.value ||
         contactSaving.value ||
         contactUpdating.value ||
-        hasActiveOutreachTask.value ||
-        outreachAgent.session.value !== null ||
-        (outreachAgent.taskActive.value &&
-            (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
+        (outreachAgent.taskActive.value && outreachPostId.value !== selectedPostId.value),
 )
 const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
@@ -132,7 +134,10 @@ watch(
         selectedPostId.value = postId
 
         if (changed) {
-            outreachStore.reset()
+            if (!outreachTaskInProgress.value) {
+                outreachStore.reset()
+            }
+
             outreachExpanded.value = false
             labelError.value = null
             applicationError.value = null
@@ -146,15 +151,10 @@ watch(
 )
 
 function selectPost(postId: string) {
-    if (hasActiveOutreachTask.value) {
-        activePanel.value = 'outreach'
-        return
-    }
-
     const changed = postId !== selectedPostId.value
     selectedPostId.value = postId
 
-    if (changed) {
+    if (changed && !outreachTaskInProgress.value) {
         outreachStore.reset()
     }
 
@@ -186,14 +186,12 @@ function updateApplyQueueMembership(postId: string, inApplyQueue: boolean) {
 }
 
 function showPosts() {
-    if (hasActiveOutreachTask.value) {
-        activePanel.value = 'outreach'
-        return
-    }
-
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
-        outreachStore.reset()
+
+        if (!outreachTaskInProgress.value) {
+            outreachStore.reset()
+        }
     }
 
     outreachExpanded.value = false
@@ -201,8 +199,8 @@ function showPosts() {
 }
 
 function showViewer() {
-    if (hasActiveOutreachTask.value) {
-        activePanel.value = 'outreach'
+    if (selectedPost.value === null) {
+        showPosts()
         return
     }
 
@@ -242,15 +240,6 @@ async function openOutreach() {
     const post = selectedPost.value
 
     if (post === null || contactSaving.value || contactUpdating.value || contactsLoading.value) {
-        return
-    }
-
-    if (hasActiveOutreachTask.value) {
-        if (outreachStore.postId === post.id) {
-            outreachExpanded.value = false
-            activePanel.value = 'outreach'
-        }
-
         return
     }
 
@@ -294,12 +283,6 @@ async function openOutreach() {
 
 async function cancelOutreach() {
     await outreachStore.cancelActiveTask().catch(() => false)
-}
-
-function dismissOutreach() {
-    if (outreachStore.dismissActiveTask() && outreachPost.value === null) {
-        showPosts()
-    }
 }
 
 function expandOutreach() {
@@ -415,6 +398,29 @@ async function restoreOutreachTask() {
         session === null ||
         (session.kind !== 'outreach-contact' && session.kind !== 'outreach-draft')
     ) {
+        const returnPostId = outreachStore.postId
+
+        if (!restoreContactListPending.value || returnPostId === null) {
+            return
+        }
+
+        if (postStore.findPost(returnPostId) === null) {
+            await postStore.fetchPost(returnPostId).catch(() => null)
+        }
+
+        if (!viewMounted || !restoreContactListPending.value) {
+            return
+        }
+
+        selectedPostId.value = returnPostId
+        outreachExpanded.value = false
+        activePanel.value = 'outreach'
+        await outreachStore.restoreContactList()
+
+        if (outreachPost.value === null) {
+            showPosts()
+        }
+
         return
     }
 
@@ -430,6 +436,14 @@ async function restoreOutreachTask() {
     outreachExpanded.value = false
     activePanel.value = 'outreach'
     await outreachStore.restoreActiveTask()
+
+    if (outreachAgent.task.value?.status === 'cancelled') {
+        outreachStore.clearInactiveTask()
+
+        if (outreachPost.value === null) {
+            showPosts()
+        }
+    }
 }
 
 onMounted(() => {
@@ -484,11 +498,7 @@ onMounted(() => {
                 :adjacent="
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
-                :back-label="
-                    !outreachAgent.taskActive.value && activePanel !== 'posts'
-                        ? 'Back to job posts'
-                        : undefined
-                "
+                :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
                 :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                 :post="selectedPost"
                 :recommendation="selectedRecommendationContext ?? undefined"
@@ -502,7 +512,7 @@ onMounted(() => {
             />
 
             <OutreachPanel
-                v-if="outreachPost !== null || hasActiveOutreachTask"
+                v-if="outreachPost !== null || hasActiveOutreachTask || restoreContactListPending"
                 class="apply-panel apply-outreach glass-frame"
                 data-testid="apply-outreach-panel"
                 :class="{
@@ -517,7 +527,6 @@ onMounted(() => {
                 @cancel="cancelOutreach"
                 @collapse="collapseOutreach"
                 @discover="discoverAnotherContact"
-                @dismiss="dismissOutreach"
                 @expand="expandOutreach"
                 @retry-contacts="openOutreach"
                 @show-viewer="showViewer"

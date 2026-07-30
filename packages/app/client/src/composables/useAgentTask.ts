@@ -43,15 +43,6 @@ export function useAgentTask(lane: AgentTaskLane) {
                 error.value === null &&
                 !sessionUnavailable.value),
     )
-    const canDismissSession = computed(
-        () =>
-            session.value !== null &&
-            !starting.value &&
-            !restoring.value &&
-            (sessionUnavailable.value ||
-                (task.value === null && error.value !== null) ||
-                (task.value !== null && task.value.status !== 'running')),
-    )
     const actionNeedsAttention = computed(
         () => pendingAction.value !== null && !alwaysAllowBrowserActions.value,
     )
@@ -99,7 +90,6 @@ export function useAgentTask(lane: AgentTaskLane) {
         events,
         connectionState,
         taskActive,
-        canDismissSession,
         pendingAction,
         alwaysAllowBrowserActions,
         actionNeedsAttention,
