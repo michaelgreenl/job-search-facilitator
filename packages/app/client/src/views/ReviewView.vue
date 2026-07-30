@@ -167,7 +167,6 @@ function pushSelectionState(source?: ReviewSource, postId?: string, replace = fa
         }
 
         selectionNavigationPending = false
-        restoreRouteSelection()
     }
 
     void router
@@ -578,7 +577,7 @@ function selectPostFilter(value: string) {
 function showSources() {
     activePanel.value = 'sources'
     selectedItem.value = null
-    pushSelectionState()
+    pushSelectionState(selectedSource.value ?? undefined)
 }
 
 function showPosts() {

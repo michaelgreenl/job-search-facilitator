@@ -279,6 +279,19 @@ const setDateInput = (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+const useLaptopViewport = () => {
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+        matches: query === '(min-width: 848px)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+    }))
+}
+
 const submitJobPostUrl = async (root: HTMLElement, url: string) => {
     findTestButton(root, 'add-job-post').click()
     const input = await vi.waitFor(() => {
@@ -1126,7 +1139,8 @@ describe('review route selection', () => {
         })
     })
 
-    it('removes hidden selection state when returning to the reports list', async () => {
+    it('keeps the selected report when returning to the review sources', async () => {
+        useLaptopViewport()
         const { root, router } = await mountReview()
 
         reportButton(root, secondReport.id).click()
@@ -1135,13 +1149,21 @@ describe('review route selection', () => {
                 reviewReportId: secondReport.id,
             }),
         )
+        postButton(root, secondPost.id).click()
+        await vi.waitFor(() =>
+            expect(router.options.history.state.reviewPostId).toBe(secondPost.id),
+        )
 
         findTestButton(root, 'back-to-reports').click()
 
         await vi.waitFor(() => {
             expect(router.currentRoute.value.fullPath).toBe('/')
-            expect(router.options.history.state.reviewReportId).toBeUndefined()
+            expect(router.options.history.state.reviewReportId).toBe(secondReport.id)
             expect(router.options.history.state.reviewPostId).toBeUndefined()
+            expect(
+                root.querySelector('[aria-label="Review sources"]')?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(reportButton(root, secondReport.id).getAttribute('aria-pressed')).toBe('true')
         })
     })
 
@@ -1160,7 +1182,8 @@ describe('review route selection', () => {
         })
     })
 
-    it('restores user-added history and removes only the current navigation level', async () => {
+    it('keeps user-added posts selected when returning from its viewer to review sources', async () => {
+        useLaptopViewport()
         const { root, router } = await mountReview('/', {
             reviewCollection: 'user-added',
             reviewPostId: userAddedPost.post.id,
@@ -1172,17 +1195,20 @@ describe('review route selection', () => {
             ).toBe(userAddedPost.post.id),
         )
 
-        findTestButton(root, 'back-to-job-posts').click()
-        await vi.waitFor(() => {
-            expect(router.options.history.state.reviewCollection).toBe('user-added')
-            expect(router.options.history.state.reviewPostId).toBeUndefined()
-        })
-
         findTestButton(root, 'back-to-reports').click()
         await vi.waitFor(() => {
-            expect(router.options.history.state.reviewCollection).toBeUndefined()
+            expect(router.options.history.state.reviewCollection).toBe('user-added')
             expect(router.options.history.state.reviewReportId).toBeUndefined()
             expect(router.options.history.state.reviewPostId).toBeUndefined()
+            expect(
+                root.querySelector('[aria-label="Review sources"]')?.getAttribute('data-active'),
+            ).toBe('true')
+            expect(findTestButton(root, 'user-added-source').getAttribute('aria-pressed')).toBe(
+                'true',
+            )
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${userAddedPost.post.id}"]`),
+            ).not.toBeNull()
         })
     })
 
