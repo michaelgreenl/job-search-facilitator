@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import { createPinia } from 'pinia'
 import { createApp, defineComponent, type App as VueApp } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -80,6 +81,7 @@ describe('application error handling', () => {
         const root = document.createElement('div')
         document.body.append(root)
         const app = createApp(App)
+        app.use(createPinia())
         app.use(applicationRouter)
         app.mount(root)
         mountedApps.push({ app, root })

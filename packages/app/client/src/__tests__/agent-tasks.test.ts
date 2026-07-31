@@ -1,10 +1,7 @@
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import {
-    createContactDiscoveryTask,
-    createDraftRevisionTask,
-} from '../features/outreach/outreach-tasks'
-import { createJobPostImportTask } from '../features/job-post-import/job-post-import-task'
+import { createContactDiscoveryTask, createDraftRevisionTask } from '../stores/outreach'
+import { createJobPostImportTask } from '../stores/job-post-import'
 
 const post: JobPost = {
     id: 'post-id',

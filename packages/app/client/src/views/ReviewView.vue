@@ -1,27 +1,24 @@
 <script setup lang="ts">
 import {
-    parseCreateUserAddedJobPostInput,
-    type CreateUserAddedJobPostInput,
     type JobPost,
     type JobSearchReport,
     type StandaloneJobRecommendation,
     type UserLabel,
-    type AgentTask,
 } from '@job-search-facilitator/core'
+import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
-import { useAgentTask } from '@/composables/useAgentTask'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import JobPostViewPanel, {
     type JobPostViewPanelMode,
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
-import { createJobPostImportTask } from '@/features/job-post-import/job-post-import-task'
+import { useJobPostImportStore } from '@/stores/job-post-import'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
 
@@ -49,10 +46,23 @@ const router = useRouter()
 
 const reportStore = useReportStore()
 const postStore = usePostStore()
-const importAgent = useAgentTask('job-post-import')
-const activePanel = shallowRef<ActivePanel>(
-    importAgent.session.value === null ? 'sources' : 'import',
-)
+const importStore = useJobPostImportStore()
+const {
+    hasSession: hasImportSession,
+    dialogOpen: importDialogOpen,
+    url: addPostUrl,
+    importedItem,
+    saving: importSaving,
+    starting: importStarting,
+    running: importRunning,
+    displayIssue: importDisplayIssue,
+    retryAvailable: importRetryAvailable,
+    showCard: showImportCard,
+    popupError: importPopUpError,
+    cancelling: importCancelling,
+    requestStarting: importRequestStarting,
+} = storeToRefs(importStore)
+const activePanel = shallowRef<ActivePanel>(hasImportSession.value ? 'import' : 'sources')
 const postFilter = shallowRef<PostFilter>('all')
 const selectedSource = shallowRef<ReviewSource | null>(null)
 const selectedItem = shallowRef<ReviewItem | null>(null)
@@ -62,13 +72,6 @@ const reportsSettled = shallowRef(false)
 const userAddedPostsSettled = shallowRef(false)
 const userAddedLoading = shallowRef(false)
 const userAddedError = shallowRef<string | null>(null)
-const importSaving = shallowRef(false)
-const importIssue = shallowRef<string | null>(null)
-const importDialogIssue = shallowRef<string | null>(null)
-const importUrlError = shallowRef<string | null>(null)
-const importingTaskId = shallowRef<string | null>(null)
-const importRetryMode = shallowRef<'save' | 'task' | null>(null)
-let importRevision = 0
 let selectionNavigationPending = false
 let selectionNavigationRevision = 0
 const reviewViewerMode = { kind: 'review' } satisfies JobPostViewPanelMode
@@ -93,42 +96,6 @@ const selectedItems = computed<ReviewItem[]>(() => {
         recommendation: result,
     }))
 })
-const importSession = computed(() => {
-    const session = importAgent.session.value
-    return session?.kind === 'job-post-import' ? session : null
-})
-const matchingImportTask = importAgent.task
-const importStarting = computed(
-    () =>
-        importSession.value !== null &&
-        matchingImportTask.value === null &&
-        (importAgent.starting.value || importAgent.restoring.value),
-)
-const importRunning = computed(() => matchingImportTask.value?.status === 'running')
-const importBusy = computed(() => importAgent.taskActive.value || importSaving.value)
-const importDisplayIssue = computed(
-    () =>
-        importIssue.value ??
-        (matchingImportTask.value?.status === 'failed' ? matchingImportTask.value.error : null) ??
-        (matchingImportTask.value?.status === 'cancelled'
-            ? 'The job-post import was cancelled.'
-            : null) ??
-        (importSession.value !== null ? importAgent.error.value : null),
-)
-const importRetryAvailable = computed(
-    () => importSession.value !== null && !importBusy.value && importDisplayIssue.value !== null,
-)
-const showImportCard = computed(
-    () =>
-        importSession.value !== null &&
-        (importStarting.value || importRunning.value || importSaving.value),
-)
-const addPostUrl = computed({
-    get: () => postStore.addPostDialog.url,
-    set: (url: string) => postStore.setAddPostUrl(url),
-})
-const importPopUpError = computed(() => importUrlError.value ?? importDialogIssue.value)
-
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
 
@@ -330,7 +297,6 @@ const removeRouteListener = router.afterEach(() => {
 
 onUnmounted(() => {
     removeRouteListener()
-    importRevision += 1
     selectionNavigationRevision += 1
     selectionNavigationPending = false
 })
@@ -370,24 +336,12 @@ function selectUserAdded() {
 }
 
 function showImport() {
-    importDialogIssue.value = null
-    postStore.openAddPostDialog()
+    importStore.openDialog()
 }
 
 function submitImportUrl() {
-    const value = addPostUrl.value.trim()
-
-    try {
-        const parsedUrl = new URL(value)
-
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-            throw new Error()
-        }
-
-        importUrlError.value = null
-        void startImport(parsedUrl.href)
-    } catch {
-        importUrlError.value = 'Enter a valid http or https job-post URL.'
+    if (importStore.submitUrl()) {
+        activePanel.value = 'import'
     }
 }
 
@@ -402,30 +356,19 @@ function showImportPosts() {
 }
 
 function showImportProgress() {
-    if (importSession.value !== null) {
+    if (hasImportSession.value) {
         activePanel.value = 'import'
     }
 }
 
-async function saveImportedPost(
-    input: CreateUserAddedJobPostInput,
-    revision: number,
-    taskId: string,
-) {
-    importSaving.value = true
-    importIssue.value = null
-    importRetryMode.value = 'save'
-
-    try {
-        const savedItem = await postStore.addUserAddedPost(input)
-
-        if (revision !== importRevision || importSession.value?.taskId !== taskId) {
+watch(
+    importedItem,
+    (savedItem) => {
+        if (savedItem === null) {
             return
         }
 
         const source = { kind: 'user-added' } satisfies ReviewSource
-        importAgent.dismissSession()
-        importIssue.value = null
         selectedSource.value = source
         selectedItem.value = {
             post: savedItem.post,
@@ -435,140 +378,9 @@ async function saveImportedPost(
         labelError.value = null
         activePanel.value = 'viewer'
         pushSelectionState(source, savedItem.post.id)
-    } catch (error) {
-        if (revision === importRevision && importSession.value?.taskId === taskId) {
-            importIssue.value =
-                error instanceof Error ? error.message : 'Could not save the imported job post'
-        }
-    } finally {
-        if (revision === importRevision) {
-            importSaving.value = false
-        }
-    }
-}
-
-async function handleImportTask(task: AgentTask, revision = importRevision) {
-    if (
-        revision !== importRevision ||
-        task.id !== importSession.value?.taskId ||
-        importingTaskId.value === task.id
-    ) {
-        return
-    }
-
-    if (task.status === 'running') {
-        return
-    }
-
-    if (task.status === 'failed') {
-        importIssue.value = task.error
-        importRetryMode.value = 'task'
-        return
-    }
-
-    if (task.status === 'cancelled') {
-        importIssue.value = 'The job-post import was cancelled.'
-        importRetryMode.value = 'task'
-        return
-    }
-
-    importingTaskId.value = task.id
-
-    try {
-        const input = parseCreateUserAddedJobPostInput(task.output)
-        await saveImportedPost(input, revision, task.id)
-    } catch {
-        if (revision === importRevision && importSession.value?.taskId === task.id) {
-            importIssue.value = 'Agent did not return a valid job post. Try again.'
-            importRetryMode.value = 'task'
-        }
-    } finally {
-        if (importingTaskId.value === task.id) {
-            importingTaskId.value = null
-        }
-    }
-}
-
-async function startImport(url: string) {
-    if (importBusy.value) {
-        importDialogIssue.value = 'Finish the current job-post import before starting another.'
-        return
-    }
-
-    const revision = ++importRevision
-    importIssue.value = null
-    importDialogIssue.value = null
-    importRetryMode.value = null
-    postStore.closeAddPostDialog()
-    activePanel.value = 'import'
-
-    try {
-        const task = await importAgent.startTask(createJobPostImportTask(url), {
-            kind: 'job-post-import',
-            url,
-        })
-
-        postStore.clearAddPostDialog()
-        await handleImportTask(task, revision)
-    } catch (error) {
-        if (revision === importRevision && importSession.value !== null) {
-            importIssue.value =
-                error instanceof Error ? error.message : 'Could not start the job-post import'
-            importRetryMode.value = 'task'
-        }
-    }
-}
-
-function retryImport() {
-    const session = importSession.value
-    const task = matchingImportTask.value
-
-    if (session === null) {
-        return
-    }
-
-    if (task?.status === 'completed' && importRetryMode.value === 'save') {
-        void handleImportTask(task)
-    } else {
-        void startImport(session.url)
-    }
-}
-
-async function cancelImport() {
-    if (importRunning.value) {
-        try {
-            await importAgent.cancelTask()
-        } catch (error) {
-            importIssue.value =
-                error instanceof Error ? error.message : 'Could not cancel the job-post import'
-        }
-    }
-}
-
-watch(
-    [importSession, matchingImportTask] as const,
-    ([session, task]) => {
-        if (session?.kind !== 'job-post-import') {
-            return
-        }
-
-        postStore.clearAddPostDialog()
-
-        if (task?.id === session.taskId) {
-            void handleImportTask(task)
-        }
+        importStore.consumeImportedItem(savedItem)
     },
     { immediate: true },
-)
-
-watch(
-    () => postStore.addPostDialog.open,
-    (open) => {
-        if (!open) {
-            importDialogIssue.value = null
-            importUrlError.value = null
-        }
-    },
 )
 
 function selectItem(item: ReviewItem) {
@@ -660,30 +472,8 @@ onMounted(() => {
     void loadReports()
     void loadUserAddedPosts()
 
-    if (importSession.value !== null) {
-        const restoringTaskId = importSession.value.taskId
-
-        void importAgent
-            .restoreSession()
-            .then((task) => {
-                if (
-                    task?.status !== 'cancelled' ||
-                    importSession.value?.taskId !== restoringTaskId
-                ) {
-                    return
-                }
-
-                importAgent.dismissSession()
-                importRevision += 1
-                importIssue.value = null
-                importingTaskId.value = null
-                importRetryMode.value = null
-
-                if (activePanel.value === 'import') {
-                    showImportPosts()
-                }
-            })
-            .catch(() => undefined)
+    if (importStore.clearRestoredCancellation() && activePanel.value === 'import') {
+        showImportPosts()
     }
 })
 </script>
@@ -692,13 +482,13 @@ onMounted(() => {
     <section class="review-layout" aria-label="Job search review">
         <BasePopUp
             data-testid="job-post-url-dialog"
-            :open="postStore.addPostDialog.open"
+            :open="importDialogOpen"
             heading="Add job post"
             close-label="Close add job post"
             close-test-id="close-job-post-url-dialog"
             :error="importPopUpError"
             error-test-id="job-post-url-error"
-            @close="postStore.closeAddPostDialog"
+            @close="importStore.closeDialog"
         >
             <template #default="{ errorId }">
                 <form
@@ -720,9 +510,9 @@ onMounted(() => {
                             placeholder="Job post URL for agent to review"
                             :aria-describedby="importPopUpError ? errorId : undefined"
                             :aria-invalid="importPopUpError !== null"
-                            :disabled="importAgent.starting.value"
+                            :disabled="importRequestStarting"
                             autofocus
-                            @input="importUrlError = null"
+                            @input="importStore.clearUrlError"
                         />
                         <BaseButton
                             class="submit-button"
@@ -732,7 +522,7 @@ onMounted(() => {
                             type="submit"
                             aria-label="Add job post"
                             title="Add job post"
-                            :disabled="importAgent.starting.value"
+                            :disabled="importRequestStarting"
                         >
                             <span aria-hidden="true">→</span>
                         </BaseButton>
@@ -765,15 +555,15 @@ onMounted(() => {
                 class="import-panel glass-frame"
                 :active="activePanel === 'import'"
                 :adjacent="false"
-                :cancelling="importAgent.cancelling.value"
+                :cancelling="importCancelling"
                 :issue="importDisplayIssue"
                 :retry-available="importRetryAvailable"
                 :running="importRunning"
                 :saving="importSaving"
                 :starting="importStarting"
                 @back="showImportPosts"
-                @cancel="cancelImport"
-                @retry="retryImport"
+                @cancel="importStore.cancel"
+                @retry="importStore.retry"
             />
 
             <JobPostListPanel

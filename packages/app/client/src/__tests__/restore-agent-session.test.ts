@@ -3,7 +3,7 @@
 import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { restorePersistedAgentSession } from '@/restore-agent-session'
+import { createPersistedAgentSessionGuard } from '@/router'
 import type { AgentSession } from '@/stores/agent'
 
 const emptyView = defineComponent({ template: '<main />' })
@@ -38,23 +38,20 @@ describe('persisted Agent session startup', () => {
         },
     ])('opens $routeName and reconnects its owner task', async ({ session, routeName }) => {
         const router = createTestRouter()
+        const agentStore = {
+            sessions: [session],
+            restoreSessions: vi.fn().mockResolvedValue(undefined),
+        }
+        router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
+
         await router.push('/results')
 
-        const restoreSessions = vi.fn().mockResolvedValue(undefined)
-
-        await restorePersistedAgentSession(router, {
-            sessions: [session],
-            restoreSessions,
-        })
-
         expect(router.currentRoute.value.name).toBe(routeName)
-        expect(restoreSessions).toHaveBeenCalledOnce()
+        expect(agentStore.restoreSessions).toHaveBeenCalledOnce()
     })
 
     it('opens the route for the most recently persisted session and restores all tasks', async () => {
         const router = createTestRouter()
-        await router.push('/results')
-        const restoreSessions = vi.fn().mockResolvedValue(undefined)
         const sessions = [
             {
                 kind: 'outreach-contact',
@@ -67,10 +64,35 @@ describe('persisted Agent session startup', () => {
                 url: 'https://example.com/job',
             },
         ] satisfies AgentSession[]
+        const agentStore = {
+            sessions,
+            restoreSessions: vi.fn().mockResolvedValue(undefined),
+        }
+        router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
 
-        await restorePersistedAgentSession(router, { sessions, restoreSessions })
+        await router.push('/results')
 
         expect(router.currentRoute.value.name).toBe('review')
-        expect(restoreSessions).toHaveBeenCalledOnce()
+        expect(agentStore.restoreSessions).toHaveBeenCalledOnce()
+    })
+
+    it('allows later navigation while an active session remains persisted', async () => {
+        const router = createTestRouter()
+        const agentStore = {
+            sessions: [
+                {
+                    kind: 'job-post-import',
+                    taskId: 'task-import',
+                    url: 'https://example.com/job',
+                },
+            ] satisfies AgentSession[],
+            restoreSessions: vi.fn().mockResolvedValue(undefined),
+        }
+        router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
+
+        await router.push('/results')
+        await router.push('/results')
+
+        expect(router.currentRoute.value.name).toBe('results')
     })
 })

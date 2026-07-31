@@ -4,7 +4,7 @@ import {
     type ContactDiscoveryResult,
     type UpdateOutreachContactInput,
 } from '@job-search-facilitator/core'
-import { parseApiResponse } from '@/services/api-response'
+import { parseApiResponse } from '@/api'
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
 

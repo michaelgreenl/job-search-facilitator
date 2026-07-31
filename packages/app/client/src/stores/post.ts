@@ -16,17 +16,9 @@ import {
     updateJobPost as requestJobPostUpdate,
 } from '@/services/job-posts'
 
-interface AddPostDialogState {
-    open: boolean
-    url: string
-}
-
-const emptyAddPostDialog = (): AddPostDialogState => ({ open: false, url: '' })
-
 export const usePostStore = defineStore('posts', () => {
     const posts = ref<JobPost[]>([])
     const userAddedPosts = ref<UserAddedJobPost[]>([])
-    const addPostDialog = shallowRef<AddPostDialogState>(emptyAddPostDialog())
     const loading = shallowRef(false)
     const error = shallowRef<string | null>(null)
     const userAddedMutationRevisions = new Map<string, number>()
@@ -157,30 +149,9 @@ export const usePostStore = defineStore('posts', () => {
 
     const findPost = (id: string) => posts.value.find((post) => post.id === id) ?? null
 
-    function saveAddPostDialog(state: AddPostDialogState) {
-        addPostDialog.value = state
-    }
-
-    function openAddPostDialog() {
-        saveAddPostDialog({ ...addPostDialog.value, open: true })
-    }
-
-    function closeAddPostDialog() {
-        saveAddPostDialog({ ...addPostDialog.value, open: false })
-    }
-
-    function setAddPostUrl(url: string) {
-        saveAddPostDialog({ ...addPostDialog.value, url })
-    }
-
-    function clearAddPostDialog() {
-        saveAddPostDialog(emptyAddPostDialog())
-    }
-
     return {
         posts,
         userAddedPosts,
-        addPostDialog,
         loading,
         error,
         fetchPosts,
@@ -191,9 +162,5 @@ export const usePostStore = defineStore('posts', () => {
         updatePost,
         findPost,
         upsertPost,
-        openAddPostDialog,
-        closeAddPostDialog,
-        setAddPostUrl,
-        clearAddPostDialog,
     }
 })

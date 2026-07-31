@@ -6,7 +6,7 @@ import {
     type AgentTaskEvent,
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
-import { parseJsonResponse, readResponseError } from '@/services/api-response'
+import { parseJsonResponse, readResponseError } from '@/api'
 
 const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://localhost:3001').replace(
     /\/$/,
@@ -22,7 +22,7 @@ export class AgentBridgeRequestError extends Error {
     }
 }
 
-async function agentResponse(path: string, init?: RequestInit) {
+async function requestAgentBridge(path: string, init?: RequestInit) {
     const response = await fetch(`${agentBridgeUrl}${path}`, init)
 
     if (!response.ok) {
@@ -37,14 +37,14 @@ async function agentResponse(path: string, init?: RequestInit) {
 
 export async function fetchAgentHealth() {
     const path = '/health'
-    const response = await agentResponse(path)
+    const response = await requestAgentBridge(path)
 
     return parseJsonResponse(response, parseAgentHealth, `Agent ${path}`)
 }
 
 export async function startAgentTask(taskId: string, input: StartAgentTaskInput) {
     const path = `/tasks/${encodeURIComponent(taskId)}`
-    const response = await agentResponse(path, {
+    const response = await requestAgentBridge(path, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -55,14 +55,14 @@ export async function startAgentTask(taskId: string, input: StartAgentTaskInput)
 
 export async function fetchAgentTask(taskId: string) {
     const path = `/tasks/${encodeURIComponent(taskId)}`
-    const response = await agentResponse(path)
+    const response = await requestAgentBridge(path)
 
     return parseJsonResponse(response, parseAgentTask, `Agent ${path}`)
 }
 
 export async function cancelAgentTask(taskId: string) {
     const path = `/tasks/${encodeURIComponent(taskId)}/cancel`
-    const response = await agentResponse(path, { method: 'POST' })
+    const response = await requestAgentBridge(path, { method: 'POST' })
 
     return parseJsonResponse(response, parseAgentTask, `Agent ${path}`)
 }
@@ -72,7 +72,7 @@ export async function resolveAgentPermission(
     permissionId: string,
     decision: AgentPermissionDecision,
 ) {
-    await agentResponse(`/tasks/${taskId}/permissions/${permissionId}`, {
+    await requestAgentBridge(`/tasks/${taskId}/permissions/${permissionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),

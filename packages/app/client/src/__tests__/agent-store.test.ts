@@ -1,7 +1,6 @@
 import type { StartAgentTaskInput, AgentTask, AgentTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAgentTask } from '../composables/useAgentTask'
 import { useAgentStore, type AgentSessionOwner } from '../stores/agent'
 
 class MemoryStorage implements Storage {
@@ -420,7 +419,6 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useAgentStore()
-        const importAgent = useAgentTask('job-post-import')
 
         await store.startTask(taskInput, outreachOwner)
         const outreachSource = FakeEventSource.instances[0]!
@@ -428,7 +426,7 @@ describe('agent store', () => {
         const outreachStateBeforeRestore = store.getTaskState(nextTask.id)
         const restore = store.restoreTask(startedTask.id)
 
-        expect(importAgent.taskActive.value).toBe(true)
+        expect(store.isLaneTaskActive('job-post-import')).toBe(true)
         expect(store.dismissSession(startedTask.id)).toBe(false)
 
         resolveRestore?.(jsonResponse({ ...nextTask, status: 'cancelled' }))
@@ -453,12 +451,12 @@ describe('agent store', () => {
         expect(FakeEventSource.instances).toEqual([outreachSource])
         expect(outreachSource.close).not.toHaveBeenCalled()
 
-        expect(importAgent.taskActive.value).toBe(false)
-        expect(importAgent.dismissSession()).toBe(true)
+        expect(store.isLaneTaskActive('job-post-import')).toBe(false)
+        expect(store.dismissSession(startedTask.id)).toBe(true)
         expect(store.getSession('job-post-import')).toBeNull()
 
         vi.stubGlobal('crypto', { randomUUID: () => startedTask.id })
-        await importAgent.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner)
 
         expect(store.getSession('job-post-import')).toEqual({
             ...importOwner,
@@ -513,14 +511,13 @@ describe('agent store', () => {
         )
         vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(startedTask))
         const store = useAgentStore()
-        const outreachAgent = useAgentTask('outreach')
 
         expect(store.sessions).toEqual([{ ...outreachOwner, taskId: startedTask.id }])
         expect(store.getSession('outreach')).toEqual({
             ...outreachOwner,
             taskId: startedTask.id,
         })
-        expect(outreachAgent.taskActive.value).toBe(true)
+        expect(store.isLaneTaskActive('outreach')).toBe(true)
 
         await store.restoreSessions()
 

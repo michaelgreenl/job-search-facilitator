@@ -15,7 +15,7 @@ import {
     type AgentSession,
     type AgentSessionOwner,
     type AgentTaskLane,
-} from '@/features/agent/agent-session'
+} from '@/services/agent/agent-session'
 import {
     AgentBridgeRequestError,
     cancelAgentTask,
@@ -25,14 +25,14 @@ import {
     resolveAgentPermission,
     startAgentTask,
     type AgentTaskConnection,
-} from '@/services/agent-bridge'
+} from '@/services/agent/agent-bridge'
 
 export {
     getAgentTaskLane,
     type AgentSession,
     type AgentSessionOwner,
     type AgentTaskLane,
-} from '@/features/agent/agent-session'
+} from '@/services/agent/agent-session'
 
 export type AgentConnectionState =
     | 'idle'
@@ -113,6 +113,16 @@ export const useAgentStore = defineStore('agent', () => {
 
     function getTaskState(taskId: string) {
         return taskStates.value[taskId] ?? null
+    }
+
+    function getLaneTaskState(lane: AgentTaskLane) {
+        const session = getSession(lane)
+        return session === null ? null : getTaskState(session.taskId)
+    }
+
+    function isLaneTaskActive(lane: AgentTaskLane) {
+        const state = getLaneTaskState(lane)
+        return state !== null && taskStateActive(state)
     }
 
     function updateTaskState(
@@ -565,6 +575,8 @@ export const useAgentStore = defineStore('agent', () => {
         taskStates,
         getSession,
         getTaskState,
+        getLaneTaskState,
+        isLaneTaskActive,
         startTask,
         restoreTask,
         restoreSessions,
