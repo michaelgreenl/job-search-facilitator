@@ -41,14 +41,14 @@ const laneContent = {
     'job-post-import': {
         taskId: importSession.taskId,
         activity: 'Reviewing the imported role.',
-        action: 'Allow access for the imported role?',
+        permission: 'Allow access for the imported role?',
     },
     outreach: {
         taskId: outreachSession.taskId,
         activity: 'Researching the outreach contact.',
-        action: 'Allow access for outreach research?',
+        permission: 'Allow access for outreach research?',
     },
-} satisfies Record<AgentTaskLane, { taskId: string; activity: string; action: string }>
+} satisfies Record<AgentTaskLane, { taskId: string; activity: string; permission: string }>
 
 type AgentStore = ReturnType<typeof useAgentStore>
 type TaskStateUpdate = Partial<Omit<AgentTaskState, 'taskId'>>
@@ -58,9 +58,9 @@ const createTaskState = (taskId: string, update: TaskStateUpdate = {}): AgentTas
     task: null,
     events: [],
     connectionState: 'idle',
-    pendingAction: null,
+    pendingPermission: null,
     alwaysAllowBrowserActions: false,
-    actionSubmitting: false,
+    permissionSubmitting: false,
     cancelling: false,
     starting: false,
     restoring: false,
@@ -184,10 +184,10 @@ describe('agent stream', () => {
                                 createdAt,
                             },
                         ],
-                        pendingAction: {
-                            id: 'import-action',
+                        pendingPermission: {
+                            id: 'import-permission',
                             kind: 'browser-origin',
-                            message: laneContent['job-post-import'].action,
+                            message: laneContent['job-post-import'].permission,
                             origin: 'https://example.com',
                         },
                     }),
@@ -201,16 +201,16 @@ describe('agent stream', () => {
                                 createdAt,
                             },
                         ],
-                        pendingAction: {
-                            id: 'outreach-action',
+                        pendingPermission: {
+                            id: 'outreach-permission',
                             kind: 'browser-origin',
-                            message: laneContent.outreach.action,
+                            message: laneContent.outreach.permission,
                             origin: 'https://example.org',
                         },
                     }),
                 },
             })
-            const resolveAction = vi.spyOn(store, 'resolveAction').mockResolvedValue()
+            const resolvePermission = vi.spyOn(store, 'resolvePermission').mockResolvedValue()
 
             await vi.waitFor(() => {
                 expect(root.querySelector('[data-testid="agent-stream-copy"]')?.textContent).toBe(
@@ -218,17 +218,17 @@ describe('agent stream', () => {
                 )
                 expect(
                     root.querySelector('[data-testid="agent-permission-prompt"]')?.textContent,
-                ).toContain(selected.action)
+                ).toContain(selected.permission)
             })
 
             expect(root.textContent).not.toContain(excluded.activity)
-            expect(root.textContent).not.toContain(excluded.action)
+            expect(root.textContent).not.toContain(excluded.permission)
 
             root.querySelector<HTMLButtonElement>(
                 '[data-testid="agent-permission-approve"]',
             )?.click()
 
-            expect(resolveAction).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
+            expect(resolvePermission).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
         },
     )
 
@@ -346,16 +346,16 @@ describe('agent stream', () => {
         expect(scrollWrites).toBe(writesAtBottom)
     })
 
-    it('routes required actions and resets confirmation for the next action', async () => {
+    it('routes required permissions and resets confirmation for the next permission', async () => {
         const { root, store, taskId } = mountAgentStream()
-        const resolveAction = vi.spyOn(store, 'resolveAction').mockResolvedValue()
+        const resolvePermission = vi.spyOn(store, 'resolvePermission').mockResolvedValue()
         const allowBrowserActions = vi
             .spyOn(store, 'allowBrowserActionsForTask')
             .mockResolvedValue()
         updateTaskState(store, taskId, {
             task: runningTask,
-            pendingAction: {
-                id: 'action-1',
+            pendingPermission: {
+                id: 'permission-1',
                 kind: 'browser-origin',
                 message: 'Allow access?',
                 origin: 'https://example.com',
@@ -369,7 +369,7 @@ describe('agent stream', () => {
         )
 
         root.querySelector<HTMLButtonElement>('[data-testid="agent-permission-approve"]')?.click()
-        expect(resolveAction).toHaveBeenCalledExactlyOnceWith(taskId, 'approve')
+        expect(resolvePermission).toHaveBeenCalledExactlyOnceWith(taskId, 'approve')
 
         root.querySelector<HTMLButtonElement>(
             '[data-testid="agent-permission-always-allow"]',
@@ -381,8 +381,8 @@ describe('agent stream', () => {
         )
 
         updateTaskState(store, taskId, {
-            pendingAction: {
-                id: 'action-2',
+            pendingPermission: {
+                id: 'permission-2',
                 kind: 'browser-origin',
                 message: 'Allow access?',
                 origin: 'https://example.org',

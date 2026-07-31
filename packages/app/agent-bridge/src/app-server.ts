@@ -28,9 +28,9 @@ interface PendingRequest {
     timeout: ReturnType<typeof setTimeout>
 }
 
-interface PendingAction {
+interface PendingPermission {
     requestId: RpcId
-    action: AgentRuntimeAction
+    permission: AgentRuntimePermission
     decision: AgentPermissionDecision | null
 }
 
@@ -57,14 +57,14 @@ export interface StartedAgentTask {
     turnId: string
 }
 
-export interface AgentRuntimeAction extends AgentPermissionRequired {
+export interface AgentRuntimePermission extends AgentPermissionRequired {
     threadId: string
     turnId: string | null
 }
 
 export type AgentRuntimeEvent =
-    | { type: 'action-required'; action: AgentRuntimeAction }
-    | { type: 'action-resolved'; threadId: string; actionId: string }
+    | { type: 'permission-required'; permission: AgentRuntimePermission }
+    | { type: 'permission-resolved'; threadId: string; permissionId: string }
     | {
           type: 'activity'
           threadId: string
@@ -93,7 +93,7 @@ export interface AgentRuntime {
     readonly health: AgentRuntimeHealth
     startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask>
     interruptTask(threadId: string, turnId: string): Promise<void>
-    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean
+    resolvePermission(permissionId: string, decision: AgentPermissionDecision): boolean
     onEvent(listener: (event: AgentRuntimeEvent) => void): () => void
 }
 
@@ -132,7 +132,7 @@ const turnReferenceSchema = z.object({
     threadId: z.string().min(1),
     turnId: z.string().min(1),
 })
-const actionResolvedSchema = z.object({
+const permissionResolvedSchema = z.object({
     threadId: z.string().min(1),
     requestId: rpcIdSchema,
 })
@@ -168,7 +168,7 @@ const stringValue = (value: unknown): string | null =>
 
 const rpcIdKey = (id: RpcId) => `${typeof id}:${id}`
 
-const browserOriginAction = (params: unknown): AgentRuntimeAction | null => {
+const browserOriginPermission = (params: unknown): AgentRuntimePermission | null => {
     if (!isObject(params)) {
         return null
     }
@@ -208,8 +208,8 @@ export class CodexAppServer implements AgentRuntime {
     private output: Interface | null = null
     private requestId = 0
     private readonly pendingRequests = new Map<RpcId, PendingRequest>()
-    private readonly pendingActions = new Map<string, PendingAction>()
-    private readonly actionIdsByRequest = new Map<string, string>()
+    private readonly pendingPermissions = new Map<string, PendingPermission>()
+    private readonly permissionIdsByRequest = new Map<string, string>()
     private readonly capabilityRoots = new Map<AgentCapability, string>()
     private readonly queuedEvents: AgentRuntimeEvent[] = []
     private eventFlushScheduled = false
@@ -425,12 +425,12 @@ export class CodexAppServer implements AgentRuntime {
         this.assertReady()
     }
 
-    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean {
+    resolvePermission(permissionId: string, decision: AgentPermissionDecision): boolean {
         if (!this.ready) {
             return false
         }
 
-        const pending = this.pendingActions.get(actionId)
+        const pending = this.pendingPermissions.get(permissionId)
 
         if (pending === undefined) {
             return false
@@ -477,8 +477,8 @@ export class CodexAppServer implements AgentRuntime {
         this.runtimeError = error
         this.capabilityRoots.clear()
         this.rejectPending(error)
-        this.pendingActions.clear()
-        this.actionIdsByRequest.clear()
+        this.pendingPermissions.clear()
+        this.permissionIdsByRequest.clear()
         this.queuedEvents.length = 0
     }
 
@@ -656,16 +656,16 @@ export class CodexAppServer implements AgentRuntime {
         }
 
         if (method === 'mcpServer/elicitation/request') {
-            const action = browserOriginAction(params)
+            const permission = browserOriginPermission(params)
 
-            if (action !== null) {
-                this.pendingActions.set(action.id, {
+            if (permission !== null) {
+                this.pendingPermissions.set(permission.id, {
                     requestId: id,
-                    action,
+                    permission,
                     decision: null,
                 })
-                this.actionIdsByRequest.set(rpcIdKey(id), action.id)
-                this.queueEvent({ type: 'action-required', action })
+                this.permissionIdsByRequest.set(rpcIdKey(id), permission.id)
+                this.queueEvent({ type: 'permission-required', permission })
                 return
             }
         }
@@ -697,35 +697,35 @@ export class CodexAppServer implements AgentRuntime {
 
     private handleNotification(method: string, params: unknown): void {
         if (method === 'serverRequest/resolved') {
-            const notification = this.parseNotification(method, actionResolvedSchema, params)
+            const notification = this.parseNotification(method, permissionResolvedSchema, params)
 
             if (notification === null) {
                 return
             }
 
             const requestKey = rpcIdKey(notification.requestId)
-            const actionId = this.actionIdsByRequest.get(requestKey)
+            const permissionId = this.permissionIdsByRequest.get(requestKey)
 
-            if (actionId === undefined) {
+            if (permissionId === undefined) {
                 return
             }
 
-            const pendingAction = this.pendingActions.get(actionId)
+            const pendingPermission = this.pendingPermissions.get(permissionId)
 
             if (
-                pendingAction === undefined ||
-                pendingAction.action.threadId !== notification.threadId
+                pendingPermission === undefined ||
+                pendingPermission.permission.threadId !== notification.threadId
             ) {
                 this.failNotification(method)
                 return
             }
 
-            this.pendingActions.delete(actionId)
-            this.actionIdsByRequest.delete(requestKey)
+            this.pendingPermissions.delete(permissionId)
+            this.permissionIdsByRequest.delete(requestKey)
             this.queueEvent({
-                type: 'action-resolved',
-                threadId: pendingAction.action.threadId,
-                actionId,
+                type: 'permission-resolved',
+                threadId: pendingPermission.permission.threadId,
+                permissionId,
             })
             return
         }
@@ -914,8 +914,8 @@ export class CodexAppServer implements AgentRuntime {
         this.runtimeError = error
         this.capabilityRoots.clear()
         this.rejectPending(error)
-        this.pendingActions.clear()
-        this.actionIdsByRequest.clear()
+        this.pendingPermissions.clear()
+        this.permissionIdsByRequest.clear()
 
         this.queueEvent({ type: 'runtime-failed', error })
     }

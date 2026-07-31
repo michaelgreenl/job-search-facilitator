@@ -12,13 +12,13 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
 
 const {
-    actionNeedsAttention,
-    actionSubmitting,
+    permissionNeedsAttention,
+    permissionSubmitting,
     connectionState,
     events,
-    pendingAction,
+    pendingPermission,
     taskActive,
-    resolveAction: resolveAgentPermission,
+    resolvePermission: resolveAgentPermission,
     allowBrowserActionsForTask: allowBrowserActions,
 } = useAgentTask(props.lane)
 
@@ -91,12 +91,12 @@ const latestActivityIndex = computed(() => {
 
     return -1
 })
-const visiblePendingAction = computed(() =>
-    actionNeedsAttention.value ? pendingAction.value : null,
+const visiblePendingPermission = computed(() =>
+    permissionNeedsAttention.value ? pendingPermission.value : null,
 )
 const scrollRevision = computed(() => [
     streamItems.value,
-    visiblePendingAction.value?.id ?? null,
+    visiblePendingPermission.value?.id ?? null,
     props.issue,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
@@ -125,7 +125,7 @@ watch(
     { immediate: true },
 )
 
-function resolveAction(decision: AgentPermissionDecision) {
+function resolvePermission(decision: AgentPermissionDecision) {
     void resolveAgentPermission(decision).catch(() => undefined)
 }
 
@@ -173,7 +173,7 @@ function allowBrowserActionsForTask() {
                     <span
                         v-if="
                             taskActive &&
-                            visiblePendingAction === null &&
+                            visiblePendingPermission === null &&
                             index === latestActivityIndex
                         "
                         data-testid="agent-progress-indicator"
@@ -190,11 +190,11 @@ function allowBrowserActionsForTask() {
     </div>
 
     <AgentPermissionPrompt
-        v-if="visiblePendingAction"
-        :action="visiblePendingAction"
-        :submitting="actionSubmitting"
+        v-if="visiblePendingPermission"
+        :permission="visiblePendingPermission"
+        :submitting="permissionSubmitting"
         @always-allow="allowBrowserActionsForTask"
-        @resolve="resolveAction"
+        @resolve="resolvePermission"
     />
 </template>
 

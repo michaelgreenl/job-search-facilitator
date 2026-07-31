@@ -98,22 +98,22 @@ const outreachOwner = {
     postId: '10000000-0000-4000-8000-000000000001',
 } satisfies AgentSessionOwner
 const agentSessionStorageKey = 'job-search-facilitator:agent-session'
-const firstActionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
-const firstActionRequired = {
-    type: 'action-required',
-    action: {
-        id: firstActionId,
+const firstPermissionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+const firstPermissionRequired = {
+    type: 'permission-required',
+    permission: {
+        id: firstPermissionId,
         kind: 'browser-origin',
         message: 'Allow Chrome to access https://www.linkedin.com?',
         origin: 'https://www.linkedin.com',
     },
     createdAt: '2026-07-18T12:00:00.000Z',
 } satisfies AgentTaskEvent
-const secondActionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
-const secondActionRequired = {
-    type: 'action-required',
-    action: {
-        id: secondActionId,
+const secondPermissionId = 'b110f66c-b31c-4db5-90ad-89ac670d6ce0'
+const secondPermissionRequired = {
+    type: 'permission-required',
+    permission: {
+        id: secondPermissionId,
         kind: 'browser-origin',
         message: 'Allow Chrome to access https://example.com?',
         origin: 'https://example.com',
@@ -212,15 +212,15 @@ describe('agent store', () => {
         expect(store.getTaskState(startedTask.id)?.events).toEqual([importActivity])
         expect(store.getTaskState(nextTask.id)?.events).toEqual([outreachActivity])
 
-        importSource.message(firstActionRequired)
-        outreachSource.message(secondActionRequired)
+        importSource.message(firstPermissionRequired)
+        outreachSource.message(secondPermissionRequired)
         const outreachStateBeforeImportAction = store.getTaskState(nextTask.id)
 
-        await store.resolveAction(startedTask.id, 'approve')
+        await store.resolvePermission(startedTask.id, 'approve')
 
         expect(fetch).toHaveBeenNthCalledWith(
             5,
-            `http://localhost:3001/tasks/${startedTask.id}/actions/${firstActionId}`,
+            `http://localhost:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -228,14 +228,14 @@ describe('agent store', () => {
             },
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
-            pendingAction: { id: firstActionId },
-            actionSubmitting: true,
+            pendingPermission: { id: firstPermissionId },
+            permissionSubmitting: true,
             connectionState: 'connected',
         })
         expect(store.getTaskState(nextTask.id)).toEqual(outreachStateBeforeImportAction)
         expect(store.getTaskState(nextTask.id)).toMatchObject({
-            pendingAction: { id: secondActionId },
-            actionSubmitting: false,
+            pendingPermission: { id: secondPermissionId },
+            permissionSubmitting: false,
             connectionState: 'connected',
         })
         expect(importSource.close).not.toHaveBeenCalled()
@@ -250,14 +250,14 @@ describe('agent store', () => {
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
             task: { status: 'cancelled' },
-            events: [importActivity, firstActionRequired],
+            events: [importActivity, firstPermissionRequired],
             connectionState: 'closed',
         })
         expect(store.getTaskState(nextTask.id)).toMatchObject({
             task: nextTask,
-            events: [outreachActivity, secondActionRequired],
-            pendingAction: { id: secondActionId },
-            actionSubmitting: false,
+            events: [outreachActivity, secondPermissionRequired],
+            pendingPermission: { id: secondPermissionId },
+            permissionSubmitting: false,
             connectionState: 'connected',
         })
         expect(store.sessions).toHaveLength(2)
@@ -558,9 +558,9 @@ describe('agent store', () => {
             task: null,
             events: [],
             connectionState: 'idle',
-            pendingAction: null,
+            pendingPermission: null,
             alwaysAllowBrowserActions: false,
-            actionSubmitting: false,
+            permissionSubmitting: false,
             cancelling: false,
             starting: false,
             restoring: false,
@@ -853,7 +853,7 @@ describe('agent store', () => {
         })
     })
 
-    it('resumes the same task after a required browser action is approved', async () => {
+    it('resumes the same task after a required browser permission is approved', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
@@ -864,18 +864,18 @@ describe('agent store', () => {
         await store.startTask(taskInput, importOwner)
         const source = FakeEventSource.instances[0]!
         source.open()
-        source.message(firstActionRequired)
+        source.message(firstPermissionRequired)
 
-        expect(store.getTaskState(startedTask.id)?.pendingAction?.origin).toBe(
+        expect(store.getTaskState(startedTask.id)?.pendingPermission?.origin).toBe(
             'https://www.linkedin.com',
         )
 
-        await store.resolveAction(startedTask.id, 'approve')
+        await store.resolvePermission(startedTask.id, 'approve')
 
-        expect(store.getTaskState(startedTask.id)?.actionSubmitting).toBe(true)
+        expect(store.getTaskState(startedTask.id)?.permissionSubmitting).toBe(true)
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3001/tasks/${startedTask.id}/actions/${firstActionId}`,
+            `http://localhost:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -886,19 +886,19 @@ describe('agent store', () => {
         expect(source.close).not.toHaveBeenCalled()
 
         source.message({
-            type: 'action-resolved',
-            actionId: firstActionId,
+            type: 'permission-resolved',
+            permissionId: firstPermissionId,
             createdAt: '2026-07-18T12:00:01.000Z',
         })
 
-        expect(store.getTaskState(startedTask.id)?.actionSubmitting).toBe(false)
+        expect(store.getTaskState(startedTask.id)?.permissionSubmitting).toBe(false)
         source.message({
             type: 'completed',
             output: { personName: 'Ada Lovelace' },
             createdAt: '2026-07-18T12:00:02.000Z',
         })
 
-        expect(store.getTaskState(startedTask.id)?.pendingAction).toBeNull()
+        expect(store.getTaskState(startedTask.id)?.pendingPermission).toBeNull()
         expect(store.getTaskState(startedTask.id)?.task?.output).toEqual({
             personName: 'Ada Lovelace',
         })
@@ -921,12 +921,12 @@ describe('agent store', () => {
 
         await store.startTask(taskInput, importOwner)
         const firstSource = FakeEventSource.instances[0]!
-        firstSource.message(firstActionRequired)
+        firstSource.message(firstPermissionRequired)
 
         await store.allowBrowserActionsForTask(startedTask.id)
         firstSource.message({
-            type: 'action-resolved',
-            actionId: firstActionId,
+            type: 'permission-resolved',
+            permissionId: firstPermissionId,
             createdAt: '2026-07-18T12:00:01.000Z',
         })
         expect(store.getTaskState(startedTask.id)?.alwaysAllowBrowserActions).toBe(true)
@@ -941,11 +941,11 @@ describe('agent store', () => {
         await store.startTask(taskInput, importOwner)
 
         const secondSource = FakeEventSource.instances[1]!
-        secondSource.message(secondActionRequired)
+        secondSource.message(secondPermissionRequired)
 
         expect(store.getSession('job-post-import')?.taskId).toBe(nextTask.id)
         expect(store.getTaskState(nextTask.id)).toMatchObject({
-            pendingAction: { id: secondActionId },
+            pendingPermission: { id: secondPermissionId },
             alwaysAllowBrowserActions: false,
         })
     })
@@ -961,20 +961,20 @@ describe('agent store', () => {
 
         await store.startTask(taskInput, importOwner)
         const source = FakeEventSource.instances[0]!
-        source.message(firstActionRequired)
+        source.message(firstPermissionRequired)
         await store.allowBrowserActionsForTask(startedTask.id)
         source.message({
-            type: 'action-resolved',
-            actionId: firstActionId,
+            type: 'permission-resolved',
+            permissionId: firstPermissionId,
             createdAt: '2026-07-18T12:00:01.000Z',
         })
 
-        source.message(secondActionRequired)
+        source.message(secondPermissionRequired)
 
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
                 4,
-                `http://localhost:3001/tasks/${startedTask.id}/actions/${secondActionId}`,
+                `http://localhost:3001/tasks/${startedTask.id}/permissions/${secondPermissionId}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -983,9 +983,9 @@ describe('agent store', () => {
             )
         })
         expect(store.getTaskState(startedTask.id)).toMatchObject({
-            pendingAction: { id: secondActionId },
+            pendingPermission: { id: secondPermissionId },
             alwaysAllowBrowserActions: true,
-            actionSubmitting: true,
+            permissionSubmitting: true,
         })
     })
 
@@ -1000,23 +1000,23 @@ describe('agent store', () => {
         await store.startTask(taskInput, importOwner)
         const source = FakeEventSource.instances[0]!
         source.open()
-        source.message(firstActionRequired)
+        source.message(firstPermissionRequired)
         await store.allowBrowserActionsForTask(startedTask.id)
         source.message({
-            type: 'action-resolved',
-            actionId: firstActionId,
+            type: 'permission-resolved',
+            permissionId: firstPermissionId,
             createdAt: '2026-07-18T12:00:01.000Z',
         })
 
-        source.message(secondActionRequired)
+        source.message(secondPermissionRequired)
 
         await vi.waitFor(() => {
             expect(store.getTaskState(startedTask.id)?.error).toBe('Agent request failed (500)')
         })
         expect(store.getTaskState(startedTask.id)).toMatchObject({
-            pendingAction: { id: secondActionId },
+            pendingPermission: { id: secondPermissionId },
             alwaysAllowBrowserActions: false,
-            actionSubmitting: false,
+            permissionSubmitting: false,
             connectionState: 'connected',
         })
     })

@@ -22,7 +22,7 @@ import {
     connectAgentTask,
     fetchAgentHealth,
     fetchAgentTask,
-    resolveAgentAction,
+    resolveAgentPermission,
     startAgentTask,
     type AgentTaskConnection,
 } from '@/services/agent-bridge'
@@ -47,9 +47,9 @@ export interface AgentTaskState {
     task: AgentTask | null
     events: AgentTaskEvent[]
     connectionState: AgentConnectionState
-    pendingAction: AgentPermissionRequired | null
+    pendingPermission: AgentPermissionRequired | null
     alwaysAllowBrowserActions: boolean
-    actionSubmitting: boolean
+    permissionSubmitting: boolean
     cancelling: boolean
     starting: boolean
     restoring: boolean
@@ -62,9 +62,9 @@ const createTaskState = (taskId: string): AgentTaskState => ({
     task: null,
     events: [],
     connectionState: 'idle',
-    pendingAction: null,
+    pendingPermission: null,
     alwaysAllowBrowserActions: false,
-    actionSubmitting: false,
+    permissionSubmitting: false,
     cancelling: false,
     starting: false,
     restoring: false,
@@ -166,9 +166,9 @@ export const useAgentStore = defineStore('agent', () => {
     function finishTask(currentTask: AgentTask) {
         updateTaskState(currentTask.id, {
             task: currentTask,
-            pendingAction: null,
+            pendingPermission: null,
             alwaysAllowBrowserActions: false,
-            actionSubmitting: false,
+            permissionSubmitting: false,
             cancelling: false,
             sessionUnavailable: false,
             error: null,
@@ -212,10 +212,10 @@ export const useAgentStore = defineStore('agent', () => {
                     return
                 }
 
-                if (event.type === 'action-required') {
+                if (event.type === 'permission-required') {
                     updateTaskState(taskId, {
-                        pendingAction: event.action,
-                        actionSubmitting: false,
+                        pendingPermission: event.permission,
+                        permissionSubmitting: false,
                         error: null,
                     })
 
@@ -223,12 +223,12 @@ export const useAgentStore = defineStore('agent', () => {
                         void allowBrowserActionsForTask(taskId).catch(() => undefined)
                     }
                 } else if (
-                    event.type === 'action-resolved' &&
-                    state.pendingAction?.id === event.actionId
+                    event.type === 'permission-resolved' &&
+                    state.pendingPermission?.id === event.permissionId
                 ) {
                     updateTaskState(taskId, {
-                        pendingAction: null,
-                        actionSubmitting: false,
+                        pendingPermission: null,
+                        permissionSubmitting: false,
                         error: null,
                     })
                 } else if (event.type === 'completed' && state.task !== null) {
@@ -371,8 +371,8 @@ export const useAgentStore = defineStore('agent', () => {
             if (state.task.status === 'running' && !eventSources.has(taskId)) {
                 updateTaskState(taskId, {
                     events: [],
-                    pendingAction: null,
-                    actionSubmitting: false,
+                    pendingPermission: null,
+                    permissionSubmitting: false,
                     error: null,
                 })
                 connect(taskId)
@@ -461,32 +461,32 @@ export const useAgentStore = defineStore('agent', () => {
         return true
     }
 
-    async function resolveAction(taskId: string, decision: AgentPermissionDecision) {
+    async function resolvePermission(taskId: string, decision: AgentPermissionDecision) {
         const state = getTaskState(taskId)
         const currentTask = state?.task ?? null
-        const currentAction = state?.pendingAction ?? null
+        const currentPermission = state?.pendingPermission ?? null
 
-        if (currentTask === null || currentAction === null || state?.actionSubmitting) {
+        if (currentTask === null || currentPermission === null || state?.permissionSubmitting) {
             return
         }
 
-        updateTaskState(taskId, { actionSubmitting: true, error: null })
+        updateTaskState(taskId, { permissionSubmitting: true, error: null })
 
         try {
-            await resolveAgentAction(currentTask.id, currentAction.id, decision)
+            await resolveAgentPermission(currentTask.id, currentPermission.id, decision)
         } catch (requestError) {
             const currentState = getTaskState(taskId)
 
             if (
                 currentState?.task?.id === currentTask.id &&
-                currentState.pendingAction?.id === currentAction.id
+                currentState.pendingPermission?.id === currentPermission.id
             ) {
                 updateTaskState(taskId, {
                     error:
                         requestError instanceof Error
                             ? requestError.message
-                            : 'Could not resolve Agent action',
-                    actionSubmitting: false,
+                            : 'Could not resolve Agent permission',
+                    permissionSubmitting: false,
                 })
             }
 
@@ -496,20 +496,27 @@ export const useAgentStore = defineStore('agent', () => {
 
     async function allowBrowserActionsForTask(taskId: string) {
         const state = getTaskState(taskId)
-        const actionId = state?.pendingAction?.id
+        const permissionId = state?.pendingPermission?.id
 
-        if (state?.task?.status !== 'running' || actionId === undefined || state.actionSubmitting) {
+        if (
+            state?.task?.status !== 'running' ||
+            permissionId === undefined ||
+            state.permissionSubmitting
+        ) {
             return
         }
 
         updateTaskState(taskId, { alwaysAllowBrowserActions: true })
 
         try {
-            await resolveAction(taskId, 'approve')
+            await resolvePermission(taskId, 'approve')
         } catch (requestError) {
             const currentState = getTaskState(taskId)
 
-            if (currentState?.task?.id === taskId && currentState.pendingAction?.id === actionId) {
+            if (
+                currentState?.task?.id === taskId &&
+                currentState.pendingPermission?.id === permissionId
+            ) {
                 updateTaskState(taskId, { alwaysAllowBrowserActions: false })
             }
 
@@ -562,7 +569,7 @@ export const useAgentStore = defineStore('agent', () => {
         restoreTask,
         restoreSessions,
         dismissSession,
-        resolveAction,
+        resolvePermission,
         allowBrowserActionsForTask,
         cancelTask,
     }

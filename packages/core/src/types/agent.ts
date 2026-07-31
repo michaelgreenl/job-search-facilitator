@@ -59,8 +59,12 @@ export type AgentTaskEvent =
           startsNewStatement: boolean
           createdAt: IsoDateTime
       }
-    | { type: 'action-required'; action: AgentPermissionRequired; createdAt: IsoDateTime }
-    | { type: 'action-resolved'; actionId: string; createdAt: IsoDateTime }
+    | {
+          type: 'permission-required'
+          permission: AgentPermissionRequired
+          createdAt: IsoDateTime
+      }
+    | { type: 'permission-resolved'; permissionId: string; createdAt: IsoDateTime }
     | { type: 'completed'; output: JsonObject; createdAt: IsoDateTime }
     | { type: 'failed'; error: string; createdAt: IsoDateTime }
     | { type: 'cancelled'; createdAt: IsoDateTime }

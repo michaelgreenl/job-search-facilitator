@@ -67,13 +67,13 @@ const agentTaskEventSchema: z.ZodType<AgentTaskEvent> = z.discriminatedUnion('ty
         createdAt: isoDateTimeSchema,
     }),
     z.looseObject({
-        type: z.literal('action-required'),
-        action: agentPermissionRequiredSchema,
+        type: z.literal('permission-required'),
+        permission: agentPermissionRequiredSchema,
         createdAt: isoDateTimeSchema,
     }),
     z.looseObject({
-        type: z.literal('action-resolved'),
-        actionId: z.uuid(),
+        type: z.literal('permission-resolved'),
+        permissionId: z.uuid(),
         createdAt: isoDateTimeSchema,
     }),
     z.looseObject({

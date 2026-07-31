@@ -23,11 +23,11 @@ export function useAgentTask(lane: AgentTaskLane) {
     const task = computed(() => state.value?.task ?? null)
     const events = computed(() => state.value?.events ?? noEvents)
     const connectionState = computed(() => state.value?.connectionState ?? 'idle')
-    const pendingAction = computed(() => state.value?.pendingAction ?? null)
+    const pendingPermission = computed(() => state.value?.pendingPermission ?? null)
     const alwaysAllowBrowserActions = computed(
         () => state.value?.alwaysAllowBrowserActions ?? false,
     )
-    const actionSubmitting = computed(() => state.value?.actionSubmitting ?? false)
+    const permissionSubmitting = computed(() => state.value?.permissionSubmitting ?? false)
     const cancelling = computed(() => state.value?.cancelling ?? false)
     const starting = computed(() => state.value?.starting ?? false)
     const restoring = computed(() => state.value?.restoring ?? false)
@@ -43,8 +43,8 @@ export function useAgentTask(lane: AgentTaskLane) {
                 error.value === null &&
                 !sessionUnavailable.value),
     )
-    const actionNeedsAttention = computed(
-        () => pendingAction.value !== null && !alwaysAllowBrowserActions.value,
+    const permissionNeedsAttention = computed(
+        () => pendingPermission.value !== null && !alwaysAllowBrowserActions.value,
     )
 
     function currentTaskId() {
@@ -69,9 +69,9 @@ export function useAgentTask(lane: AgentTaskLane) {
         return taskId !== null && agentStore.dismissSession(taskId)
     }
 
-    function resolveAction(decision: AgentPermissionDecision) {
+    function resolvePermission(decision: AgentPermissionDecision) {
         const taskId = currentTaskId()
-        return taskId === null ? Promise.resolve() : agentStore.resolveAction(taskId, decision)
+        return taskId === null ? Promise.resolve() : agentStore.resolvePermission(taskId, decision)
     }
 
     function allowBrowserActionsForTask() {
@@ -90,10 +90,10 @@ export function useAgentTask(lane: AgentTaskLane) {
         events,
         connectionState,
         taskActive,
-        pendingAction,
+        pendingPermission,
         alwaysAllowBrowserActions,
-        actionNeedsAttention,
-        actionSubmitting,
+        permissionNeedsAttention,
+        permissionSubmitting,
         cancelling,
         starting,
         restoring,
@@ -102,7 +102,7 @@ export function useAgentTask(lane: AgentTaskLane) {
         startTask,
         restoreSession,
         dismissSession,
-        resolveAction,
+        resolvePermission,
         allowBrowserActionsForTask,
         cancelTask,
     }

@@ -67,12 +67,12 @@ export async function cancelAgentTask(taskId: string) {
     return parseJsonResponse(response, parseAgentTask, `Agent ${path}`)
 }
 
-export async function resolveAgentAction(
+export async function resolveAgentPermission(
     taskId: string,
-    actionId: string,
+    permissionId: string,
     decision: AgentPermissionDecision,
 ) {
-    await agentResponse(`/tasks/${taskId}/actions/${actionId}`, {
+    await agentResponse(`/tasks/${taskId}/permissions/${permissionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),

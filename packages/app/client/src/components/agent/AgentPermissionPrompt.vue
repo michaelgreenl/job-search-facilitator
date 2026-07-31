@@ -4,7 +4,7 @@ import { nextTick, shallowRef, useTemplateRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
-    action: AgentPermissionRequired
+    permission: AgentPermissionRequired
     submitting: boolean
 }>()
 
@@ -13,19 +13,19 @@ const emit = defineEmits<{
     resolve: [decision: AgentPermissionDecision]
 }>()
 
-const actionRequired = useTemplateRef<HTMLElement>('actionRequired')
-const alwaysAllowAction = useTemplateRef<{ focus: () => void }>('alwaysAllowAction')
+const permissionRequired = useTemplateRef<HTMLElement>('permissionRequired')
+const alwaysAllowPermission = useTemplateRef<{ focus: () => void }>('alwaysAllowPermission')
 const alwaysAllowNo = useTemplateRef<{ focus: () => void }>('alwaysAllowNo')
 const confirmingAlwaysAllow = shallowRef(false)
 
 watch(
-    () => props.action,
-    (action, previousAction) => {
-        if (action.id !== previousAction?.id) {
+    () => props.permission,
+    (permission, previousPermission) => {
+        if (permission.id !== previousPermission?.id) {
             confirmingAlwaysAllow.value = false
         }
 
-        void nextTick(() => actionRequired.value?.focus())
+        void nextTick(() => permissionRequired.value?.focus())
     },
     { immediate: true },
 )
@@ -41,14 +41,14 @@ function requestAlwaysAllowConfirmation() {
 
 function cancelAlwaysAllowConfirmation() {
     confirmingAlwaysAllow.value = false
-    void nextTick(() => alwaysAllowAction.value?.focus())
+    void nextTick(() => alwaysAllowPermission.value?.focus())
 }
 </script>
 
 <template>
     <section
         v-if="confirmingAlwaysAllow"
-        class="action-required"
+        class="permission-required"
         data-testid="agent-permission-confirmation"
         role="alertdialog"
         aria-labelledby="always-allow-title"
@@ -56,12 +56,12 @@ function cancelAlwaysAllowConfirmation() {
         @keydown.esc.stop="cancelAlwaysAllowConfirmation"
     >
         <span class="eyebrow">Confirm access</span>
-        <h3 id="always-allow-title" class="action-title">Always allow for this task?</h3>
-        <p id="always-allow-message" class="action-message">
+        <h3 id="always-allow-title" class="permission-title">Always allow for this task?</h3>
+        <p id="always-allow-message" class="permission-message">
             Chrome will be allowed to access every website this task visits without asking again.
         </p>
 
-        <div class="action-buttons confirmation-buttons">
+        <div class="permission-buttons confirmation-buttons">
             <BaseButton
                 ref="alwaysAllowNo"
                 data-testid="agent-permission-always-allow-cancel"
@@ -84,19 +84,19 @@ function cancelAlwaysAllowConfirmation() {
 
     <section
         v-else
-        ref="actionRequired"
-        class="action-required"
+        ref="permissionRequired"
+        class="permission-required"
         data-testid="agent-permission-prompt"
-        aria-labelledby="action-title"
+        aria-labelledby="permission-title"
         tabindex="-1"
     >
-        <span class="eyebrow">Action required</span>
-        <h3 id="action-title" class="action-title">Website access</h3>
-        <p class="action-message">{{ action.message }}</p>
+        <span class="eyebrow">Permission required</span>
+        <h3 id="permission-title" class="permission-title">Website access</h3>
+        <p class="permission-message">{{ permission.message }}</p>
 
-        <div class="action-controls">
+        <div class="permission-controls">
             <BaseButton
-                ref="alwaysAllowAction"
+                ref="alwaysAllowPermission"
                 data-testid="agent-permission-always-allow"
                 preset="outline"
                 :disabled="submitting"
@@ -105,7 +105,7 @@ function cancelAlwaysAllowConfirmation() {
                 Always allow for this task
             </BaseButton>
 
-            <div class="action-buttons">
+            <div class="permission-buttons">
                 <BaseButton
                     data-testid="agent-permission-decline"
                     preset="outline"
@@ -128,12 +128,12 @@ function cancelAlwaysAllowConfirmation() {
 </template>
 
 <style scoped lang="scss">
-.action-title,
-.action-message {
+.permission-title,
+.permission-message {
     margin: 0;
 }
 
-.action-required {
+.permission-required {
     display: grid;
     gap: $space-1;
     padding: $space-4;
@@ -151,16 +151,16 @@ function cancelAlwaysAllowConfirmation() {
     text-transform: uppercase;
 }
 
-.action-title {
+.permission-title {
     font-size: 1rem;
 }
 
-.action-message {
+.permission-message {
     color: $color-ink-secondary;
     font-size: 0.875rem;
 }
 
-.action-controls {
+.permission-controls {
     display: flex;
     flex-wrap: wrap;
     gap: $space-3;
@@ -169,7 +169,7 @@ function cancelAlwaysAllowConfirmation() {
     margin-top: $space-3;
 }
 
-.action-buttons {
+.permission-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
