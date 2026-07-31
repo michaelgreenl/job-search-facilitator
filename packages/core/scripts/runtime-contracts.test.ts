@@ -5,7 +5,7 @@ import {
     parseCreateUserAddedJobPostInput,
     parseUserAddedJobPost,
     parseUserAddedJobPosts,
-} from '../src/runtime-contracts.ts'
+} from '../src/index.ts'
 
 const input: CreateUserAddedJobPostInput = {
     agentLabel: 'target',
