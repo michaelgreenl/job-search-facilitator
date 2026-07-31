@@ -1,8 +1,4 @@
 import {
-    parseAgentHealth,
-    parseAgentTask,
-    parseAgentTaskEvent,
-    type RuntimeParser,
     type StartAgentTaskInput,
     type AgentPermissionDecision,
     type AgentPermissionRequired,
@@ -11,7 +7,32 @@ import {
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
-import { parseJsonResponse } from '@/api'
+import {
+    agentSessionOwnersMatch,
+    getAgentTaskLane,
+    readAgentSessions,
+    writeAgentSessions,
+    type AgentSession,
+    type AgentSessionOwner,
+    type AgentTaskLane,
+} from '@/services/agent/agent-session'
+import {
+    AgentBridgeRequestError,
+    cancelAgentTask,
+    connectAgentTask,
+    fetchAgentHealth,
+    fetchAgentTask,
+    resolveAgentPermission,
+    startAgentTask,
+    type AgentTaskConnection,
+} from '@/services/agent/agent-bridge'
+
+export {
+    getAgentTaskLane,
+    type AgentSession,
+    type AgentSessionOwner,
+    type AgentTaskLane,
+} from '@/services/agent/agent-session'
 
 export type AgentConnectionState =
     | 'idle'
@@ -21,29 +42,14 @@ export type AgentConnectionState =
     | 'disconnected'
     | 'closed'
 
-export type AgentTaskLane = 'job-post-import' | 'outreach'
-
-export type AgentSessionOwner =
-    | { kind: 'job-post-import'; url: string }
-    | { kind: 'outreach-contact'; postId: string }
-    | {
-          kind: 'outreach-draft'
-          postId: string
-          contactId: string
-          draft: string
-          request: string
-      }
-
-export type AgentSession = AgentSessionOwner & { taskId: string }
-
 export interface AgentTaskState {
     taskId: string
     task: AgentTask | null
     events: AgentTaskEvent[]
     connectionState: AgentConnectionState
-    pendingAction: AgentPermissionRequired | null
+    pendingPermission: AgentPermissionRequired | null
     alwaysAllowBrowserActions: boolean
-    actionSubmitting: boolean
+    permissionSubmitting: boolean
     cancelling: boolean
     starting: boolean
     restoring: boolean
@@ -51,188 +57,20 @@ export interface AgentTaskState {
     error: string | null
 }
 
-const agentSessionStorageKey = 'job-search-facilitator:agent-session'
-
-export const getAgentTaskLane = (owner: AgentSessionOwner): AgentTaskLane =>
-    owner.kind === 'job-post-import' ? 'job-post-import' : 'outreach'
-
 const createTaskState = (taskId: string): AgentTaskState => ({
     taskId,
     task: null,
     events: [],
     connectionState: 'idle',
-    pendingAction: null,
+    pendingPermission: null,
     alwaysAllowBrowserActions: false,
-    actionSubmitting: false,
+    permissionSubmitting: false,
     cancelling: false,
     starting: false,
     restoring: false,
     sessionUnavailable: false,
     error: null,
 })
-
-const getSessionStorage = () => (typeof sessionStorage === 'undefined' ? null : sessionStorage)
-
-const isNonBlankString = (value: unknown): value is string =>
-    typeof value === 'string' && value.trim().length > 0
-
-const parseAgentSession = (value: unknown): AgentSession | null => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return null
-    }
-
-    const session = value as Record<string, unknown>
-
-    if (!isNonBlankString(session.taskId) || !isNonBlankString(session.kind)) {
-        return null
-    }
-
-    if (session.kind === 'job-post-import' && isNonBlankString(session.url)) {
-        return {
-            kind: session.kind,
-            taskId: session.taskId,
-            url: session.url,
-        }
-    }
-
-    if (session.kind === 'outreach-contact' && isNonBlankString(session.postId)) {
-        return {
-            kind: session.kind,
-            taskId: session.taskId,
-            postId: session.postId,
-        }
-    }
-
-    if (
-        session.kind === 'outreach-draft' &&
-        isNonBlankString(session.postId) &&
-        isNonBlankString(session.contactId) &&
-        typeof session.draft === 'string' &&
-        isNonBlankString(session.request)
-    ) {
-        return {
-            kind: session.kind,
-            taskId: session.taskId,
-            postId: session.postId,
-            contactId: session.contactId,
-            draft: session.draft,
-            request: session.request,
-        }
-    }
-
-    return null
-}
-
-const parseStoredSessions = (value: unknown): AgentSession[] | null => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return null
-    }
-
-    if ('version' in value && value.version === 1 && 'session' in value) {
-        const session = parseAgentSession(value.session)
-        return session === null ? null : [session]
-    }
-
-    if (!('version' in value) || value.version !== 2 || !('sessions' in value)) {
-        return null
-    }
-
-    if (!Array.isArray(value.sessions)) {
-        return null
-    }
-
-    const validSessions = value.sessions
-        .map(parseAgentSession)
-        .filter((session): session is AgentSession => session !== null)
-
-    if (value.sessions.length > 0 && validSessions.length === 0) {
-        return null
-    }
-
-    const taskIds = new Set(validSessions.map(({ taskId }) => taskId))
-    const lanes = new Set(validSessions.map(getAgentTaskLane))
-
-    return taskIds.size === validSessions.length && lanes.size === validSessions.length
-        ? validSessions
-        : null
-}
-
-const readAgentSessions = (): AgentSession[] => {
-    const storage = getSessionStorage()
-
-    if (storage === null) {
-        return []
-    }
-
-    const removeStoredSessions = () => {
-        try {
-            storage.removeItem(agentSessionStorageKey)
-        } catch {
-            // Storage may be unavailable even when the browser exposes the API.
-        }
-    }
-
-    try {
-        const stored = storage.getItem(agentSessionStorageKey)
-
-        if (stored === null) {
-            return []
-        }
-
-        const sessions = parseStoredSessions(JSON.parse(stored))
-
-        if (sessions === null) {
-            removeStoredSessions()
-            return []
-        }
-
-        return sessions
-    } catch {
-        removeStoredSessions()
-        return []
-    }
-}
-
-const writeAgentSessions = (sessions: AgentSession[]) => {
-    const storage = getSessionStorage()
-
-    if (storage === null) {
-        return
-    }
-
-    try {
-        if (sessions.length === 0) {
-            storage.removeItem(agentSessionStorageKey)
-        } else {
-            storage.setItem(agentSessionStorageKey, JSON.stringify({ version: 2, sessions }))
-        }
-    } catch {
-        // A storage failure must not prevent tasks from remaining usable in memory.
-    }
-}
-
-const ownersMatch = (left: AgentSession, right: AgentSessionOwner) => {
-    if (left.kind !== right.kind) {
-        return false
-    }
-
-    if (left.kind === 'job-post-import' && right.kind === 'job-post-import') {
-        return left.url === right.url
-    }
-
-    if (left.kind === 'outreach-contact' && right.kind === 'outreach-contact') {
-        return left.postId === right.postId
-    }
-
-    return (
-        left.kind === 'outreach-draft' &&
-        right.kind === 'outreach-draft' &&
-        left.postId === right.postId &&
-        left.contactId === right.contactId &&
-        left.draft === right.draft &&
-        left.request === right.request
-    )
-}
 
 const taskStateActive = (state: AgentTaskState) =>
     state.starting ||
@@ -246,57 +84,6 @@ const taskStateCanDismiss = (state: AgentTaskState) =>
     (state.sessionUnavailable ||
         (state.task === null && state.error !== null) ||
         (state.task !== null && state.task.status !== 'running'))
-
-const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://localhost:3001').replace(
-    /\/$/,
-    '',
-)
-
-class AgentRequestError extends Error {
-    constructor(
-        message: string,
-        readonly status: number,
-    ) {
-        super(message)
-    }
-}
-
-const agentResponse = async (path: string, init?: RequestInit) => {
-    const response = await fetch(`${agentBridgeUrl}${path}`, init)
-
-    if (!response.ok) {
-        const body: unknown = await response.json().catch(() => null)
-        const message =
-            typeof body === 'object' &&
-            body !== null &&
-            !Array.isArray(body) &&
-            'error' in body &&
-            typeof body.error === 'string'
-                ? body.error
-                : null
-
-        throw new AgentRequestError(
-            message ?? `Agent request failed (${response.status})`,
-            response.status,
-        )
-    }
-
-    return response
-}
-
-const requestAgent = async <T>(
-    path: string,
-    parser: RuntimeParser<T>,
-    init?: RequestInit,
-): Promise<T> => {
-    const response = await agentResponse(path, init)
-
-    return parseJsonResponse(response, parser, `Agent ${path}`)
-}
-
-const sendAgent = async (path: string, init?: RequestInit): Promise<void> => {
-    await agentResponse(path, init)
-}
 
 const assertTaskIdentity = (task: AgentTask, taskId: string) => {
     if (task.id !== taskId) {
@@ -312,7 +99,7 @@ export const useAgentStore = defineStore('agent', () => {
             initialSessions.map(({ taskId }) => [taskId, createTaskState(taskId)] as const),
         ),
     )
-    const eventSources = new Map<string, EventSource>()
+    const eventSources = new Map<string, AgentTaskConnection>()
     const restorePromises = new Map<string, Promise<AgentTask | null>>()
     const nonRestorableTaskIds = new Set<string>()
 
@@ -326,6 +113,16 @@ export const useAgentStore = defineStore('agent', () => {
 
     function getTaskState(taskId: string) {
         return taskStates.value[taskId] ?? null
+    }
+
+    function getLaneTaskState(lane: AgentTaskLane) {
+        const session = getSession(lane)
+        return session === null ? null : getTaskState(session.taskId)
+    }
+
+    function isLaneTaskActive(lane: AgentTaskLane) {
+        const state = getLaneTaskState(lane)
+        return state !== null && taskStateActive(state)
     }
 
     function updateTaskState(
@@ -379,9 +176,9 @@ export const useAgentStore = defineStore('agent', () => {
     function finishTask(currentTask: AgentTask) {
         updateTaskState(currentTask.id, {
             task: currentTask,
-            pendingAction: null,
+            pendingPermission: null,
             alwaysAllowBrowserActions: false,
-            actionSubmitting: false,
+            permissionSubmitting: false,
             cancelling: false,
             sessionUnavailable: false,
             error: null,
@@ -405,29 +202,17 @@ export const useAgentStore = defineStore('agent', () => {
 
     function connect(taskId: string) {
         closeConnection(taskId, 'connecting')
-        const source = new EventSource(
-            `${agentBridgeUrl}/tasks/${encodeURIComponent(taskId)}/events`,
-        )
-        eventSources.set(taskId, source)
-
-        source.onopen = () => {
-            if (eventSources.get(taskId) === source) {
-                updateTaskState(taskId, { connectionState: 'connected' })
-            }
-        }
-
-        source.onmessage = ({ data }) => {
-            if (eventSources.get(taskId) !== source) {
-                return
-            }
-
-            try {
-                if (typeof data !== 'string') {
-                    throw new Error()
+        const connection = connectAgentTask(taskId, {
+            onOpen: () => {
+                if (eventSources.get(taskId) === connection) {
+                    updateTaskState(taskId, { connectionState: 'connected' })
+                }
+            },
+            onEvent: (event) => {
+                if (eventSources.get(taskId) !== connection) {
+                    return
                 }
 
-                const value: unknown = JSON.parse(data)
-                const event = parseAgentTaskEvent(value)
                 const state = updateTaskState(taskId, (currentState) => ({
                     ...currentState,
                     events: [...currentState.events, event],
@@ -437,10 +222,10 @@ export const useAgentStore = defineStore('agent', () => {
                     return
                 }
 
-                if (event.type === 'action-required') {
+                if (event.type === 'permission-required') {
                     updateTaskState(taskId, {
-                        pendingAction: event.action,
-                        actionSubmitting: false,
+                        pendingPermission: event.permission,
+                        permissionSubmitting: false,
                         error: null,
                     })
 
@@ -448,12 +233,12 @@ export const useAgentStore = defineStore('agent', () => {
                         void allowBrowserActionsForTask(taskId).catch(() => undefined)
                     }
                 } else if (
-                    event.type === 'action-resolved' &&
-                    state.pendingAction?.id === event.actionId
+                    event.type === 'permission-resolved' &&
+                    state.pendingPermission?.id === event.permissionId
                 ) {
                     updateTaskState(taskId, {
-                        pendingAction: null,
-                        actionSubmitting: false,
+                        pendingPermission: null,
+                        permissionSubmitting: false,
                         error: null,
                     })
                 } else if (event.type === 'completed' && state.task !== null) {
@@ -482,22 +267,26 @@ export const useAgentStore = defineStore('agent', () => {
                         error: null,
                     })
                 }
-            } catch {
-                disconnectConnectedTask(taskId, 'Agent stream returned invalid data')
-            }
-        }
+            },
+            onInvalidEvent: () => {
+                if (eventSources.get(taskId) === connection) {
+                    disconnectConnectedTask(taskId, 'Agent stream returned invalid data')
+                }
+            },
+            onDisconnected: () => {
+                if (eventSources.get(taskId) !== connection) {
+                    return
+                }
 
-        source.onerror = () => {
-            if (eventSources.get(taskId) !== source) {
-                return
-            }
-
-            if (source.readyState === EventSource.CLOSED) {
                 disconnectConnectedTask(taskId, 'Agent stream closed before the task finished')
-            } else {
-                updateTaskState(taskId, { connectionState: 'reconnecting' })
-            }
-        }
+            },
+            onReconnecting: () => {
+                if (eventSources.get(taskId) === connection) {
+                    updateTaskState(taskId, { connectionState: 'reconnecting' })
+                }
+            },
+        })
+        eventSources.set(taskId, connection)
     }
 
     async function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner) {
@@ -513,7 +302,7 @@ export const useAgentStore = defineStore('agent', () => {
             currentSession !== null &&
             currentState?.task === null &&
             currentState.sessionUnavailable &&
-            ownersMatch(currentSession, owner)
+            agentSessionOwnersMatch(currentSession, owner)
         const taskId = reuseReservedTask ? currentSession.taskId : crypto.randomUUID()
 
         if (currentSession !== null && currentSession.taskId !== taskId) {
@@ -530,7 +319,7 @@ export const useAgentStore = defineStore('agent', () => {
         let taskRequestStarted = false
 
         try {
-            const health = await requestAgent('/health', parseAgentHealth)
+            const health = await fetchAgentHealth()
             const unavailableCapability = input.capabilities.find(
                 (capability) => !health.capabilities.includes(capability),
             )
@@ -540,15 +329,7 @@ export const useAgentStore = defineStore('agent', () => {
             }
 
             taskRequestStarted = true
-            const currentTask = await requestAgent(
-                `/tasks/${encodeURIComponent(taskId)}`,
-                parseAgentTask,
-                {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(input),
-                },
-            )
+            const currentTask = await startAgentTask(taskId, input)
 
             assertTaskIdentity(currentTask, taskId)
 
@@ -573,7 +354,7 @@ export const useAgentStore = defineStore('agent', () => {
             if (getSession(lane)?.taskId === taskId) {
                 updateTaskState(taskId, {
                     sessionUnavailable:
-                        !taskRequestStarted || requestError instanceof AgentRequestError,
+                        !taskRequestStarted || requestError instanceof AgentBridgeRequestError,
                     error:
                         requestError instanceof Error
                             ? requestError.message
@@ -600,8 +381,8 @@ export const useAgentStore = defineStore('agent', () => {
             if (state.task.status === 'running' && !eventSources.has(taskId)) {
                 updateTaskState(taskId, {
                     events: [],
-                    pendingAction: null,
-                    actionSubmitting: false,
+                    pendingPermission: null,
+                    permissionSubmitting: false,
                     error: null,
                 })
                 connect(taskId)
@@ -625,10 +406,7 @@ export const useAgentStore = defineStore('agent', () => {
             })
 
             try {
-                const currentTask = await requestAgent(
-                    `/tasks/${encodeURIComponent(taskId)}`,
-                    parseAgentTask,
-                )
+                const currentTask = await fetchAgentTask(taskId)
 
                 assertTaskIdentity(currentTask, taskId)
 
@@ -653,7 +431,7 @@ export const useAgentStore = defineStore('agent', () => {
                 if (sessions.value.some((candidate) => candidate.taskId === taskId)) {
                     updateTaskState(taskId, {
                         sessionUnavailable:
-                            requestError instanceof AgentRequestError &&
+                            requestError instanceof AgentBridgeRequestError &&
                             requestError.status === 404,
                         error:
                             requestError instanceof Error
@@ -693,36 +471,32 @@ export const useAgentStore = defineStore('agent', () => {
         return true
     }
 
-    async function resolveAction(taskId: string, decision: AgentPermissionDecision) {
+    async function resolvePermission(taskId: string, decision: AgentPermissionDecision) {
         const state = getTaskState(taskId)
         const currentTask = state?.task ?? null
-        const currentAction = state?.pendingAction ?? null
+        const currentPermission = state?.pendingPermission ?? null
 
-        if (currentTask === null || currentAction === null || state?.actionSubmitting) {
+        if (currentTask === null || currentPermission === null || state?.permissionSubmitting) {
             return
         }
 
-        updateTaskState(taskId, { actionSubmitting: true, error: null })
+        updateTaskState(taskId, { permissionSubmitting: true, error: null })
 
         try {
-            await sendAgent(`/tasks/${currentTask.id}/actions/${currentAction.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision }),
-            })
+            await resolveAgentPermission(currentTask.id, currentPermission.id, decision)
         } catch (requestError) {
             const currentState = getTaskState(taskId)
 
             if (
                 currentState?.task?.id === currentTask.id &&
-                currentState.pendingAction?.id === currentAction.id
+                currentState.pendingPermission?.id === currentPermission.id
             ) {
                 updateTaskState(taskId, {
                     error:
                         requestError instanceof Error
                             ? requestError.message
-                            : 'Could not resolve Agent action',
-                    actionSubmitting: false,
+                            : 'Could not resolve Agent permission',
+                    permissionSubmitting: false,
                 })
             }
 
@@ -732,20 +506,27 @@ export const useAgentStore = defineStore('agent', () => {
 
     async function allowBrowserActionsForTask(taskId: string) {
         const state = getTaskState(taskId)
-        const actionId = state?.pendingAction?.id
+        const permissionId = state?.pendingPermission?.id
 
-        if (state?.task?.status !== 'running' || actionId === undefined || state.actionSubmitting) {
+        if (
+            state?.task?.status !== 'running' ||
+            permissionId === undefined ||
+            state.permissionSubmitting
+        ) {
             return
         }
 
         updateTaskState(taskId, { alwaysAllowBrowserActions: true })
 
         try {
-            await resolveAction(taskId, 'approve')
+            await resolvePermission(taskId, 'approve')
         } catch (requestError) {
             const currentState = getTaskState(taskId)
 
-            if (currentState?.task?.id === taskId && currentState.pendingAction?.id === actionId) {
+            if (
+                currentState?.task?.id === taskId &&
+                currentState.pendingPermission?.id === permissionId
+            ) {
                 updateTaskState(taskId, { alwaysAllowBrowserActions: false })
             }
 
@@ -763,13 +544,7 @@ export const useAgentStore = defineStore('agent', () => {
         updateTaskState(taskId, { cancelling: true, error: null })
 
         try {
-            const currentTask = await requestAgent(
-                `/tasks/${encodeURIComponent(taskId)}/cancel`,
-                parseAgentTask,
-                {
-                    method: 'POST',
-                },
-            )
+            const currentTask = await cancelAgentTask(taskId)
 
             assertTaskIdentity(currentTask, taskId)
 
@@ -783,7 +558,7 @@ export const useAgentStore = defineStore('agent', () => {
         } catch (requestError) {
             updateTaskState(taskId, {
                 sessionUnavailable:
-                    requestError instanceof AgentRequestError && requestError.status === 404,
+                    requestError instanceof AgentBridgeRequestError && requestError.status === 404,
                 error:
                     requestError instanceof Error
                         ? requestError.message
@@ -800,11 +575,13 @@ export const useAgentStore = defineStore('agent', () => {
         taskStates,
         getSession,
         getTaskState,
+        getLaneTaskState,
+        isLaneTaskActive,
         startTask,
         restoreTask,
         restoreSessions,
         dismissSession,
-        resolveAction,
+        resolvePermission,
         allowBrowserActionsForTask,
         cancelTask,
     }

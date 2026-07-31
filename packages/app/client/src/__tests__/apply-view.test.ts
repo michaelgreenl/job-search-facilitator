@@ -726,7 +726,9 @@ describe('apply view', () => {
         })
         FakeEventSource.instances = []
         vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
+        const pinia = createPinia()
+        await useAgentStore(pinia).restoreSessions()
+        const root = await mountApplyView(pinia)
 
         await vi.waitFor(() => {
             expect(

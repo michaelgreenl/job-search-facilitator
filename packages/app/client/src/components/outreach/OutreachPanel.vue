@@ -5,7 +5,6 @@ import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import { useAgentTask } from '@/composables/useAgentTask'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
@@ -34,7 +33,6 @@ const emit = defineEmits<{
 }>()
 
 const outreachStore = useOutreachStore()
-const { cancelling, connectionState, error, starting, task, taskActive } = useAgentTask('outreach')
 const {
     assistantReply,
     contact,
@@ -47,19 +45,23 @@ const {
     discovering,
     drafting,
     draft,
-    hasActiveTask,
+    taskVisible,
     resultError,
+    taskActive: isActive,
+    taskCancelling: cancelling,
+    taskConnectionState: connectionState,
+    taskIssue: issue,
+    taskStarting: starting,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
-    contact.value !== null ? 'draft' : hasActiveTask.value ? 'stream' : 'contacts',
+    contact.value !== null ? 'draft' : taskVisible.value ? 'stream' : 'contacts',
 )
 const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(() => hasActiveTask.value && taskActive.value)
-const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
+const canCancel = computed(() => taskVisible.value && isActive.value)
 const backLabel = computed(() =>
     panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
 )
@@ -69,21 +71,19 @@ const backTestId = computed(() =>
 const statusMessage = computed(() =>
     contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
 )
-const draftIssue = computed(
-    () => resultError.value ?? (drafting.value ? (error.value ?? task.value?.error ?? null) : null),
-)
+const draftIssue = computed(() => resultError.value ?? (drafting.value ? issue.value : null))
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
     () => props.post?.id,
     () => {
         contactFilter.value = 'all'
-        panelView.value = hasActiveTask.value ? 'stream' : 'contacts'
+        panelView.value = taskVisible.value ? 'stream' : 'contacts'
     },
 )
 
 watch(
-    hasActiveTask,
+    taskVisible,
     (hasTask) => {
         if (hasTask) {
             panelView.value = 'stream'
@@ -95,7 +95,7 @@ watch(
 )
 
 watch(contact, (selectedContact) => {
-    if (hasActiveTask.value) {
+    if (taskVisible.value) {
         if (drafting.value && selectedContact !== null) {
             panelView.value = 'draft'
         }
@@ -131,7 +131,7 @@ function submitDraftRequest() {
         contact.value === null ||
         !draft.value.trim() ||
         !request ||
-        taskActive.value
+        isActive.value
     ) {
         return
     }
@@ -216,7 +216,7 @@ async function copyDraft() {
         v-if="panelView === 'stream'"
         v-bind="$attrs"
         as="aside"
-        :active="active"
+        :active="props.active"
         :adjacent="adjacent"
         lane="outreach"
         eyebrow="Outreach"
@@ -237,7 +237,7 @@ async function copyDraft() {
         v-else
         v-bind="$attrs"
         as="aside"
-        :active="active"
+        :active="props.active"
         :adjacent="adjacent"
         eyebrow="Outreach"
         :back-label="backLabel"
@@ -264,7 +264,7 @@ async function copyDraft() {
                 <OutreachContactList
                     v-model:filter="contactFilter"
                     :contacts="contacts"
-                    :discovering="discovering && taskActive"
+                    :discovering="discovering && isActive"
                     :error="contactsError"
                     :loading="contactsLoading"
                     @retry="emit('retryContacts')"
@@ -279,7 +279,7 @@ async function copyDraft() {
                     tooltip="Find new"
                     aria-label="Discover another contact"
                     :disabled="
-                        taskActive ||
+                        isActive ||
                         contactsLoading ||
                         contactSaving ||
                         contactUpdating ||
@@ -297,8 +297,8 @@ async function copyDraft() {
                     v-model:request="draftRequest"
                     :contact="contact"
                     :assistant-reply="assistantReply"
-                    :running="taskActive"
-                    :requesting-changes="drafting && taskActive"
+                    :running="isActive"
+                    :requesting-changes="drafting && isActive"
                     :copy-state="copyState"
                     :expanded="expanded"
                     :issue="draftIssue"

@@ -27,8 +27,8 @@ const startAgentTaskInputSchema = z.strictObject({
 })
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })
-const taskActionParamsSchema = z.strictObject({ id: z.uuid(), actionId: z.uuid() })
-const taskActionInputSchema = z.strictObject({ decision: z.enum(['approve', 'decline']) })
+const taskPermissionParamsSchema = z.strictObject({ id: z.uuid(), permissionId: z.uuid() })
+const taskPermissionInputSchema = z.strictObject({ decision: z.enum(['approve', 'decline']) })
 
 const taskNotFound = { error: 'Agent task not found' }
 
@@ -167,17 +167,23 @@ export const createApp = (
         }
     })
 
-    app.post('/tasks/:id/actions/:actionId', (request, response) => {
-        const params = taskActionParamsSchema.safeParse(request.params)
-        const input = taskActionInputSchema.safeParse(request.body)
+    app.post('/tasks/:id/permissions/:permissionId', (request, response) => {
+        const params = taskPermissionParamsSchema.safeParse(request.params)
+        const input = taskPermissionInputSchema.safeParse(request.body)
 
         if (!params.success || !input.success) {
             response.status(BAD_REQUEST).json({ error: 'Invalid request' })
             return
         }
 
-        if (!taskManager.resolveAction(params.data.id, params.data.actionId, input.data.decision)) {
-            response.status(NOT_FOUND).json({ error: 'Agent action not found' })
+        if (
+            !taskManager.resolvePermission(
+                params.data.id,
+                params.data.permissionId,
+                input.data.decision,
+            )
+        ) {
+            response.status(NOT_FOUND).json({ error: 'Agent permission not found' })
             return
         }
 

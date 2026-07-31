@@ -8,7 +8,7 @@ import type {
     AgentTaskEvent,
 } from '@job-search-facilitator/core'
 import { Ajv, type ValidateFunction } from 'ajv'
-import type { AgentRuntime, AgentRuntimeAction, AgentRuntimeEvent } from './app-server.ts'
+import type { AgentRuntime, AgentRuntimeEvent, AgentRuntimePermission } from './app-server.ts'
 
 interface StoredTask {
     id: string
@@ -23,7 +23,7 @@ interface StoredTask {
     listeners: Set<(event: AgentTaskStreamEvent) => void>
     finalMessages: string[]
     outputValidator: ValidateFunction<JsonObject>
-    pendingAction: AgentPermissionRequired | null
+    pendingPermission: AgentPermissionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
 }
 
@@ -154,7 +154,7 @@ export class AgentTaskManager {
             listeners: new Set(),
             finalMessages: [],
             outputValidator,
-            pendingAction: null,
+            pendingPermission: null,
             reasoningSection: null,
         }
 
@@ -203,14 +203,18 @@ export class AgentTaskManager {
         return { accepted: true, task: publicTask(task) }
     }
 
-    resolveAction(id: string, actionId: string, decision: AgentPermissionDecision): boolean {
+    resolvePermission(
+        id: string,
+        permissionId: string,
+        decision: AgentPermissionDecision,
+    ): boolean {
         const task = this.tasks.get(id)
 
-        if (task?.pendingAction?.id !== actionId) {
+        if (task?.pendingPermission?.id !== permissionId) {
             return false
         }
 
-        return this.runtime.resolveAction(actionId, decision)
+        return this.runtime.resolvePermission(permissionId, decision)
     }
 
     connect(
@@ -244,23 +248,23 @@ export class AgentTaskManager {
             return
         }
 
-        if (event.type === 'action-required') {
-            this.handleActionRequired(event.action)
+        if (event.type === 'permission-required') {
+            this.handlePermissionRequired(event.permission)
             return
         }
 
-        if (event.type === 'action-resolved') {
+        if (event.type === 'permission-resolved') {
             const task = [...this.tasks.values()].find(
                 (candidate) =>
                     candidate.threadId === event.threadId &&
-                    candidate.pendingAction?.id === event.actionId,
+                    candidate.pendingPermission?.id === event.permissionId,
             )
 
             if (task !== undefined) {
-                task.pendingAction = null
+                task.pendingPermission = null
                 this.emit(task, {
-                    type: 'action-resolved',
-                    actionId: event.actionId,
+                    type: 'permission-resolved',
+                    permissionId: event.permissionId,
                     createdAt: new Date().toISOString(),
                 })
             }
@@ -310,7 +314,11 @@ export class AgentTaskManager {
         }
     }
 
-    private handleActionRequired({ threadId, turnId, ...action }: AgentRuntimeAction): void {
+    private handlePermissionRequired({
+        threadId,
+        turnId,
+        ...permission
+    }: AgentRuntimePermission): void {
         const task = [...this.tasks.values()].find(
             (candidate) =>
                 candidate.threadId === threadId &&
@@ -318,15 +326,15 @@ export class AgentTaskManager {
                 candidate.status === 'running',
         )
 
-        if (task === undefined || task.pendingAction !== null) {
-            this.runtime.resolveAction(action.id, 'decline')
+        if (task === undefined || task.pendingPermission !== null) {
+            this.runtime.resolvePermission(permission.id, 'decline')
             return
         }
 
-        task.pendingAction = action
+        task.pendingPermission = permission
         this.emit(task, {
-            type: 'action-required',
-            action,
+            type: 'permission-required',
+            permission,
             createdAt: new Date().toISOString(),
         })
     }
@@ -374,7 +382,7 @@ export class AgentTaskManager {
 
         task.status = 'completed'
         task.output = output
-        task.pendingAction = null
+        task.pendingPermission = null
         this.emit(task, { type: 'completed', output, createdAt: new Date().toISOString() })
     }
 
@@ -392,14 +400,14 @@ export class AgentTaskManager {
 
     private markCancelled(task: StoredTask): void {
         task.status = 'cancelled'
-        task.pendingAction = null
+        task.pendingPermission = null
         this.emit(task, { type: 'cancelled', createdAt: new Date().toISOString() })
     }
 
     private fail(task: StoredTask, error: string): void {
         task.status = 'failed'
         task.error = error
-        task.pendingAction = null
+        task.pendingPermission = null
         this.emit(task, { type: 'failed', error, createdAt: new Date().toISOString() })
     }
 

@@ -258,23 +258,23 @@ describe('Codex app server client', () => {
 
         expect(events).toHaveLength(1)
         expect(events[0]).toMatchObject({
-            type: 'action-required',
-            action: {
+            type: 'permission-required',
+            permission: {
                 threadId: 'thread-id',
                 turnId: 'turn-id',
                 message: 'Allow Chrome to access https://www.linkedin.com?',
                 origin: 'https://www.linkedin.com',
             },
         })
-        const action = events[0]?.type === 'action-required' ? events[0].action : null
-        expect(action).not.toBeNull()
-        expect(runtime.resolveAction(action!.id, 'approve')).toBe(true)
+        const permission = events[0]?.type === 'permission-required' ? events[0].permission : null
+        expect(permission).not.toBeNull()
+        expect(runtime.resolvePermission(permission!.id, 'approve')).toBe(true)
         expect(fake.requests).toContainEqual({
             id: 99,
             result: { action: 'accept', content: null, _meta: null },
         })
-        expect(runtime.resolveAction(action!.id, 'approve')).toBe(true)
-        expect(runtime.resolveAction(action!.id, 'decline')).toBe(false)
+        expect(runtime.resolvePermission(permission!.id, 'approve')).toBe(true)
+        expect(runtime.resolvePermission(permission!.id, 'decline')).toBe(false)
         expect(fake.requests.filter(({ id }) => id === 99)).toHaveLength(1)
 
         fake.respond({
@@ -284,11 +284,11 @@ describe('Codex app server client', () => {
         await new Promise((resolve) => setImmediate(resolve))
 
         expect(events).toContainEqual({
-            type: 'action-resolved',
+            type: 'permission-resolved',
             threadId: 'thread-id',
-            actionId: action!.id,
+            permissionId: permission!.id,
         })
-        expect(runtime.resolveAction(action!.id, 'approve')).toBe(false)
+        expect(runtime.resolvePermission(permission!.id, 'approve')).toBe(false)
 
         runtime.close()
     })

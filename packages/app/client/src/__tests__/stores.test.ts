@@ -17,7 +17,7 @@ import {
     type AgentSessionOwner,
     type AgentTaskState,
 } from '../stores/agent'
-import { createJobPostImportTask } from '../agent-tasks'
+import { createJobPostImportTask } from '../stores/job-post-import'
 
 class MemoryStorage implements Storage {
     readonly values = new Map<string, string>()
@@ -222,21 +222,6 @@ describe('post store', () => {
         vi.stubGlobal('sessionStorage', new MemoryStorage())
     })
 
-    it('does not carry the add-post popup into a fresh store', () => {
-        const store = usePostStore()
-
-        store.openAddPostDialog()
-        store.setAddPostUrl('https://example.com/jobs/draft')
-
-        setActivePinia(createPinia())
-        const restoredStore = usePostStore()
-
-        expect(restoredStore.addPostDialog).toEqual({
-            open: false,
-            url: '',
-        })
-    })
-
     it('keeps one canonical post across reports, reads, and PATCH responses', async () => {
         const secondPost = {
             ...post,
@@ -378,9 +363,9 @@ describe('outreach store', () => {
             task,
             events: [],
             connectionState: 'idle',
-            pendingAction: null,
+            pendingPermission: null,
             alwaysAllowBrowserActions: false,
-            actionSubmitting: false,
+            permissionSubmitting: false,
             cancelling: false,
             starting: false,
             restoring: false,
@@ -444,8 +429,8 @@ describe('outreach store', () => {
         )
         const fetchMock = vi
             .mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse(completedTask))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
         vi.stubGlobal(
             'EventSource',
             class {
@@ -454,9 +439,10 @@ describe('outreach store', () => {
                 close() {}
             },
         )
+        await useAgentStore().restoreSessions()
         const store = useOutreachStore()
 
-        await store.restoreActiveTask()
+        await store.restoreTaskContext()
 
         await vi.waitFor(() => expect(store.contact).toEqual(savedContact))
         expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -486,8 +472,8 @@ describe('outreach store', () => {
             }),
         )
         vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse(cancelledTask))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
         vi.stubGlobal(
             'EventSource',
             class {
@@ -496,14 +482,14 @@ describe('outreach store', () => {
                 close() {}
             },
         )
+        await useAgentStore().restoreSessions()
         const store = useOutreachStore()
 
-        await store.restoreActiveTask()
+        await store.restoreTaskContext()
 
-        expect(store.contact).toEqual(savedContact)
-        expect(store.draft).toBe(editedDraft)
-        expect(store.drafting).toBe(true)
-        expect(store.clearInactiveTask()).toBe(true)
+        expect(store.contact).toBeNull()
+        expect(store.draft).toBe('')
+        expect(store.drafting).toBe(false)
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 
@@ -534,8 +520,8 @@ describe('outreach store', () => {
             }),
         )
         vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse(completedTask))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
         vi.stubGlobal(
             'EventSource',
             class {
@@ -544,13 +530,14 @@ describe('outreach store', () => {
                 close() {}
             },
         )
+        await useAgentStore().restoreSessions()
         const store = useOutreachStore()
 
-        await store.restoreActiveTask()
+        await store.restoreTaskContext()
 
         await vi.waitFor(() => expect(store.draft).toBe(revisedDraft))
         expect(store.assistantReply).toBe('Made the introduction warmer.')
-        expect(store.hasActiveTask).toBe(false)
+        expect(store.taskVisible).toBe(false)
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 

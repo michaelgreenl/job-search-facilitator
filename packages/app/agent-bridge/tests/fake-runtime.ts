@@ -9,7 +9,7 @@ import type {
 export class FakeRuntime implements AgentRuntime {
     health: AgentRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }
     startAttempts = 0
-    readonly decisions: Array<{ actionId: string; decision: AgentPermissionDecision }> = []
+    readonly decisions: Array<{ permissionId: string; decision: AgentPermissionDecision }> = []
     readonly interruptions: Array<{ threadId: string; turnId: string }> = []
     private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
     private startError: Error | null = null
@@ -34,8 +34,8 @@ export class FakeRuntime implements AgentRuntime {
         await this.onInterrupt()
     }
 
-    resolveAction(actionId: string, decision: AgentPermissionDecision): boolean {
-        this.decisions.push({ actionId, decision })
+    resolvePermission(permissionId: string, decision: AgentPermissionDecision): boolean {
+        this.decisions.push({ permissionId, decision })
         return true
     }
 

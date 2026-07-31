@@ -1,26 +1,26 @@
 <script setup lang="ts">
-import type { AgentPermissionDecision } from '@job-search-facilitator/core'
+import type { AgentPermissionDecision, AgentTaskEvent } from '@job-search-facilitator/core'
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
-import { useAgentTask } from '@/composables/useAgentTask'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
-import type { AgentTaskLane } from '@/stores/agent'
+import { useAgentStore, type AgentTaskLane } from '@/stores/agent'
 import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 
 const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
-
-const {
-    actionNeedsAttention,
-    actionSubmitting,
-    connectionState,
-    events,
-    pendingAction,
-    taskActive,
-    resolveAction: resolveAgentPermission,
-    allowBrowserActionsForTask: allowBrowserActions,
-} = useAgentTask(props.lane)
+const agentStore = useAgentStore()
+const noEvents: AgentTaskEvent[] = []
+const session = computed(() => agentStore.getSession(props.lane))
+const state = computed(() => agentStore.getLaneTaskState(props.lane))
+const events = computed(() => state.value?.events ?? noEvents)
+const connectionState = computed(() => state.value?.connectionState ?? 'idle')
+const pendingPermission = computed(() => state.value?.pendingPermission ?? null)
+const permissionSubmitting = computed(() => state.value?.permissionSubmitting ?? false)
+const isActive = computed(() => agentStore.isLaneTaskActive(props.lane))
+const permissionNeedsAttention = computed(
+    () => pendingPermission.value !== null && !state.value?.alwaysAllowBrowserActions,
+)
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
@@ -91,12 +91,12 @@ const latestActivityIndex = computed(() => {
 
     return -1
 })
-const visiblePendingAction = computed(() =>
-    actionNeedsAttention.value ? pendingAction.value : null,
+const visiblePendingPermission = computed(() =>
+    permissionNeedsAttention.value ? pendingPermission.value : null,
 )
 const scrollRevision = computed(() => [
     streamItems.value,
-    visiblePendingAction.value?.id ?? null,
+    visiblePendingPermission.value?.id ?? null,
     props.issue,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
@@ -125,12 +125,20 @@ watch(
     { immediate: true },
 )
 
-function resolveAction(decision: AgentPermissionDecision) {
-    void resolveAgentPermission(decision).catch(() => undefined)
+function resolvePermission(decision: AgentPermissionDecision) {
+    const taskId = session.value?.taskId
+
+    if (taskId !== undefined) {
+        void agentStore.resolvePermission(taskId, decision).catch(() => undefined)
+    }
 }
 
 function allowBrowserActionsForTask() {
-    void allowBrowserActions().catch(() => undefined)
+    const taskId = session.value?.taskId
+
+    if (taskId !== undefined) {
+        void agentStore.allowBrowserActionsForTask(taskId).catch(() => undefined)
+    }
 }
 </script>
 
@@ -160,7 +168,7 @@ function allowBrowserActionsForTask() {
                 class="activity-list"
                 aria-label="Agent activity"
                 aria-live="polite"
-                :aria-busy="taskActive"
+                :aria-busy="isActive"
                 role="log"
             >
                 <li
@@ -172,8 +180,8 @@ function allowBrowserActionsForTask() {
                 >
                     <span
                         v-if="
-                            taskActive &&
-                            visiblePendingAction === null &&
+                            isActive &&
+                            visiblePendingPermission === null &&
                             index === latestActivityIndex
                         "
                         data-testid="agent-progress-indicator"
@@ -190,11 +198,11 @@ function allowBrowserActionsForTask() {
     </div>
 
     <AgentPermissionPrompt
-        v-if="visiblePendingAction"
-        :action="visiblePendingAction"
-        :submitting="actionSubmitting"
+        v-if="visiblePendingPermission"
+        :permission="visiblePendingPermission"
+        :submitting="permissionSubmitting"
         @always-allow="allowBrowserActionsForTask"
-        @resolve="resolveAction"
+        @resolve="resolvePermission"
     />
 </template>
 

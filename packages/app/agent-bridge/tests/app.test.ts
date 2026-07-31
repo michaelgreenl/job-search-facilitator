@@ -222,17 +222,17 @@ describe('Agent bridge routes', () => {
         expect(runtime.interruptions).toHaveLength(0)
     })
 
-    it('resumes a task after its browser-origin action is approved', async () => {
+    it('resumes a task after its browser-origin permission is approved', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
         const app = createApp(manager, runtime, 'http://localhost')
         const task = await manager.start(taskInput as StartAgentTaskInput)
-        const actionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
+        const permissionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
 
         runtime.emit({
-            type: 'action-required',
-            action: {
-                id: actionId,
+            type: 'permission-required',
+            permission: {
+                id: permissionId,
                 kind: 'browser-origin',
                 threadId: task.threadId,
                 turnId: task.turnId,
@@ -242,26 +242,26 @@ describe('Agent bridge routes', () => {
         })
 
         expect(manager.connect(task.id, () => {})?.events.at(-1)?.event).toMatchObject({
-            type: 'action-required',
-            action: { id: actionId },
+            type: 'permission-required',
+            permission: { id: permissionId },
         })
 
         await request(app)
-            .post(`/tasks/${task.id}/actions/${actionId}`)
+            .post(`/tasks/${task.id}/permissions/${permissionId}`)
             .send({ decision: 'approve' })
             .expect(202, { status: 'accepted' })
 
-        expect(runtime.decisions).toEqual([{ actionId, decision: 'approve' }])
+        expect(runtime.decisions).toEqual([{ permissionId, decision: 'approve' }])
 
         runtime.emit({
-            type: 'action-resolved',
+            type: 'permission-resolved',
             threadId: task.threadId,
-            actionId,
+            permissionId,
         })
 
         expect(manager.connect(task.id, () => {})?.events.at(-1)?.event).toMatchObject({
-            type: 'action-resolved',
-            actionId,
+            type: 'permission-resolved',
+            permissionId,
         })
     })
 })

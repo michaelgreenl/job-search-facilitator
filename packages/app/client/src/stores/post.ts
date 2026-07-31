@@ -1,10 +1,4 @@
 import {
-    parseApplyQueueItems,
-    parseJobPost,
-    parseJobPosts,
-    parseUserAddedJobPost,
-    parseUserAddedJobPosts,
-    parseUpdateJobPostResult,
     type ApplyQueueItem,
     type CreateUserAddedJobPostInput,
     type JobPost,
@@ -13,41 +7,18 @@ import {
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { request } from '@/api'
-
-const getJobPosts = () => request('/job-posts', parseJobPosts)
-
-const getApplyQueue = () => request('/job-posts/apply-queue', parseApplyQueueItems)
-
-const getUserAddedPosts = () => request('/job-posts/user-added', parseUserAddedJobPosts)
-
-const postUserAddedPost = (input: CreateUserAddedJobPostInput) =>
-    request('/job-posts', parseUserAddedJobPost, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-
-const getJobPost = (id: string) => request(`/job-posts/${encodeURIComponent(id)}`, parseJobPost)
-
-const patchJobPost = (id: string, input: UpdateJobPostInput) =>
-    request(`/job-posts/${encodeURIComponent(id)}`, parseUpdateJobPostResult, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-
-interface AddPostDialogState {
-    open: boolean
-    url: string
-}
-
-const emptyAddPostDialog = (): AddPostDialogState => ({ open: false, url: '' })
+import {
+    createUserAddedJobPost,
+    fetchApplyQueue as requestApplyQueue,
+    fetchJobPost as requestJobPost,
+    fetchJobPosts as requestJobPosts,
+    fetchUserAddedJobPosts,
+    updateJobPost as requestJobPostUpdate,
+} from '@/services/job-posts'
 
 export const usePostStore = defineStore('posts', () => {
     const posts = ref<JobPost[]>([])
     const userAddedPosts = ref<UserAddedJobPost[]>([])
-    const addPostDialog = shallowRef<AddPostDialogState>(emptyAddPostDialog())
     const loading = shallowRef(false)
     const error = shallowRef<string | null>(null)
     const userAddedMutationRevisions = new Map<string, number>()
@@ -141,29 +112,29 @@ export const usePostStore = defineStore('posts', () => {
         }
     }
 
-    const fetchPosts = () => load(getJobPosts, upsertPosts)
+    const fetchPosts = () => load(requestJobPosts, upsertPosts)
 
-    const fetchApplyQueue = () => load(getApplyQueue, upsertApplyQueue)
+    const fetchApplyQueue = () => load(requestApplyQueue, upsertApplyQueue)
 
     const fetchUserAddedPosts = () => {
         const requestMutationRevision = userAddedMutationRevision
 
-        return load(getUserAddedPosts, (items) =>
+        return load(fetchUserAddedJobPosts, (items) =>
             replaceUserAddedPosts(items, requestMutationRevision),
         )
     }
 
     const addUserAddedPost = (input: CreateUserAddedJobPostInput) =>
-        load(() => postUserAddedPost(input), saveUserAddedPost)
+        load(() => createUserAddedJobPost(input), saveUserAddedPost)
 
-    const fetchPost = (id: string) => load(() => getJobPost(id), upsertPost)
+    const fetchPost = (id: string) => load(() => requestJobPost(id), upsertPost)
 
     async function updatePost(id: string, input: UpdateJobPostInput) {
         loading.value = true
         error.value = null
 
         try {
-            const result = await patchJobPost(id, input)
+            const result = await requestJobPostUpdate(id, input)
             return {
                 ...result,
                 post: savePost(result.post),
@@ -178,30 +149,9 @@ export const usePostStore = defineStore('posts', () => {
 
     const findPost = (id: string) => posts.value.find((post) => post.id === id) ?? null
 
-    function saveAddPostDialog(state: AddPostDialogState) {
-        addPostDialog.value = state
-    }
-
-    function openAddPostDialog() {
-        saveAddPostDialog({ ...addPostDialog.value, open: true })
-    }
-
-    function closeAddPostDialog() {
-        saveAddPostDialog({ ...addPostDialog.value, open: false })
-    }
-
-    function setAddPostUrl(url: string) {
-        saveAddPostDialog({ ...addPostDialog.value, url })
-    }
-
-    function clearAddPostDialog() {
-        saveAddPostDialog(emptyAddPostDialog())
-    }
-
     return {
         posts,
         userAddedPosts,
-        addPostDialog,
         loading,
         error,
         fetchPosts,
@@ -212,9 +162,5 @@ export const usePostStore = defineStore('posts', () => {
         updatePost,
         findPost,
         upsertPost,
-        openAddPostDialog,
-        closeAddPostDialog,
-        setAddPostUrl,
-        clearAddPostDialog,
     }
 })
