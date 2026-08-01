@@ -1,10 +1,10 @@
 import { createServer } from 'node:http'
-import { createApp } from './app.ts'
-import { CodexAppServer } from './app-server.ts'
 import { env } from './config.ts'
-import { AgentTaskManager } from './task-manager.ts'
+import { createApp } from './http/app.ts'
+import { CodexRuntime } from './runtime/codex/codex-runtime.ts'
+import { AgentTaskManager } from './tasks/agent-task-manager.ts'
 
-const runtime = new CodexAppServer(env.CODEX_BIN, env.AGENT_CWD)
+const runtime = new CodexRuntime(env.CODEX_BIN, env.AGENT_CWD)
 let server: ReturnType<typeof createServer> | null = null
 let shuttingDown = false
 
@@ -27,6 +27,6 @@ try {
 }
 
 if (!shuttingDown) {
-    server = createServer(createApp(new AgentTaskManager(runtime), runtime, env.CLIENT_ORIGIN))
+    server = createServer(createApp(new AgentTaskManager(runtime), env.CLIENT_ORIGIN))
     server.listen(env.PORT, '127.0.0.1')
 }

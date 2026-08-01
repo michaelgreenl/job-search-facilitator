@@ -2,8 +2,9 @@ import { EventEmitter } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { CodexAppServer, type AgentRuntimeEvent } from '../src/app-server.ts'
-import { AgentTaskManager } from '../src/task-manager.ts'
+import type { AgentRuntimeEvent } from '../src/runtime/agent-runtime.ts'
+import { CodexRuntime } from '../src/runtime/codex/codex-runtime.ts'
+import { AgentTaskManager } from '../src/tasks/agent-task-manager.ts'
 
 const createFakeProcess = ({
     completeTaskImmediately = false,
@@ -115,10 +116,10 @@ const createFakeProcess = ({
     return { process, requests, respond, writeStderr, endStdout }
 }
 
-describe('Codex app server client', () => {
+describe('Codex runtime', () => {
     it('discovers Chrome and starts a structured read-only task', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
 
@@ -190,7 +191,7 @@ describe('Codex app server client', () => {
 
     it('declines an unexpected command approval', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
 
@@ -210,7 +211,7 @@ describe('Codex app server client', () => {
 
     it('interrupts the active turn', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
 
@@ -229,7 +230,7 @@ describe('Codex app server client', () => {
 
     it('resumes a browser-origin request after the client approves it', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const events: AgentRuntimeEvent[] = []
@@ -295,7 +296,7 @@ describe('Codex app server client', () => {
 
     it('translates supported notifications and ignores unknown notifications', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const events: AgentRuntimeEvent[] = []
@@ -396,7 +397,7 @@ describe('Codex app server client', () => {
 
     it('rejects an invalid task response and becomes unavailable', async () => {
         const fake = createFakeProcess({ ignoredMethods: ['thread/start'] })
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
 
@@ -421,7 +422,7 @@ describe('Codex app server client', () => {
 
     it('fails closed when a recognized notification is malformed', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const events: AgentRuntimeEvent[] = []
@@ -451,7 +452,7 @@ describe('Codex app server client', () => {
 
     it('keeps terminal events ahead of an immediate runtime exit', async () => {
         const fake = createFakeProcess({ completeTaskImmediately: true })
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const manager = new AgentTaskManager(runtime)
@@ -478,7 +479,7 @@ describe('Codex app server client', () => {
 
     it('drains terminal notifications emitted after process exit', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const manager = new AgentTaskManager(runtime)
@@ -520,7 +521,7 @@ describe('Codex app server client', () => {
 
     it('fails running tasks when exited process streams never close', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
             exitDrainTimeoutMs: 10,
         })
@@ -544,7 +545,7 @@ describe('Codex app server client', () => {
 
     it('rejects an ambiguous JSON-RPC envelope immediately', async () => {
         const fake = createFakeProcess({ ignoredMethods: ['initialize'] })
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
         const start = runtime.start()
@@ -558,7 +559,7 @@ describe('Codex app server client', () => {
     it('reports stdin failure with bounded private stderr diagnostics', async () => {
         const fake = createFakeProcess()
         const diagnostics: string[] = []
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
             diagnosticSink: (message) => diagnostics.push(message),
             diagnosticBufferSize: 12,
@@ -589,7 +590,7 @@ describe('Codex app server client', () => {
 
     it('becomes unavailable when the protocol output closes', async () => {
         const fake = createFakeProcess()
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
         })
 
@@ -611,7 +612,7 @@ describe('Codex app server client', () => {
 
     it('times out a silent request and becomes unavailable', async () => {
         const fake = createFakeProcess({ ignoredMethods: ['initialize'] })
-        const runtime = new CodexAppServer('codex', '/workspace', {
+        const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
             requestTimeoutMs: 10,
         })

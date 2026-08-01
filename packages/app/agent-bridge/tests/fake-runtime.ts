@@ -4,7 +4,7 @@ import type {
     AgentRuntime,
     AgentRuntimeEvent,
     AgentRuntimeHealth,
-} from '../src/app-server.ts'
+} from '../src/runtime/agent-runtime.ts'
 
 export class FakeRuntime implements AgentRuntime {
     health: AgentRuntimeHealth = { status: 'healthy', capabilities: ['chrome'] }

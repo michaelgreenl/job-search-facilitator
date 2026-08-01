@@ -3,8 +3,8 @@ import type { AddressInfo } from 'node:net'
 import type { StartAgentTaskInput, AgentTaskEvent } from '@job-search-facilitator/core'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { createApp } from '../src/app.ts'
-import { AgentTaskManager } from '../src/task-manager.ts'
+import { createApp } from '../src/http/app.ts'
+import { AgentTaskManager } from '../src/tasks/agent-task-manager.ts'
 import { FakeRuntime } from './fake-runtime.ts'
 
 const taskInput = {
@@ -36,7 +36,7 @@ const parseEventStream = (body: string): Array<{ id: number; event: AgentTaskEve
 describe('Agent bridge routes', () => {
     it('reports available capabilities and starts a task', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
 
         await request(app)
             .get('/health')
@@ -53,7 +53,7 @@ describe('Agent bridge routes', () => {
 
     it('reuses a client-specified task without starting the runtime twice', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
         const taskId = '7a669871-290f-4a3f-8874-f1d7cf0f6203'
 
         const first = await request(app).put(`/tasks/${taskId}`).send(taskInput).expect(202)
@@ -66,7 +66,7 @@ describe('Agent bridge routes', () => {
 
     it('reports runtime failure and refuses new tasks without hiding existing task state', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
         const started = await request(app).post('/tasks').send(taskInput).expect(202)
 
         runtime.fail(new Error('runtime unavailable'))
@@ -92,7 +92,7 @@ describe('Agent bridge routes', () => {
 
     it('returns unavailable when the runtime fails during task creation', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
         runtime.failNextStart(new Error('task creation failed'))
 
         await request(app)
@@ -103,7 +103,7 @@ describe('Agent bridge routes', () => {
 
     it('rejects an unsupported capability', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
 
         await request(app)
             .post('/tasks')
@@ -113,7 +113,7 @@ describe('Agent bridge routes', () => {
 
     it('maps an invalid output schema to a client error before starting a task', async () => {
         const runtime = new FakeRuntime()
-        const app = createApp(new AgentTaskManager(runtime), runtime, 'http://localhost')
+        const app = createApp(new AgentTaskManager(runtime), 'http://localhost')
 
         await request(app)
             .post('/tasks')
@@ -132,7 +132,7 @@ describe('Agent bridge routes', () => {
     it('streams live task events and resumes after the last received event', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
-        const app = createApp(manager, runtime, 'http://localhost')
+        const app = createApp(manager, 'http://localhost')
         const task = await manager.start(taskInput as StartAgentTaskInput)
         const eventIdentity = { threadId: task.threadId, turnId: task.turnId }
 
@@ -184,7 +184,7 @@ describe('Agent bridge routes', () => {
     it('cancels a running task and closes its event stream with cancellation', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
-        const app = createApp(manager, runtime, 'http://localhost')
+        const app = createApp(manager, 'http://localhost')
         const task = await manager.start(taskInput as StartAgentTaskInput)
 
         const cancellation = await request(app).post(`/tasks/${task.id}/cancel`).expect(202)
@@ -201,7 +201,7 @@ describe('Agent bridge routes', () => {
     it('rejects cancellation after a task finishes', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
-        const app = createApp(manager, runtime, 'http://localhost')
+        const app = createApp(manager, 'http://localhost')
         const task = await manager.start(taskInput as StartAgentTaskInput)
         const eventIdentity = { threadId: task.threadId, turnId: task.turnId }
 
@@ -225,7 +225,7 @@ describe('Agent bridge routes', () => {
     it('resumes a task after its browser-origin permission is approved', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
-        const app = createApp(manager, runtime, 'http://localhost')
+        const app = createApp(manager, 'http://localhost')
         const task = await manager.start(taskInput as StartAgentTaskInput)
         const permissionId = 'b7eb7f52-d99d-42f2-84b2-d13dcf8afdc4'
 

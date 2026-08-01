@@ -7,8 +7,17 @@ import type {
     AgentTask,
     AgentTaskEvent,
 } from '@job-search-facilitator/core'
-import { Ajv, type ValidateFunction } from 'ajv'
-import type { AgentRuntime, AgentRuntimeEvent, AgentRuntimePermission } from './app-server.ts'
+import type {
+    AgentRuntime,
+    AgentRuntimeEvent,
+    AgentRuntimeHealth,
+    AgentRuntimePermission,
+} from '../runtime/agent-runtime.ts'
+import {
+    compileOutputValidator,
+    isStructuredOutput,
+    type AgentOutputValidator,
+} from './output-schema.ts'
 
 interface StoredTask {
     id: string
@@ -22,7 +31,7 @@ interface StoredTask {
     events: AgentTaskStreamEvent[]
     listeners: Set<(event: AgentTaskStreamEvent) => void>
     finalMessages: string[]
-    outputValidator: ValidateFunction<JsonObject>
+    outputValidator: AgentOutputValidator
     pendingPermission: AgentPermissionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
 }
@@ -36,47 +45,6 @@ export interface AgentTaskConnection {
 export interface AgentTaskStreamEvent {
     id: number
     event: AgentTaskEvent
-}
-
-const isStructuredOutput = (value: unknown): value is JsonObject =>
-    typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const containsDialectMarker = (value: unknown): boolean =>
-    Array.isArray(value)
-        ? value.some(containsDialectMarker)
-        : isStructuredOutput(value) &&
-          ('$schema' in value || Object.values(value).some(containsDialectMarker))
-
-const outputSchemaValidator = new Ajv({ addUsedSchema: false, strict: true })
-
-export class InvalidAgentOutputSchemaError extends Error {
-    constructor() {
-        super('Invalid Agent output schema')
-        this.name = 'InvalidAgentOutputSchemaError'
-    }
-}
-
-const compileOutputValidator = (schema: unknown): ValidateFunction<JsonObject> => {
-    if (
-        !isStructuredOutput(schema) ||
-        schema.type !== 'object' ||
-        schema.$async === true ||
-        containsDialectMarker(schema)
-    ) {
-        throw new InvalidAgentOutputSchemaError()
-    }
-
-    try {
-        const validator = outputSchemaValidator.compile<JsonObject>(schema)
-
-        if ('$async' in validator) {
-            throw new InvalidAgentOutputSchemaError()
-        }
-
-        return validator
-    } catch {
-        throw new InvalidAgentOutputSchemaError()
-    }
 }
 
 const publicTask = (task: StoredTask): AgentTask => {
@@ -111,6 +79,10 @@ export class AgentTaskManager {
 
     constructor(private readonly runtime: AgentRuntime) {
         runtime.onEvent((event) => this.handleEvent(event))
+    }
+
+    get health(): AgentRuntimeHealth {
+        return this.runtime.health
     }
 
     async start(input: StartAgentTaskInput, id: string = randomUUID()): Promise<AgentTask> {

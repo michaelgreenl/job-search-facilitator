@@ -7,15 +7,10 @@ import {
     SERVER_ERROR,
     SERVICE_UNAVAILABLE,
 } from '@job-search-facilitator/utils'
-import cors from 'cors'
 import express from 'express'
 import { z } from 'zod'
-import type { AgentRuntime } from './app-server.ts'
-import {
-    InvalidAgentOutputSchemaError,
-    type AgentTaskManager,
-    type AgentTaskStreamEvent,
-} from './task-manager.ts'
+import type { AgentTaskManager, AgentTaskStreamEvent } from '../tasks/agent-task-manager.ts'
+import { InvalidAgentOutputSchemaError } from '../tasks/output-schema.ts'
 
 const startAgentTaskInputSchema = z.strictObject({
     prompt: z.string().trim().min(1),
@@ -36,25 +31,8 @@ const sendEvent = (response: express.Response, { id, event }: AgentTaskStreamEve
     response.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
 }
 
-export const createApp = (
-    taskManager: AgentTaskManager,
-    runtime: AgentRuntime,
-    clientOrigin: string,
-) => {
-    const app = express()
-
-    app.use(cors({ origin: clientOrigin }))
-    app.use(express.json())
-
-    app.get('/health', (_request, response) => {
-        const health = runtime.health
-
-        if (health.status === 'unavailable') {
-            response.status(SERVICE_UNAVAILABLE)
-        }
-
-        response.json(health)
-    })
+export const createTaskRouter = (taskManager: AgentTaskManager) => {
+    const router = express.Router()
 
     const startTask = async (
         request: express.Request,
@@ -77,7 +55,7 @@ export const createApp = (
             }
         }
 
-        const health = runtime.health
+        const health = taskManager.health
 
         if (health.status === 'unavailable') {
             response.status(SERVICE_UNAVAILABLE).json({ error: health.error })
@@ -92,7 +70,7 @@ export const createApp = (
                 return
             }
 
-            const currentHealth = runtime.health
+            const currentHealth = taskManager.health
 
             if (currentHealth.status === 'unavailable') {
                 response.status(SERVICE_UNAVAILABLE).json({ error: currentHealth.error })
@@ -105,11 +83,11 @@ export const createApp = (
         }
     }
 
-    app.post('/tasks', async (request, response) => {
+    router.post('/tasks', async (request, response) => {
         await startTask(request, response)
     })
 
-    app.put('/tasks/:id', async (request, response) => {
+    router.put('/tasks/:id', async (request, response) => {
         const params = taskIdParamsSchema.safeParse(request.params)
 
         if (!params.success) {
@@ -120,7 +98,7 @@ export const createApp = (
         await startTask(request, response, params.data.id)
     })
 
-    app.get('/tasks/:id', (request, response) => {
+    router.get('/tasks/:id', (request, response) => {
         const params = taskIdParamsSchema.safeParse(request.params)
 
         if (!params.success) {
@@ -138,7 +116,7 @@ export const createApp = (
         response.json(task)
     })
 
-    app.post('/tasks/:id/cancel', async (request, response) => {
+    router.post('/tasks/:id/cancel', async (request, response) => {
         const params = taskIdParamsSchema.safeParse(request.params)
 
         if (!params.success) {
@@ -167,7 +145,7 @@ export const createApp = (
         }
     })
 
-    app.post('/tasks/:id/permissions/:permissionId', (request, response) => {
+    router.post('/tasks/:id/permissions/:permissionId', (request, response) => {
         const params = taskPermissionParamsSchema.safeParse(request.params)
         const input = taskPermissionInputSchema.safeParse(request.body)
 
@@ -190,7 +168,7 @@ export const createApp = (
         response.status(ACCEPTED).json({ status: 'accepted' })
     })
 
-    app.get('/tasks/:id/events', (request, response) => {
+    router.get('/tasks/:id/events', (request, response) => {
         const params = taskIdParamsSchema.safeParse(request.params)
         const lastEventId = Number(request.get('Last-Event-ID') ?? 0)
 
@@ -249,5 +227,5 @@ export const createApp = (
         request.on('close', unsubscribe)
     })
 
-    return app
+    return router
 }

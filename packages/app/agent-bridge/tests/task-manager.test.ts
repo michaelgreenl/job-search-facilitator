@@ -5,11 +5,8 @@ import {
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { describe, expect, it } from 'vitest'
-import {
-    InvalidAgentOutputSchemaError,
-    AgentTaskManager,
-    type AgentTaskStreamEvent,
-} from '../src/task-manager.ts'
+import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
+import { InvalidAgentOutputSchemaError } from '../src/tasks/output-schema.ts'
 import { FakeRuntime } from './fake-runtime.ts'
 
 const input: StartAgentTaskInput = {
