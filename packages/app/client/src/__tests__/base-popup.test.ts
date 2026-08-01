@@ -1,19 +1,10 @@
 /** @vitest-environment jsdom */
 
-import { createApp, defineComponent, h, nextTick, shallowRef, type App } from 'vue'
+import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BasePopUp from '@/components/base/BasePopUp.vue'
+import { cleanupVueMounts, mountVue } from '@/test/support/mount'
 
-interface MountedPopUp {
-    app: App
-    dialog: HTMLDialogElement
-    error: ReturnType<typeof shallowRef<string | null>>
-    onClose: ReturnType<typeof vi.fn>
-    open: ReturnType<typeof shallowRef<boolean>>
-    root: HTMLElement
-}
-
-const mountedPopUps: MountedPopUp[] = []
 const nativeShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
 const nativeClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 
@@ -23,11 +14,7 @@ function mountPopUp(initiallyOpen = true) {
     const onClose = vi.fn(() => {
         open.value = false
     })
-    const root = document.createElement('div')
-
-    document.body.append(root)
-
-    const app = createApp(
+    const { root } = mountVue(
         defineComponent({
             setup() {
                 return () =>
@@ -54,18 +41,13 @@ function mountPopUp(initiallyOpen = true) {
         }),
     )
 
-    app.mount(root)
-
     const dialog = root.querySelector<HTMLDialogElement>('[data-testid="base-pop-up"]')
 
     if (dialog === null) {
         throw new Error('Could not mount the base pop-up')
     }
 
-    const mounted = { app, dialog, error, onClose, open, root }
-    mountedPopUps.push(mounted)
-
-    return mounted
+    return { dialog, error, onClose, open, root }
 }
 
 describe('BasePopUp', () => {
@@ -88,10 +70,7 @@ describe('BasePopUp', () => {
     })
 
     afterEach(() => {
-        for (const { app, root } of mountedPopUps.splice(0)) {
-            app.unmount()
-            root.remove()
-        }
+        cleanupVueMounts()
 
         if (nativeShowModal === undefined) {
             Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')

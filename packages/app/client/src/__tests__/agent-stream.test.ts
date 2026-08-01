@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import type { AgentTask, AgentTaskEvent } from '@job-search-facilitator/core'
+import type { AgentTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
-import { createApp, nextTick } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
 import AgentStream from '../components/agent/AgentStream.vue'
 import {
     useAgentStore,
@@ -11,22 +11,20 @@ import {
     type AgentTaskLane,
     type AgentTaskState,
 } from '../stores/agent'
+import { makeAgentTask, makeAgentTaskState } from '@/test/fixtures/agent'
+import { mountVue } from '@/test/support/mount'
 
 const createdAt = '2026-07-20T12:00:00.000Z'
-const runningTask: AgentTask = {
+const runningTask = makeAgentTask({
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
-    status: 'running',
     threadId: 'thread-id',
     turnId: 'turn-id',
-    output: null,
-    error: null,
-}
-const outreachTask: AgentTask = {
-    ...runningTask,
+})
+const outreachTask = makeAgentTask({
     id: 'a8314bdd-2a1c-48f3-8982-a57fd8b04f5c',
     threadId: 'outreach-thread-id',
     turnId: 'outreach-turn-id',
-}
+})
 const importSession = {
     kind: 'job-post-import',
     taskId: runningTask.id,
@@ -53,21 +51,8 @@ const laneContent = {
 type AgentStore = ReturnType<typeof useAgentStore>
 type TaskStateUpdate = Partial<Omit<AgentTaskState, 'taskId'>>
 
-const createTaskState = (taskId: string, update: TaskStateUpdate = {}): AgentTaskState => ({
-    taskId,
-    task: null,
-    events: [],
-    connectionState: 'idle',
-    pendingPermission: null,
-    alwaysAllowBrowserActions: false,
-    permissionSubmitting: false,
-    cancelling: false,
-    starting: false,
-    restoring: false,
-    sessionUnavailable: false,
-    error: null,
-    ...update,
-})
+const createTaskState = (taskId: string, update: TaskStateUpdate = {}) =>
+    makeAgentTaskState(null, { taskId, connectionState: 'idle', ...update })
 
 function updateTaskState(store: AgentStore, taskId: string, update: TaskStateUpdate) {
     const currentState = store.taskStates[taskId]
@@ -100,8 +85,6 @@ interface MountAgentStreamOptions {
 }
 
 describe('agent stream', () => {
-    const mounted: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
-
     function mountAgentStream({
         issue = null,
         lane = 'job-post-import',
@@ -115,12 +98,10 @@ describe('agent stream', () => {
         const store = useAgentStore()
         store.sessions = sessions
         store.taskStates = taskStates
-        const root = document.createElement('div')
-        const app = createApp(AgentStream, { issue, lane })
-        document.body.append(root)
-        app.use(pinia)
-        app.mount(root)
-        mounted.push({ app, root })
+        const { root } = mountVue(AgentStream, {
+            props: { issue, lane },
+            install: (app) => app.use(pinia),
+        })
 
         const taskId = store.getSession(lane)?.taskId
 
@@ -130,13 +111,6 @@ describe('agent stream', () => {
 
         return { root, store, taskId }
     }
-
-    afterEach(() => {
-        for (const { app, root } of mounted.splice(0)) {
-            app.unmount()
-            root.remove()
-        }
-    })
 
     it('renders fragmented reasoning sections as clean, separate statements', async () => {
         const { root, store, taskId } = mountAgentStream()

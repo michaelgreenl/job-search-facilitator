@@ -1,72 +1,10 @@
 import type { StartAgentTaskInput, AgentTask, AgentTaskEvent } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore, type AgentSessionOwner } from '../stores/agent'
-
-class MemoryStorage implements Storage {
-    readonly values = new Map<string, string>()
-
-    get length() {
-        return this.values.size
-    }
-
-    clear() {
-        this.values.clear()
-    }
-
-    getItem(key: string) {
-        return this.values.get(key) ?? null
-    }
-
-    key(index: number) {
-        return [...this.values.keys()][index] ?? null
-    }
-
-    removeItem(key: string) {
-        this.values.delete(key)
-    }
-
-    setItem(key: string, value: string) {
-        this.values.set(key, value)
-    }
-}
-
-class FakeEventSource {
-    static instances: FakeEventSource[] = []
-    static readonly CONNECTING = 0
-    static readonly OPEN = 1
-    static readonly CLOSED = 2
-
-    readonly close = vi.fn(() => {
-        this.readyState = FakeEventSource.CLOSED
-    })
-    readyState: number = FakeEventSource.CONNECTING
-    onopen: (() => void) | null = null
-    onmessage: ((event: { data: string }) => void) | null = null
-    onerror: (() => void) | null = null
-
-    constructor(readonly url: string) {
-        FakeEventSource.instances.push(this)
-    }
-
-    open() {
-        this.readyState = FakeEventSource.OPEN
-        this.onopen?.()
-    }
-
-    message(event: AgentTaskEvent) {
-        this.onmessage?.({ data: JSON.stringify(event) })
-    }
-
-    rawMessage(value: unknown) {
-        this.onmessage?.({ data: JSON.stringify(value) })
-    }
-
-    disconnect(readyState = FakeEventSource.CONNECTING) {
-        this.readyState = readyState
-        this.onerror?.()
-    }
-}
+import { FakeEventSource } from '@/test/support/fake-event-source'
+import { jsonResponse } from '@/test/support/http'
+import { MemoryStorage } from '@/test/support/memory-storage'
 
 const startedTask: AgentTask = {
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -120,24 +58,14 @@ const secondPermissionRequired = {
     createdAt: '2026-07-18T12:00:02.000Z',
 } satisfies AgentTaskEvent
 
-const jsonResponse = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
-
 describe('agent store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         vi.stubGlobal('fetch', vi.fn())
         vi.stubGlobal('sessionStorage', new MemoryStorage())
         vi.stubGlobal('crypto', { randomUUID: () => startedTask.id })
-    })
-
-    afterEach(() => {
-        vi.unstubAllGlobals()
     })
 
     it('keeps active import and outreach tasks independently connected and addressable', async () => {
@@ -264,6 +192,30 @@ describe('agent store', () => {
         expect(outreachSource.close).not.toHaveBeenCalled()
     })
 
+    it('rejects a second start in the same lane while the first start is pending', async () => {
+        let resolveHealth: ((response: Response) => void) | undefined
+        const healthResponse = new Promise<Response>((resolve) => {
+            resolveHealth = resolve
+        })
+        const fetchMock = vi
+            .mocked(fetch)
+            .mockReturnValueOnce(healthResponse)
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+        const store = useAgentStore()
+
+        const firstStart = store.startTask(taskInput, importOwner)
+
+        await expect(store.startTask(taskInput, importOwner)).rejects.toThrow(
+            'Another job-post-import Agent task is already active',
+        )
+        expect(fetchMock).toHaveBeenCalledOnce()
+
+        resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+        await expect(firstStart).resolves.toEqual(startedTask)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(FakeEventSource.instances).toHaveLength(1)
+    })
+
     it('keeps a running task active while its event stream reconnects', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
@@ -354,7 +306,7 @@ describe('agent store', () => {
         })
 
         expect(FakeEventSource.instances).toHaveLength(2)
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         setActivePinia(createPinia())
         const restoredStore = useAgentStore()
 
@@ -683,7 +635,7 @@ describe('agent store', () => {
         await store.startTask(taskInput, importOwner)
         const source = FakeEventSource.instances[0]!
         source.open()
-        source.rawMessage({
+        source.message({
             type: 'completed',
             output: [],
             createdAt: '2026-07-18T12:00:00.000Z',

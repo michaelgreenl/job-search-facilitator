@@ -1,27 +1,13 @@
 /** @vitest-environment jsdom */
 
-import { createApp, type App } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import BaseCard from '@/components/base/BaseCard.vue'
-
-const mountedApps: Array<{ app: App; root: HTMLElement }> = []
-
-afterEach(() => {
-    for (const { app, root } of mountedApps.splice(0)) {
-        app.unmount()
-        root.remove()
-    }
-})
+import { mountVue } from '@/test/support/mount'
 
 describe('BaseCard', () => {
     it('forwards clicks from button cards with a non-submit type', () => {
-        const root = document.createElement('div')
         const onClick = vi.fn()
-        document.body.append(root)
-
-        const app = createApp(BaseCard, { as: 'button', onClick })
-        app.mount(root)
-        mountedApps.push({ app, root })
+        const { root } = mountVue(BaseCard, { props: { as: 'button', onClick } })
 
         const card = root.querySelector<HTMLButtonElement>('button')
 

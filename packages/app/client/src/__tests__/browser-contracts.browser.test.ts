@@ -1,5 +1,4 @@
-import type { OutreachContact } from '@job-search-facilitator/core'
-import { createApp, defineComponent, h, nextTick, shallowRef, type App, type Component } from 'vue'
+import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -12,29 +11,9 @@ import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
+import { makeOutreachContact } from '@/test/fixtures/outreach'
 import '@/assets/styles/app.scss'
-
-const mountedApps: Array<{ app: App; root: HTMLElement }> = []
-
-function mountComponent(
-    component: Component,
-    options: {
-        props?: Record<string, unknown>
-        install?: (app: App) => void
-        style?: Partial<CSSStyleDeclaration>
-    } = {},
-) {
-    const root = document.createElement('div')
-    Object.assign(root.style, options.style)
-    document.body.append(root)
-
-    const app = createApp(component, options.props)
-    options.install?.(app)
-    app.mount(root)
-    mountedApps.push({ app, root })
-
-    return root
-}
+import { mountVue } from '@/test/support/mount'
 
 async function flushLayout() {
     await nextTick()
@@ -44,11 +23,6 @@ async function flushLayout() {
 }
 
 afterEach(async () => {
-    for (const { app, root } of mountedApps.splice(0)) {
-        app.unmount()
-        root.remove()
-    }
-
     await page.viewport(1024, 768)
 })
 
@@ -61,7 +35,7 @@ describe('browser interaction contracts', () => {
             { value: 'applied', label: 'Applied' },
             { value: 'clear', label: 'Clear' },
         ]
-        mountComponent(BaseDropdown, {
+        mountVue(BaseDropdown, {
             props: {
                 accessibleLabel: 'Job post label',
                 disabled: false,
@@ -107,7 +81,7 @@ describe('browser interaction contracts', () => {
         })
         await router.push('/')
         await router.isReady()
-        mountComponent(AppHeader, { install: (app) => app.use(router) })
+        mountVue(AppHeader, { install: (app) => app.use(router) })
         const trigger = page.getByTestId('app-nav-trigger')
         const applyLink = page.getByTestId('nav-link-apply')
 
@@ -142,7 +116,7 @@ describe('browser interaction contracts', () => {
         })
         await router.push('/')
         await router.isReady()
-        const root = mountComponent(AppHeader, { install: (app) => app.use(router) })
+        const { root } = mountVue(AppHeader, { install: (app) => app.use(router) })
         const trigger = page.getByTestId('app-nav-trigger')
         let hidFocusedElement = false
         const ariaHiddenObserver = new MutationObserver((records) => {
@@ -224,7 +198,7 @@ describe('browser interaction contracts', () => {
                     ])
             },
         })
-        mountComponent(AddJobPostFixture)
+        mountVue(AddJobPostFixture)
         const trigger = page.getByTestId('add-job-post')
         const tooltip = page.getByTestId('button-tooltip-content')
         const dialog = page.getByTestId('job-post-url-dialog')
@@ -263,7 +237,7 @@ describe('browser layout contracts', () => {
                     { default: () => h(ArrowLeftIcon) },
                 ),
         })
-        mountComponent(BackButtonFixture, {
+        mountVue(BackButtonFixture, {
             style: {
                 bottom: '16px',
                 position: 'fixed',
@@ -314,7 +288,7 @@ describe('browser layout contracts', () => {
                     }),
                 ]),
         })
-        mountComponent(ResponsiveFixture)
+        mountVue(ResponsiveFixture)
         const adjacentPanel = page.getByTestId('adjacent-panel')
 
         await expect.element(adjacentPanel).not.toBeVisible()
@@ -325,7 +299,7 @@ describe('browser layout contracts', () => {
     })
 
     it('keeps shared panel spacing below the job-post list back control', async () => {
-        const root = mountComponent(JobPostListPanel, {
+        const { root } = mountVue(JobPostListPanel, {
             props: {
                 active: true,
                 adjacent: false,
@@ -354,18 +328,15 @@ describe('browser layout contracts', () => {
     })
 
     it('offers rationale expansion only when real layout overflows', async () => {
-        const createContact = (id: string, rationale: string): OutreachContact => ({
-            id,
-            jobPostId: 'post-1',
-            personName: 'Contact',
-            personTitle: 'Engineering leader',
-            profileUrl: `https://www.linkedin.com/in/${id}`,
-            relevanceRationale: rationale,
-            draftMessage: 'Draft',
-            messaged: false,
-            createdAt: '2026-07-21T12:00:00.000Z',
-            updatedAt: '2026-07-21T12:00:00.000Z',
-        })
+        const createContact = (id: string, rationale: string) =>
+            makeOutreachContact({
+                id,
+                jobPostId: 'post-1',
+                personName: 'Contact',
+                personTitle: 'Engineering leader',
+                relevanceRationale: rationale,
+                draftMessage: 'Draft',
+            })
         const shortContact = createContact('short', 'Short rationale.')
         const longContact = createContact(
             'long',
@@ -380,7 +351,7 @@ describe('browser layout contracts', () => {
                     h(OutreachContactCard, { contact: longContact }),
                 ]),
         })
-        mountComponent(RationaleFixture)
+        mountVue(RationaleFixture)
         await flushLayout()
 
         const shortCard = page.getByTestId('outreach-contact-short')

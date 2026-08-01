@@ -496,7 +496,6 @@ onMounted(() => {
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
-                :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                 :post="selectedPost"
                 :recommendation="selectedRecommendationContext ?? undefined"
                 :label-updating="labelUpdating || applyQueuePostIds === null"

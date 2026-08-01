@@ -18,34 +18,8 @@ import {
     type AgentTaskState,
 } from '../stores/agent'
 import { createJobPostImportTask } from '../stores/job-post-import'
-
-class MemoryStorage implements Storage {
-    readonly values = new Map<string, string>()
-
-    get length() {
-        return this.values.size
-    }
-
-    clear() {
-        this.values.clear()
-    }
-
-    getItem(key: string) {
-        return this.values.get(key) ?? null
-    }
-
-    key(index: number) {
-        return [...this.values.keys()][index] ?? null
-    }
-
-    removeItem(key: string) {
-        this.values.delete(key)
-    }
-
-    setItem(key: string, value: string) {
-        this.values.set(key, value)
-    }
-}
+import { jsonResponse } from '@/test/support/http'
+import { MemoryStorage } from '@/test/support/memory-storage'
 
 const post: JobPost = {
     id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',
@@ -109,12 +83,6 @@ const report: JobSearchReport = {
         },
     ],
 }
-
-const jsonResponse = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
 
 describe('report store', () => {
     beforeEach(() => {
@@ -449,7 +417,7 @@ describe('outreach store', () => {
         expect(useAgentStore().getSession('outreach')).toBeNull()
     })
 
-    it('restores cancelled draft context until the stream is left', async () => {
+    it('clears a draft session when restore finds that Agent cancelled it', async () => {
         const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
         const editedDraft = 'Edited draft awaiting revision'
         const cancelledTask: AgentTask = {

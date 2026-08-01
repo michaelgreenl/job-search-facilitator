@@ -8,49 +8,44 @@ import type {
     UserLabel,
 } from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
-import { createApp, nextTick, type App } from 'vue'
+import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 import { useAgentStore } from '@/stores/agent'
+import { makeAgentTask } from '@/test/fixtures/agent'
+import { makeJobPost, makeRecommendationContext } from '@/test/fixtures/job-post'
+import { makeOutreachContact } from '@/test/fixtures/outreach'
+import { FakeEventSource } from '@/test/support/fake-event-source'
+import { jsonResponse, requestUrl } from '@/test/support/http'
+import { mountVue, type MountedVueComponent } from '@/test/support/mount'
 import ApplyView from '../views/ApplyView.vue'
 
-const createPost = (id: string, userLabel: UserLabel): JobPost => ({
-    id,
-    sourceKey: `example:${id}`,
-    roleTitle: `${userLabel} Engineer`,
-    company: 'Example Co',
-    location: 'Remote',
-    compensation: null,
-    techStack: 'TypeScript, Vue, Node.js',
-    postSource: 'Greenhouse',
-    postUrl: `https://example.com/jobs/${id}`,
-    applicationUrl: `https://apply.example.com/jobs/${id}`,
-    postStatus: 'active',
-    applicationStatus: 'not-applied',
-    userLabel,
-    archivedAt: null,
-    createdAt: '2026-07-16T12:00:00.000Z',
-    updatedAt: '2026-07-16T12:00:00.000Z',
-})
+const createPost = (id: string, userLabel: UserLabel): JobPost =>
+    makeJobPost({
+        id,
+        roleTitle: `${userLabel} Engineer`,
+        userLabel,
+        createdAt: '2026-07-16T12:00:00.000Z',
+        updatedAt: '2026-07-16T12:00:00.000Z',
+    })
 
 const posts = [
     createPost('30000000-0000-4000-8000-000000000001', 'P1'),
     createPost('30000000-0000-4000-8000-000000000002', 'P2'),
     createPost('30000000-0000-4000-8000-000000000003', 'quick-app'),
 ]
-const createRecommendation = (post: JobPost, index: number): JobRecommendationContext => ({
-    reportId: '40000000-0000-4000-8000-000000000001',
-    reportDate: '2026-07-16',
-    agentRank: index + 1,
-    agentLabel: post.userLabel === 'quick-app' ? 'quick-app' : 'target',
-    fitRationale: `Fixture fit ${index}`,
-    applicationFlow: 'Direct application',
-    keyLegitimacySignals: `Fixture signals ${index}`,
-    recommendedResume: index === 1 ? 'backend-full-stack' : 'frontend',
-    recommendedAction: `Fixture action ${index}`,
-    legitimacyNotes: null,
-})
+const createRecommendation = (post: JobPost, index: number): JobRecommendationContext =>
+    makeRecommendationContext({
+        reportId: '40000000-0000-4000-8000-000000000001',
+        reportDate: '2026-07-16',
+        agentRank: index + 1,
+        agentLabel: post.userLabel === 'quick-app' ? 'quick-app' : 'target',
+        fitRationale: `Fixture fit ${index}`,
+        keyLegitimacySignals: `Fixture signals ${index}`,
+        recommendedResume: index === 1 ? 'backend-full-stack' : 'frontend',
+        recommendedAction: `Fixture action ${index}`,
+    })
 const applyQueueItems: ApplyQueueItem[] = posts.map((post, index) => ({
     post,
     recommendationContext: createRecommendation(post, index),
@@ -60,15 +55,12 @@ const createApplyQueueItem = (
     recommendationContext: JobRecommendationContext | null = null,
 ): ApplyQueueItem => ({ post, recommendationContext })
 
-const runningAgentTask = {
+const runningAgentTask = makeAgentTask({
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
-    status: 'running',
     threadId: 'thread-id',
     turnId: 'turn-id',
-    output: null,
-    error: null,
-}
-const savedContact: OutreachContact = {
+})
+const savedContact: OutreachContact = makeOutreachContact({
     id: '50000000-0000-4000-8000-000000000001',
     jobPostId: posts[0]!.id,
     personName: 'Grace Hopper',
@@ -77,53 +69,9 @@ const savedContact: OutreachContact = {
     relevanceRationale: 'Fixture rationale',
     draftMessage: 'Fixture outreach draft',
     messaged: true,
-    createdAt: '2026-07-20T12:00:00.000Z',
-    updatedAt: '2026-07-20T12:00:00.000Z',
-}
+})
 
-const jsonResponse = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
-const fetchUrl = (input: string | URL | Request) =>
-    typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-
-const mountedApps: Array<{ app: App; root: HTMLElement }> = []
-
-class FakeEventSource {
-    static readonly CONNECTING = 0
-    static readonly OPEN = 1
-    static readonly CLOSED = 2
-    static instances: FakeEventSource[] = []
-
-    readyState = FakeEventSource.CONNECTING
-    readonly close = vi.fn(() => {
-        this.readyState = FakeEventSource.CLOSED
-    })
-    onopen: (() => void) | null = null
-    onmessage: ((event: { data: string }) => void) | null = null
-    onerror: (() => void) | null = null
-
-    constructor(readonly url: string) {
-        FakeEventSource.instances.push(this)
-    }
-
-    open() {
-        this.readyState = FakeEventSource.OPEN
-        this.onopen?.()
-    }
-
-    disconnect() {
-        this.readyState = FakeEventSource.CONNECTING
-        this.onerror?.()
-    }
-
-    fail() {
-        this.readyState = FakeEventSource.CLOSED
-        this.onerror?.()
-    }
-}
+const mountedApps: MountedVueComponent[] = []
 
 const findTestButton = (root: HTMLElement, testId: string) => {
     const button = root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
@@ -139,13 +87,9 @@ const postButton = (root: HTMLElement, postId: string) =>
     findTestButton(root, `job-post-card-${postId}`)
 
 const mountApplyView = async (pinia: Pinia = createPinia(), waitForQueue = true) => {
-    const root = document.createElement('div')
-    document.body.append(root)
-
-    const app = createApp(ApplyView)
-    app.use(pinia)
-    app.mount(root)
-    mountedApps.push({ app, root })
+    const mounted = mountVue(ApplyView, { install: (app) => app.use(pinia) })
+    const { root } = mounted
+    mountedApps.push(mounted)
 
     if (waitForQueue) {
         await vi.waitFor(() =>
@@ -185,12 +129,9 @@ describe('apply view', () => {
     })
 
     afterEach(() => {
-        for (const { app, root } of mountedApps.splice(0)) {
-            app.unmount()
-            root.remove()
+        for (const mounted of mountedApps.splice(0)) {
+            mounted.unmount()
         }
-
-        vi.unstubAllGlobals()
     })
 
     it('filters application candidates by user label', async () => {
@@ -284,7 +225,7 @@ describe('apply view', () => {
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([savedContact]))
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
@@ -423,7 +364,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([savedContact]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
@@ -490,7 +431,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
@@ -527,7 +468,7 @@ describe('apply view', () => {
         vi.mocked(fetch)
             .mockReset()
             .mockImplementation((input, init) => {
-                const url = fetchUrl(input)
+                const url = requestUrl(input)
 
                 if (url.endsWith(`/tasks/${importTaskId}`) && init?.method === undefined) {
                     return Promise.resolve(jsonResponse(runningImportTask))
@@ -553,7 +494,7 @@ describe('apply view', () => {
 
                 throw new Error(`Unexpected request: ${url}`)
             })
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const pinia = createPinia()
         const agentStore = useAgentStore(pinia)
@@ -603,7 +544,7 @@ describe('apply view', () => {
     it('restores the contact list without restoring a cancelled outreach task', async () => {
         sessionStorage.setItem('job-search-facilitator:outreach-contact-list-return', posts[0]!.id)
         vi.mocked(fetch).mockImplementation((input) => {
-            const url = fetchUrl(input)
+            const url = requestUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(applyQueueItems))
@@ -615,7 +556,7 @@ describe('apply view', () => {
 
             throw new Error(`Unexpected request: ${url}`)
         })
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
@@ -642,7 +583,7 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse([]))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const pinia = createPinia()
         const root = await mountApplyView(pinia)
@@ -698,7 +639,7 @@ describe('apply view', () => {
             }),
         )
         vi.mocked(fetch).mockImplementation((input) => {
-            const url = fetchUrl(input)
+            const url = requestUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(applyQueueItems))
@@ -724,7 +665,7 @@ describe('apply view', () => {
 
             throw new Error(`Unexpected request: ${url}`)
         })
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const pinia = createPinia()
         await useAgentStore(pinia).restoreSessions()
@@ -761,7 +702,7 @@ describe('apply view', () => {
         })
         const fetchMock = vi.mocked(fetch).mockReset()
         fetchMock.mockImplementation((input, init) => {
-            const url = fetchUrl(input)
+            const url = requestUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(applyQueueItems))
@@ -780,7 +721,7 @@ describe('apply view', () => {
 
             throw new Error(`Unexpected request: ${url}`)
         })
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 
@@ -794,12 +735,11 @@ describe('apply view', () => {
             throw new Error('Could not find mounted Apply view')
         }
 
-        mounted.app.unmount()
-        mounted.root.remove()
+        mounted.unmount()
         resolveContacts?.(jsonResponse([]))
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(fetchMock.mock.calls.some(([input]) => fetchUrl(input).endsWith('/health'))).toBe(
+        expect(fetchMock.mock.calls.some(([input]) => requestUrl(input).endsWith('/health'))).toBe(
             false,
         )
         expect(FakeEventSource.instances).toHaveLength(0)
@@ -812,7 +752,7 @@ describe('apply view', () => {
         }> = []
         const fetchMock = vi.mocked(fetch).mockReset()
         fetchMock.mockImplementation((input) => {
-            const url = fetchUrl(input)
+            const url = requestUrl(input)
 
             if (url.endsWith('/api/job-posts/apply-queue')) {
                 return Promise.resolve(jsonResponse(applyQueueItems))
@@ -830,7 +770,7 @@ describe('apply view', () => {
 
             throw new Error(`Unexpected request: ${url}`)
         })
-        FakeEventSource.instances = []
+        FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
         const root = await mountApplyView()
 

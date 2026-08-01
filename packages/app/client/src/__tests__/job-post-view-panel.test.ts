@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 
 import type { JobPost, StandaloneJobRecommendation } from '@job-search-facilitator/core'
-import { createApp } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import JobPostViewPanel from '@/components/job-posts/JobPostViewPanel.vue'
+import { makeJobPost } from '@/test/fixtures/job-post'
+import { mountVue } from '@/test/support/mount'
 
-const post = {
+const post = makeJobPost({
     id: 'post-id',
     sourceKey: 'example:post-id',
     roleTitle: 'Software Engineer',
@@ -16,13 +17,10 @@ const post = {
     postSource: 'Greenhouse',
     postUrl: 'https://example.com/jobs/post-id',
     applicationUrl: 'https://apply.example.com/jobs/post-id',
-    postStatus: 'active',
-    applicationStatus: 'not-applied',
     userLabel: 'P1',
-    archivedAt: null,
     createdAt: '2026-07-20T00:00:00.000Z',
     updatedAt: '2026-07-20T00:00:00.000Z',
-} satisfies JobPost
+})
 
 const recommendation = {
     agentLabel: 'target',
@@ -36,26 +34,21 @@ const recommendation = {
     legitimacyNotes: 'The company and role details are consistent across both sources.',
 } satisfies StandaloneJobRecommendation
 
-const mountedApps: Array<{ app: ReturnType<typeof createApp>; root: HTMLElement }> = []
-
 function mountViewer(
     overrides: Partial<JobPost> = {},
     options: { recommendation?: StandaloneJobRecommendation } = {},
 ) {
-    const root = document.createElement('div')
-    document.body.append(root)
-
-    const app = createApp(JobPostViewPanel, {
-        active: true,
-        adjacent: false,
-        post: { ...post, ...overrides },
-        recommendation: options.recommendation,
-        labelUpdating: false,
-        labelError: null,
-        mode: { kind: 'review' },
+    const { root } = mountVue(JobPostViewPanel, {
+        props: {
+            active: true,
+            adjacent: false,
+            post: { ...post, ...overrides },
+            recommendation: options.recommendation,
+            labelUpdating: false,
+            labelError: null,
+            mode: { kind: 'review' },
+        },
     })
-    app.mount(root)
-    mountedApps.push({ app, root })
 
     return root
 }
@@ -74,13 +67,6 @@ async function openLabelOptions(root: HTMLElement) {
 }
 
 describe('JobPostViewPanel', () => {
-    afterEach(() => {
-        for (const { app, root } of mountedApps.splice(0)) {
-            app.unmount()
-            root.remove()
-        }
-    })
-
     it('exposes distinct safe post and application destinations', () => {
         const root = mountViewer()
         const postLink = root.querySelector<HTMLAnchorElement>('[data-testid="post-link"]')

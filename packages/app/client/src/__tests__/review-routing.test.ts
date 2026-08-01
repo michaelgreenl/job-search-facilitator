@@ -8,58 +8,44 @@ import type {
     AgentTask,
 } from '@job-search-facilitator/core'
 import { createPinia, type Pinia } from 'pinia'
-import { createApp, nextTick, type App } from 'vue'
+import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createJobPostImportTask } from '@/stores/job-post-import'
-import { useAgentStore, type AgentSession, type AgentTaskState } from '@/stores/agent'
+import { useAgentStore, type AgentSession } from '@/stores/agent'
+import { makeAgentTask, makeAgentTaskState } from '@/test/fixtures/agent'
+import { makeJobPost } from '@/test/fixtures/job-post'
+import { makeJobSearchReport } from '@/test/fixtures/report'
+import { jsonResponse, requestParts } from '@/test/support/http'
+import { installMatchMedia } from '@/test/support/match-media'
+import { mountVue, type MountedVueComponent } from '@/test/support/mount'
 import ReviewView from '../views/ReviewView.vue'
 
-const createPost = (id: string, roleTitle: string): JobPost => ({
-    id,
-    sourceKey: `example:${id}`,
-    roleTitle,
-    company: 'Example Co',
-    location: 'Remote',
-    compensation: null,
-    techStack: 'TypeScript, Vue, Node.js',
-    postSource: 'Greenhouse',
-    postUrl: `https://example.com/jobs/${id}`,
-    applicationUrl: `https://apply.example.com/jobs/${id}`,
-    postStatus: 'active',
-    applicationStatus: 'not-applied',
-    userLabel: null,
-    archivedAt: null,
-    createdAt: '2026-07-15T12:00:00.000Z',
-    updatedAt: '2026-07-15T12:00:00.000Z',
-})
+const createPost = (id: string, roleTitle: string): JobPost =>
+    makeJobPost({
+        id,
+        roleTitle,
+        createdAt: '2026-07-15T12:00:00.000Z',
+        updatedAt: '2026-07-15T12:00:00.000Z',
+    })
 
 const createReport = (
     id: string,
     reportDate: string,
     summary: string,
     post: JobPost,
-): JobSearchReport => ({
-    id,
-    reportDate,
-    summary,
-    createdAt: `${reportDate}T12:00:00.000Z`,
-    updatedAt: `${reportDate}T12:00:00.000Z`,
-    archivedAt: null,
-    results: [
-        {
-            agentRank: 1,
-            agentLabel: 'target',
+): JobSearchReport => {
+    const report = makeJobSearchReport({ id, reportDate, summary }, post)
+
+    return {
+        ...report,
+        results: report.results.map((result) => ({
+            ...result,
             fitRationale: 'Strong TypeScript fit',
-            applicationFlow: 'Direct application',
             keyLegitimacySignals: 'Listed on company careers page',
-            recommendedResume: 'backend-full-stack',
-            recommendedAction: 'Apply',
-            legitimacyNotes: null,
-            post,
-        },
-    ],
-})
+        })),
+    }
+}
 
 const firstPost = createPost('10000000-0000-4000-8000-000000000001', 'Frontend Engineer')
 const secondPost = createPost('10000000-0000-4000-8000-000000000002', 'Backend Engineer')
@@ -142,19 +128,8 @@ const savedImportedPost = {
     updatedAt: '2026-07-21T12:00:00.000Z',
 } satisfies UserAddedJobPost
 
-const jsonResponse = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
-
-const getRequest = (input: RequestInfo | URL, init?: RequestInit) => ({
-    method: init?.method ?? (input instanceof Request ? input.method : 'GET'),
-    url: input instanceof Request ? input.url : String(input),
-})
-
 const defaultReviewResponse = (input: RequestInfo | URL, init?: RequestInit) => {
-    const { method, url } = getRequest(input, init)
+    const { method, url } = requestParts(input, init)
 
     if (method === 'GET' && url.endsWith('/job-search-reports')) {
         return Promise.resolve(jsonResponse(reports))
@@ -167,30 +142,13 @@ const defaultReviewResponse = (input: RequestInfo | URL, init?: RequestInit) => 
     throw new Error(`Unexpected ${method} request: ${url}`)
 }
 
-interface MountedReview {
-    app: App
+interface MountedReview extends MountedVueComponent {
     pinia: Pinia
-    root: HTMLElement
     router: Router
 }
 
 const mountedReviews: MountedReview[] = []
 type AgentStore = ReturnType<typeof useAgentStore>
-
-const createAgentTaskState = (task: AgentTask): AgentTaskState => ({
-    taskId: task.id,
-    task,
-    events: [],
-    connectionState: task.status === 'running' ? 'connected' : 'closed',
-    pendingPermission: null,
-    alwaysAllowBrowserActions: false,
-    permissionSubmitting: false,
-    cancelling: false,
-    starting: false,
-    restoring: false,
-    sessionUnavailable: false,
-    error: null,
-})
 
 const seedImportAgent = (
     agentStore: AgentStore,
@@ -209,7 +167,7 @@ const seedImportAgent = (
     ]
     agentStore.taskStates = {
         ...agentStore.taskStates,
-        [task.id]: createAgentTaskState(task),
+        [task.id]: makeAgentTaskState(task),
     }
 }
 
@@ -279,18 +237,9 @@ const setDateInput = (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-const useLaptopViewport = () => {
-    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-        matches: query === '(min-width: 848px)',
-        media: query,
-        onchange: null,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-    }))
-}
+let viewport: ReturnType<typeof installMatchMedia>
+
+const useLaptopViewport = () => viewport.setWidth(848)
 
 const submitJobPostUrl = async (root: HTMLElement, url: string) => {
     findTestButton(root, 'add-job-post').click()
@@ -329,22 +278,20 @@ const mountReview = async (
     )
     await router.isReady()
 
-    const root = document.createElement('div')
-    document.body.append(root)
-
     const pinia = createPinia()
-    const app = createApp(ReviewView)
-    app.use(pinia)
-    app.use(router)
-    app.mount(root)
-
-    const mountedReview = { app, pinia, root, router }
+    const mounted = mountVue(ReviewView, {
+        install: (app) => {
+            app.use(pinia)
+            app.use(router)
+        },
+    })
+    const mountedReview = { ...mounted, pinia, router }
     mountedReviews.push(mountedReview)
 
     if (waitForReports) {
         await vi.waitFor(() =>
             expect(
-                root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
+                mounted.root.querySelector(`[data-testid="report-card-${secondReport.id}"]`),
             ).not.toBeNull(),
         )
     }
@@ -356,29 +303,13 @@ describe('review route selection', () => {
     beforeEach(() => {
         sessionStorage.clear()
         vi.stubGlobal('fetch', vi.fn(defaultReviewResponse))
-        vi.stubGlobal(
-            'matchMedia',
-            vi.fn((query: string) => ({
-                matches: false,
-                media: query,
-                onchange: null,
-                addEventListener: vi.fn(),
-                removeEventListener: vi.fn(),
-                addListener: vi.fn(),
-                removeListener: vi.fn(),
-                dispatchEvent: vi.fn(),
-            })),
-        )
+        viewport = installMatchMedia(0)
     })
 
     afterEach(() => {
-        for (const { app, root } of mountedReviews.splice(0)) {
-            app.unmount()
-            root.remove()
+        for (const mounted of mountedReviews.splice(0)) {
+            mounted.unmount()
         }
-
-        vi.restoreAllMocks()
-        vi.unstubAllGlobals()
     })
 
     it('keeps the selected report id out of the visible URL', async () => {
@@ -403,7 +334,7 @@ describe('review route selection', () => {
         vi.mocked(fetch)
             .mockReset()
             .mockImplementation((input, init) => {
-                const { method, url } = getRequest(input, init)
+                const { method, url } = requestParts(input, init)
 
                 if (method === 'GET' && url.endsWith('/job-posts/user-added')) {
                     return Promise.resolve(jsonResponse([userAddedPost]))
@@ -438,7 +369,7 @@ describe('review route selection', () => {
 
     it('keeps user-added posts usable when report loading fails', async () => {
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { url } = getRequest(input, init)
+            const { url } = requestParts(input, init)
 
             if (url.endsWith('/job-posts/user-added')) {
                 return Promise.resolve(jsonResponse([userAddedPost]))
@@ -523,31 +454,25 @@ describe('review route selection', () => {
         }
 
         vi.stubGlobal('EventSource', SilentEventSource)
-        const outreachTask = {
+        const outreachTask = makeAgentTask({
             id: '50000000-0000-4000-8000-000000000001',
             threadId: 'outreach-thread',
             turnId: 'outreach-turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         const outreachSession = {
             kind: 'outreach-contact',
             taskId: outreachTask.id,
             postId: firstPost.id,
         } satisfies AgentSession
         const importTaskId = '40000000-0000-4000-8000-000000000001'
-        const importTask = {
+        const importTask = makeAgentTask({
             id: importTaskId,
             threadId: 'import-thread',
             turnId: 'import-turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         vi.spyOn(crypto, 'randomUUID').mockReturnValue(importTaskId)
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'GET' && url.endsWith('/health')) {
                 return Promise.resolve(
@@ -615,8 +540,7 @@ describe('review route selection', () => {
         input.dispatchEvent(new Event('input', { bubbles: true }))
         await nextTick()
 
-        firstMount.app.unmount()
-        firstMount.root.remove()
+        firstMount.unmount()
         mountedReviews.splice(mountedReviews.indexOf(firstMount), 1)
 
         const restoredMount = await mountReview()
@@ -644,17 +568,14 @@ describe('review route selection', () => {
         vi.stubGlobal('EventSource', SilentEventSource)
         const taskId = crypto.randomUUID()
         vi.spyOn(crypto, 'randomUUID').mockReturnValue(taskId)
-        const runningTask = {
+        const runningTask = makeAgentTask({
             id: taskId,
             threadId: 'thread',
             turnId: 'turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         const cancelledTask = { ...runningTask, status: 'cancelled' } satisfies AgentTask
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'GET' && url.endsWith('/health')) {
                 return Promise.resolve(
@@ -702,7 +623,7 @@ describe('review route selection', () => {
     it('saves matching completed Agent output and opens the imported user-added post', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'POST' && url.endsWith('/job-posts')) {
                 postRequestCount += 1
@@ -713,14 +634,11 @@ describe('review route selection', () => {
         })
         const { pinia, root, router } = await mountReview()
         const agentStore = useAgentStore(pinia)
-        const runningTask = {
+        const runningTask = makeAgentTask({
             id: 'import-task',
             threadId: 'thread',
             turnId: 'turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
             seedImportAgent(agentStore, runningTask)
             return runningTask
@@ -752,7 +670,7 @@ describe('review route selection', () => {
     it('keeps invalid completed Agent output away from persistence and exposes retry', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'POST' && url.endsWith('/job-posts')) {
                 postRequestCount += 1
@@ -763,14 +681,11 @@ describe('review route selection', () => {
         })
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
-        const runningTask = {
+        const runningTask = makeAgentTask({
             id: 'invalid-import-task',
             threadId: 'thread',
             turnId: 'turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
             seedImportAgent(agentStore, runningTask)
             return runningTask
@@ -799,14 +714,11 @@ describe('review route selection', () => {
     it('shows a selectable in-progress card after leaving a running import', async () => {
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
-        const runningTask = {
+        const runningTask = makeAgentTask({
             id: 'visible-import-task',
             threadId: 'thread',
             turnId: 'turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
             seedImportAgent(agentStore, runningTask)
             return runningTask
@@ -838,14 +750,11 @@ describe('review route selection', () => {
     it('keeps a running import intact when cancellation fails and allows leaving after cancellation', async () => {
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
-        const runningTask = {
+        const runningTask = makeAgentTask({
             id: 'cancel-import-task',
             threadId: 'thread',
             turnId: 'turn',
-            status: 'running',
-            output: null,
-            error: null,
-        } satisfies AgentTask
+        })
         const cancelledTask = {
             ...runningTask,
             status: 'cancelled',
@@ -1042,7 +951,7 @@ describe('review route selection', () => {
             resolveUpdate = resolve
         })
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'GET' && url.endsWith('/job-search-reports')) {
                 return Promise.resolve(jsonResponse(reports))
@@ -1218,7 +1127,7 @@ describe('review route selection', () => {
             resolveReports = resolve
         })
         vi.mocked(fetch).mockImplementation((input, init) => {
-            const { method, url } = getRequest(input, init)
+            const { method, url } = requestParts(input, init)
 
             if (method === 'GET' && url.endsWith('/job-search-reports')) {
                 return pendingReports

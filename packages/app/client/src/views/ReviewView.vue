@@ -534,6 +534,7 @@ onMounted(() => {
         <div class="layout-panels">
             <ReviewSourcePanel
                 class="report-list-panel glass-frame"
+                data-testid="review-sources-panel"
                 :active="activePanel === 'sources'"
                 :adjacent="activePanel === 'import'"
                 :reports="reportStore.reports"
@@ -553,6 +554,7 @@ onMounted(() => {
 
             <JobPostImportPanel
                 class="import-panel glass-frame"
+                data-testid="review-import-panel"
                 :active="activePanel === 'import'"
                 :adjacent="false"
                 :cancelling="importCancelling"
@@ -568,6 +570,7 @@ onMounted(() => {
 
             <JobPostListPanel
                 class="glass-frame"
+                data-testid="review-posts-panel"
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'sources' || activePanel === 'viewer'"
                 aria-label="Job posts"
@@ -607,10 +610,10 @@ onMounted(() => {
             <JobPostViewPanel
                 v-if="selectedItem"
                 class="job-post-view glass-frame"
+                data-testid="review-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="activePanel === 'posts'"
                 back-label="Back to job posts"
-                back-mobile-only
                 :post="selectedItem.post"
                 :recommendation="selectedItem.recommendation"
                 :label-updating="labelUpdating"

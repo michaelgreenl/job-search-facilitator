@@ -6,6 +6,7 @@ import type {
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePostStore } from '../stores/post'
+import { jsonResponse } from '@/test/support/http'
 
 const post: JobPost = {
     id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107eb',
@@ -73,12 +74,6 @@ const membershipForPost = (id: string, addedAt: string): UserAddedJobPost => ({
     addedAt,
     updatedAt: addedAt,
 })
-
-const jsonResponse = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
 
 describe('user-added posts in the post store', () => {
     beforeEach(() => {

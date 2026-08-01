@@ -1,32 +1,13 @@
 /** @vitest-environment jsdom */
 
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { createApp, type App } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import OutreachContactList from '@/components/outreach/OutreachContactList.vue'
+import { makeOutreachContact } from '@/test/fixtures/outreach'
+import { mountVue } from '@/test/support/mount'
 
-const contact = (overrides: Partial<OutreachContact>): OutreachContact => ({
-    id: 'contact-1',
-    jobPostId: 'post-1',
-    personName: 'Ada Lovelace',
-    personTitle: 'Engineering Manager',
-    profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-    relevanceRationale: 'Her visible role aligns with the position.',
-    draftMessage: 'Hi Ada, I would value your perspective on the role.',
-    messaged: false,
-    createdAt: '2026-07-21T12:00:00.000Z',
-    updatedAt: '2026-07-21T12:00:00.000Z',
-    ...overrides,
-})
-
-const mountedApps: Array<{ app: App; root: HTMLElement }> = []
-
-afterEach(() => {
-    for (const { app, root } of mountedApps.splice(0)) {
-        app.unmount()
-        root.remove()
-    }
-})
+const contact = (overrides: Partial<OutreachContact>): OutreachContact =>
+    makeOutreachContact({ id: 'contact-1', jobPostId: 'post-1', ...overrides })
 
 const selectFilter = async (root: HTMLElement, value: string) => {
     const trigger = root.querySelector<HTMLButtonElement>('[data-testid="contact-filter-trigger"]')
@@ -59,19 +40,17 @@ const expectContacts = (root: HTMLElement, visibleIds: string[]) => {
 
 describe('OutreachContactList', () => {
     it('filters saved contacts by messaged status', async () => {
-        const root = document.createElement('div')
-        document.body.append(root)
-        const app = createApp(OutreachContactList, {
-            contacts: [
-                contact({ messaged: true }),
-                contact({ id: 'contact-2', personName: 'Grace Hopper' }),
-            ],
-            discovering: true,
-            error: null,
-            loading: false,
+        const { root } = mountVue(OutreachContactList, {
+            props: {
+                contacts: [
+                    contact({ messaged: true }),
+                    contact({ id: 'contact-2', personName: 'Grace Hopper' }),
+                ],
+                discovering: true,
+                error: null,
+                loading: false,
+            },
         })
-        app.mount(root)
-        mountedApps.push({ app, root })
 
         expectContacts(root, ['contact-1', 'contact-2'])
 
