@@ -351,7 +351,7 @@ function showImportPosts() {
     selectedItem.value = null
     postFilter.value = 'all'
     labelError.value = null
-    activePanel.value = 'posts'
+    activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
     pushSelectionState(source)
 }
 
@@ -614,6 +614,7 @@ onMounted(() => {
                 :active="activePanel === 'viewer'"
                 :adjacent="activePanel === 'posts'"
                 back-label="Back to job posts"
+                back-mobile-only
                 :post="selectedItem.post"
                 :recommendation="selectedItem.recommendation"
                 :label-updating="labelUpdating"

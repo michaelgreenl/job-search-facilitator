@@ -747,7 +747,35 @@ describe('review route selection', () => {
         })
     })
 
-    it('keeps a running import intact when cancellation fails and allows leaving after cancellation', async () => {
+    it('keeps a running import intact when cancellation fails', async () => {
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const runningTask = makeAgentTask({
+            id: 'cancel-import-task',
+            threadId: 'thread',
+            turnId: 'turn',
+        })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
+            seedImportAgent(agentStore, runningTask)
+            return runningTask
+        })
+        const cancelTask = vi
+            .spyOn(agentStore, 'cancelTask')
+            .mockRejectedValueOnce(new Error('Could not cancel import'))
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
+        findTestButton(root, 'cancel-job-post-import').click()
+
+        await vi.waitFor(() => {
+            expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="retry-job-post-import"]')).toBeNull()
+        })
+    })
+
+    it('shows retry without an error after an import is cancelled', async () => {
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
         const runningTask = makeAgentTask({
@@ -763,36 +791,24 @@ describe('review route selection', () => {
             seedImportAgent(agentStore, runningTask)
             return runningTask
         })
-        const cancelTask = vi
-            .spyOn(agentStore, 'cancelTask')
-            .mockRejectedValueOnce(new Error('Could not cancel import'))
-            .mockImplementationOnce(async () => {
-                updateImportAgentTask(agentStore, cancelledTask)
-                return cancelledTask
-            })
+        const cancelTask = vi.spyOn(agentStore, 'cancelTask').mockImplementationOnce(async () => {
+            updateImportAgentTask(agentStore, cancelledTask)
+            return cancelledTask
+        })
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
         findTestButton(root, 'cancel-job-post-import').click()
 
         await vi.waitFor(() => {
-            expect(cancelTask).toHaveBeenCalledTimes(1)
-            expect(cancelTask).toHaveBeenNthCalledWith(1, runningTask.id)
-            expect(root.querySelector('[role="alert"]')).not.toBeNull()
-            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
-        })
-
-        findTestButton(root, 'cancel-job-post-import').click()
-
-        await vi.waitFor(() => {
-            expect(cancelTask).toHaveBeenCalledTimes(2)
-            expect(cancelTask).toHaveBeenNthCalledWith(2, runningTask.id)
+            expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
             expect(
                 root.querySelector('[data-testid="job-post-url-dialog"]')?.hasAttribute('open'),
             ).toBe(false)
             expect(root.querySelector('[data-testid="back-from-job-post-import"]')).not.toBeNull()
             expect(root.querySelector('[data-testid="retry-job-post-import"]')).not.toBeNull()
             expect(root.querySelector('[data-testid="cancel-job-post-import"]')).toBeNull()
+            expect(root.querySelector('[role="alert"]')).toBeNull()
             expect(
                 root
                     .querySelector('[aria-label="Add job post"][data-active]')

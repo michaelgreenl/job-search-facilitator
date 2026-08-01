@@ -91,6 +91,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     const agentState = computed(() => agentStore.getLaneTaskState('outreach'))
     const agentTask = computed(() => agentState.value?.task ?? null)
     const agentIsActive = computed(() => agentStore.isLaneTaskActive('outreach'))
+    const agentIsRunning = computed(() => agentTask.value?.status === 'running')
     const agentCancelling = computed(() => agentState.value?.cancelling ?? false)
     const agentConnectionState = computed(() => agentState.value?.connectionState ?? 'idle')
     const agentError = computed(() => agentState.value?.error ?? null)
@@ -124,6 +125,26 @@ export const useOutreachStore = defineStore('outreach', () => {
     const drafting = computed(() => resultContext.value?.kind === 'draft')
     const taskVisible = computed(() => resultContext.value !== null)
     const hasTaskSession = computed(() => agentSession.value !== null)
+    const taskContextCanRetry = computed(() => {
+        const session = agentSession.value
+
+        return (
+            session?.kind === 'outreach-contact' ||
+            (session?.kind === 'outreach-draft' &&
+                contact.value?.id === session.contactId &&
+                draft.value.trim().length > 0)
+        )
+    })
+    const taskRetryAvailable = computed(
+        () =>
+            resultContext.value !== null &&
+            taskContextCanRetry.value &&
+            !agentIsActive.value &&
+            (agentTask.value?.status === 'cancelled' ||
+                agentTask.value?.status === 'failed' ||
+                agentError.value !== null ||
+                resultError.value !== null),
+    )
     const taskIssue = computed(
         () => agentError.value ?? agentTask.value?.error ?? resultError.value,
     )
@@ -648,6 +669,25 @@ export const useOutreachStore = defineStore('outreach', () => {
         return true
     }
 
+    async function retryTask(post: JobPost) {
+        const session = currentOutreachSession()
+
+        if (
+            session === null ||
+            session.postId !== post.id ||
+            !taskRetryAvailable.value ||
+            !clearInactiveTask()
+        ) {
+            return false
+        }
+
+        clearContactListReturn()
+
+        return session.kind === 'outreach-contact'
+            ? startContactDiscovery(post)
+            : requestDraftRevision(post, session.request)
+    }
+
     function clearInactiveTask() {
         if (agentIsActive.value) {
             return false
@@ -731,6 +771,8 @@ export const useOutreachStore = defineStore('outreach', () => {
         taskCancelling: agentCancelling,
         taskConnectionState: agentConnectionState,
         taskIssue,
+        taskRetryAvailable,
+        taskRunning: agentIsRunning,
         taskStarting: agentStarting,
         postId,
         contacts,
@@ -757,6 +799,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         updateContactMessaged,
         requestDraftRevision,
         cancelActiveTask,
+        retryTask,
         clearInactiveTask,
         reset,
     }

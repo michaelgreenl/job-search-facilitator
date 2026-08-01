@@ -42,7 +42,6 @@ const statusTestId = computed(() =>
         :issue="issue"
         :status-message="statusMessage"
         :status-test-id="statusTestId"
-        cancel-label="Cancel import"
         cancel-test-id="cancel-job-post-import"
         :retry-available="retryAvailable"
         retry-test-id="retry-job-post-import"

@@ -28,6 +28,7 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    retry: []
     retryContacts: []
     showViewer: []
 }>()
@@ -51,6 +52,8 @@ const {
     taskCancelling: cancelling,
     taskConnectionState: connectionState,
     taskIssue: issue,
+    taskRetryAvailable: retryAvailable,
+    taskRunning: running,
     taskStarting: starting,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
@@ -61,7 +64,7 @@ const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(() => taskVisible.value && isActive.value)
+const canCancel = computed(() => taskVisible.value && running.value)
 const backLabel = computed(() =>
     panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
 )
@@ -227,10 +230,12 @@ async function copyDraft() {
         :issue="issue"
         :status-message="statusMessage"
         status-test-id="outreach-task-status"
-        cancel-label="Cancel outreach"
         cancel-test-id="outreach-cancel"
+        :retry-available="retryAvailable && props.post !== null"
+        retry-test-id="outreach-retry"
         @back="showContacts"
         @cancel="emit('cancel')"
+        @retry="emit('retry')"
     />
 
     <BasePanel

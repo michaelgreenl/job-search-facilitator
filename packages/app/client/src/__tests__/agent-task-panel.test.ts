@@ -20,7 +20,6 @@ const mountPanel = (overrides: Partial<InstanceType<typeof AgentTaskPanel>['$pro
             cancelling: false,
             running: false,
             issue: null,
-            cancelLabel: 'Cancel',
             cancelTestId: 'agent-task-cancel',
             retryTestId: 'agent-task-retry',
             onBack,
@@ -42,6 +41,7 @@ describe('AgentTaskPanel', () => {
 
         expect(back).not.toBeNull()
         expect(cancel?.disabled).toBe(false)
+        expect(cancel?.textContent?.trim()).toBe('Cancel')
         expect(root.querySelector('[data-testid="agent-task-retry"]')).toBeNull()
 
         back?.click()
@@ -69,6 +69,7 @@ describe('AgentTaskPanel', () => {
 
         expect(back).not.toBeNull()
         expect(retry).not.toBeNull()
+        expect(retry?.textContent?.trim()).toBe('Retry')
         expect(root.querySelector('[data-testid="agent-task-cancel"]')).toBeNull()
 
         back?.click()

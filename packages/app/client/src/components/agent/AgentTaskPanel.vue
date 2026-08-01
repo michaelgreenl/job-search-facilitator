@@ -18,10 +18,8 @@ interface Props {
     issue: string | null
     statusMessage?: string | null
     statusTestId?: string
-    cancelLabel: string
     cancelTestId: string
     retryAvailable?: boolean
-    retryLabel?: string
     retryTestId?: string
 }
 
@@ -33,7 +31,6 @@ const props = withDefaults(defineProps<Props>(), {
     statusMessage: null,
     statusTestId: undefined,
     retryAvailable: false,
-    retryLabel: 'Try again',
     retryTestId: undefined,
 })
 
@@ -78,7 +75,7 @@ const emit = defineEmits<{
                     :disabled="props.cancelling"
                     @click="emit('cancel')"
                 >
-                    {{ props.cancelling ? 'Cancelling…' : props.cancelLabel }}
+                    {{ props.cancelling ? 'Cancelling…' : 'Cancel' }}
                 </BaseButton>
                 <BaseButton
                     v-else-if="props.retryAvailable"
@@ -87,7 +84,7 @@ const emit = defineEmits<{
                     preset="text"
                     @click="emit('retry')"
                 >
-                    {{ props.retryLabel }}
+                    Retry
                 </BaseButton>
             </div>
         </div>

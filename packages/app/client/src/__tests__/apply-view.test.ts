@@ -424,12 +424,16 @@ describe('apply view', () => {
         })
     })
 
-    it('moves a first contact discovery into the task stream', async () => {
+    it('only exposes cancellation after contact discovery starts running', async () => {
+        let resolveHealth: ((response: Response) => void) | undefined
+        const healthResponse = new Promise<Response>((resolve) => {
+            resolveHealth = resolve
+        })
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
             .mockResolvedValueOnce(jsonResponse([]))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockReturnValueOnce(healthResponse)
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
         FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
@@ -439,8 +443,16 @@ describe('apply view', () => {
         findTestButton(root, 'discover-contacts').click()
 
         await vi.waitFor(() => {
+            expect(root.querySelector('[data-testid="outreach-task-status"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).toBeNull()
+        })
+
+        resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+
+        await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(1)
             expect(root.querySelector('[data-testid="agent-progress"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
             expect(
                 root
                     .querySelector('[data-testid="apply-outreach-panel"]')
@@ -623,6 +635,54 @@ describe('apply view', () => {
             postId: posts[0]!.id,
         })
         expect(sessionStorage.getItem('job-search-facilitator:agent-session')).not.toBeNull()
+    })
+
+    it('replaces outreach cancellation with a retry that starts a new task', async () => {
+        const retryTask = makeAgentTask({
+            id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb4',
+            threadId: 'retry-thread-id',
+            turnId: 'retry-turn-id',
+        })
+        vi.stubGlobal('crypto', {
+            randomUUID: vi
+                .fn()
+                .mockReturnValueOnce(runningAgentTask.id)
+                .mockReturnValueOnce(retryTask.id),
+        })
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([]))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ ...runningAgentTask, status: 'cancelled' }, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(retryTask, 202))
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull(),
+        )
+
+        findTestButton(root, 'outreach-cancel').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).toBeNull()
+            expect(root.querySelector('[data-testid="outreach-retry"]')).not.toBeNull()
+        })
+
+        findTestButton(root, 'outreach-retry').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[data-testid="outreach-retry"]')).toBeNull()
+            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+            expect(useAgentStore(pinia).getSession('outreach')?.taskId).toBe(retryTask.id)
+        })
     })
 
     it('keeps a restored task reachable when its owner post cannot be loaded', async () => {

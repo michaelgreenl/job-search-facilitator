@@ -285,6 +285,12 @@ async function cancelOutreach() {
     await outreachStore.cancelActiveTask().catch(() => false)
 }
 
+async function retryOutreach() {
+    if (outreachPost.value !== null) {
+        await outreachStore.retryTask(outreachPost.value).catch(() => false)
+    }
+}
+
 function expandOutreach() {
     outreachExpanded.value = true
     activePanel.value = 'outreach'
@@ -496,6 +502,7 @@ onMounted(() => {
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
+                :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                 :post="selectedPost"
                 :recommendation="selectedRecommendationContext ?? undefined"
                 :label-updating="labelUpdating || applyQueuePostIds === null"
@@ -524,6 +531,7 @@ onMounted(() => {
                 @collapse="collapseOutreach"
                 @discover="discoverAnotherContact"
                 @expand="expandOutreach"
+                @retry="retryOutreach"
                 @retry-contacts="openOutreach"
                 @show-viewer="showViewer"
             />

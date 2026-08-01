@@ -19,7 +19,11 @@ const applyPost = makeJobPost({
     id: '10000000-0000-4000-8000-000000000021',
     userLabel: 'P1',
 })
-const applyQueueItem = makeApplyQueueItem(applyPost)
+const applySecondPost = makeJobPost({
+    id: '10000000-0000-4000-8000-000000000022',
+    userLabel: 'P2',
+})
+const applyQueueItems = [makeApplyQueueItem(applyPost), makeApplyQueueItem(applySecondPost)]
 const outreachContact = makeOutreachContact({ jobPostId: applyPost.id })
 
 function reviewApiResponse(input: RequestInfo | URL, init?: RequestInit) {
@@ -48,7 +52,7 @@ function applyApiResponse(
     const { method, url } = requestParts(input, init)
 
     if (method === 'GET' && url.endsWith('/job-posts/apply-queue')) {
-        return Promise.resolve(jsonResponse([applyQueueItem]))
+        return Promise.resolve(jsonResponse(applyQueueItems))
     }
 
     if (method === 'GET' && url.endsWith(`/job-posts/${applyPost.id}/outreach-contacts`)) {
@@ -131,13 +135,15 @@ describe.each([
         await expectVisible(posts, desktop)
         await expect.element(sources).not.toBeVisible()
         await expect.element(importPanel).not.toBeVisible()
-        await expect.element(viewerBack).toBeVisible()
+        await expectVisible(viewerBack, !desktop)
 
-        await viewerBack.click()
+        if (!desktop) {
+            await viewerBack.click()
 
-        await expect.element(posts).toBeVisible()
-        await expectVisible(viewer, desktop)
-        await expect.element(sources).not.toBeVisible()
+            await expect.element(posts).toBeVisible()
+            await expect.element(viewer).not.toBeVisible()
+            await expect.element(sources).not.toBeVisible()
+        }
 
         await page.getByTestId('back-to-reports').click()
 
@@ -157,30 +163,43 @@ describe.each([
         await expect.element(posts).toBeVisible()
         await expectVisible(viewer, desktop)
         await expect.element(page.getByTestId('apply-outreach-panel')).not.toBeInTheDocument()
+        await expect.element(page.getByTestId('back-to-job-posts')).not.toBeInTheDocument()
 
-        await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+        await page.getByTestId(`job-post-card-${applySecondPost.id}`).click()
 
         const viewerBack = page.getByTestId('back-to-job-posts')
         await expect.element(viewer).toBeVisible()
         await expectVisible(posts, desktop)
-        await expect.element(viewerBack).toBeVisible()
+        await expectVisible(viewerBack, !desktop)
+
+        if (!desktop) {
+            await viewerBack.click()
+            await expect.element(posts).toBeVisible()
+        }
+
+        await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+        await expect.element(viewer).toBeVisible()
+        await expectVisible(viewerBack, !desktop)
 
         await page.getByTestId('discover-contacts').click()
 
         const outreach = page.getByTestId('apply-outreach-panel')
+        const contactBack = page.getByTestId('back-to-job-post')
         await expect.element(outreach).toBeVisible()
         await expect.element(posts).not.toBeVisible()
         await expectVisible(viewer, desktop)
+        await expectVisible(viewerBack, desktop)
+        await expectVisible(contactBack, !desktop)
 
         if (desktop) {
-            await expect.element(viewerBack).toBeVisible()
             await viewerBack.click()
 
             await expect.element(posts).toBeVisible()
             await expect.element(viewer).toBeVisible()
             await expect.element(outreach).not.toBeVisible()
+            await expect.element(viewerBack).not.toBeInTheDocument()
         } else {
-            await page.getByTestId('back-to-job-post').click()
+            await contactBack.click()
 
             await expect.element(posts).not.toBeVisible()
             await expect.element(viewer).toBeVisible()
@@ -246,8 +265,15 @@ describe('running Agent task panel layout', () => {
         await importBack.click()
 
         await expect.element(posts).toBeVisible()
+        await expect.element(sources).toBeVisible()
         await expect.element(importPanel).not.toBeVisible()
         await expect.element(page.getByTestId('job-post-import-progress')).toBeVisible()
+
+        const returnedSourcesRect = sources.element().getBoundingClientRect()
+        const postsRect = posts.element().getBoundingClientRect()
+
+        expect(returnedSourcesRect.right).toBeLessThanOrEqual(postsRect.left)
+        expect(postsRect.right).toBeLessThanOrEqual(848)
 
         await page.getByTestId('job-post-import-progress').click()
 
@@ -284,12 +310,14 @@ describe('running Agent task panel layout', () => {
         const outreach = page.getByTestId('apply-outreach-panel')
         const outreachBack = page.getByTestId('back-to-saved-contacts')
         const outreachCancel = page.getByTestId('outreach-cancel')
+        const viewerBack = page.getByTestId('back-to-job-posts')
 
         await expect.element(outreach).toBeVisible()
         await expect.element(outreachBack).toBeVisible()
         await expect.element(outreachCancel).toBeVisible()
         await expect.element(viewer).toBeVisible()
         await expect.element(posts).not.toBeVisible()
+        await expect.element(viewerBack).toBeVisible()
 
         const viewerRect = viewer.element().getBoundingClientRect()
         const outreachRect = outreach.element().getBoundingClientRect()
@@ -298,30 +326,34 @@ describe('running Agent task panel layout', () => {
         expect(viewerRect.right).toBeLessThanOrEqual(outreachRect.left)
         expect(outreachRect.right).toBeLessThanOrEqual(848)
 
-        await page.getByTestId('back-to-job-posts').click()
-
-        await expect.element(posts).toBeVisible()
-        await expect.element(viewer).toBeVisible()
-        await expect.element(outreach).not.toBeVisible()
-
-        await page.getByTestId(`job-post-card-${applyPost.id}`).click()
-        await page.getByTestId('discover-contacts').click()
-
-        await expect.element(outreach).toBeVisible()
-        await expect.element(outreachBack).toBeVisible()
-        await expect.element(outreachCancel).toBeVisible()
-
         await outreachBack.click()
 
         await expect.element(page.getByTestId('outreach-contact-list')).toBeVisible()
         await expect.element(page.getByTestId('outreach-contact-progress')).toBeVisible()
         await expect.element(viewer).toBeVisible()
         await expect.element(posts).not.toBeVisible()
+        await expect.element(page.getByTestId('back-to-job-post')).not.toBeVisible()
+        await expect.element(viewerBack).toBeVisible()
+
+        await viewerBack.click()
+
+        await expect.element(posts).toBeVisible()
+        await expect.element(viewer).toBeVisible()
+        await expect.element(outreach).not.toBeVisible()
+        await expect.element(viewerBack).not.toBeInTheDocument()
+
+        await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+        await page.getByTestId('discover-contacts').click()
+
+        await expect.element(page.getByTestId('outreach-contact-list')).toBeVisible()
+        await expect.element(page.getByTestId('back-to-job-post')).not.toBeVisible()
+        await expect.element(viewerBack).toBeVisible()
 
         await page.getByTestId('outreach-contact-progress').click()
 
         await expect.element(outreachBack).toBeVisible()
         await expect.element(outreachCancel).toBeVisible()
         await expect.element(viewer).toBeVisible()
+        await expect.element(viewerBack).toBeVisible()
     })
 })

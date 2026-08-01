@@ -55,11 +55,13 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         () =>
             issue.value ??
             (task.value?.status === 'failed' ? task.value.error : null) ??
-            (task.value?.status === 'cancelled' ? 'The job-post import was cancelled.' : null) ??
             (session.value !== null ? (agentState.value?.error ?? null) : null),
     )
     const retryAvailable = computed(
-        () => session.value !== null && !busy.value && displayIssue.value !== null,
+        () =>
+            session.value !== null &&
+            !busy.value &&
+            (retryMode.value !== null || displayIssue.value !== null),
     )
     const showCard = computed(
         () => session.value !== null && (starting.value || running.value || saving.value),
@@ -140,7 +142,7 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         }
 
         if (currentTask.status === 'cancelled') {
-            issue.value = 'The job-post import was cancelled.'
+            issue.value = null
             retryMode.value = 'task'
             return
         }
@@ -230,6 +232,8 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         if (!running.value || taskId === undefined) {
             return
         }
+
+        issue.value = null
 
         try {
             await agentStore.cancelTask(taskId)

@@ -7,7 +7,11 @@ import type {
 } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useOutreachStore } from '../stores/outreach'
+import {
+    createContactDiscoveryTask,
+    createDraftRevisionTask,
+    useOutreachStore,
+} from '../stores/outreach'
 import { usePostStore } from '../stores/post'
 import { useReportStore } from '../stores/report'
 import {
@@ -824,6 +828,143 @@ describe('outreach store', () => {
         )
         expect(store.clearInactiveTask()).toBe(true)
         expect(store.discovering).toBe(false)
+    })
+
+    it('retries cancelled contact discovery without preserving its return state', async () => {
+        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
+        const retryTask: AgentTask = {
+            ...runningTask,
+            id: 'task-2',
+            threadId: 'thread-2',
+            turnId: 'turn-2',
+        }
+        const agentStore = useAgentStore()
+        const startTask = vi
+            .spyOn(agentStore, 'startTask')
+            .mockImplementationOnce(async (_input, owner) => seedTask(runningTask, owner))
+            .mockImplementationOnce(async (_input, owner) => seedTask(retryTask, owner))
+        vi.spyOn(agentStore, 'cancelTask').mockImplementationOnce(async () => {
+            updateTask(cancelledTask)
+            return cancelledTask
+        })
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+        await store.cancelActiveTask()
+
+        expect(store.taskRetryAvailable).toBe(true)
+        expect(sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return')).toBe(
+            post.id,
+        )
+        await expect(store.retryTask(post)).resolves.toBe(true)
+
+        expect(startTask).toHaveBeenCalledTimes(2)
+        expect(startTask).toHaveBeenNthCalledWith(2, createContactDiscoveryTask(post), {
+            kind: 'outreach-contact',
+            postId: post.id,
+        })
+        expect(
+            sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return'),
+        ).toBeNull()
+        expect(store.taskRetryAvailable).toBe(false)
+        expect(store.taskActive).toBe(true)
+    })
+
+    it('retries a cancelled draft revision with its original request', async () => {
+        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
+        const retryTask: AgentTask = {
+            ...runningTask,
+            id: 'task-2',
+            threadId: 'thread-2',
+            turnId: 'turn-2',
+        }
+        const request = 'Make it warmer'
+        const agentStore = useAgentStore()
+        const startTask = vi
+            .spyOn(agentStore, 'startTask')
+            .mockImplementationOnce(async (_input, owner) => seedTask(runningTask, owner))
+            .mockImplementationOnce(async (_input, owner) => seedTask(retryTask, owner))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+        await store.requestDraftRevision(post, request)
+        updateTask(cancelledTask)
+
+        expect(store.taskRetryAvailable).toBe(true)
+        await expect(store.retryTask(post)).resolves.toBe(true)
+
+        expect(startTask).toHaveBeenCalledTimes(2)
+        expect(startTask).toHaveBeenNthCalledWith(
+            2,
+            createDraftRevisionTask(post, savedContact, savedContact.draftMessage, request),
+            {
+                kind: 'outreach-draft',
+                postId: post.id,
+                contactId: savedContact.id,
+                draft: savedContact.draftMessage,
+                request,
+            },
+        )
+        expect(store.taskRetryAvailable).toBe(false)
+        expect(store.taskActive).toBe(true)
+    })
+
+    it('does not discard a draft task when its contact context is unavailable', async () => {
+        const failedTask: AgentTask = {
+            ...runningTask,
+            status: 'failed',
+            error: 'Agent task failed',
+        }
+        const agentStore = useAgentStore()
+        seedTask(failedTask, {
+            kind: 'outreach-draft',
+            postId: post.id,
+            contactId: savedContact.id,
+            draft: savedContact.draftMessage,
+            request: 'Make it warmer',
+        })
+        const store = useOutreachStore()
+
+        expect(store.taskRetryAvailable).toBe(false)
+        await expect(store.retryTask(post)).resolves.toBe(false)
+        expect(agentStore.getSession('outreach')?.taskId).toBe(failedTask.id)
+    })
+
+    it('keeps retry available when a replacement task fails to start', async () => {
+        const initialTask: AgentTask = {
+            ...runningTask,
+            id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
+        }
+        const replacementTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb4'
+        const cancelledTask: AgentTask = { ...initialTask, status: 'cancelled' }
+        vi.stubGlobal('crypto', {
+            randomUUID: vi
+                .fn()
+                .mockReturnValueOnce(initialTask.id)
+                .mockReturnValueOnce(replacementTaskId),
+        })
+        vi.stubGlobal(
+            'EventSource',
+            class {
+                static readonly CLOSED = 2
+                readonly readyState = 0
+                close() {}
+            },
+        )
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(initialTask, 202))
+            .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ error: 'Agent bridge unavailable' }, 503))
+        const store = useOutreachStore()
+        await store.startContactDiscovery(post)
+        await store.cancelActiveTask()
+
+        await expect(store.retryTask(post)).rejects.toThrow('Agent bridge unavailable')
+
+        expect(store.taskRetryAvailable).toBe(true)
+        expect(store.taskRunning).toBe(false)
+        expect(useAgentStore().getSession('outreach')?.taskId).toBe(replacementTaskId)
     })
 
     it('preserves active outreach when Agent cancellation fails', async () => {
