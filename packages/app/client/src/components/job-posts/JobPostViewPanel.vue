@@ -222,24 +222,43 @@ function selectLabel(value: string) {
                 <section v-if="hasFacts" class="content-section" data-testid="post-facts">
                     <h3 class="content-section-title">At a glance</h3>
 
-                    <dl class="post-facts">
-                        <div v-if="content.recommendedResume" class="post-fact">
-                            <dt>Recommended resume</dt>
-                            <dd>{{ content.recommendedResume }}</dd>
+                    <div class="post-facts">
+                        <dl
+                            v-if="content.recommendedResume || content.postSource"
+                            class="post-fact post-fact-resume-source"
+                            data-testid="post-fact-resume-source"
+                        >
+                            <template v-if="content.recommendedResume">
+                                <dt>Recommended resume</dt>
+                                <dd>{{ content.recommendedResume }}</dd>
+                            </template>
+                            <template v-if="content.postSource">
+                                <dt>Source</dt>
+                                <dd>{{ content.postSource }}</dd>
+                            </template>
+                        </dl>
+                        <div
+                            v-if="content.compensation || content.techStack"
+                            class="post-fact-details"
+                        >
+                            <dl
+                                v-if="content.compensation"
+                                class="post-fact"
+                                data-testid="post-fact-compensation"
+                            >
+                                <dt>Compensation</dt>
+                                <dd>{{ content.compensation }}</dd>
+                            </dl>
+                            <dl
+                                v-if="content.techStack"
+                                class="post-fact post-fact-stack"
+                                data-testid="post-fact-tech-stack"
+                            >
+                                <dt>Tech stack</dt>
+                                <dd>{{ content.techStack }}</dd>
+                            </dl>
                         </div>
-                        <div v-if="content.compensation" class="post-fact">
-                            <dt>Compensation</dt>
-                            <dd>{{ content.compensation }}</dd>
-                        </div>
-                        <div v-if="content.postSource" class="post-fact">
-                            <dt>Source</dt>
-                            <dd>{{ content.postSource }}</dd>
-                        </div>
-                        <div v-if="content.techStack" class="post-fact post-fact-stack">
-                            <dt>Tech stack</dt>
-                            <dd>{{ content.techStack }}</dd>
-                        </div>
-                    </dl>
+                    </div>
                 </section>
 
                 <div v-if="hasAnalysis" class="post-analysis">
@@ -408,10 +427,15 @@ function selectLabel(value: string) {
     align-content: start;
     gap: $space-1;
     min-width: 0;
+    margin: 0;
 
     &-stack {
         grid-column: 1 / -1;
     }
+}
+
+.post-fact-details {
+    display: contents;
 }
 
 .post-fact dt,
@@ -420,6 +444,10 @@ function selectLabel(value: string) {
     color: $color-ink-muted;
     font-size: 0.75rem;
     font-weight: 600;
+}
+
+.post-fact-resume-source dt:not(:first-child) {
+    margin-top: $space-2;
 }
 
 .post-fact dd {
@@ -456,6 +484,21 @@ function selectLabel(value: string) {
 }
 
 @container post-content (min-width: 40rem) {
+    .post-facts {
+        grid-template-columns: minmax(10rem, 1fr) minmax(0, 2fr);
+    }
+
+    .post-fact-details {
+        display: grid;
+        align-content: start;
+        gap: $space-3;
+        min-width: 0;
+    }
+
+    .post-fact-stack {
+        grid-column: auto;
+    }
+
     .post-analysis {
         grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
     }
