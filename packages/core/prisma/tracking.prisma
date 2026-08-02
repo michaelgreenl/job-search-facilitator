@@ -1,0 +1,79 @@
+enum TrackingActivitySource {
+  MANUAL   @map("manual")
+  GMAIL    @map("gmail")
+  LINKEDIN @map("linkedin")
+  SYSTEM   @map("system")
+}
+
+enum TrackingActivityType {
+  APPLICATION_SUBMITTED      @map("application-submitted")
+  APPLICATION_ACKNOWLEDGED   @map("application-acknowledged")
+  APPLICATION_STATUS_CHANGED @map("application-status-changed")
+  INTERVIEW_REQUESTED        @map("interview-requested")
+  INTERVIEW_SCHEDULED        @map("interview-scheduled")
+  REJECTION_RECEIVED         @map("rejection-received")
+  OFFER_RECEIVED             @map("offer-received")
+  OUTREACH_SENT              @map("outreach-sent")
+  OUTREACH_RESPONSE_RECEIVED @map("outreach-response-received")
+  ACTION_REQUESTED           @map("action-requested")
+}
+
+model JobPostSnapshot {
+  jobPostId   String   @id @db.Uuid
+  description String
+  sourceUrl   String
+  capturedAt  DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  jobPost     JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+}
+
+model ApplicationArtifact {
+  id         String   @id @default(uuid()) @db.Uuid
+  jobPostId  String   @db.Uuid
+  storageKey String   @unique
+  fileName   String
+  mediaType  String
+  label      String?
+  position   Int
+  capturedAt DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  jobPost    JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPostId, position])
+}
+
+model TrackingActivity {
+  id                String                 @id @default(uuid()) @db.Uuid
+  jobPostId         String                 @db.Uuid
+  outreachContactId String?                @db.Uuid
+  type              TrackingActivityType
+  applicationStatus ApplicationStatus?
+  source            TrackingActivitySource
+  externalId        String?
+  summary           String
+  sourceUrl         String?
+  occurredAt        DateTime               @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  jobPost           JobPost                @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  outreachContact   OutreachContact?       @relation(fields: [outreachContactId], references: [id], onDelete: SetNull)
+  nextSteps         JobNextStep[]
+
+  @@unique([source, externalId, type])
+  @@index([jobPostId, occurredAt])
+  @@index([outreachContactId, occurredAt])
+}
+
+model JobNextStep {
+  jobPostId        String            @id @db.Uuid
+  title            String
+  dueAt            DateTime          @db.Timestamptz(3)
+  completedAt      DateTime?         @db.Timestamptz(3)
+  sourceActivityId String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  jobPost          JobPost           @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  sourceActivity   TrackingActivity? @relation(fields: [sourceActivityId], references: [id], onDelete: SetNull)
+
+  @@index([dueAt])
+  @@index([sourceActivityId])
+}
