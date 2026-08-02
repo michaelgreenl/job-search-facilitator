@@ -1,6 +1,6 @@
 import type { JobSearchReport, UpsertJobSearchReportInput } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
-import { toJobPost, toPrismaPostStatus } from '../mappers/job-post.mapper.ts'
+import { toJobPost, toPrismaJobPostListingData } from '../mappers/job-post.mapper.ts'
 import {
     toJobRecommendation,
     toPrismaAgentLabel,
@@ -86,17 +86,7 @@ export const searchReportRepository: SearchReportRepository = {
 
             for (const result of input.results) {
                 // Report ingestion refreshes canonical listing facts, but not user-owned post state.
-                const listingData = {
-                    roleTitle: result.post.roleTitle,
-                    company: result.post.company,
-                    location: result.post.location,
-                    compensation: result.post.compensation,
-                    techStack: result.post.techStack,
-                    postSource: result.post.postSource,
-                    postUrl: result.post.postUrl,
-                    applicationUrl: result.post.applicationUrl,
-                    postStatus: toPrismaPostStatus(result.post.postStatus),
-                }
+                const listingData = toPrismaJobPostListingData(result.post)
                 const post = await transaction.jobPost.upsert({
                     where: { sourceKey: result.post.sourceKey },
                     create: {

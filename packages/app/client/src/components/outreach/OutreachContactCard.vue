@@ -1,27 +1,45 @@
+<script lang="ts">
+export interface OutreachTaskListItem {
+    taskId: string
+    kind: 'contact' | 'draft'
+    active: boolean
+    status:
+        | 'starting'
+        | 'restoring'
+        | 'running'
+        | 'completed'
+        | 'failed'
+        | 'cancelled'
+        | 'unavailable'
+}
+</script>
+
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
-import OutreachRationale from './OutreachRationale.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCard from '@/components/base/BaseCard.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import { useDescriptionOverflow } from '@/composables/useDescriptionOverflow'
 
 const props = withDefaults(
     defineProps<{
         contact?: OutreachContact
         expanded?: boolean
-        loading?: boolean
         messagedError?: string | null
         messagedUpdating?: boolean
         selectable?: boolean
         showMessagedControl?: boolean
+        task?: OutreachTaskListItem
     }>(),
     {
         contact: undefined,
         expanded: false,
-        loading: false,
         messagedError: null,
         messagedUpdating: false,
         selectable: false,
         showMessagedControl: false,
+        task: undefined,
     },
 )
 
@@ -35,12 +53,42 @@ const selectionLabel = computed(() => {
         return null
     }
 
-    if (props.loading) {
-        return 'View outreach progress'
+    if (props.task !== undefined) {
+        return 'Open outreach task'
     }
 
     return props.contact ? `Open outreach draft for ${props.contact.personName}` : null
 })
+const taskMessage = computed(() => {
+    if (props.task?.status === 'starting') {
+        return 'Starting Agent…'
+    }
+
+    if (props.task?.status === 'restoring') {
+        return 'Restoring Agent…'
+    }
+
+    if (props.task?.status === 'running') {
+        return props.task.kind === 'draft' ? 'Revising outreach…' : 'Discovering contact…'
+    }
+
+    if (props.task?.status === 'completed') {
+        return props.task.kind === 'draft' ? 'Draft ready' : 'Saving contact…'
+    }
+
+    return 'Outreach needs attention'
+})
+const {
+    descriptionElement,
+    descriptionId,
+    expanded: descriptionExpanded,
+    showToggle: showDescriptionToggle,
+    toggleExpanded: toggleDescription,
+    userExpanded: descriptionUserExpanded,
+} = useDescriptionOverflow(
+    () => props.contact?.relevanceRationale ?? '',
+    () => props.expanded,
+)
 
 function toggleMessaged() {
     if (props.contact) {
@@ -50,34 +98,41 @@ function toggleMessaged() {
 </script>
 
 <template>
-    <article
+    <BaseCard
         class="contact-card"
+        tone="signal"
         :data-testid="
             contact
                 ? `outreach-contact-${contact.id}`
-                : loading
-                  ? 'outreach-contact-loading'
+                : task
+                  ? `outreach-task-${task.taskId}`
                   : undefined
         "
-        :class="{ 'is-selectable': selectionLabel !== null }"
-        :aria-busy="loading || messagedUpdating || undefined"
+        :interactive="selectionLabel !== null"
+        :aria-busy="task?.active || messagedUpdating || undefined"
     >
         <button
             v-if="selectionLabel"
             class="contact-select-button"
             type="button"
             :data-testid="
-                contact ? `outreach-contact-${contact.id}-select` : 'outreach-contact-progress'
+                contact
+                    ? `outreach-contact-${contact.id}-select`
+                    : task
+                      ? `outreach-task-${task.taskId}-select`
+                      : undefined
             "
             :aria-label="selectionLabel"
             @click="emit('select')"
         ></button>
 
-        <template v-if="loading">
-            <span class="eyebrow">Relevant contact</span>
+        <template v-if="task">
+            <span class="eyebrow">
+                {{ task.kind === 'draft' ? 'Outreach draft' : 'Relevant contact' }}
+            </span>
             <span class="loading-contact">
-                <LoadingSpinner />
-                Discovering contact…
+                <LoadingSpinner v-if="task.active" />
+                {{ taskMessage }}
             </span>
         </template>
 
@@ -119,28 +174,38 @@ function toggleMessaged() {
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
-            <OutreachRationale
-                :key="contact.id"
-                :expanded="expanded"
-                :rationale="contact.relevanceRationale"
-            />
+            <div class="rationale-copy">
+                <p
+                    :id="descriptionId"
+                    ref="descriptionElement"
+                    class="rationale-text"
+                    data-testid="outreach-contact-rationale"
+                    :class="{ 'is-clamped': !descriptionExpanded }"
+                >
+                    {{ contact.relevanceRationale }}
+                </p>
+                <div v-if="showDescriptionToggle" class="rationale-actions">
+                    <BaseButton
+                        class="rationale-toggle"
+                        preset="text"
+                        data-testid="outreach-contact-rationale-toggle"
+                        :aria-controls="descriptionId"
+                        :aria-expanded="descriptionUserExpanded"
+                        @click="toggleDescription"
+                    >
+                        {{ descriptionUserExpanded ? 'Show less' : 'Show more' }}
+                    </BaseButton>
+                </div>
+            </div>
         </template>
-    </article>
+    </BaseCard>
 </template>
 
 <style scoped lang="scss">
 .contact-card {
     position: relative;
-    display: grid;
     gap: $space-1;
     padding: $space-3;
-    background: $color-ink-alpha-5;
-    border: 1px solid $color-signal-light-alpha-18;
-    border-radius: $radius-md;
-
-    &.is-selectable:hover {
-        border-color: $color-signal-light-alpha-50;
-    }
 }
 
 .contact-select-button {
@@ -247,6 +312,44 @@ function toggleMessaged() {
 
 .person-title {
     color: $color-ink-secondary;
+}
+
+.rationale-copy {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rationale-text {
+    margin: 0;
+    color: $color-ink-secondary;
+    font-size: 0.875rem;
+
+    &.is-clamped {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+    }
+}
+
+.rationale-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    min-width: 0;
+    margin-top: $space-2;
+}
+
+.rationale-toggle {
+    position: relative;
+    z-index: 2;
+    padding: 0 $space-1 0 0;
+    margin-left: auto;
+    font-size: 0.875rem;
 }
 
 .loading-contact {

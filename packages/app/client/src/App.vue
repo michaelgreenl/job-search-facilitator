@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onErrorCaptured, shallowRef } from 'vue'
 import { RouterView } from 'vue-router'
-import AppHeader from '@/components/app/AppHeader.vue'
+import AppHeader from '@/components/AppHeader.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { navigationFailed } from '@/router'
 
 const descendantFailed = shallowRef(false)
@@ -29,14 +30,9 @@ function reloadDocument() {
                 <h1 class="error-title">The interface could not continue</h1>
                 <p class="error-message">Reload the page to restore a clean application state.</p>
             </div>
-            <button
-                class="error-reload"
-                data-testid="app-error-reload"
-                type="button"
-                @click="reloadDocument"
-            >
+            <BaseButton class="error-reload" data-testid="app-error-reload" @click="reloadDocument">
                 Reload page
-            </button>
+            </BaseButton>
         </main>
 
         <template v-else>
@@ -110,18 +106,5 @@ function reloadDocument() {
 
 .error-reload {
     width: fit-content;
-    padding: $space-2 $space-3;
-    color: $color-ink;
-    font: inherit;
-    font-weight: 650;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
 }
 </style>

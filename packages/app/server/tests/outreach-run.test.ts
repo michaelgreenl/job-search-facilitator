@@ -6,17 +6,17 @@ import type {
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import { createOutreachRunRouter } from '../src/api/routes/outreach-run.route.ts'
-import type { OutreachRunRepository } from '../src/db/repositories/outreach-run.repository.ts'
+import { createOutreachRunRouter } from '../src/api/routes/outreach.route.ts'
+import type { OutreachRunRepository } from '../src/db/repositories/outreach.repository.ts'
 
 const existingRun: OutreachRun = {
     id: '11111111-1111-4111-8111-111111111111',
     jobPostId: '22222222-2222-4222-8222-222222222222',
     requestedContactCount: 2,
     status: 'pending',
-    workTaskId: null,
-    workThreadId: null,
-    workTurnId: null,
+    agentTaskId: null,
+    agentThreadId: null,
+    agentTurnId: null,
     error: null,
     completedAt: null,
     createdAt: '2026-07-18T12:00:00.000Z',
@@ -100,13 +100,13 @@ describe('outreach run routes', () => {
             .expect(200, existingRun)
     })
 
-    it('records the Work thread and turn when a run starts', async () => {
+    it('records the Agent thread and turn when a run starts', async () => {
         const { repository, update } = createFakeRepository()
         const input: UpdateOutreachRunInput = {
             status: 'running',
-            workTaskId: '33333333-3333-4333-8333-333333333333',
-            workThreadId: 'thread-id',
-            workTurnId: 'turn-id',
+            agentTaskId: '33333333-3333-4333-8333-333333333333',
+            agentThreadId: 'thread-id',
+            agentTurnId: 'turn-id',
         }
 
         await request(createTestApp(repository))

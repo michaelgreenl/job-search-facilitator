@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed, useId } from 'vue'
-import LoadingSpinner from '@/components/app/LoadingSpinner.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
 
@@ -59,9 +60,8 @@ const copyFeedbackId = useId()
                         aria-label="Outreach message"
                         :disabled="running"
                     ></textarea>
-                    <button
+                    <BaseButton
                         class="field-action copy-button"
-                        type="button"
                         :aria-label="
                             copyState === 'copied'
                                 ? 'Outreach message copied'
@@ -72,7 +72,7 @@ const copyFeedbackId = useId()
                         @click="emit('copy')"
                     >
                         <CopyIcon class="copy-icon" />
-                    </button>
+                    </BaseButton>
                     <span
                         :id="copyFeedbackId"
                         class="copy-feedback"
@@ -97,7 +97,7 @@ const copyFeedbackId = useId()
                 data-testid="outreach-draft-reconnect"
                 role="status"
             >
-                Reconnecting to Work…
+                Reconnecting to Agent…
             </p>
             <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
                 {{ issue }}
@@ -115,7 +115,7 @@ const copyFeedbackId = useId()
                         :disabled="running"
                         placeholder="Request changes"
                     ></textarea>
-                    <button
+                    <BaseButton
                         class="field-action send-button"
                         type="submit"
                         data-testid="outreach-draft-submit"
@@ -125,7 +125,7 @@ const copyFeedbackId = useId()
                     >
                         <LoadingSpinner v-if="requestingChanges" class="send-spinner" />
                         <ArrowUpIcon v-else class="send-icon" />
-                    </button>
+                    </BaseButton>
                 </div>
             </form>
         </div>
@@ -239,21 +239,8 @@ const copyFeedbackId = useId()
 
 .field-action {
     position: absolute;
-    color: $color-ink;
-    font: inherit;
-    font-weight: 650;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
 
     &:disabled {
-        cursor: not-allowed;
         opacity: 0.45;
     }
 }

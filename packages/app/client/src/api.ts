@@ -1,8 +1,6 @@
 import type { RuntimeParser } from '@job-search-facilitator/core'
 
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
-
-const readErrorMessage = async (response: Response) => {
+export const readResponseError = async (response: Response) => {
     const body: unknown = await response.json().catch(() => null)
 
     if (
@@ -32,16 +30,14 @@ export const parseJsonResponse = async <T>(
     }
 }
 
-export const request = async <T>(
-    path: string,
+export const parseApiResponse = async <T>(
+    response: Response,
     parser: RuntimeParser<T>,
-    init?: RequestInit,
-): Promise<T> => {
-    const response = await fetch(`${apiUrl}${path}`, init)
-
+    path: string,
+) => {
     if (!response.ok) {
         throw new Error(
-            (await readErrorMessage(response)) ?? `API request failed (${response.status})`,
+            (await readResponseError(response)) ?? `API request failed (${response.status})`,
         )
     }
 

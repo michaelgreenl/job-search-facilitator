@@ -2,13 +2,12 @@
 import type { JobPost, OutreachContact } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
-import ButtonTooltip from '@/components/app/ButtonTooltip.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
-import WorkStream from '@/components/work/WorkStream.vue'
-import { useOutreachStore } from '@/stores/outreach.store'
-import { useWorkStore } from '@/stores/work.store'
+import { useOutreachStore } from '@/stores/outreach'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
 import OutreachDraft from './OutreachDraft.vue'
@@ -16,30 +15,25 @@ import OutreachDraft from './OutreachDraft.vue'
 type PanelView = 'contacts' | 'draft' | 'stream'
 
 const props = defineProps<{
-    post: JobPost
+    active: boolean
+    adjacent: boolean
+    post: JobPost | null
     expanded: boolean
 }>()
+
+defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{
     cancel: []
     collapse: []
     discover: []
     expand: []
+    retry: []
     retryContacts: []
     showViewer: []
 }>()
 
-const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
-const {
-    actionNeedsAttention,
-    actionSubmitting,
-    cancelling,
-    connectionState,
-    error,
-    task,
-    taskActive,
-} = storeToRefs(workStore)
 const {
     assistantReply,
     contact,
@@ -49,63 +43,78 @@ const {
     contacts,
     contactsError,
     contactsLoading,
-    discovering,
     drafting,
     draft,
     resultError,
+    tasks,
+    taskActive: isActive,
+    taskCancelling: cancelling,
+    taskConnectionState: connectionState,
+    taskIssue: issue,
+    taskId,
+    taskRetryAvailable: retryAvailable,
+    taskRunning: running,
+    taskStarting: starting,
+    taskVisible,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
-    contact.value !== null ? 'draft' : discovering.value ? 'stream' : 'contacts',
+    contact.value !== null ? 'draft' : taskVisible.value ? 'stream' : 'contacts',
 )
 const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canCancel = computed(
-    () =>
-        task.value?.status === 'running' &&
-        (panelView.value === 'stream' || (panelView.value === 'draft' && drafting.value)),
+const canCancel = computed(() => taskVisible.value && running.value)
+const backLabel = computed(() =>
+    panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
 )
-const issue = computed(() => error.value ?? task.value?.error ?? resultError.value)
-const draftIssue = computed(() => resultError.value ?? (drafting.value ? error.value : null))
+const backTestId = computed(() =>
+    panelView.value === 'contacts' ? 'back-to-job-post' : 'back-to-saved-contacts',
+)
+const statusMessage = computed(() =>
+    contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
+)
+const draftIssue = computed(() => resultError.value ?? (drafting.value ? issue.value : null))
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
-    () => props.post.id,
+    () => props.post?.id,
     () => {
         contactFilter.value = 'all'
-        panelView.value = discovering.value ? 'stream' : 'contacts'
+        panelView.value = taskVisible.value ? 'stream' : 'contacts'
     },
 )
 
 watch(
-    discovering,
-    (isDiscovering) => {
-        if (isDiscovering) {
+    taskId,
+    (currentTaskId, previousTaskId) => {
+        if (currentTaskId !== null && currentTaskId !== previousTaskId) {
             panelView.value = 'stream'
+        } else if (currentTaskId === null && previousTaskId !== null) {
+            panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
     },
     { immediate: true },
 )
 
-watch(contact, (selectedContact) => {
-    if (selectedContact !== null) {
-        panelView.value = 'draft'
-    } else if (!discovering.value) {
-        panelView.value = 'contacts'
+watch(isActive, (active, wasActive) => {
+    if (wasActive && !active && taskVisible.value) {
+        panelView.value = 'stream'
     }
 })
 
-watch(
-    [actionNeedsAttention, actionSubmitting],
-    ([needsAttention, submitting]) => {
-        if (needsAttention && !submitting) {
-            panelView.value = 'stream'
-        }
-    },
-    { immediate: true },
-)
+watch(contact, (selectedContact) => {
+    if (taskVisible.value) {
+        return
+    }
+
+    if (selectedContact !== null) {
+        panelView.value = 'draft'
+    } else {
+        panelView.value = 'contacts'
+    }
+})
 
 function resetCopyState() {
     if (copyResetTimer !== null) {
@@ -120,14 +129,21 @@ watch(draft, resetCopyState)
 onBeforeUnmount(resetCopyState)
 
 function submitDraftRequest() {
+    const post = props.post
     const request = draftRequest.value.trim()
 
-    if (contact.value === null || !draft.value.trim() || !request || taskActive.value) {
+    if (
+        post === null ||
+        contact.value === null ||
+        !draft.value.trim() ||
+        !request ||
+        isActive.value
+    ) {
         return
     }
 
     void outreachStore
-        .requestDraftRevision(props.post, request)
+        .requestDraftRevision(post, request)
         .then((started) => {
             if (started) {
                 draftRequest.value = ''
@@ -145,15 +161,35 @@ function toggleExpanded() {
 }
 
 function showContacts() {
-    outreachStore.clearContact()
+    if (!isActive.value && contactsError.value === null) {
+        outreachStore.clearInactiveTask()
+    }
+
+    if (!taskVisible.value) {
+        outreachStore.clearContact()
+    }
+
     panelView.value = 'contacts'
+
+    if (props.post === null) {
+        emit('showViewer')
+    }
 
     if (props.expanded) {
         emit('collapse')
     }
 }
 
-function showStream() {
+function goBack() {
+    if (panelView.value === 'contacts') {
+        emit('showViewer')
+    } else {
+        showContacts()
+    }
+}
+
+function showStream(task: string) {
+    outreachStore.openTask(task)
     panelView.value = 'stream'
 }
 
@@ -189,114 +225,103 @@ async function copyDraft() {
 </script>
 
 <template>
-    <section class="outreach-panel" aria-label="Outreach">
-        <header>
-            <div class="outreach-heading-copy">
-                <div class="panel-navigation">
-                    <PanelBackButton
-                        v-if="panelView === 'contacts'"
-                        label="Back to job post"
-                        test-id="back-to-job-post"
-                        mobile-only
-                        @back="emit('showViewer')"
-                    />
-                    <PanelBackButton
-                        v-else-if="!(drafting && taskActive)"
-                        label="Back to saved contacts"
-                        test-id="back-to-saved-contacts"
-                        @back="showContacts"
-                    />
+    <AgentTaskPanel
+        v-if="panelView === 'stream'"
+        v-bind="$attrs"
+        as="aside"
+        :active="props.active"
+        :adjacent="adjacent"
+        :task-id="taskId"
+        eyebrow="Outreach"
+        back-label="Back to saved contacts"
+        back-test-id="back-to-saved-contacts"
+        :cancelling="cancelling"
+        :running="canCancel"
+        :issue="issue"
+        :status-message="statusMessage"
+        status-test-id="outreach-task-status"
+        cancel-test-id="outreach-cancel"
+        :retry-available="retryAvailable && props.post !== null"
+        retry-test-id="outreach-retry"
+        @back="showContacts"
+        @cancel="emit('cancel')"
+        @retry="emit('retry')"
+    />
 
-                    <ButtonTooltip
-                        v-if="panelView === 'draft'"
-                        v-slot="{ tooltipId }"
-                        class="panel-control-desktop"
-                        :label="resizeLabel"
-                    >
-                        <button
-                            class="panel-control panel-control-expand"
-                            type="button"
-                            :aria-label="resizeLabel"
-                            :aria-describedby="tooltipId"
-                            :aria-expanded="expanded"
-                            @click="toggleExpanded"
-                        >
-                            <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                            <ExpandIcon v-else class="panel-control-icon" />
-                        </button>
-                    </ButtonTooltip>
-                </div>
+    <BasePanel
+        v-else
+        v-bind="$attrs"
+        as="aside"
+        :active="props.active"
+        :adjacent="adjacent"
+        eyebrow="Outreach"
+        :back-label="backLabel"
+        :back-test-id="backTestId"
+        :back-mobile-only="panelView === 'contacts'"
+        @back="goBack"
+    >
+        <template v-if="panelView === 'draft'" #controls>
+            <BaseButton
+                class="panel-control-desktop"
+                preset="icon"
+                :tooltip="resizeLabel"
+                :aria-label="resizeLabel"
+                :aria-expanded="expanded"
+                @click="toggleExpanded"
+            >
+                <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                <ExpandIcon v-else class="panel-control-icon" />
+            </BaseButton>
+        </template>
 
-                <span class="eyebrow">Outreach</span>
-            </div>
-        </header>
+        <section class="outreach-panel" aria-label="Outreach">
+            <template v-if="panelView === 'contacts'">
+                <OutreachContactList
+                    v-model:filter="contactFilter"
+                    :contacts="contacts"
+                    :error="contactsError"
+                    :loading="contactsLoading"
+                    :tasks="tasks"
+                    @retry="emit('retryContacts')"
+                    @select="selectContact"
+                    @show-stream="showStream"
+                />
 
-        <template v-if="panelView === 'contacts'">
-            <OutreachContactList
-                v-model:filter="contactFilter"
-                :contacts="contacts"
-                :discovering="discovering && taskActive"
-                :error="contactsError"
-                :loading="contactsLoading"
-                @retry="emit('retryContacts')"
-                @select="selectContact"
-                @show-stream="showStream"
-            />
-
-            <ButtonTooltip v-slot="{ tooltipId }" class="discover-contact-tooltip" label="Find new">
-                <button
-                    class="discover-contact-button"
-                    type="button"
+                <BaseButton
+                    class="discover-contact-tooltip"
+                    icon-size="md"
+                    preset="primary"
+                    tooltip="Find new"
+                    data-testid="discover-another-contact"
                     aria-label="Discover another contact"
-                    :aria-describedby="tooltipId"
-                    :disabled="
-                        taskActive ||
-                        contactsLoading ||
-                        contactSaving ||
-                        contactUpdating ||
-                        contactsError !== null
-                    "
+                    :disabled="contactsLoading || contactUpdating || contactsError !== null"
                     @click="emit('discover')"
                 >
-                    <span aria-hidden="true">+</span>
-                </button>
-            </ButtonTooltip>
-        </template>
+                    <span class="discover-contact-icon" aria-hidden="true">+</span>
+                </BaseButton>
+            </template>
 
-        <template v-else-if="panelView === 'draft' && contact">
-            <OutreachDraft
-                v-model:draft="draft"
-                v-model:request="draftRequest"
-                :contact="contact"
-                :assistant-reply="assistantReply"
-                :running="taskActive"
-                :requesting-changes="drafting && taskActive"
-                :copy-state="copyState"
-                :expanded="expanded"
-                :issue="draftIssue"
-                :messaged-error="contactUpdateError"
-                :messaged-updating="contactUpdating"
-                :reconnecting="connectionState === 'reconnecting'"
-                @submit="submitDraftRequest"
-                @copy="copyDraft"
-                @update-messaged="updateMessaged"
-            />
-        </template>
-
-        <WorkStream v-else :issue="issue" />
-
-        <button
-            v-if="canCancel"
-            class="cancel-action"
-            data-testid="outreach-cancel"
-            type="button"
-            aria-label="Cancel outreach task"
-            :disabled="cancelling"
-            @click="emit('cancel')"
-        >
-            {{ cancelling ? 'Cancelling…' : 'Cancel' }}
-        </button>
-    </section>
+            <template v-else-if="panelView === 'draft' && contact">
+                <OutreachDraft
+                    v-model:draft="draft"
+                    v-model:request="draftRequest"
+                    :contact="contact"
+                    :assistant-reply="assistantReply"
+                    :running="isActive"
+                    :requesting-changes="drafting && isActive"
+                    :copy-state="copyState"
+                    :expanded="expanded"
+                    :issue="draftIssue"
+                    :messaged-error="contactUpdateError"
+                    :messaged-updating="contactUpdating"
+                    :reconnecting="connectionState === 'reconnecting'"
+                    @submit="submitDraftRequest"
+                    @copy="copyDraft"
+                    @update-messaged="updateMessaged"
+                />
+            </template>
+        </section>
+    </BasePanel>
 </template>
 
 <style scoped lang="scss">
@@ -308,121 +333,19 @@ async function copyDraft() {
     min-height: 0;
 }
 
-.outreach-heading-copy {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-}
-
-.panel-navigation {
-    display: flex;
-    gap: $space-3;
-    align-items: center;
-}
-
 .discover-contact-tooltip {
     align-self: flex-end;
 }
 
-.discover-contact-button {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
-    color: $color-ink;
-    font: inherit;
+.discover-contact-icon {
     font-size: 1.25rem;
-    font-weight: 650;
-    line-height: 1;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-md;
-
-    &:hover,
-    &:focus-visible {
-        background: $color-signal;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.55;
-    }
 }
 
-.cancel-action {
-    align-self: flex-start;
-    padding: 0;
-    color: $color-signal-light;
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        text-decoration: underline;
-        text-underline-offset: 0.15em;
-    }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.5;
-    }
-}
-
-.eyebrow {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
-.panel-navigation > .panel-control-desktop {
+.panel-control-desktop {
     display: none;
 
     @include bp-md-tablet {
         display: inline-flex;
-    }
-}
-
-.panel-control {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    color: $color-ink;
-    cursor: pointer;
-    background: $color-action;
-    border: 0;
-    border-radius: $radius-sm;
-
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
-        background: $color-signal;
-    }
-
-    &-expand {
-        color: $color-ink-muted;
-        background: transparent;
-
-        &:hover,
-        &:focus-visible {
-            color: $color-signal-light;
-            background: transparent;
-        }
     }
 }
 

@@ -1,36 +1,19 @@
-import type { OutreachContact } from '@job-search-facilitator/core'
-import { createApp, defineComponent, h, nextTick, type App, type Component } from 'vue'
+import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
-import AppHeader from '@/components/app/AppHeader.vue'
-import FlowPanel from '@/components/layout/FlowPanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import AppHeader from '@/components/AppHeader.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
+import BasePopUp from '@/components/base/BasePopUp.vue'
+import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import OutreachContactCard from '@/components/outreach/OutreachContactCard.vue'
+import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
+import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
+import { makeOutreachContact } from '@/test/fixtures/outreach'
 import '@/assets/styles/app.scss'
-
-const mountedApps: Array<{ app: App; root: HTMLElement }> = []
-
-function mountComponent(
-    component: Component,
-    options: {
-        props?: Record<string, unknown>
-        install?: (app: App) => void
-        style?: Partial<CSSStyleDeclaration>
-    } = {},
-) {
-    const root = document.createElement('div')
-    Object.assign(root.style, options.style)
-    document.body.append(root)
-
-    const app = createApp(component, options.props)
-    options.install?.(app)
-    app.mount(root)
-    mountedApps.push({ app, root })
-
-    return root
-}
+import { mountVue } from '@/test/support/mount'
 
 async function flushLayout() {
     await nextTick()
@@ -40,24 +23,19 @@ async function flushLayout() {
 }
 
 afterEach(async () => {
-    for (const { app, root } of mountedApps.splice(0)) {
-        app.unmount()
-        root.remove()
-    }
-
     await page.viewport(1024, 768)
 })
 
 describe('browser interaction contracts', () => {
     it('keeps dropdown keyboard focus inside its menu and restores it after selection', async () => {
         const onSelect = vi.fn()
-        const options: AppDropdownOption[] = [
+        const options: BaseDropdownOption[] = [
             { value: 'P1', label: 'First' },
             { value: 'P2', label: 'Second' },
             { value: 'applied', label: 'Applied' },
             { value: 'clear', label: 'Clear' },
         ]
-        mountComponent(AppDropdown, {
+        mountVue(BaseDropdown, {
             props: {
                 accessibleLabel: 'Job post label',
                 disabled: false,
@@ -103,7 +81,7 @@ describe('browser interaction contracts', () => {
         })
         await router.push('/')
         await router.isReady()
-        mountComponent(AppHeader, { install: (app) => app.use(router) })
+        mountVue(AppHeader, { install: (app) => app.use(router) })
         const trigger = page.getByTestId('app-nav-trigger')
         const applyLink = page.getByTestId('nav-link-apply')
 
@@ -138,7 +116,7 @@ describe('browser interaction contracts', () => {
         })
         await router.push('/')
         await router.isReady()
-        const root = mountComponent(AppHeader, { install: (app) => app.use(router) })
+        const { root } = mountVue(AppHeader, { install: (app) => app.use(router) })
         const trigger = page.getByTestId('app-nav-trigger')
         let hidFocusedElement = false
         const ariaHiddenObserver = new MutationObserver((records) => {
@@ -170,21 +148,96 @@ describe('browser interaction contracts', () => {
 
         expect(hidFocusedElement).toBe(false)
     })
+
+    it('keeps the add-post tooltip hidden when its dialog restores trigger focus', async () => {
+        const AddJobPostFixture = defineComponent({
+            setup() {
+                const open = shallowRef(false)
+
+                return () =>
+                    h('div', [
+                        h(ReviewSourcePanel, {
+                            active: true,
+                            adjacent: false,
+                            reports: [],
+                            selectedReportId: null,
+                            userAddedSelected: false,
+                            userAddedCount: 0,
+                            userAddedLoading: false,
+                            userAddedError: null,
+                            reportsLoading: false,
+                            reportsError: null,
+                            onAddPost: () => {
+                                open.value = true
+                            },
+                            onRetryReports: () => undefined,
+                            onRetryUserAdded: () => undefined,
+                            onSelectReport: () => undefined,
+                            onSelectUserAdded: () => undefined,
+                        }),
+                        h(
+                            BasePopUp,
+                            {
+                                open: open.value,
+                                heading: 'Add job post',
+                                closeLabel: 'Close add job post',
+                                closeTestId: 'close-job-post-url-dialog',
+                                'data-testid': 'job-post-url-dialog',
+                                onClose: () => {
+                                    open.value = false
+                                },
+                            },
+                            {
+                                default: () =>
+                                    h('input', {
+                                        autofocus: true,
+                                        'aria-label': 'Job post URL',
+                                    }),
+                            },
+                        ),
+                    ])
+            },
+        })
+        mountVue(AddJobPostFixture)
+        const trigger = page.getByTestId('add-job-post')
+        const tooltip = page.getByTestId('button-tooltip-content')
+        const dialog = page.getByTestId('job-post-url-dialog')
+
+        await trigger.hover()
+        await expect.element(tooltip).toBeVisible()
+        await trigger.click()
+        await expect.element(dialog).toBeVisible()
+        await expect.element(tooltip).not.toBeVisible()
+
+        await page.getByTestId('close-job-post-url-dialog').click()
+        await expect.element(dialog).not.toBeVisible()
+        await expect.element(trigger).toHaveFocus()
+        await expect.element(tooltip).not.toBeVisible()
+    })
 })
 
 describe('browser layout contracts', () => {
-    it('anchors the back-button tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
+    it('anchors a back-preset tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
         await page.viewport(320, 600)
-        mountComponent(PanelBackButton, {
-            props: {
-                label: 'Back to the previous panel',
-                style: {
-                    boxSizing: 'border-box',
-                    paddingLeft: '120px',
-                    width: '100%',
-                },
-                testId: 'tooltip-back',
-            },
+        const BackButtonFixture = defineComponent({
+            setup: () => () =>
+                h(
+                    BaseButton,
+                    {
+                        preset: 'back',
+                        tooltip: 'Back to the previous panel',
+                        'aria-label': 'Back to the previous panel',
+                        'data-testid': 'tooltip-back',
+                        style: {
+                            boxSizing: 'border-box',
+                            paddingLeft: '120px',
+                            width: '100%',
+                        },
+                    },
+                    { default: () => h(ArrowLeftIcon) },
+                ),
+        })
+        mountVue(BackButtonFixture, {
             style: {
                 bottom: '16px',
                 position: 'fixed',
@@ -223,49 +276,67 @@ describe('browser layout contracts', () => {
         await expect.element(tooltip).not.toBeVisible()
     })
 
-    it('switches adjacent panels and mobile-only navigation at the shared 848px breakpoint', async () => {
+    it('switches adjacent panels at the shared 848px breakpoint', async () => {
         await page.viewport(847, 768)
         const ResponsiveFixture = defineComponent({
             setup: () => () =>
                 h('div', [
-                    h(FlowPanel, {
+                    h(BasePanel, {
                         active: false,
                         adjacent: true,
                         'data-testid': 'adjacent-panel',
                     }),
-                    h(PanelBackButton, {
-                        label: 'Back',
-                        mobileOnly: true,
-                        testId: 'mobile-back',
-                    }),
                 ]),
         })
-        mountComponent(ResponsiveFixture)
+        mountVue(ResponsiveFixture)
         const adjacentPanel = page.getByTestId('adjacent-panel')
-        const mobileBack = page.getByTestId('mobile-back')
 
         await expect.element(adjacentPanel).not.toBeVisible()
-        await expect.element(mobileBack).toBeVisible()
 
         await page.viewport(848, 768)
 
         await expect.element(adjacentPanel).toBeVisible()
-        await expect.element(mobileBack).not.toBeVisible()
+    })
+
+    it('keeps shared panel spacing below the job-post list back control', async () => {
+        const { root } = mountVue(JobPostListPanel, {
+            props: {
+                active: true,
+                adjacent: false,
+                eyebrow: 'Job posts',
+                title: 'Saved posts',
+                backLabel: 'Back to sources',
+                backTestId: 'job-post-list-back-contract',
+                posts: [],
+                selectedPostId: null,
+                emptyMessage: 'No posts',
+            },
+        })
+        await flushLayout()
+
+        const backButton = page.getByTestId('job-post-list-back-contract')
+        const heading = root.querySelector<HTMLElement>('[data-testid="panel-heading"]')
+
+        if (heading === null) {
+            throw new Error('Could not find panel heading')
+        }
+
+        const backButtonRect = backButton.element().getBoundingClientRect()
+        const headingRect = heading.getBoundingClientRect()
+
+        expect(headingRect.top - backButtonRect.bottom).toBeGreaterThanOrEqual(16)
     })
 
     it('offers rationale expansion only when real layout overflows', async () => {
-        const createContact = (id: string, rationale: string): OutreachContact => ({
-            id,
-            jobPostId: 'post-1',
-            personName: 'Contact',
-            personTitle: 'Engineering leader',
-            profileUrl: `https://www.linkedin.com/in/${id}`,
-            relevanceRationale: rationale,
-            draftMessage: 'Draft',
-            messaged: false,
-            createdAt: '2026-07-21T12:00:00.000Z',
-            updatedAt: '2026-07-21T12:00:00.000Z',
-        })
+        const createContact = (id: string, rationale: string) =>
+            makeOutreachContact({
+                id,
+                jobPostId: 'post-1',
+                personName: 'Contact',
+                personTitle: 'Engineering leader',
+                relevanceRationale: rationale,
+                draftMessage: 'Draft',
+            })
         const shortContact = createContact('short', 'Short rationale.')
         const longContact = createContact(
             'long',
@@ -280,7 +351,7 @@ describe('browser layout contracts', () => {
                     h(OutreachContactCard, { contact: longContact }),
                 ]),
         })
-        mountComponent(RationaleFixture)
+        mountVue(RationaleFixture)
         await flushLayout()
 
         const shortCard = page.getByTestId('outreach-contact-short')

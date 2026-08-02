@@ -1,24 +1,40 @@
 import type {
     ApplyQueueItem,
+    CreateUserAddedJobPostInput,
     JobPost,
     JobRecommendationContext,
     UpdateJobPostInput,
     UpdateJobPostResult,
+    UserAddedJobPost,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import {
     toJobPost,
+    toPrismaJobPostListingData,
     toPrismaApplicationStatus,
     toPrismaPostStatus,
     toPrismaUserLabel,
+    toUserAddedJobPost,
+    userAddedJobPostInclude,
 } from '../mappers/job-post.mapper.ts'
-import { toJobRecommendation } from '../mappers/search-report.mapper.ts'
+import {
+    toJobRecommendation,
+    toPrismaAgentLabel,
+    toPrismaResumeType,
+} from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
+
+export interface UserAddedJobPostUpsertResult {
+    item: UserAddedJobPost
+    created: boolean
+}
 
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
     findApplyQueue(): Promise<ApplyQueueItem[]>
+    findUserAdded(): Promise<UserAddedJobPost[]>
     findById(id: string): Promise<JobPost | null>
+    upsertUserAdded(input: CreateUserAddedJobPostInput): Promise<UserAddedJobPostUpsertResult>
     update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
 }
 
@@ -87,10 +103,60 @@ export const jobPostRepository: JobPostRepository = {
         }))
     },
 
+    async findUserAdded() {
+        const items = await prisma.userAddedJobPost.findMany({
+            include: userAddedJobPostInclude,
+            orderBy: [{ createdAt: 'desc' }, { postId: 'asc' }],
+        })
+
+        return items.map(toUserAddedJobPost)
+    },
+
     async findById(id) {
         const post = await prisma.jobPost.findUnique({ where: { id } })
 
         return post === null ? null : toJobPost(post)
+    },
+
+    async upsertUserAdded(input) {
+        return prisma.$transaction(async (transaction) => {
+            const listingData = toPrismaJobPostListingData(input.post)
+            const post = await transaction.jobPost.upsert({
+                where: { sourceKey: input.post.sourceKey },
+                create: {
+                    sourceKey: input.post.sourceKey,
+                    ...listingData,
+                },
+                update: listingData,
+                select: { id: true },
+            })
+            const recommendationData = {
+                agentLabel: toPrismaAgentLabel(input.agentLabel),
+                fitRationale: input.fitRationale,
+                applicationFlow: input.applicationFlow,
+                keyLegitimacySignals: input.keyLegitimacySignals,
+                recommendedResume: toPrismaResumeType(input.recommendedResume),
+                recommendedAction: input.recommendedAction,
+                legitimacyNotes: input.legitimacyNotes,
+            }
+            const inserted = await transaction.userAddedJobPost.createMany({
+                data: {
+                    postId: post.id,
+                    ...recommendationData,
+                },
+                skipDuplicates: true,
+            })
+            const savedItem = await transaction.userAddedJobPost.update({
+                where: { postId: post.id },
+                data: recommendationData,
+                include: userAddedJobPostInclude,
+            })
+
+            return {
+                item: toUserAddedJobPost(savedItem),
+                created: inserted.count === 1,
+            }
+        })
     },
 
     async update(id, input) {

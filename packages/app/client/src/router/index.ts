@@ -1,5 +1,7 @@
+import { getActivePinia } from 'pinia'
 import { shallowRef } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type NavigationGuard } from 'vue-router'
+import { useAgentStore } from '@/stores/agent'
 
 export const navigationFailed = shallowRef(false)
 
@@ -37,6 +39,46 @@ export const router = createRouter({
         { path: '/:pathMatch(.*)*', redirect: { name: 'review' } },
     ],
 })
+
+type AgentSessionStore = Pick<ReturnType<typeof useAgentStore>, 'sessions' | 'restoreSessions'>
+
+export const createPersistedAgentSessionGuard = (
+    getAgentStore: () => AgentSessionStore | null,
+): NavigationGuard => {
+    let startupHandled = false
+
+    return async (to) => {
+        if (startupHandled) {
+            return
+        }
+
+        const agentStore = getAgentStore()
+
+        if (agentStore === null) {
+            return
+        }
+
+        startupHandled = true
+        const session = agentStore.sessions.at(-1)
+
+        if (session === undefined) {
+            return
+        }
+
+        await agentStore.restoreSessions().catch(() => undefined)
+        const routeName = session.kind === 'job-post-import' ? 'review' : 'apply'
+
+        return to.name === routeName ? undefined : { name: routeName }
+    }
+}
+
+router.beforeEach(
+    createPersistedAgentSessionGuard(() => {
+        const pinia = getActivePinia()
+
+        return pinia === undefined ? null : useAgentStore(pinia)
+    }),
+)
 
 router.onError((error) => {
     navigationFailed.value = true

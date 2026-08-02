@@ -1,4 +1,10 @@
-import type { ApplyQueueItem, JobPost, UpdateJobPostInput } from '@job-search-facilitator/core'
+import type {
+    ApplyQueueItem,
+    CreateUserAddedJobPostInput,
+    JobPost,
+    UpdateJobPostInput,
+    UserAddedJobPost,
+} from '@job-search-facilitator/core'
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
@@ -29,11 +35,49 @@ const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
     recommendationContext: null,
 }
+const userAddedPost: UserAddedJobPost = {
+    agentLabel: 'target',
+    fitRationale: 'Strong TypeScript experience',
+    applicationFlow: 'Direct company application',
+    keyLegitimacySignals: 'Listed on the company careers page',
+    recommendedResume: 'frontend',
+    recommendedAction: 'Apply today',
+    legitimacyNotes: null,
+    post: existingPost,
+    addedAt: '2026-07-12T10:00:00.000Z',
+    updatedAt: '2026-07-12T10:00:00.000Z',
+}
+const createUserAddedPostInput: CreateUserAddedJobPostInput = {
+    agentLabel: userAddedPost.agentLabel,
+    fitRationale: userAddedPost.fitRationale,
+    applicationFlow: userAddedPost.applicationFlow,
+    keyLegitimacySignals: userAddedPost.keyLegitimacySignals,
+    recommendedResume: userAddedPost.recommendedResume,
+    recommendedAction: userAddedPost.recommendedAction,
+    legitimacyNotes: userAddedPost.legitimacyNotes,
+    post: {
+        sourceKey: existingPost.sourceKey,
+        roleTitle: existingPost.roleTitle,
+        company: existingPost.company,
+        location: existingPost.location,
+        compensation: existingPost.compensation,
+        techStack: existingPost.techStack,
+        postSource: existingPost.postSource,
+        postUrl: existingPost.postUrl,
+        applicationUrl: existingPost.applicationUrl,
+        postStatus: existingPost.postStatus,
+    },
+}
 
 const createFakeRepository = () => {
     const findMany = vi.fn(async () => [existingPost])
     const findApplyQueue = vi.fn(async () => [applyQueueItem])
+    const findUserAdded = vi.fn(async () => [userAddedPost])
     const findById = vi.fn(async (_id: string): Promise<JobPost | null> => existingPost)
+    const upsertUserAdded = vi.fn(async (_input: CreateUserAddedJobPostInput) => ({
+        item: userAddedPost,
+        created: true,
+    }))
     const update = vi.fn(async (_id: string, input: UpdateJobPostInput) => ({
         post: { ...existingPost, ...input },
         inApplyQueue: false,
@@ -41,11 +85,21 @@ const createFakeRepository = () => {
     const repository: JobPostRepository = {
         findMany,
         findApplyQueue,
+        findUserAdded,
         findById,
+        upsertUserAdded,
         update,
     }
 
-    return { findApplyQueue, findById, findMany, repository, update }
+    return {
+        findApplyQueue,
+        findById,
+        findMany,
+        findUserAdded,
+        repository,
+        update,
+        upsertUserAdded,
+    }
 }
 
 const createTestApp = (repository: JobPostRepository) => {
@@ -72,6 +126,72 @@ describe('job post routes', () => {
             .expect(200, [applyQueueItem])
 
         expect(findApplyQueue).toHaveBeenCalledOnce()
+    })
+
+    it('lists posts added by the user', async () => {
+        const { findUserAdded, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .get('/job-posts/user-added')
+            .expect(200, [userAddedPost])
+
+        expect(findUserAdded).toHaveBeenCalledOnce()
+    })
+
+    it('adds a new user-added post', async () => {
+        const { repository, upsertUserAdded } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .post('/job-posts')
+            .send(createUserAddedPostInput)
+            .expect(201, userAddedPost)
+
+        expect(upsertUserAdded).toHaveBeenCalledExactlyOnceWith(createUserAddedPostInput)
+    })
+
+    it('refreshes an existing user-added post', async () => {
+        const { repository, upsertUserAdded } = createFakeRepository()
+        upsertUserAdded.mockResolvedValueOnce({
+            item: userAddedPost,
+            created: false,
+        })
+
+        await request(createTestApp(repository))
+            .post('/job-posts')
+            .send(createUserAddedPostInput)
+            .expect(200, userAddedPost)
+
+        expect(upsertUserAdded).toHaveBeenCalledExactlyOnceWith(createUserAddedPostInput)
+    })
+
+    it.each([
+        ['a report-only recommendation field', { ...createUserAddedPostInput, agentRank: 1 }],
+        [
+            'a user-owned post field',
+            {
+                ...createUserAddedPostInput,
+                post: {
+                    ...createUserAddedPostInput.post,
+                    applicationStatus: 'interviewing',
+                },
+            },
+        ],
+        [
+            'an invalid listing URL',
+            {
+                ...createUserAddedPostInput,
+                post: {
+                    ...createUserAddedPostInput.post,
+                    postUrl: 'ftp://example.com/jobs/123',
+                },
+            },
+        ],
+    ])('rejects %s without adding a post', async (_description, invalidInput) => {
+        const { repository, upsertUserAdded } = createFakeRepository()
+
+        await request(createTestApp(repository)).post('/job-posts').send(invalidInput).expect(400)
+
+        expect(upsertUserAdded).not.toHaveBeenCalled()
     })
 
     it('gets a job post by id', async () => {

@@ -7,24 +7,22 @@ import {
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
-import AppDropdown, { type AppDropdownOption } from '@/components/app/AppDropdown.vue'
-import JobPostList from '@/components/job-posts/JobPostList.vue'
-import JobPostViewer, { type JobPostViewerMode } from '@/components/job-posts/JobPostViewer.vue'
+import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobPostViewPanel, {
+    type JobPostViewPanelMode,
+} from '@/components/job-posts/JobPostViewPanel.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
-import FlowPanel from '@/components/layout/FlowPanel.vue'
-import PanelBackButton from '@/components/layout/PanelBackButton.vue'
-import PanelHeading from '@/components/layout/PanelHeading.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
-import { useOutreachStore } from '@/stores/outreach.store'
-import { usePostStore } from '@/stores/post.store'
-import { useWorkStore } from '@/stores/work.store'
+import { useOutreachStore } from '@/stores/outreach'
+import { usePostStore } from '@/stores/post'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
-const postFilterOptions: AppDropdownOption[] = [
+const postFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
     ...applyLabels.map((label) => ({
         value: label,
@@ -35,18 +33,24 @@ const postFilterOptions: AppDropdownOption[] = [
 const isPostFilter = (value: string): value is PostFilter =>
     value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
-const workStore = useWorkStore()
 const outreachStore = useOutreachStore()
 const {
     postId: outreachPostId,
     contact: outreachContact,
-    contactSaving,
-    contactUpdating,
-    contactsLoading,
+    taskPostIds: outreachTaskPostIds,
+    taskVisible: outreachTaskVisible,
+    restoreContactListPending,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
+const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
+const startupOutreachPostId =
+    startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
+        ? outreachPostId.value
+        : null
 const activePanel = shallowRef<ActivePanel>(
-    outreachPostId.value !== null && workStore.task !== null ? 'outreach' : 'posts',
+    outreachPostId.value !== null && (outreachTaskVisible.value || restoreContactListPending.value)
+        ? 'outreach'
+        : 'posts',
 )
 const outreachExpanded = shallowRef(false)
 const selectedPostId = shallowRef<string | null>(outreachPostId.value)
@@ -102,19 +106,15 @@ const outreachPost = computed(() =>
     outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
 )
 const outreachActionDisabled = computed(
-    () =>
-        contactsLoading.value ||
-        contactSaving.value ||
-        contactUpdating.value ||
-        (workStore.taskActive &&
-            (outreachPostId.value !== selectedPostId.value || activePanel.value !== 'viewer')),
+    () => selectedPostId.value === null || outreachStore.isPostBusy(selectedPostId.value),
 )
-const applyViewerMode = computed<JobPostViewerMode>(() => ({
+const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
     applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
     applicationError: applicationError.value,
     outreachDisabled: outreachActionDisabled.value,
 }))
+
 watch(
     filteredPosts,
     (posts) => {
@@ -131,6 +131,7 @@ watch(
 
         if (changed) {
             outreachStore.reset()
+
             outreachExpanded.value = false
             labelError.value = null
             applicationError.value = null
@@ -181,6 +182,7 @@ function updateApplyQueueMembership(postId: string, inApplyQueue: boolean) {
 function showPosts() {
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
+
         outreachStore.reset()
     }
 
@@ -189,6 +191,11 @@ function showPosts() {
 }
 
 function showViewer() {
+    if (selectedPost.value === null) {
+        showPosts()
+        return
+    }
+
     outreachExpanded.value = false
     activePanel.value = 'viewer'
 }
@@ -196,10 +203,7 @@ function showViewer() {
 async function startContactDiscovery(post: JobPost) {
     if (
         !viewMounted ||
-        workStore.taskActive ||
-        contactSaving.value ||
-        contactUpdating.value ||
-        contactsLoading.value ||
+        outreachStore.isPostBusy(post.id) ||
         outreachStore.postId !== post.id ||
         selectedPostId.value !== post.id
     ) {
@@ -223,20 +227,15 @@ function discoverAnotherContact() {
 async function openOutreach() {
     const post = selectedPost.value
 
-    if (post === null || contactSaving.value || contactUpdating.value || contactsLoading.value) {
+    if (post === null) {
         return
     }
 
-    if (workStore.taskActive) {
-        if (outreachStore.postId === post.id) {
-            outreachExpanded.value = false
-            activePanel.value = 'outreach'
-        }
-
+    if (!outreachStore.hasTaskForPost(post.id) && outreachStore.isPostBusy(post.id)) {
         return
     }
 
-    outreachStore.openForPost(post.id)
+    outreachStore.openForPost(post.id, null)
     outreachExpanded.value = false
     activePanel.value = 'outreach'
 
@@ -245,7 +244,6 @@ async function openOutreach() {
 
         if (
             !viewMounted ||
-            workStore.taskActive ||
             savedContacts === null ||
             outreachStore.postId !== post.id ||
             selectedPostId.value !== post.id ||
@@ -254,8 +252,20 @@ async function openOutreach() {
             return
         }
 
-        if (savedContacts.length > 0) {
-            activePanel.value = 'outreach'
+        const visibleItemCount = outreachStore.contacts.length + outreachStore.tasks.length
+
+        if (visibleItemCount >= 2) {
+            return
+        }
+
+        const soleTask = outreachStore.tasks[0]
+
+        if (soleTask !== undefined && outreachStore.contacts.length === 0) {
+            outreachStore.openTask(soleTask.taskId)
+            return
+        }
+
+        if (outreachStore.contacts.length > 0) {
             return
         }
 
@@ -267,6 +277,26 @@ async function openOutreach() {
 
 async function cancelOutreach() {
     await outreachStore.cancelActiveTask().catch(() => false)
+}
+
+async function retryOutreach() {
+    if (outreachPost.value !== null) {
+        const retry =
+            outreachStore.contactsError === null
+                ? outreachStore.retryTask(outreachPost.value)
+                : outreachStore.restoreTaskContext()
+        await retry.catch(() => false)
+    }
+}
+
+async function retryOutreachContacts() {
+    const post = outreachPost.value
+
+    if (post === null) {
+        return
+    }
+
+    await outreachStore.fetchContacts(post.id).catch(() => null)
 }
 
 function expandOutreach() {
@@ -364,7 +394,21 @@ async function loadApplyQueue() {
 
     try {
         const items = await postStore.fetchApplyQueue()
-        applyQueuePostIds.value = items.map(({ post }) => post.id)
+        const queuePostIds = items.map(({ post }) => post.id)
+        const omittedTaskPostIds = startupOutreachTaskPostIds.filter(
+            (postId) => !queuePostIds.includes(postId),
+        )
+
+        await Promise.allSettled(
+            omittedTaskPostIds
+                .filter((postId) => postStore.findPost(postId) === null)
+                .map((postId) => postStore.fetchPost(postId)),
+        )
+
+        applyQueuePostIds.value = [
+            ...queuePostIds,
+            ...omittedTaskPostIds.filter((postId) => postStore.findPost(postId) !== null),
+        ]
         recommendationContextByPostId.value = new Map(
             items.map(({ post, recommendationContext }) => [post.id, recommendationContext]),
         )
@@ -375,84 +419,128 @@ async function loadApplyQueue() {
     }
 }
 
+async function restoreOutreach() {
+    const restoredPostId = startupOutreachPostId
+
+    if (restoreContactListPending.value) {
+        const returnPostId = outreachStore.postId
+
+        if (returnPostId === null) {
+            return
+        }
+
+        if (postStore.findPost(returnPostId) === null) {
+            await postStore.fetchPost(returnPostId).catch(() => null)
+        }
+
+        if (!viewMounted || !restoreContactListPending.value) {
+            return
+        }
+
+        selectedPostId.value = returnPostId
+        outreachExpanded.value = false
+        activePanel.value = 'outreach'
+        await outreachStore.restoreContactList()
+
+        if (outreachPost.value === null) {
+            showPosts()
+        }
+
+        return
+    }
+
+    if (restoredPostId === null) {
+        return
+    }
+
+    if (postStore.findPost(restoredPostId) === null) {
+        await postStore.fetchPost(restoredPostId).catch(() => null)
+    }
+
+    if (!viewMounted || outreachStore.postId !== restoredPostId) {
+        return
+    }
+
+    selectedPostId.value = restoredPostId
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+
+    if (!outreachTaskVisible.value && outreachContact.value === null) {
+        showPosts()
+    }
+}
+
 onMounted(() => {
-    void loadApplyQueue()
+    if (startupOutreachTaskPostIds.length > 0) {
+        void outreachStore.restoreTaskContext()
+    }
+
+    void loadApplyQueue().then(restoreOutreach)
 })
 </script>
 
 <template>
     <section class="apply-layout" aria-label="Job applications">
         <div class="apply-panels">
-            <FlowPanel
+            <JobPostListPanel
                 class="apply-panel apply-post-list glass-frame"
                 data-testid="apply-posts-panel"
                 :active="activePanel === 'posts'"
                 :adjacent="activePanel === 'viewer' && outreachContact === null"
                 aria-label="Job posts"
+                eyebrow="Apply"
+                title="Queue"
+                title-tag="h1"
+                :posts="filteredPosts"
+                :selected-post-id="selectedPostId"
+                :loading="listLoading"
+                :error="listError"
+                loading-message="Loading Apply queue…"
+                empty-message="No job posts match this filter."
+                @select="selectPost"
+                @retry="loadApplyQueue"
             >
-                <PanelHeading eyebrow="Apply" title="Queue" title-tag="h1">
-                    <template #controls>
-                        <span class="item-count">{{ filteredPosts.length }} posts</span>
+                <template #heading-controls>
+                    <span class="item-count">{{ filteredPosts.length }} posts</span>
 
-                        <div class="post-filter">
-                            <span>Filter</span>
-                            <AppDropdown
-                                class="post-filter-dropdown"
-                                accessible-label="Filter job posts"
-                                test-id="apply-post-filter"
-                                :disabled="false"
-                                :options="postFilterOptions"
-                                :label="postFilterLabel"
-                                @select="selectPostFilter"
-                            />
-                        </div>
-                    </template>
-                </PanelHeading>
+                    <div class="post-filter">
+                        <span>Filter</span>
+                        <BaseDropdown
+                            class="post-filter-dropdown"
+                            accessible-label="Filter job posts"
+                            test-id="apply-post-filter"
+                            :disabled="false"
+                            :options="postFilterOptions"
+                            :label="postFilterLabel"
+                            @select="selectPostFilter"
+                        />
+                    </div>
+                </template>
+            </JobPostListPanel>
 
-                <JobPostList
-                    :posts="filteredPosts"
-                    :selected-post-id="selectedPostId"
-                    :loading="listLoading"
-                    :error="listError"
-                    loading-message="Loading Apply queue…"
-                    empty-message="No job posts match this filter."
-                    @select="selectPost"
-                    @retry="loadApplyQueue"
-                />
-            </FlowPanel>
-
-            <FlowPanel
+            <JobPostViewPanel
                 v-if="selectedPost"
-                as="aside"
                 class="apply-panel apply-job-post-view glass-frame"
                 data-testid="apply-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="
                     activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
-            >
-                <PanelBackButton
-                    v-if="!workStore.taskActive && activePanel !== 'posts'"
-                    label="Back to job posts"
-                    test-id="back-to-job-posts"
-                    :mobile-only="activePanel === 'viewer' && outreachContact === null"
-                    @back="showPosts"
-                />
-                <JobPostViewer
-                    :post="selectedPost"
-                    :recommendation="selectedRecommendationContext ?? undefined"
-                    :label-updating="labelUpdating || applyQueuePostIds === null"
-                    :label-error="labelError"
-                    :mode="applyViewerMode"
-                    @update-label="updateUserLabel"
-                    @open-outreach="openOutreach"
-                    @mark-applied="markApplied"
-                />
-            </FlowPanel>
+                :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
+                :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
+                :post="selectedPost"
+                :recommendation="selectedRecommendationContext ?? undefined"
+                :label-updating="labelUpdating || applyQueuePostIds === null"
+                :label-error="labelError"
+                :mode="applyViewerMode"
+                @back="showPosts"
+                @update-label="updateUserLabel"
+                @open-outreach="openOutreach"
+                @mark-applied="markApplied"
+            />
 
-            <FlowPanel
-                v-if="outreachPost"
-                as="aside"
+            <OutreachPanel
+                v-if="outreachPost !== null || outreachTaskVisible || restoreContactListPending"
                 class="apply-panel apply-outreach glass-frame"
                 data-testid="apply-outreach-panel"
                 :class="{
@@ -462,18 +550,16 @@ onMounted(() => {
                 :adjacent="
                     activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
                 "
-            >
-                <OutreachPanel
-                    :post="outreachPost"
-                    :expanded="outreachExpanded"
-                    @cancel="cancelOutreach"
-                    @collapse="collapseOutreach"
-                    @discover="discoverAnotherContact"
-                    @expand="expandOutreach"
-                    @retry-contacts="openOutreach"
-                    @show-viewer="showViewer"
-                />
-            </FlowPanel>
+                :post="outreachPost"
+                :expanded="outreachExpanded"
+                @cancel="cancelOutreach"
+                @collapse="collapseOutreach"
+                @discover="discoverAnotherContact"
+                @expand="expandOutreach"
+                @retry="retryOutreach"
+                @retry-contacts="retryOutreachContacts"
+                @show-viewer="showViewer"
+            />
         </div>
     </section>
 </template>

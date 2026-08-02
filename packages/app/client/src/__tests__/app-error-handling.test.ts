@@ -1,12 +1,13 @@
 /** @vitest-environment jsdom */
 
-import { createApp, defineComponent, type App as VueApp } from 'vue'
+import { createPinia } from 'pinia'
+import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { navigationFailed, router as applicationRouter } from '../router'
 import App from '../App.vue'
+import { mountVue } from '@/test/support/mount'
 
-const mountedApps: Array<{ app: VueApp; root: HTMLElement }> = []
 const removeApplicationRoutes: Array<() => void> = []
 
 const mountApp = async (component: ReturnType<typeof defineComponent>) => {
@@ -21,31 +22,23 @@ const mountApp = async (component: ReturnType<typeof defineComponent>) => {
     await router.push('/')
     await router.isReady()
 
-    const root = document.createElement('div')
-    document.body.append(root)
-
-    const app = createApp(App)
-    app.config.errorHandler = vi.fn()
-    app.use(router)
-    app.mount(root)
-    mountedApps.push({ app, root })
+    const { root } = mountVue(App, {
+        install: (app) => {
+            app.config.errorHandler = vi.fn()
+            app.use(router)
+        },
+    })
 
     return root
 }
 
 describe('application error handling', () => {
     afterEach(() => {
-        for (const { app, root } of mountedApps.splice(0)) {
-            app.unmount()
-            root.remove()
-        }
-
         for (const removeRoute of removeApplicationRoutes.splice(0)) {
             removeRoute()
         }
 
         navigationFailed.value = false
-        vi.restoreAllMocks()
     })
 
     it('replaces a failed route subtree with document recovery', async () => {
@@ -77,12 +70,12 @@ describe('application error handling', () => {
         await applicationRouter.push('/error-handling-ready')
         await applicationRouter.isReady()
 
-        const root = document.createElement('div')
-        document.body.append(root)
-        const app = createApp(App)
-        app.use(applicationRouter)
-        app.mount(root)
-        mountedApps.push({ app, root })
+        const { root } = mountVue(App, {
+            install: (app) => {
+                app.use(createPinia())
+                app.use(applicationRouter)
+            },
+        })
         vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
         await applicationRouter.push('/error-handling-broken').catch(() => undefined)

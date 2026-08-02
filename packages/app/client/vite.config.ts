@@ -28,6 +28,7 @@ export default defineConfig({
                     name: 'unit',
                     include: ['src/**/*.test.ts'],
                     exclude: ['src/**/*.browser.test.ts'],
+                    setupFiles: ['./src/test/setup.ts'],
                 },
             },
             {
@@ -35,6 +36,7 @@ export default defineConfig({
                 test: {
                     name: 'browser',
                     include: ['src/**/*.browser.test.ts'],
+                    setupFiles: ['./src/test/setup.ts'],
                     browser: {
                         enabled: true,
                         headless: true,
