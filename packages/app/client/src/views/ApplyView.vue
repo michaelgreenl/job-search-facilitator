@@ -231,13 +231,11 @@ async function openOutreach() {
         return
     }
 
-    const hasTask = outreachStore.hasTaskForPost(post.id)
-
-    if (!hasTask && outreachStore.isPostBusy(post.id)) {
+    if (!outreachStore.hasTaskForPost(post.id) && outreachStore.isPostBusy(post.id)) {
         return
     }
 
-    outreachStore.openForPost(post.id)
+    outreachStore.openForPost(post.id, null)
     outreachExpanded.value = false
     activePanel.value = 'outreach'
 
@@ -254,12 +252,20 @@ async function openOutreach() {
             return
         }
 
-        if (hasTask || outreachStore.hasTaskForPost(post.id)) {
+        const visibleItemCount = outreachStore.contacts.length + outreachStore.tasks.length
+
+        if (visibleItemCount >= 2) {
             return
         }
 
-        if (savedContacts.length > 0) {
-            activePanel.value = 'outreach'
+        const soleTask = outreachStore.tasks[0]
+
+        if (soleTask !== undefined && outreachStore.contacts.length === 0) {
+            outreachStore.openTask(soleTask.taskId)
+            return
+        }
+
+        if (outreachStore.contacts.length > 0) {
             return
         }
 

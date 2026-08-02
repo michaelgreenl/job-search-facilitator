@@ -104,7 +104,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     const resultStates = shallowRef<Record<string, OutreachResultState>>({})
     let contactRequestRevision = 0
     let contactUpdateRevision = 0
-    let contactResultQueue = Promise.resolve()
+    const contactResultQueues = new Map<string, Promise<void>>()
 
     const outreachSessions = computed(() => agentStore.sessions.filter(isOutreachSession))
     const agentSession = computed(() =>
@@ -574,6 +574,20 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
     }
 
+    function enqueueContactResult(session: OutreachAgentSession, task: AgentTask) {
+        const queue = (contactResultQueues.get(session.postId) ?? Promise.resolve()).then(() =>
+            applyContactResult(session, task),
+        )
+        const clearQueue = () => {
+            if (contactResultQueues.get(session.postId) === queue) {
+                contactResultQueues.delete(session.postId)
+            }
+        }
+
+        contactResultQueues.set(session.postId, queue)
+        void queue.then(clearQueue, clearQueue)
+    }
+
     function applyDraftResult(session: OutreachAgentSession, task: AgentTask) {
         if (
             session.kind !== 'outreach-draft' ||
@@ -616,9 +630,7 @@ export const useOutreachStore = defineStore('outreach', () => {
 
         if (session.kind === 'outreach-contact') {
             updateResultState(session.taskId, { saving: true, error: null, retry: null })
-            contactResultQueue = contactResultQueue.then(() =>
-                applyContactResult(session, currentTask),
-            )
+            enqueueContactResult(session, currentTask)
         } else if (selectedTaskId.value === session.taskId && contact.value !== null) {
             updateResultState(session.taskId, { saving: false, error: null, retry: null })
             applyDraftResult(session, currentTask)
