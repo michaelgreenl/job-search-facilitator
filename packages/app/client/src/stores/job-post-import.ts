@@ -8,7 +8,7 @@ import {
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
-import { useAgentStore } from './agent'
+import { useAgentStore, type AgentTaskStart } from './agent'
 import { usePostStore } from './post'
 
 type ImportRetryMode = 'save' | 'task'
@@ -34,12 +34,17 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
     const importedItem = shallowRef<UserAddedJobPost | null>(null)
     let revision = 0
 
-    const session = computed(() => {
-        const currentSession = agentStore.getSession('job-post-import')
-        return currentSession?.kind === 'job-post-import' ? currentSession : null
-    })
-    const agentState = computed(() => agentStore.getLaneTaskState('job-post-import'))
+    const session = computed(
+        () =>
+            agentStore.sessions.find(
+                (currentSession) => currentSession.kind === 'job-post-import',
+            ) ?? null,
+    )
+    const agentState = computed(() =>
+        session.value === null ? null : agentStore.getTaskState(session.value.taskId),
+    )
     const task = computed(() => agentState.value?.task ?? null)
+    const taskId = computed(() => session.value?.taskId ?? null)
     const hasSession = computed(() => session.value !== null)
     const cancelling = computed(() => agentState.value?.cancelling ?? false)
     const requestStarting = computed(() => agentState.value?.starting ?? false)
@@ -50,7 +55,11 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
             (requestStarting.value || agentState.value?.restoring === true),
     )
     const running = computed(() => task.value?.status === 'running')
-    const busy = computed(() => agentStore.isLaneTaskActive('job-post-import') || saving.value)
+    const busy = computed(
+        () =>
+            (session.value !== null && agentStore.isTaskActive(session.value.taskId)) ||
+            saving.value,
+    )
     const displayIssue = computed(
         () =>
             issue.value ??
@@ -158,6 +167,26 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         }
     }
 
+    function observeTaskStart(taskStart: AgentTaskStart, currentRevision: number) {
+        void taskStart.started
+            .then((startedTask) => {
+                url.value = ''
+                return handleTask(startedTask, currentRevision)
+            })
+            .catch((error: unknown) => {
+                if (
+                    currentRevision === revision &&
+                    agentStore.getSession(taskStart.taskId) !== null
+                ) {
+                    issue.value =
+                        error instanceof Error
+                            ? error.message
+                            : 'Could not start the job-post import'
+                    retryMode.value = 'task'
+                }
+            })
+    }
+
     function startImport(importUrl: string) {
         if (busy.value) {
             dialogIssue.value = 'Finish the current job-post import before starting another.'
@@ -171,24 +200,18 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         importedItem.value = null
         dialogOpen.value = false
 
-        void agentStore
-            .startTask(createJobPostImportTask(importUrl), {
+        try {
+            const taskStart = agentStore.startTask(createJobPostImportTask(importUrl), {
                 kind: 'job-post-import',
                 url: importUrl,
             })
-            .then((startedTask) => {
-                url.value = ''
-                return handleTask(startedTask, currentRevision)
-            })
-            .catch((error: unknown) => {
-                if (currentRevision === revision && session.value !== null) {
-                    issue.value =
-                        error instanceof Error
-                            ? error.message
-                            : 'Could not start the job-post import'
-                    retryMode.value = 'task'
-                }
-            })
+            observeTaskStart(taskStart, currentRevision)
+        } catch (error) {
+            issue.value =
+                error instanceof Error ? error.message : 'Could not start the job-post import'
+            retryMode.value = 'task'
+            return false
+        }
 
         return true
     }
@@ -222,7 +245,23 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         if (currentTask?.status === 'completed' && retryMode.value === 'save') {
             void handleTask(currentTask)
         } else {
-            startImport(currentSession.url)
+            const currentRevision = ++revision
+            issue.value = null
+            retryMode.value = null
+
+            try {
+                observeTaskStart(
+                    agentStore.retryTask(
+                        currentSession.taskId,
+                        createJobPostImportTask(currentSession.url),
+                    ),
+                    currentRevision,
+                )
+            } catch (error) {
+                issue.value =
+                    error instanceof Error ? error.message : 'Could not retry the job-post import'
+                retryMode.value = 'task'
+            }
         }
     }
 
@@ -282,6 +321,7 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
 
     return {
         hasSession,
+        taskId,
         dialogOpen,
         url,
         importedItem,

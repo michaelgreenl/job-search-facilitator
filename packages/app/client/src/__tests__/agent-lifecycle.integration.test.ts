@@ -1,4 +1,4 @@
-import type { AgentSession, AgentTaskLane } from '@/stores/agent'
+import type { AgentSession } from '@/stores/agent'
 import type {
     ContactDiscoveryResult,
     CreateUserAddedJobPostInput,
@@ -8,8 +8,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore } from '@/stores/agent'
 import { useJobPostImportStore } from '@/stores/job-post-import'
-import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
+import { useOutreachStore } from '@/stores/outreach'
 import { makeAgentTask } from '@/test/fixtures/agent'
 import { makeJobPost } from '@/test/fixtures/job-post'
 import { makeOutreachContact } from '@/test/fixtures/outreach'
@@ -18,9 +18,12 @@ import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestParts } from '@/test/support/http'
 import { MemoryStorage } from '@/test/support/memory-storage'
 
+type AgentTaskLane = 'job-post-import' | 'outreach'
+
 const agentSessionStorageKey = 'job-search-facilitator:agent-session'
 const importTaskId = '11111111-1111-4111-8111-111111111111'
 const outreachTaskId = '22222222-2222-4222-8222-222222222222'
+const secondOutreachTaskId = '33333333-3333-4333-8333-333333333333'
 const importUrl = 'https://example.com/jobs/imported-role'
 const outreachPost = makeJobPost()
 const savedContact = makeOutreachContact({ jobPostId: outreachPost.id })
@@ -141,7 +144,11 @@ function createLifecycleContext({ deferWrites = false } = {}) {
     const bridge = new AgentBridgeHarness({
         fallback: createApiFallback(writes, deferWrites ? pendingWrites : null),
     })
-    const randomUUID = vi.fn().mockReturnValueOnce(importTaskId).mockReturnValueOnce(outreachTaskId)
+    const randomUUID = vi
+        .fn()
+        .mockReturnValueOnce(importTaskId)
+        .mockReturnValueOnce(outreachTaskId)
+        .mockReturnValueOnce(secondOutreachTaskId)
 
     setActivePinia(createPinia())
     vi.stubGlobal('sessionStorage', storage)
@@ -183,6 +190,7 @@ function resolvePendingWrite(
 async function startBothLanes(context: ReturnType<typeof createLifecycleContext>) {
     context.importStore.url = importUrl
     expect(context.importStore.submitUrl()).toBe(true)
+    context.outreachStore.openForPost(outreachPost.id)
     const outreachStart = context.outreachStore.startContactDiscovery(outreachPost)
 
     await expect(outreachStart).resolves.toBe(true)
@@ -193,24 +201,6 @@ async function startBothLanes(context: ReturnType<typeof createLifecycleContext>
 
     taskSource(importTaskId).open()
     taskSource(outreachTaskId).open()
-}
-
-async function waitForLaneResult(
-    lane: AgentTaskLane,
-    context: ReturnType<typeof createLifecycleContext>,
-) {
-    if (lane === 'job-post-import') {
-        await vi.waitFor(() => {
-            expect(context.writes.imports).toHaveLength(1)
-            expect(context.agentStore.getSession(lane)).toBeNull()
-        })
-        return
-    }
-
-    await vi.waitFor(() => {
-        expect(context.writes.contacts).toHaveLength(1)
-        expect(context.agentStore.getSession(lane)).toBeNull()
-    })
 }
 
 function completeLane(lane: AgentTaskLane, context: ReturnType<typeof createLifecycleContext>) {
@@ -230,44 +220,6 @@ describe('Agent feature lifecycle integration', () => {
         ['job-post-import', 'outreach'],
         ['outreach', 'job-post-import'],
     ] satisfies Array<[AgentTaskLane, AgentTaskLane]>)(
-        'persists %s and %s results once while their lanes complete independently',
-        async (firstLane, secondLane) => {
-            const context = createLifecycleContext()
-            await startBothLanes(context)
-            const secondTaskId = secondLane === 'job-post-import' ? importTaskId : outreachTaskId
-            const secondSession = context.agentStore.getSession(secondLane)
-            const secondSource = taskSource(secondTaskId)
-
-            completeLane(firstLane, context)
-            await waitForLaneResult(firstLane, context)
-
-            expect(context.agentStore.isLaneTaskActive(secondLane)).toBe(true)
-            expect(context.agentStore.getSession(secondLane)).toEqual(secondSession)
-            expect(context.agentStore.getTaskState(secondTaskId)?.task?.status).toBe('running')
-            expect(secondSource.close).not.toHaveBeenCalled()
-            expect(readStoredSessions(context.storage)).toEqual({
-                version: 2,
-                sessions: [secondSession],
-            })
-
-            completeLane(secondLane, context)
-            await waitForLaneResult(secondLane, context)
-
-            expect(context.writes.imports).toEqual([importOutput])
-            expect(context.writes.contacts).toEqual([contactOutput])
-            expect(context.postStore.userAddedPosts).toEqual([savedImportedItem])
-            expect(context.outreachStore.contacts).toEqual([savedContact])
-            expect(context.agentStore.sessions).toEqual([])
-            expect(readStoredSessions(context.storage)).toBeNull()
-            expect(taskSource(importTaskId).close).toHaveBeenCalledOnce()
-            expect(taskSource(outreachTaskId).close).toHaveBeenCalledOnce()
-        },
-    )
-
-    it.each([
-        ['job-post-import', 'outreach'],
-        ['outreach', 'job-post-import'],
-    ] satisfies Array<[AgentTaskLane, AgentTaskLane]>)(
         'keeps concurrent completions isolated when the %s save settles before %s',
         async (firstLane, secondLane) => {
             const context = createLifecycleContext({ deferWrites: true })
@@ -282,14 +234,17 @@ describe('Agent feature lifecycle integration', () => {
                     'outreach',
                 ])
             })
-            expect(context.agentStore.getSession(firstLane)).not.toBeNull()
-            expect(context.agentStore.getSession(secondLane)).not.toBeNull()
+            const firstTaskId = firstLane === 'job-post-import' ? importTaskId : outreachTaskId
+            const secondTaskId = secondLane === 'job-post-import' ? importTaskId : outreachTaskId
+
+            expect(context.agentStore.getSession(firstTaskId)).not.toBeNull()
+            expect(context.agentStore.getSession(secondTaskId)).not.toBeNull()
 
             resolvePendingWrite(firstLane, context)
             await vi.waitFor(() => {
-                expect(context.agentStore.getSession(firstLane)).toBeNull()
+                expect(context.agentStore.getSession(firstTaskId)).toBeNull()
             })
-            expect(context.agentStore.getSession(secondLane)).not.toBeNull()
+            expect(context.agentStore.getSession(secondTaskId)).not.toBeNull()
 
             resolvePendingWrite(secondLane, context)
             await vi.waitFor(() => {
@@ -306,91 +261,57 @@ describe('Agent feature lifecycle integration', () => {
         },
     )
 
-    it.each([
-        { cancelledLane: 'job-post-import', remainingLane: 'outreach' },
-        { cancelledLane: 'outreach', remainingLane: 'job-post-import' },
-    ] satisfies Array<{
-        cancelledLane: AgentTaskLane
-        remainingLane: AgentTaskLane
-    }>)(
-        'does not restore a cancelled $cancelledLane task while $remainingLane stays restorable',
-        async ({ cancelledLane, remainingLane }) => {
-            const context = createLifecycleContext()
-            await startBothLanes(context)
-            const cancelledTaskId =
-                cancelledLane === 'job-post-import' ? importTaskId : outreachTaskId
-            const remainingTaskId =
-                remainingLane === 'job-post-import' ? importTaskId : outreachTaskId
-            const remainingSession = context.agentStore.getSession(remainingLane)
-            const cancelledSource = taskSource(cancelledTaskId)
-            const remainingSource = taskSource(remainingTaskId)
+    it('restores every active outreach run, persists an exact completion, and skips cancellation', async () => {
+        const context = createLifecycleContext()
+        await startBothLanes(context)
+        await expect(context.outreachStore.startContactDiscovery(outreachPost)).resolves.toBe(true)
+        await vi.waitFor(() => {
+            expect(context.agentStore.getTaskState(secondOutreachTaskId)?.task?.status).toBe(
+                'running',
+            )
+        })
+        taskSource(secondOutreachTaskId).open()
 
-            await context.agentStore.cancelTask(cancelledTaskId)
+        await context.agentStore.cancelTask(importTaskId)
 
-            expect(cancelledSource.close).toHaveBeenCalledOnce()
-            expect(remainingSource.close).not.toHaveBeenCalled()
-            expect(context.agentStore.getTaskState(cancelledTaskId)?.task?.status).toBe('cancelled')
-            expect(context.agentStore.isLaneTaskActive(remainingLane)).toBe(true)
-            expect(readStoredSessions(context.storage)).toEqual({
-                version: 2,
-                sessions: [remainingSession],
-            })
+        const firstOutreachSession = context.agentStore.getSession(outreachTaskId)
+        const secondOutreachSession = context.agentStore.getSession(secondOutreachTaskId)
+        expect(readStoredSessions(context.storage)).toEqual({
+            version: 2,
+            sessions: [firstOutreachSession, secondOutreachSession],
+        })
 
-            context.bridge.clearRequests()
-            FakeEventSource.reset()
-            setActivePinia(createPinia())
-            const refreshedStore = useAgentStore()
+        context.bridge.clearRequests()
+        FakeEventSource.reset()
+        setActivePinia(createPinia())
+        const refreshedAgentStore = useAgentStore()
 
-            expect(refreshedStore.sessions).toEqual([remainingSession])
-            expect(refreshedStore.getSession(cancelledLane)).toBeNull()
-            await refreshedStore.restoreSessions()
+        await refreshedAgentStore.restoreSessions()
 
-            expect(
-                context.bridge.requests
-                    .filter(
-                        ({ method, url }) =>
-                            method === 'GET' && new URL(url).pathname.startsWith('/tasks/'),
-                    )
-                    .map(({ url }) => decodeURIComponent(new URL(url).pathname.split('/').at(-1)!)),
-            ).toEqual([remainingTaskId])
-            expect(refreshedStore.getTaskState(remainingTaskId)?.task?.status).toBe('running')
-            expect(FakeEventSource.instances).toHaveLength(1)
-            taskSource(remainingTaskId).open()
-            expect(refreshedStore.getTaskState(remainingTaskId)?.connectionState).toBe('connected')
+        expect(refreshedAgentStore.getSession(importTaskId)).toBeNull()
+        expect(refreshedAgentStore.isTaskActive(outreachTaskId)).toBe(true)
+        expect(refreshedAgentStore.isTaskActive(secondOutreachTaskId)).toBe(true)
+        expect(FakeEventSource.instances).toHaveLength(2)
+        taskSource(outreachTaskId).open()
+        taskSource(secondOutreachTaskId).open()
 
-            if (remainingLane === 'job-post-import') {
-                const refreshedImportStore = useJobPostImportStore()
-                const refreshedPostStore = usePostStore()
+        const refreshedOutreachStore = useOutreachStore()
+        await expect(refreshedOutreachStore.restoreTaskContext(outreachTaskId)).resolves.toBe(true)
+        context.bridge.complete(outreachTaskId, contactOutput)
 
-                context.bridge.complete(remainingTaskId, importOutput)
-
-                await vi.waitFor(() => {
-                    expect(context.writes.imports).toHaveLength(1)
-                    expect(refreshedStore.getSession(remainingLane)).toBeNull()
-                })
-                expect(context.writes.imports).toEqual([importOutput])
-                expect(context.writes.contacts).toEqual([])
-                expect(refreshedImportStore.importedItem).toEqual(savedImportedItem)
-                expect(refreshedPostStore.userAddedPosts).toEqual([savedImportedItem])
-            } else {
-                const refreshedOutreachStore = useOutreachStore()
-
-                await expect(refreshedOutreachStore.restoreTaskContext()).resolves.toBe(true)
-                context.bridge.complete(remainingTaskId, contactOutput)
-
-                await vi.waitFor(() => {
-                    expect(context.writes.contacts).toHaveLength(1)
-                    expect(refreshedStore.getSession(remainingLane)).toBeNull()
-                })
-                expect(context.writes.contacts).toEqual([contactOutput])
-                expect(context.writes.imports).toEqual([])
-                expect(refreshedOutreachStore.contacts).toEqual([savedContact])
-            }
-
-            expect(readStoredSessions(context.storage)).toBeNull()
-            expect(taskSource(remainingTaskId).close).toHaveBeenCalledOnce()
-        },
-    )
+        await vi.waitFor(() => {
+            expect(context.writes.contacts).toEqual([contactOutput])
+            expect(refreshedAgentStore.getSession(outreachTaskId)).toBeNull()
+        })
+        expect(refreshedAgentStore.getSession(secondOutreachTaskId)).toEqual(secondOutreachSession)
+        expect(refreshedAgentStore.isTaskActive(secondOutreachTaskId)).toBe(true)
+        expect(taskSource(secondOutreachTaskId).close).not.toHaveBeenCalled()
+        expect(refreshedOutreachStore.contacts).toEqual([savedContact])
+        expect(readStoredSessions(context.storage)).toEqual({
+            version: 2,
+            sessions: [secondOutreachSession],
+        })
+    })
 
     it.each([
         { failedLane: 'job-post-import', restoredLane: 'outreach' },
@@ -438,8 +359,8 @@ describe('Agent feature lifecycle integration', () => {
                 error: 'Agent restore unavailable',
             })
             expect(agentStore.getTaskState(restoredTaskId)?.task?.status).toBe('running')
-            expect(agentStore.isLaneTaskActive(failedLane)).toBe(false)
-            expect(agentStore.isLaneTaskActive(restoredLane)).toBe(true)
+            expect(agentStore.isTaskActive(failedTaskId)).toBe(false)
+            expect(agentStore.isTaskActive(restoredTaskId)).toBe(true)
             expect(FakeEventSource.forTask(failedTaskId)).toBeUndefined()
             const restoredSource = taskSource(restoredTaskId)
             restoredSource.open()

@@ -1,3 +1,19 @@
+<script lang="ts">
+export interface OutreachTaskListItem {
+    taskId: string
+    kind: 'contact' | 'draft'
+    active: boolean
+    status:
+        | 'starting'
+        | 'restoring'
+        | 'running'
+        | 'completed'
+        | 'failed'
+        | 'cancelled'
+        | 'unavailable'
+}
+</script>
+
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -10,20 +26,20 @@ const props = withDefaults(
     defineProps<{
         contact?: OutreachContact
         expanded?: boolean
-        loading?: boolean
         messagedError?: string | null
         messagedUpdating?: boolean
         selectable?: boolean
         showMessagedControl?: boolean
+        task?: OutreachTaskListItem
     }>(),
     {
         contact: undefined,
         expanded: false,
-        loading: false,
         messagedError: null,
         messagedUpdating: false,
         selectable: false,
         showMessagedControl: false,
+        task: undefined,
     },
 )
 
@@ -37,11 +53,30 @@ const selectionLabel = computed(() => {
         return null
     }
 
-    if (props.loading) {
-        return 'View outreach progress'
+    if (props.task !== undefined) {
+        return 'Open outreach task'
     }
 
     return props.contact ? `Open outreach draft for ${props.contact.personName}` : null
+})
+const taskMessage = computed(() => {
+    if (props.task?.status === 'starting') {
+        return 'Starting Agent…'
+    }
+
+    if (props.task?.status === 'restoring') {
+        return 'Restoring Agent…'
+    }
+
+    if (props.task?.status === 'running') {
+        return props.task.kind === 'draft' ? 'Revising outreach…' : 'Discovering contact…'
+    }
+
+    if (props.task?.status === 'completed') {
+        return props.task.kind === 'draft' ? 'Draft ready' : 'Saving contact…'
+    }
+
+    return 'Outreach needs attention'
 })
 const {
     descriptionElement,
@@ -69,29 +104,35 @@ function toggleMessaged() {
         :data-testid="
             contact
                 ? `outreach-contact-${contact.id}`
-                : loading
-                  ? 'outreach-contact-loading'
+                : task
+                  ? `outreach-task-${task.taskId}`
                   : undefined
         "
         :interactive="selectionLabel !== null"
-        :aria-busy="loading || messagedUpdating || undefined"
+        :aria-busy="task?.active || messagedUpdating || undefined"
     >
         <button
             v-if="selectionLabel"
             class="contact-select-button"
             type="button"
             :data-testid="
-                contact ? `outreach-contact-${contact.id}-select` : 'outreach-contact-progress'
+                contact
+                    ? `outreach-contact-${contact.id}-select`
+                    : task
+                      ? `outreach-task-${task.taskId}-select`
+                      : undefined
             "
             :aria-label="selectionLabel"
             @click="emit('select')"
         ></button>
 
-        <template v-if="loading">
-            <span class="eyebrow">Relevant contact</span>
+        <template v-if="task">
+            <span class="eyebrow">
+                {{ task.kind === 'draft' ? 'Outreach draft' : 'Relevant contact' }}
+            </span>
             <span class="loading-contact">
-                <LoadingSpinner />
-                Discovering contact…
+                <LoadingSpinner v-if="task.active" />
+                {{ taskMessage }}
             </span>
         </template>
 

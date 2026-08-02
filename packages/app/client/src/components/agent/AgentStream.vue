@@ -5,19 +5,18 @@ import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
-import { useAgentStore, type AgentTaskLane } from '@/stores/agent'
+import { useAgentStore } from '@/stores/agent'
 import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 
-const props = defineProps<{ issue: string | null; lane: AgentTaskLane }>()
+const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
-const session = computed(() => agentStore.getSession(props.lane))
-const state = computed(() => agentStore.getLaneTaskState(props.lane))
+const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
 const connectionState = computed(() => state.value?.connectionState ?? 'idle')
 const pendingPermission = computed(() => state.value?.pendingPermission ?? null)
 const permissionSubmitting = computed(() => state.value?.permissionSubmitting ?? false)
-const isActive = computed(() => agentStore.isLaneTaskActive(props.lane))
+const isActive = computed(() => props.taskId !== null && agentStore.isTaskActive(props.taskId))
 const permissionNeedsAttention = computed(
     () => pendingPermission.value !== null && !state.value?.alwaysAllowBrowserActions,
 )
@@ -126,18 +125,14 @@ watch(
 )
 
 function resolvePermission(decision: AgentPermissionDecision) {
-    const taskId = session.value?.taskId
-
-    if (taskId !== undefined) {
-        void agentStore.resolvePermission(taskId, decision).catch(() => undefined)
+    if (props.taskId !== null) {
+        void agentStore.resolvePermission(props.taskId, decision).catch(() => undefined)
     }
 }
 
 function allowBrowserActionsForTask() {
-    const taskId = session.value?.taskId
-
-    if (taskId !== undefined) {
-        void agentStore.allowBrowserActionsForTask(taskId).catch(() => undefined)
+    if (props.taskId !== null) {
+        void agentStore.allowBrowserActionsForTask(props.taskId).catch(() => undefined)
     }
 }
 </script>

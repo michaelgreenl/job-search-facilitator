@@ -20,6 +20,13 @@ const nextTask: AgentTask = {
     threadId: 'next-thread-id',
     turnId: 'next-turn-id',
 }
+const thirdTaskId = '90766a9a-1096-40a7-89bb-a0e4c3eacfed'
+const thirdTask: AgentTask = {
+    ...startedTask,
+    id: thirdTaskId,
+    threadId: 'third-thread-id',
+    turnId: 'third-turn-id',
+}
 
 const taskInput = {
     prompt: 'Read Example Domain',
@@ -94,8 +101,8 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(cancelledImportTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
-        await store.startTask(taskInput, outreachOwner)
+        await store.startTask(taskInput, importOwner).started
+        await store.startTask(taskInput, outreachOwner).started
 
         expect(fetch).toHaveBeenNthCalledWith(2, `http://localhost:3001/tasks/${startedTask.id}`, {
             method: 'PUT',
@@ -111,11 +118,11 @@ describe('agent store', () => {
             { ...importOwner, taskId: startedTask.id },
             { ...outreachOwner, taskId: nextTask.id },
         ])
-        expect(store.getSession('job-post-import')).toEqual({
+        expect(store.getSession(startedTask.id)).toEqual({
             ...importOwner,
             taskId: startedTask.id,
         })
-        expect(store.getSession('outreach')).toEqual({
+        expect(store.getSession(nextTask.id)).toEqual({
             ...outreachOwner,
             taskId: nextTask.id,
         })
@@ -192,7 +199,33 @@ describe('agent store', () => {
         expect(outreachSource.close).not.toHaveBeenCalled()
     })
 
-    it('rejects a second start in the same lane while the first start is pending', async () => {
+    it('starts and isolates multiple outreach tasks for the same post', async () => {
+        const randomUUID = vi
+            .fn()
+            .mockReturnValueOnce(startedTask.id)
+            .mockReturnValueOnce(nextTask.id)
+        vi.stubGlobal('crypto', { randomUUID })
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(nextTask, 202))
+        const store = useAgentStore()
+
+        const firstStart = store.startTask(taskInput, outreachOwner)
+        await firstStart.started
+        const samePostStart = store.startTask(taskInput, outreachOwner)
+        await samePostStart.started
+
+        expect(store.sessions).toEqual([
+            { ...outreachOwner, taskId: firstStart.taskId },
+            { ...outreachOwner, taskId: samePostStart.taskId },
+        ])
+        expect(store.getTaskState(firstStart.taskId)?.task).toEqual(startedTask)
+        expect(store.getTaskState(samePostStart.taskId)?.task).toEqual(nextTask)
+    })
+
+    it('rejects a second import while the first start is pending', async () => {
         let resolveHealth: ((response: Response) => void) | undefined
         const healthResponse = new Promise<Response>((resolve) => {
             resolveHealth = resolve
@@ -205,25 +238,25 @@ describe('agent store', () => {
 
         const firstStart = store.startTask(taskInput, importOwner)
 
-        await expect(store.startTask(taskInput, importOwner)).rejects.toThrow(
+        expect(() => store.startTask(taskInput, importOwner)).toThrow(
             'Another job-post-import Agent task is already active',
         )
         expect(fetchMock).toHaveBeenCalledOnce()
 
         resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-        await expect(firstStart).resolves.toEqual(startedTask)
+        await expect(firstStart.started).resolves.toEqual(startedTask)
         expect(fetchMock).toHaveBeenCalledTimes(2)
         expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     it('keeps a running task active while its event stream reconnects', async () => {
-        const fetchMock = vi.mocked(fetch)
-        fetchMock
+        const fetchMock = vi
+            .mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
 
         expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:3001/health', undefined)
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -278,34 +311,39 @@ describe('agent store', () => {
         expect(source.close).toHaveBeenCalledOnce()
     })
 
-    it('restores both persisted lanes and reconnects each running task', async () => {
+    it('restores persisted import and multiple outreach tasks', async () => {
         const randomUUID = vi
             .fn()
             .mockReturnValueOnce(startedTask.id)
             .mockReturnValueOnce(nextTask.id)
+            .mockReturnValueOnce(thirdTask.id)
         vi.stubGlobal('crypto', { randomUUID })
-        const fetchMock = vi.mocked(fetch)
-        fetchMock
+        vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(nextTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(thirdTask, 202))
             .mockResolvedValueOnce(jsonResponse(startedTask))
             .mockResolvedValueOnce(jsonResponse(nextTask))
+            .mockResolvedValueOnce(jsonResponse(thirdTask))
         const firstStore = useAgentStore()
 
-        await firstStore.startTask(taskInput, importOwner)
-        await firstStore.startTask(taskInput, outreachOwner)
+        await firstStore.startTask(taskInput, importOwner).started
+        await firstStore.startTask(taskInput, outreachOwner).started
+        await firstStore.startTask(taskInput, outreachOwner).started
 
         expect(JSON.parse(sessionStorage.getItem(agentSessionStorageKey) ?? 'null')).toEqual({
             version: 2,
             sessions: [
                 { ...importOwner, taskId: startedTask.id },
                 { ...outreachOwner, taskId: nextTask.id },
+                { ...outreachOwner, taskId: thirdTask.id },
             ],
         })
 
-        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(FakeEventSource.instances).toHaveLength(3)
         FakeEventSource.reset()
         setActivePinia(createPinia())
         const restoredStore = useAgentStore()
@@ -313,42 +351,33 @@ describe('agent store', () => {
         expect(restoredStore.sessions).toEqual([
             { ...importOwner, taskId: startedTask.id },
             { ...outreachOwner, taskId: nextTask.id },
+            { ...outreachOwner, taskId: thirdTask.id },
         ])
-        expect(restoredStore.getTaskState(startedTask.id)?.task).toBeNull()
-        expect(restoredStore.getTaskState(nextTask.id)?.task).toBeNull()
+        const taskIds = restoredStore.sessions.map(({ taskId }) => taskId)
+        expect(taskIds.map((taskId) => restoredStore.getTaskState(taskId)?.task)).toEqual([
+            null,
+            null,
+            null,
+        ])
 
         await restoredStore.restoreSessions()
 
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            5,
-            `http://localhost:3001/tasks/${startedTask.id}`,
-            undefined,
-        )
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            6,
-            `http://localhost:3001/tasks/${nextTask.id}`,
-            undefined,
-        )
-        expect(restoredStore.getTaskState(startedTask.id)).toMatchObject({
-            task: startedTask,
-            restoring: false,
-            sessionUnavailable: false,
-        })
-        expect(restoredStore.getTaskState(nextTask.id)).toMatchObject({
-            task: nextTask,
-            restoring: false,
-            sessionUnavailable: false,
-        })
+        expect(taskIds.map((taskId) => restoredStore.getTaskState(taskId)?.task)).toEqual([
+            startedTask,
+            nextTask,
+            thirdTask,
+        ])
         expect(FakeEventSource.instances.map(({ url }) => url)).toEqual([
             `http://localhost:3001/tasks/${startedTask.id}/events`,
             `http://localhost:3001/tasks/${nextTask.id}/events`,
+            `http://localhost:3001/tasks/${thirdTask.id}/events`,
         ])
 
-        FakeEventSource.instances[0]!.open()
-        FakeEventSource.instances[1]!.open()
+        FakeEventSource.instances.forEach((source) => source.open())
 
-        expect(restoredStore.getTaskState(startedTask.id)?.connectionState).toBe('connected')
-        expect(restoredStore.getTaskState(nextTask.id)?.connectionState).toBe('connected')
+        expect(
+            taskIds.map((taskId) => restoredStore.getTaskState(taskId)?.connectionState),
+        ).toEqual(['connected', 'connected', 'connected'])
     })
 
     it('rejects a mismatched restore response without mutating the other lane', async () => {
@@ -372,13 +401,13 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, outreachOwner)
+        await store.startTask(taskInput, outreachOwner).started
         const outreachSource = FakeEventSource.instances[0]!
         outreachSource.open()
         const outreachStateBeforeRestore = store.getTaskState(nextTask.id)
         const restore = store.restoreTask(startedTask.id)
 
-        expect(store.isLaneTaskActive('job-post-import')).toBe(true)
+        expect(store.isTaskActive(startedTask.id)).toBe(true)
         expect(store.dismissSession(startedTask.id)).toBe(false)
 
         resolveRestore?.(jsonResponse({ ...nextTask, status: 'cancelled' }))
@@ -403,14 +432,14 @@ describe('agent store', () => {
         expect(FakeEventSource.instances).toEqual([outreachSource])
         expect(outreachSource.close).not.toHaveBeenCalled()
 
-        expect(store.isLaneTaskActive('job-post-import')).toBe(false)
+        expect(store.isTaskActive(startedTask.id)).toBe(false)
         expect(store.dismissSession(startedTask.id)).toBe(true)
-        expect(store.getSession('job-post-import')).toBeNull()
+        expect(store.getSession(startedTask.id)).toBeNull()
 
         vi.stubGlobal('crypto', { randomUUID: () => startedTask.id })
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
 
-        expect(store.getSession('job-post-import')).toEqual({
+        expect(store.getSession(startedTask.id)).toEqual({
             ...importOwner,
             taskId: startedTask.id,
         })
@@ -430,7 +459,7 @@ describe('agent store', () => {
 
         const start = store.startTask(taskInput, importOwner)
 
-        expect(store.getSession('job-post-import')).toEqual({
+        expect(store.getSession(startedTask.id)).toEqual({
             ...importOwner,
             taskId: startedTask.id,
         })
@@ -444,13 +473,13 @@ describe('agent store', () => {
             sessions: [{ ...importOwner, taskId: startedTask.id }],
         })
         expect(store.dismissSession(startedTask.id)).toBe(false)
-        expect(store.getSession('job-post-import')).toEqual({
+        expect(store.getSession(startedTask.id)).toEqual({
             ...importOwner,
             taskId: startedTask.id,
         })
 
         resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-        await start
+        await start.started
     })
 
     it('reads a v1 persisted session and restores it through the multi-session API', async () => {
@@ -465,11 +494,11 @@ describe('agent store', () => {
         const store = useAgentStore()
 
         expect(store.sessions).toEqual([{ ...outreachOwner, taskId: startedTask.id }])
-        expect(store.getSession('outreach')).toEqual({
+        expect(store.getSession(startedTask.id)).toEqual({
             ...outreachOwner,
             taskId: startedTask.id,
         })
-        expect(store.isLaneTaskActive('outreach')).toBe(true)
+        expect(store.isTaskActive(startedTask.id)).toBe(true)
 
         await store.restoreSessions()
 
@@ -519,21 +548,16 @@ describe('agent store', () => {
         expect(sessionStorage.getItem(agentSessionStorageKey)).not.toBeNull()
     })
 
-    it('rejects a v2 envelope with duplicate valid lanes', () => {
-        sessionStorage.setItem(
-            agentSessionStorageKey,
-            JSON.stringify({
-                version: 2,
-                sessions: [
-                    { ...importOwner, taskId: startedTask.id },
-                    {
-                        kind: 'job-post-import',
-                        taskId: nextTask.id,
-                        url: 'https://example.com/jobs/another-role',
-                    },
-                ],
-            }),
-        )
+    it('rejects a v2 envelope with more than one job-post-import', () => {
+        const sessions = [
+            { ...importOwner, taskId: startedTask.id },
+            {
+                kind: 'job-post-import',
+                taskId: nextTask.id,
+                url: 'https://example.com/jobs/another-role',
+            },
+        ]
+        sessionStorage.setItem(agentSessionStorageKey, JSON.stringify({ version: 2, sessions }))
 
         const store = useAgentStore()
 
@@ -559,29 +583,42 @@ describe('agent store', () => {
         expect(sessionStorage.getItem(agentSessionStorageKey)).toBeNull()
     })
 
-    it('keeps a cancelled task in memory without restoring it after refresh', async () => {
+    it('does not restore a cancelled task while restoring its active sibling', async () => {
         const cancelledTask: AgentTask = { ...startedTask, status: 'cancelled' }
+        vi.stubGlobal('crypto', {
+            randomUUID: vi
+                .fn()
+                .mockReturnValueOnce(startedTask.id)
+                .mockReturnValueOnce(nextTask.id),
+        })
         vi.mocked(fetch)
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(nextTask, 202))
             .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
+            .mockResolvedValueOnce(jsonResponse(nextTask))
         const firstStore = useAgentStore()
 
-        await firstStore.startTask(taskInput, outreachOwner)
+        await firstStore.startTask(taskInput, outreachOwner).started
+        await firstStore.startTask(taskInput, outreachOwner).started
         await firstStore.cancelTask(startedTask.id)
 
         expect(firstStore.getTaskState(startedTask.id)?.task?.status).toBe('cancelled')
-        expect(firstStore.getSession('outreach')).toEqual({
-            ...outreachOwner,
-            taskId: startedTask.id,
+        expect(firstStore.getSession(startedTask.id)).not.toBeNull()
+        expect(JSON.parse(sessionStorage.getItem(agentSessionStorageKey) ?? 'null')).toEqual({
+            version: 2,
+            sessions: [{ ...outreachOwner, taskId: nextTask.id }],
         })
-        expect(sessionStorage.getItem(agentSessionStorageKey)).toBeNull()
 
         setActivePinia(createPinia())
+        FakeEventSource.reset()
         const refreshedStore = useAgentStore()
 
-        expect(refreshedStore.sessions).toEqual([])
         expect(refreshedStore.getTaskState(startedTask.id)).toBeNull()
+        await refreshedStore.restoreSessions()
+        expect(refreshedStore.getTaskState(nextTask.id)?.task).toEqual(nextTask)
+        expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     it('rejects an invalid health response before creating a task or event stream', async () => {
@@ -590,7 +627,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'ready', capabilities: ['chrome'] }))
         const store = useAgentStore()
 
-        await expect(store.startTask(taskInput, importOwner)).rejects.toThrow(
+        await expect(store.startTask(taskInput, importOwner).started).rejects.toThrow(
             'Agent /health returned invalid data',
         )
 
@@ -604,6 +641,45 @@ describe('agent store', () => {
         })
     })
 
+    it('retries the requested terminal task without replacing its active sibling', async () => {
+        vi.stubGlobal('crypto', {
+            randomUUID: vi
+                .fn()
+                .mockReturnValueOnce(startedTask.id)
+                .mockReturnValueOnce(nextTask.id)
+                .mockReturnValueOnce(thirdTask.id),
+        })
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(nextTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(thirdTask, 202))
+        const store = useAgentStore()
+
+        const sibling = store.startTask(taskInput, outreachOwner)
+        await sibling.started
+        const target = store.startTask(taskInput, outreachOwner)
+        await target.started
+        FakeEventSource.instances[1]!.message({
+            type: 'failed',
+            error: 'Contact discovery failed',
+            createdAt: '2026-07-18T12:00:00.000Z',
+        })
+
+        const retry = store.retryTask(target.taskId, taskInput)
+
+        expect(retry.taskId).toBe(thirdTask.id)
+        expect(store.getSession(target.taskId)).toBeNull()
+        expect(store.getSession(sibling.taskId)).not.toBeNull()
+        expect(store.getSession(retry.taskId)).toEqual({
+            ...outreachOwner,
+            taskId: thirdTask.id,
+        })
+        await expect(retry.started).resolves.toEqual(thirdTask)
+    })
+
     it('rejects a contradictory task response before opening its event stream', async () => {
         const fetchMock = vi.mocked(fetch)
         fetchMock
@@ -613,7 +689,7 @@ describe('agent store', () => {
             )
         const store = useAgentStore()
 
-        await expect(store.startTask(taskInput, importOwner)).rejects.toThrow(
+        await expect(store.startTask(taskInput, importOwner).started).rejects.toThrow(
             `Agent /tasks/${startedTask.id} returned invalid data`,
         )
 
@@ -632,7 +708,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.open()
         source.message({
@@ -655,7 +731,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         const replayedActivity = {
             type: 'activity',
@@ -703,8 +779,8 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ ...nextTask, status: 'cancelled' }, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
-        await store.startTask(taskInput, outreachOwner)
+        await store.startTask(taskInput, importOwner).started
+        await store.startTask(taskInput, outreachOwner).started
         const importSource = FakeEventSource.instances[0]!
         const outreachSource = FakeEventSource.instances[1]!
         importSource.open()
@@ -742,7 +818,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.open()
 
@@ -768,7 +844,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.open()
 
@@ -789,7 +865,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: [] }))
         const store = useAgentStore()
 
-        await expect(store.startTask(taskInput, importOwner)).rejects.toThrow(
+        await expect(store.startTask(taskInput, importOwner).started).rejects.toThrow(
             'Agent capability is unavailable: chrome',
         )
 
@@ -810,7 +886,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.open()
         source.message(firstPermissionRequired)
@@ -868,7 +944,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse(nextTask, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const firstSource = FakeEventSource.instances[0]!
         firstSource.message(firstPermissionRequired)
 
@@ -887,12 +963,12 @@ describe('agent store', () => {
         })
         expect(store.getTaskState(startedTask.id)?.alwaysAllowBrowserActions).toBe(false)
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
 
         const secondSource = FakeEventSource.instances[1]!
         secondSource.message(secondPermissionRequired)
 
-        expect(store.getSession('job-post-import')?.taskId).toBe(nextTask.id)
+        expect(store.getSession(nextTask.id)?.kind).toBe('job-post-import')
         expect(store.getTaskState(nextTask.id)).toMatchObject({
             pendingPermission: { id: secondPermissionId },
             alwaysAllowBrowserActions: false,
@@ -908,7 +984,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({ status: 'accepted' }, 202))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.message(firstPermissionRequired)
         await store.allowBrowserActionsForTask(startedTask.id)
@@ -946,7 +1022,7 @@ describe('agent store', () => {
             .mockResolvedValueOnce(jsonResponse({}, 500))
         const store = useAgentStore()
 
-        await store.startTask(taskInput, importOwner)
+        await store.startTask(taskInput, importOwner).started
         const source = FakeEventSource.instances[0]!
         source.open()
         source.message(firstPermissionRequired)

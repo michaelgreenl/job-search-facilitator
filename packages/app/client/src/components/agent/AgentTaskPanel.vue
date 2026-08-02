@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import type { AgentTaskLane } from '@/stores/agent'
 import AgentStream from './AgentStream.vue'
 
 interface Props {
     as?: 'section' | 'aside'
     active: boolean
     adjacent: boolean
-    lane: AgentTaskLane
+    taskId: string | null
     eyebrow: string
     title?: string
     backLabel: string
@@ -64,7 +63,7 @@ const emit = defineEmits<{
                 {{ props.statusMessage }}
             </p>
 
-            <AgentStream :lane="props.lane" :issue="props.issue" />
+            <AgentStream :task-id="props.taskId" :issue="props.issue" />
 
             <div v-if="props.running || props.retryAvailable" class="task-actions">
                 <BaseButton

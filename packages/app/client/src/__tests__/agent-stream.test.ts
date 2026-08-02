@@ -5,12 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import AgentStream from '../components/agent/AgentStream.vue'
-import {
-    useAgentStore,
-    type AgentSession,
-    type AgentTaskLane,
-    type AgentTaskState,
-} from '../stores/agent'
+import { useAgentStore, type AgentSession, type AgentTaskState } from '../stores/agent'
 import { makeAgentTask, makeAgentTaskState } from '@/test/fixtures/agent'
 import { mountVue } from '@/test/support/mount'
 
@@ -35,18 +30,18 @@ const outreachSession = {
     taskId: outreachTask.id,
     postId: 'post-1',
 } satisfies AgentSession
-const laneContent = {
-    'job-post-import': {
+const taskContent = {
+    import: {
         taskId: importSession.taskId,
         activity: 'Reviewing the imported role.',
-        permission: 'Allow access for the imported role?',
+        eventTestId: 'agent-stream-commentary',
     },
     outreach: {
         taskId: outreachSession.taskId,
         activity: 'Researching the outreach contact.',
-        permission: 'Allow access for outreach research?',
+        eventTestId: 'agent-stream-activity',
     },
-} satisfies Record<AgentTaskLane, { taskId: string; activity: string; permission: string }>
+}
 
 type AgentStore = ReturnType<typeof useAgentStore>
 type TaskStateUpdate = Partial<Omit<AgentTaskState, 'taskId'>>
@@ -79,16 +74,16 @@ function appendEvent(store: AgentStore, taskId: string, event: AgentTaskEvent) {
 
 interface MountAgentStreamOptions {
     issue?: string | null
-    lane?: AgentTaskLane
     sessions?: AgentSession[]
+    taskId?: string
     taskStates?: Record<string, AgentTaskState>
 }
 
 describe('agent stream', () => {
     function mountAgentStream({
         issue = null,
-        lane = 'job-post-import',
         sessions = [importSession],
+        taskId = importSession.taskId,
         taskStates = {
             [importSession.taskId]: createTaskState(importSession.taskId),
         },
@@ -99,15 +94,9 @@ describe('agent stream', () => {
         store.sessions = sessions
         store.taskStates = taskStates
         const { root } = mountVue(AgentStream, {
-            props: { issue, lane },
+            props: { issue, taskId },
             install: (app) => app.use(pinia),
         })
-
-        const taskId = store.getSession(lane)?.taskId
-
-        if (taskId === undefined) {
-            throw new Error(`Missing Agent session for ${lane}`)
-        }
 
         return { root, store, taskId }
     }
@@ -136,75 +125,62 @@ describe('agent stream', () => {
         )
     })
 
-    it.each([{ lane: 'job-post-import' }, { lane: 'outreach' }] satisfies Array<{
-        lane: AgentTaskLane
-    }>)(
-        'isolates $lane activity and actions from simultaneous agent in the other lane',
-        async ({ lane }) => {
-            const selected = laneContent[lane]
-            const excluded =
-                laneContent[lane === 'job-post-import' ? 'outreach' : 'job-post-import']
-            const { root, store } = mountAgentStream({
-                lane,
-                sessions: [importSession, outreachSession],
-                taskStates: {
-                    [importSession.taskId]: createTaskState(importSession.taskId, {
-                        task: runningTask,
-                        events: [
-                            {
-                                type: 'message',
-                                textDelta: laneContent['job-post-import'].activity,
-                                startsNewStatement: true,
-                                createdAt,
-                            },
-                        ],
-                        pendingPermission: {
-                            id: 'import-permission',
-                            kind: 'browser-origin',
-                            message: laneContent['job-post-import'].permission,
-                            origin: 'https://example.com',
+    it.each([
+        { selected: taskContent.import, excludedTestId: taskContent.outreach.eventTestId },
+        { selected: taskContent.outreach, excludedTestId: taskContent.import.eventTestId },
+    ])('isolates activity and actions by task ID', async ({ selected, excludedTestId }) => {
+        const { root, store } = mountAgentStream({
+            sessions: [importSession, outreachSession],
+            taskId: selected.taskId,
+            taskStates: {
+                [importSession.taskId]: createTaskState(importSession.taskId, {
+                    task: runningTask,
+                    events: [
+                        {
+                            type: 'message',
+                            textDelta: taskContent.import.activity,
+                            startsNewStatement: true,
+                            createdAt,
                         },
-                    }),
-                    [outreachSession.taskId]: createTaskState(outreachSession.taskId, {
-                        task: outreachTask,
-                        events: [
-                            {
-                                type: 'message',
-                                textDelta: laneContent.outreach.activity,
-                                startsNewStatement: true,
-                                createdAt,
-                            },
-                        ],
-                        pendingPermission: {
-                            id: 'outreach-permission',
-                            kind: 'browser-origin',
-                            message: laneContent.outreach.permission,
-                            origin: 'https://example.org',
+                    ],
+                    pendingPermission: {
+                        id: 'import-permission',
+                        kind: 'browser-origin',
+                        message: 'Permission required',
+                        origin: 'https://example.com',
+                    },
+                }),
+                [outreachSession.taskId]: createTaskState(outreachSession.taskId, {
+                    task: outreachTask,
+                    events: [
+                        {
+                            type: 'activity',
+                            message: taskContent.outreach.activity,
+                            createdAt,
                         },
-                    }),
-                },
-            })
-            const resolvePermission = vi.spyOn(store, 'resolvePermission').mockResolvedValue()
+                    ],
+                    pendingPermission: {
+                        id: 'outreach-permission',
+                        kind: 'browser-origin',
+                        message: 'Permission required',
+                        origin: 'https://example.org',
+                    },
+                }),
+            },
+        })
+        const resolvePermission = vi.spyOn(store, 'resolvePermission').mockResolvedValue()
 
-            await vi.waitFor(() => {
-                expect(root.querySelector('[data-testid="agent-stream-copy"]')?.textContent).toBe(
-                    selected.activity,
-                )
-                expect(
-                    root.querySelector('[data-testid="agent-permission-prompt"]')?.textContent,
-                ).toContain(selected.permission)
-            })
+        await vi.waitFor(() => {
+            expect(root.querySelector('[data-testid="agent-permission-prompt"]')).not.toBeNull()
+            expect(root.querySelectorAll(`[data-testid="${selected.eventTestId}"]`)).toHaveLength(1)
+        })
 
-            expect(root.textContent).not.toContain(excluded.activity)
-            expect(root.textContent).not.toContain(excluded.permission)
+        expect(root.querySelector(`[data-testid="${excludedTestId}"]`)).toBeNull()
 
-            root.querySelector<HTMLButtonElement>(
-                '[data-testid="agent-permission-approve"]',
-            )?.click()
+        root.querySelector<HTMLButtonElement>('[data-testid="agent-permission-approve"]')?.click()
 
-            expect(resolvePermission).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
-        },
-    )
+        expect(resolvePermission).toHaveBeenCalledExactlyOnceWith(selected.taskId, 'approve')
+    })
 
     it('replaces the latest activity icon with progress without attaching it to commentary', async () => {
         const { root, store, taskId } = mountAgentStream()

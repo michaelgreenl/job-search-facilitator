@@ -55,7 +55,12 @@ function applyApiResponse(
         return Promise.resolve(jsonResponse(applyQueueItems))
     }
 
-    if (method === 'GET' && url.endsWith(`/job-posts/${applyPost.id}/outreach-contacts`)) {
+    if (
+        method === 'GET' &&
+        [applyPost.id, applySecondPost.id].some((postId) =>
+            url.endsWith(`/job-posts/${postId}/outreach-contacts`),
+        )
+    ) {
         return Promise.resolve(jsonResponse(contacts))
     }
 
@@ -306,6 +311,8 @@ describe('running Agent task panel layout', () => {
 
         await page.getByTestId(`job-post-card-${applyPost.id}`).click()
         await page.getByTestId('discover-contacts').click()
+        await vi.waitFor(() => expect(agentBridge.tasks.size).toBe(1))
+        const taskId = [...agentBridge.tasks.keys()][0]!
 
         const outreach = page.getByTestId('apply-outreach-panel')
         const outreachBack = page.getByTestId('back-to-saved-contacts')
@@ -329,7 +336,7 @@ describe('running Agent task panel layout', () => {
         await outreachBack.click()
 
         await expect.element(page.getByTestId('outreach-contact-list')).toBeVisible()
-        await expect.element(page.getByTestId('outreach-contact-progress')).toBeVisible()
+        await expect.element(page.getByTestId(`outreach-task-${taskId}-select`)).toBeVisible()
         await expect.element(viewer).toBeVisible()
         await expect.element(posts).not.toBeVisible()
         await expect.element(page.getByTestId('back-to-job-post')).not.toBeVisible()
@@ -349,11 +356,64 @@ describe('running Agent task panel layout', () => {
         await expect.element(page.getByTestId('back-to-job-post')).not.toBeVisible()
         await expect.element(viewerBack).toBeVisible()
 
-        await page.getByTestId('outreach-contact-progress').click()
+        await page.getByTestId(`outreach-task-${taskId}-select`).click()
 
         await expect.element(outreachBack).toBeVisible()
         await expect.element(outreachCancel).toBeVisible()
         await expect.element(viewer).toBeVisible()
         await expect.element(viewerBack).toBeVisible()
+    })
+
+    it('starts and reopens multiple outreach tasks for the same post', async () => {
+        await page.viewport(848, 768)
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const agentBridge = new AgentBridgeHarness({
+            fallback: applyApiResponse,
+        })
+        vi.stubGlobal('fetch', agentBridge.fetch)
+        await mountApply()
+
+        await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+        await page.getByTestId('discover-contacts').click()
+        const discoverAnother = page.getByTestId('discover-another-contact')
+        await expect.element(discoverAnother).toBeEnabled()
+        await discoverAnother.click()
+
+        await vi.waitFor(() => expect(agentBridge.tasks.size).toBe(1))
+        const firstTaskId = [...agentBridge.tasks.keys()][0]!
+        await expect.element(page.getByTestId('outreach-cancel')).toBeVisible()
+
+        await page.getByTestId('back-to-saved-contacts').click()
+
+        const firstTaskRow = page.getByTestId(`outreach-task-${firstTaskId}-select`)
+        await expect.element(firstTaskRow).toBeVisible()
+        await expect.element(discoverAnother).toBeEnabled()
+        await discoverAnother.click()
+
+        await expect.element(page.getByTestId('outreach-cancel')).toBeVisible()
+        await vi.waitFor(() => expect(agentBridge.tasks.size).toBe(2))
+        const secondTaskId = [...agentBridge.tasks.keys()].find((taskId) => taskId !== firstTaskId)!
+
+        await page.getByTestId('back-to-saved-contacts').click()
+
+        const secondTaskRow = page.getByTestId(`outreach-task-${secondTaskId}-select`)
+        await expect.element(firstTaskRow).toBeVisible()
+        await expect.element(secondTaskRow).toBeVisible()
+
+        await firstTaskRow.click()
+        await page.getByTestId('outreach-cancel').click()
+        await vi.waitFor(() => expect(agentBridge.tasks.get(firstTaskId)?.status).toBe('cancelled'))
+        expect(agentBridge.tasks.get(secondTaskId)?.status).toBe('running')
+
+        await page.getByTestId('back-to-saved-contacts').click()
+        await expect.element(firstTaskRow).not.toBeInTheDocument()
+        await expect.element(secondTaskRow).toBeVisible()
+
+        await secondTaskRow.click()
+        await page.getByTestId('outreach-cancel').click()
+        await vi.waitFor(() =>
+            expect(agentBridge.tasks.get(secondTaskId)?.status).toBe('cancelled'),
+        )
     })
 })

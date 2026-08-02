@@ -50,6 +50,115 @@ const userAddedJobPostOutput = {
 } as const
 
 describe('Agent task manager', () => {
+    it('keeps concurrent task streams, results, and cancellation isolated', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const firstStart = manager.start(input, 'first-task')
+        const secondStart = manager.start(input, 'second-task')
+        const [first, second] = await Promise.all([firstStart, secondStart])
+        const firstEvents: AgentTaskStreamEvent[] = []
+        const secondEvents: AgentTaskStreamEvent[] = []
+
+        manager.connect(first.id, (event) => firstEvents.push(event))
+        manager.connect(second.id, (event) => secondEvents.push(event))
+
+        expect({ threadId: first.threadId, turnId: first.turnId }).not.toEqual({
+            threadId: second.threadId,
+            turnId: second.turnId,
+        })
+
+        runtime.emit({
+            type: 'reasoning-delta',
+            threadId: first.threadId,
+            turnId: first.turnId,
+            itemId: 'reasoning',
+            summaryIndex: 0,
+            textDelta: 'First task progress',
+        })
+        runtime.emit({
+            type: 'activity',
+            threadId: second.threadId,
+            turnId: second.turnId,
+            activity: 'web-search',
+        })
+        runtime.emit({
+            type: 'final-message',
+            threadId: first.threadId,
+            turnId: first.turnId,
+            text: '{"contacts":[]}',
+        })
+        runtime.emit({
+            type: 'turn-completed',
+            threadId: first.threadId,
+            turnId: first.turnId,
+            status: 'completed',
+            error: null,
+        })
+
+        expect(firstEvents.map(({ event }) => event.type)).toEqual(['message', 'completed'])
+        expect(secondEvents.map(({ event }) => event.type)).toEqual(['activity'])
+        expect(manager.get(first.id)).toMatchObject({
+            status: 'completed',
+            output: { contacts: [] },
+        })
+        expect(manager.get(second.id)).toMatchObject({
+            status: 'running',
+            output: null,
+        })
+
+        await manager.cancel(second.id)
+
+        expect(runtime.interruptions).toEqual([
+            { threadId: second.threadId, turnId: second.turnId },
+        ])
+        expect(manager.get(second.id)).toMatchObject({ status: 'cancelled', output: null })
+        expect(firstEvents.map(({ event }) => event.type)).toEqual(['message', 'completed'])
+        expect(secondEvents.map(({ event }) => event.type)).toEqual(['activity', 'cancelled'])
+    })
+
+    it('routes concurrent permission requests to their exact task', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const [first, second] = await Promise.all([
+            manager.start(input, 'first-task'),
+            manager.start(input, 'second-task'),
+        ])
+        const firstPermissionId = 'first-permission'
+        const secondPermissionId = 'second-permission'
+
+        runtime.emit({
+            type: 'permission-required',
+            permission: {
+                id: firstPermissionId,
+                kind: 'browser-origin',
+                threadId: first.threadId,
+                turnId: first.turnId,
+                message: 'Allow the first browser origin?',
+                origin: 'https://first.example.com',
+            },
+        })
+        runtime.emit({
+            type: 'permission-required',
+            permission: {
+                id: secondPermissionId,
+                kind: 'browser-origin',
+                threadId: second.threadId,
+                turnId: second.turnId,
+                message: 'Allow the second browser origin?',
+                origin: 'https://second.example.com',
+            },
+        })
+
+        expect(manager.resolvePermission(first.id, secondPermissionId, 'approve')).toBe(false)
+        expect(manager.resolvePermission(second.id, firstPermissionId, 'decline')).toBe(false)
+        expect(manager.resolvePermission(first.id, firstPermissionId, 'approve')).toBe(true)
+        expect(manager.resolvePermission(second.id, secondPermissionId, 'decline')).toBe(true)
+        expect(runtime.decisions).toEqual([
+            { permissionId: firstPermissionId, decision: 'approve' },
+            { permissionId: secondPermissionId, decision: 'decline' },
+        ])
+    })
+
     it('delivers live events only while a listener is subscribed', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)

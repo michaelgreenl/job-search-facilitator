@@ -46,9 +46,9 @@ describe('OutreachContactList', () => {
                     contact({ messaged: true }),
                     contact({ id: 'contact-2', personName: 'Grace Hopper' }),
                 ],
-                discovering: true,
                 error: null,
                 loading: false,
+                tasks: [],
             },
         })
 

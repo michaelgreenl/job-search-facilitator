@@ -49,6 +49,7 @@ const postStore = usePostStore()
 const importStore = useJobPostImportStore()
 const {
     hasSession: hasImportSession,
+    taskId: importTaskId,
     dialogOpen: importDialogOpen,
     url: addPostUrl,
     importedItem,
@@ -563,6 +564,7 @@ onMounted(() => {
                 :running="importRunning"
                 :saving="importSaving"
                 :starting="importStarting"
+                :task-id="importTaskId"
                 @back="showImportPosts"
                 @cancel="importStore.cancel"
                 @retry="importStore.retry"

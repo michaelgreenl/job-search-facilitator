@@ -35,17 +35,18 @@ const isPostFilter = (value: string): value is PostFilter =>
 const postStore = usePostStore()
 const outreachStore = useOutreachStore()
 const {
-    hasTaskSession: hasOutreachTaskSession,
     postId: outreachPostId,
     contact: outreachContact,
-    contactSaving,
-    contactUpdating,
-    contactsLoading,
+    taskPostIds: outreachTaskPostIds,
     taskVisible: outreachTaskVisible,
     restoreContactListPending,
-    taskActive: outreachTaskActive,
 } = storeToRefs(outreachStore)
 const postFilter = shallowRef<PostFilter>('all')
+const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
+const startupOutreachPostId =
+    startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
+        ? outreachPostId.value
+        : null
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && (outreachTaskVisible.value || restoreContactListPending.value)
         ? 'outreach'
@@ -104,13 +105,8 @@ const selectedRecommendationContext = computed(() =>
 const outreachPost = computed(() =>
     outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
 )
-const outreachTaskInProgress = computed(() => outreachTaskActive.value || contactSaving.value)
 const outreachActionDisabled = computed(
-    () =>
-        contactsLoading.value ||
-        contactSaving.value ||
-        contactUpdating.value ||
-        (outreachTaskActive.value && outreachPostId.value !== selectedPostId.value),
+    () => selectedPostId.value === null || outreachStore.isPostBusy(selectedPostId.value),
 )
 const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
@@ -134,9 +130,7 @@ watch(
         selectedPostId.value = postId
 
         if (changed) {
-            if (!outreachTaskInProgress.value) {
-                outreachStore.reset()
-            }
+            outreachStore.reset()
 
             outreachExpanded.value = false
             labelError.value = null
@@ -154,7 +148,7 @@ function selectPost(postId: string) {
     const changed = postId !== selectedPostId.value
     selectedPostId.value = postId
 
-    if (changed && !outreachTaskInProgress.value) {
+    if (changed) {
         outreachStore.reset()
     }
 
@@ -189,9 +183,7 @@ function showPosts() {
     if (!filteredPosts.value.some(({ id }) => id === selectedPostId.value)) {
         selectedPostId.value = filteredPosts.value[0]?.id ?? null
 
-        if (!outreachTaskInProgress.value) {
-            outreachStore.reset()
-        }
+        outreachStore.reset()
     }
 
     outreachExpanded.value = false
@@ -211,11 +203,7 @@ function showViewer() {
 async function startContactDiscovery(post: JobPost) {
     if (
         !viewMounted ||
-        outreachTaskVisible.value ||
-        outreachTaskActive.value ||
-        contactSaving.value ||
-        contactUpdating.value ||
-        contactsLoading.value ||
+        outreachStore.isPostBusy(post.id) ||
         outreachStore.postId !== post.id ||
         selectedPostId.value !== post.id
     ) {
@@ -239,16 +227,13 @@ function discoverAnotherContact() {
 async function openOutreach() {
     const post = selectedPost.value
 
-    if (post === null || contactSaving.value || contactUpdating.value || contactsLoading.value) {
+    if (post === null) {
         return
     }
 
-    if (outreachTaskActive.value) {
-        if (outreachStore.postId === post.id) {
-            outreachExpanded.value = false
-            activePanel.value = 'outreach'
-        }
+    const hasTask = outreachStore.hasTaskForPost(post.id)
 
+    if (!hasTask && outreachStore.isPostBusy(post.id)) {
         return
     }
 
@@ -261,12 +246,15 @@ async function openOutreach() {
 
         if (
             !viewMounted ||
-            outreachTaskActive.value ||
             savedContacts === null ||
             outreachStore.postId !== post.id ||
             selectedPostId.value !== post.id ||
             activePanel.value !== 'outreach'
         ) {
+            return
+        }
+
+        if (hasTask || outreachStore.hasTaskForPost(post.id)) {
             return
         }
 
@@ -287,8 +275,22 @@ async function cancelOutreach() {
 
 async function retryOutreach() {
     if (outreachPost.value !== null) {
-        await outreachStore.retryTask(outreachPost.value).catch(() => false)
+        const retry =
+            outreachStore.contactsError === null
+                ? outreachStore.retryTask(outreachPost.value)
+                : outreachStore.restoreTaskContext()
+        await retry.catch(() => false)
     }
+}
+
+async function retryOutreachContacts() {
+    const post = outreachPost.value
+
+    if (post === null) {
+        return
+    }
+
+    await outreachStore.fetchContacts(post.id).catch(() => null)
 }
 
 function expandOutreach() {
@@ -386,7 +388,21 @@ async function loadApplyQueue() {
 
     try {
         const items = await postStore.fetchApplyQueue()
-        applyQueuePostIds.value = items.map(({ post }) => post.id)
+        const queuePostIds = items.map(({ post }) => post.id)
+        const omittedTaskPostIds = startupOutreachTaskPostIds.filter(
+            (postId) => !queuePostIds.includes(postId),
+        )
+
+        await Promise.allSettled(
+            omittedTaskPostIds
+                .filter((postId) => postStore.findPost(postId) === null)
+                .map((postId) => postStore.fetchPost(postId)),
+        )
+
+        applyQueuePostIds.value = [
+            ...queuePostIds,
+            ...omittedTaskPostIds.filter((postId) => postStore.findPost(postId) !== null),
+        ]
         recommendationContextByPostId.value = new Map(
             items.map(({ post, recommendationContext }) => [post.id, recommendationContext]),
         )
@@ -398,12 +414,12 @@ async function loadApplyQueue() {
 }
 
 async function restoreOutreach() {
-    const restoredPostId = outreachPostId.value
+    const restoredPostId = startupOutreachPostId
 
-    if (!hasOutreachTaskSession.value) {
+    if (restoreContactListPending.value) {
         const returnPostId = outreachStore.postId
 
-        if (!restoreContactListPending.value || returnPostId === null) {
+        if (returnPostId === null) {
             return
         }
 
@@ -435,21 +451,24 @@ async function restoreOutreach() {
         await postStore.fetchPost(restoredPostId).catch(() => null)
     }
 
-    if (!viewMounted || !hasOutreachTaskSession.value || outreachStore.postId !== restoredPostId) {
+    if (!viewMounted || outreachStore.postId !== restoredPostId) {
         return
     }
 
     selectedPostId.value = restoredPostId
     outreachExpanded.value = false
     activePanel.value = 'outreach'
-    await outreachStore.restoreTaskContext()
 
-    if (!outreachTaskVisible.value && outreachPost.value === null) {
+    if (!outreachTaskVisible.value && outreachContact.value === null) {
         showPosts()
     }
 }
 
 onMounted(() => {
+    if (startupOutreachTaskPostIds.length > 0) {
+        void outreachStore.restoreTaskContext()
+    }
+
     void loadApplyQueue().then(restoreOutreach)
 })
 </script>
@@ -532,7 +551,7 @@ onMounted(() => {
                 @discover="discoverAnotherContact"
                 @expand="expandOutreach"
                 @retry="retryOutreach"
-                @retry-contacts="openOutreach"
+                @retry-contacts="retryOutreachContacts"
                 @show-viewer="showViewer"
             />
         </div>

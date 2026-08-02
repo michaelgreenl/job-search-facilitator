@@ -11,6 +11,7 @@ const props = defineProps<{
     running: boolean
     saving: boolean
     starting: boolean
+    taskId: string | null
 }>()
 
 const emit = defineEmits<{
@@ -32,7 +33,7 @@ const statusTestId = computed(() =>
         :active="active"
         :adjacent="adjacent"
         aria-label="Add job post"
-        lane="job-post-import"
+        :task-id="taskId"
         eyebrow="Job post import"
         title="Add job post"
         back-label="Back to added job posts"

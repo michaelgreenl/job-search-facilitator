@@ -513,7 +513,7 @@ describe('apply view', () => {
         await agentStore.restoreTask(importTaskId)
         const root = await mountApplyView(pinia)
 
-        expect(agentStore.getSession('job-post-import')).toMatchObject({
+        expect(agentStore.getSession(importTaskId)).toMatchObject({
             kind: 'job-post-import',
             taskId: importTaskId,
         })
@@ -531,14 +531,14 @@ describe('apply view', () => {
 
         await vi.waitFor(() => {
             expect(FakeEventSource.instances).toHaveLength(2)
-            expect(agentStore.getSession('job-post-import')).toMatchObject({
+            expect(agentStore.getSession(importTaskId)).toMatchObject({
                 kind: 'job-post-import',
                 taskId: importTaskId,
             })
             expect(agentStore.getTaskState(importTaskId)).toMatchObject({
                 task: runningImportTask,
             })
-            expect(agentStore.getSession('outreach')).toMatchObject({
+            expect(agentStore.getSession(runningAgentTask.id)).toMatchObject({
                 kind: 'outreach-contact',
                 taskId: runningAgentTask.id,
                 postId: posts[0]!.id,
@@ -630,7 +630,7 @@ describe('apply view', () => {
             ).toBe('true'),
         )
 
-        expect(useAgentStore(pinia).getSession('outreach')).toMatchObject({
+        expect(useAgentStore(pinia).getSession(runningAgentTask.id)).toMatchObject({
             taskId: runningAgentTask.id,
             postId: posts[0]!.id,
         })
@@ -681,7 +681,7 @@ describe('apply view', () => {
         await vi.waitFor(() => {
             expect(root.querySelector('[data-testid="outreach-retry"]')).toBeNull()
             expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
-            expect(useAgentStore(pinia).getSession('outreach')?.taskId).toBe(retryTask.id)
+            expect(useAgentStore(pinia).getSession(retryTask.id)?.taskId).toBe(retryTask.id)
         })
     })
 

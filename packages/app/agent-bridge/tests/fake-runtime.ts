@@ -26,7 +26,12 @@ export class FakeRuntime implements AgentRuntime {
             throw error
         }
 
-        return { threadId: 'thread-id', turnId: 'turn-id' }
+        const identitySuffix = this.startAttempts === 1 ? '' : `-${this.startAttempts}`
+
+        return {
+            threadId: `thread-id${identitySuffix}`,
+            turnId: `turn-id${identitySuffix}`,
+        }
     }
 
     async interruptTask(threadId: string, turnId: string): Promise<void> {

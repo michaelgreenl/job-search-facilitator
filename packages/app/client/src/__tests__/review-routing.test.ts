@@ -12,7 +12,7 @@ import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createJobPostImportTask } from '@/stores/job-post-import'
-import { useAgentStore, type AgentSession } from '@/stores/agent'
+import { useAgentStore, type AgentSession, type AgentTaskStart } from '@/stores/agent'
 import { makeAgentTask, makeAgentTaskState } from '@/test/fixtures/agent'
 import { makeJobPost } from '@/test/fixtures/job-post'
 import { makeJobSearchReport } from '@/test/fixtures/report'
@@ -171,8 +171,13 @@ const seedImportAgent = (
     }
 }
 
+const seedImportStart = (agentStore: AgentStore, task: AgentTask): AgentTaskStart => {
+    seedImportAgent(agentStore, task)
+    return { taskId: task.id, started: Promise.resolve(task) }
+}
+
 const updateImportAgentTask = (agentStore: AgentStore, task: AgentTask) => {
-    const session = agentStore.getSession('job-post-import')
+    const session = agentStore.getSession(task.id)
     const currentState = agentStore.getTaskState(task.id)
 
     if (session?.taskId !== task.id || currentState === null) {
@@ -510,13 +515,13 @@ describe('review route selection', () => {
                     url: importOutput.post.postUrl,
                 },
             )
-            expect(agentStore.getSession('job-post-import')).toEqual({
+            expect(agentStore.getSession(importTask.id)).toEqual({
                 kind: 'job-post-import',
                 taskId: importTask.id,
                 url: importOutput.post.postUrl,
             })
             expect(agentStore.getTaskState(importTask.id)?.task).toEqual(importTask)
-            expect(agentStore.getSession('outreach')).toEqual(outreachSession)
+            expect(agentStore.getSession(outreachTask.id)).toEqual(outreachSession)
             expect(agentStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
         })
     })
@@ -606,7 +611,7 @@ describe('review route selection', () => {
                 kind: 'job-post-import',
                 url: importOutput.post.postUrl,
             },
-        )
+        ).started
         await firstStore.cancelTask(taskId)
         expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
 
@@ -639,11 +644,9 @@ describe('review route selection', () => {
             threadId: 'thread',
             turnId: 'turn',
         })
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
-            seedImportAgent(agentStore, runningTask)
-            return runningTask
-        })
-
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, runningTask),
+        )
         await submitJobPostUrl(root, importOutput.post.postUrl)
 
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
@@ -686,10 +689,12 @@ describe('review route selection', () => {
             threadId: 'thread',
             turnId: 'turn',
         })
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
-            seedImportAgent(agentStore, runningTask)
-            return runningTask
-        })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, runningTask),
+        )
+        const retryTask = vi
+            .spyOn(agentStore, 'retryTask')
+            .mockImplementation(() => seedImportStart(agentStore, runningTask))
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
@@ -708,7 +713,12 @@ describe('review route selection', () => {
         })
 
         findTestButton(root, 'retry-job-post-import').click()
-        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledTimes(2))
+        await vi.waitFor(() => {
+            expect(retryTask).toHaveBeenCalledWith(
+                runningTask.id,
+                createJobPostImportTask(importOutput.post.postUrl),
+            )
+        })
     })
 
     it('shows a selectable in-progress card after leaving a running import', async () => {
@@ -719,10 +729,9 @@ describe('review route selection', () => {
             threadId: 'thread',
             turnId: 'turn',
         })
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
-            seedImportAgent(agentStore, runningTask)
-            return runningTask
-        })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, runningTask),
+        )
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
@@ -755,10 +764,9 @@ describe('review route selection', () => {
             threadId: 'thread',
             turnId: 'turn',
         })
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
-            seedImportAgent(agentStore, runningTask)
-            return runningTask
-        })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, runningTask),
+        )
         const cancelTask = vi
             .spyOn(agentStore, 'cancelTask')
             .mockRejectedValueOnce(new Error('Could not cancel import'))
@@ -787,10 +795,9 @@ describe('review route selection', () => {
             ...runningTask,
             status: 'cancelled',
         } satisfies AgentTask
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async () => {
-            seedImportAgent(agentStore, runningTask)
-            return runningTask
-        })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, runningTask),
+        )
         const cancelTask = vi.spyOn(agentStore, 'cancelTask').mockImplementationOnce(async () => {
             updateImportAgentTask(agentStore, cancelledTask)
             return cancelledTask

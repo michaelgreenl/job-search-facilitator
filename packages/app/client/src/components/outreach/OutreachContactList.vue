@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 
-import OutreachContactCard from './OutreachContactCard.vue'
+import OutreachContactCard, { type OutreachTaskListItem } from './OutreachContactCard.vue'
 
 const contactFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -21,14 +21,14 @@ const isContactFilter = (value: string): value is OutreachContactFilter =>
 
 const props = defineProps<{
     contacts: OutreachContact[]
-    discovering: boolean
     error: string | null
     loading: boolean
+    tasks: OutreachTaskListItem[]
 }>()
 
 const emit = defineEmits<{
     select: [contact: OutreachContact]
-    showStream: []
+    showStream: [taskId: string]
     retry: []
 }>()
 
@@ -74,6 +74,28 @@ function selectContactFilter(value: string) {
             />
         </div>
 
+        <ul
+            v-if="tasks.length > 0 || (!loading && !error && filteredContacts.length > 0)"
+            class="contact-list"
+        >
+            <li v-for="task in tasks" :key="task.taskId">
+                <OutreachContactCard
+                    selectable
+                    :task="task"
+                    @select="emit('showStream', task.taskId)"
+                />
+            </li>
+            <template v-if="!loading && !error">
+                <li v-for="savedContact in filteredContacts" :key="savedContact.id">
+                    <OutreachContactCard
+                        :contact="savedContact"
+                        selectable
+                        @select="emit('select', savedContact)"
+                    />
+                </li>
+            </template>
+        </ul>
+
         <p
             v-if="loading"
             class="contact-history-empty"
@@ -92,25 +114,15 @@ function selectContactFilter(value: string) {
             </BaseButton>
         </template>
 
-        <template v-else>
-            <ul v-if="discovering || filteredContacts.length > 0" class="contact-list">
-                <li v-if="discovering">
-                    <OutreachContactCard loading selectable @select="emit('showStream')" />
-                </li>
-                <li v-for="savedContact in filteredContacts" :key="savedContact.id">
-                    <OutreachContactCard
-                        :contact="savedContact"
-                        selectable
-                        @select="emit('select', savedContact)"
-                    />
-                </li>
-            </ul>
-
-            <p v-else-if="contacts.length > 0" class="contact-history-empty">
-                No contacts match this filter.
-            </p>
-            <p v-else class="contact-history-empty">No saved contacts yet.</p>
-        </template>
+        <p
+            v-else-if="filteredContacts.length === 0 && contacts.length > 0"
+            class="contact-history-empty"
+        >
+            No contacts match this filter.
+        </p>
+        <p v-else-if="contacts.length === 0 && tasks.length === 0" class="contact-history-empty">
+            No saved contacts yet.
+        </p>
     </section>
 </template>
 

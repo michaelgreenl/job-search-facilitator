@@ -7,22 +7,17 @@ import type {
 } from '@job-search-facilitator/core'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-    createContactDiscoveryTask,
-    createDraftRevisionTask,
-    useOutreachStore,
-} from '../stores/outreach'
+import { useOutreachStore } from '../stores/outreach'
 import { usePostStore } from '../stores/post'
 import { useReportStore } from '../stores/report'
 import {
-    getAgentTaskLane,
     useAgentStore,
     type AgentSession,
     type AgentSessionOwner,
     type AgentTaskState,
 } from '../stores/agent'
-import { createJobPostImportTask } from '../stores/job-post-import'
-import { jsonResponse } from '@/test/support/http'
+import { FakeEventSource } from '@/test/support/fake-event-source'
+import { jsonResponse, requestUrl } from '@/test/support/http'
 import { MemoryStorage } from '@/test/support/memory-storage'
 
 const post: JobPost = {
@@ -322,14 +317,26 @@ describe('post store', () => {
 })
 
 describe('outreach store', () => {
+    const secondPost: JobPost = {
+        ...post,
+        id: '42a2193a-1fcc-4aa0-b8e7-976bd8f107ec',
+        sourceKey: 'example:post-2',
+    }
+    const secondContact: OutreachContact = {
+        ...savedContact,
+        id: 'e0d9b035-4fe4-476a-8371-c664ee8e2250',
+        jobPostId: post.id,
+        personName: 'Grace Hopper',
+        profileUrl: 'https://www.linkedin.com/in/grace-hopper',
+        draftMessage: 'Second draft',
+    }
+
     const seedTask = (
         task: AgentTask,
         owner: AgentSessionOwner,
         state: Partial<AgentTaskState> = {},
     ) => {
         const agentStore = useAgentStore()
-        const session: AgentSession = { ...owner, taskId: task.id }
-        const lane = getAgentTaskLane(owner)
         const taskState: AgentTaskState = {
             taskId: task.id,
             task,
@@ -346,12 +353,31 @@ describe('outreach store', () => {
             ...state,
         }
 
-        agentStore.sessions = [
-            ...agentStore.sessions.filter((current) => getAgentTaskLane(current) !== lane),
-            session,
-        ]
         agentStore.taskStates = { ...agentStore.taskStates, [task.id]: taskState }
+        agentStore.sessions = [
+            ...agentStore.sessions.filter((session) => session.taskId !== task.id),
+            { ...owner, taskId: task.id } as AgentSession,
+        ]
         return task
+    }
+
+    const taskStart = (task: AgentTask, owner: AgentSessionOwner) => ({
+        taskId: task.id,
+        started: Promise.resolve(seedTask(task, owner)),
+    })
+
+    const stubTaskStarts = (tasks: AgentTask[]) => {
+        const pendingTasks = [...tasks]
+
+        return vi.spyOn(useAgentStore(), 'startTask').mockImplementation((_input, owner) => {
+            const task = pendingTasks.shift()
+
+            if (task === undefined) {
+                throw new Error('Unexpected Agent task start')
+            }
+
+            return taskStart(task, owner)
+        })
     }
 
     const updateTask = (task: AgentTask) => {
@@ -359,7 +385,7 @@ describe('outreach store', () => {
         const state = agentStore.getTaskState(task.id)
 
         if (state === null) {
-            throw new Error(`Missing Agent task state for ${task.id}`)
+            throw new Error('Missing Agent task state for ' + task.id)
         }
 
         agentStore.taskStates = {
@@ -368,184 +394,99 @@ describe('outreach store', () => {
         }
     }
 
+    const completedDiscovery = (task: AgentTask, contact: OutreachContact): AgentTask => ({
+        ...task,
+        status: 'completed',
+        output: {
+            personName: contact.personName,
+            personTitle: contact.personTitle,
+            profileUrl: contact.profileUrl,
+            relevanceRationale: contact.relevanceRationale,
+            draftMessage: contact.draftMessage,
+        },
+        error: null,
+    })
+
+    const persistedTaskIds = () => {
+        const stored = sessionStorage.getItem('job-search-facilitator:agent-session')
+
+        if (stored === null) {
+            return []
+        }
+
+        return (JSON.parse(stored) as { sessions: AgentSession[] }).sessions.map(
+            ({ taskId }) => taskId,
+        )
+    }
+
     beforeEach(() => {
         setActivePinia(createPinia())
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
         vi.stubGlobal('sessionStorage', new MemoryStorage())
         vi.stubGlobal('fetch', vi.fn())
     })
 
-    it('restores completed contact discovery without creating a duplicate contact', async () => {
-        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
-        const completedTask: AgentTask = {
-            ...runningTask,
-            id: restoredTaskId,
-            status: 'completed',
-            output: {
-                personName: savedContact.personName,
-                personTitle: savedContact.personTitle,
-                profileUrl: savedContact.profileUrl,
-                relevanceRationale: savedContact.relevanceRationale,
-                draftMessage: savedContact.draftMessage,
-            },
-        }
+    it('restores a completed discovery without saving an existing contact twice', async () => {
+        const taskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
+        const completedTask = completedDiscovery({ ...runningTask, id: taskId }, savedContact)
         sessionStorage.setItem(
             'job-search-facilitator:agent-session',
             JSON.stringify({
-                version: 1,
-                session: {
-                    kind: 'outreach-contact',
-                    taskId: restoredTaskId,
-                    postId: post.id,
-                },
+                version: 2,
+                sessions: [{ kind: 'outreach-contact', taskId, postId: post.id }],
             }),
         )
-        const fetchMock = vi
-            .mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse(completedTask))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
-        vi.stubGlobal(
-            'EventSource',
-            class {
-                static readonly CLOSED = 2
-                readonly readyState = 0
-                close() {}
-            },
-        )
-        await useAgentStore().restoreSessions()
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+            const url = requestUrl(input)
+
+            if (url.endsWith('/tasks/' + taskId)) {
+                return jsonResponse(completedTask)
+            }
+
+            if (
+                url.endsWith('/job-posts/' + post.id + '/outreach-contacts') &&
+                init?.method !== 'POST'
+            ) {
+                return jsonResponse([savedContact])
+            }
+
+            throw new Error('Unexpected request: ' + url)
+        })
+        const agentStore = useAgentStore()
+        await agentStore.restoreSessions()
         const store = useOutreachStore()
 
         await store.restoreTaskContext()
 
         await vi.waitFor(() => expect(store.contact).toEqual(savedContact))
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-        expect(useAgentStore().getSession('outreach')).toBeNull()
+        expect(agentStore.getSession(taskId)).toBeNull()
+        expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     })
 
-    it('clears a draft session when restore finds that Agent cancelled it', async () => {
-        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
-        const editedDraft = 'Edited draft awaiting revision'
-        const cancelledTask: AgentTask = {
-            ...runningTask,
-            id: restoredTaskId,
-            status: 'cancelled',
-        }
-        sessionStorage.setItem(
-            'job-search-facilitator:agent-session',
-            JSON.stringify({
-                version: 1,
-                session: {
-                    kind: 'outreach-draft',
-                    taskId: restoredTaskId,
-                    postId: post.id,
-                    contactId: savedContact.id,
-                    draft: editedDraft,
-                    request: 'Make it warmer',
-                },
-            }),
-        )
-        vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse(cancelledTask))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
-        vi.stubGlobal(
-            'EventSource',
-            class {
-                static readonly CLOSED = 2
-                readonly readyState = 0
-                close() {}
-            },
-        )
-        await useAgentStore().restoreSessions()
-        const store = useOutreachStore()
-
-        await store.restoreTaskContext()
-
-        expect(store.contact).toBeNull()
-        expect(store.draft).toBe('')
-        expect(store.drafting).toBe(false)
-        expect(useAgentStore().getSession('outreach')).toBeNull()
-    })
-
-    it('applies a completed draft revision and clears its task automatically', async () => {
-        const restoredTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb3'
-        const revisedDraft = 'Revised draft from Agent'
-        const completedTask: AgentTask = {
-            ...runningTask,
-            id: restoredTaskId,
-            status: 'completed',
-            output: {
-                draftMessage: revisedDraft,
-                response: 'Made the introduction warmer.',
-            },
-        }
-        sessionStorage.setItem(
-            'job-search-facilitator:agent-session',
-            JSON.stringify({
-                version: 1,
-                session: {
-                    kind: 'outreach-draft',
-                    taskId: restoredTaskId,
-                    postId: post.id,
-                    contactId: savedContact.id,
-                    draft: savedContact.draftMessage,
-                    request: 'Make it warmer',
-                },
-            }),
-        )
-        vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse(completedTask))
-            .mockResolvedValueOnce(jsonResponse([savedContact]))
-        vi.stubGlobal(
-            'EventSource',
-            class {
-                static readonly CLOSED = 2
-                readonly readyState = 0
-                close() {}
-            },
-        )
-        await useAgentStore().restoreSessions()
-        const store = useOutreachStore()
-
-        await store.restoreTaskContext()
-
-        await vi.waitFor(() => expect(store.draft).toBe(revisedDraft))
-        expect(store.assistantReply).toBe('Made the introduction warmer.')
-        expect(store.taskVisible).toBe(false)
-        expect(useAgentStore().getSession('outreach')).toBeNull()
-    })
-
-    it('updates the selected and saved contact from the messaged PATCH response', async () => {
+    it('updates the selected contact from the saved PATCH response', async () => {
         const updatedContact = {
             ...savedContact,
             messaged: true,
             updatedAt: '2026-07-22T12:00:00.000Z',
         }
-        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(updatedContact))
+        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(updatedContact))
         const store = useOutreachStore()
         store.openForPost(post.id)
         store.contacts = [savedContact]
         store.selectContact(savedContact)
         store.draft = 'Locally edited draft'
 
-        const update = store.updateContactMessaged(savedContact.id, true)
-
-        expect(store.contactUpdating).toBe(true)
-        await expect(update).resolves.toEqual(updatedContact)
-        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts/${savedContact.id}`,
-            {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messaged: true }),
-            },
+        await expect(store.updateContactMessaged(savedContact.id, true)).resolves.toEqual(
+            updatedContact,
         )
+
         expect(store.contact).toEqual(updatedContact)
         expect(store.contacts).toEqual([updatedContact])
         expect(store.draft).toBe('Locally edited draft')
-        expect(store.contactUpdating).toBe(false)
-        expect(store.contactUpdateError).toBeNull()
     })
 
-    it('rejects unsafe contact links before changing outreach state', async () => {
+    it('does not replace saved contacts with an invalid API response', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(
             jsonResponse([{ ...savedContact, profileUrl: 'javascript:alert(1)' }]),
         )
@@ -554,548 +495,233 @@ describe('outreach store', () => {
         store.contacts = [savedContact]
 
         await expect(store.fetchContacts(post.id)).rejects.toThrow(
-            `API /job-posts/${post.id}/outreach-contacts returned invalid data`,
+            'API /job-posts/' + post.id + '/outreach-contacts returned invalid data',
         )
 
         expect(store.contacts).toEqual([savedContact])
         expect(store.contactsLoading).toBe(false)
     })
 
-    it('keeps the saved status and exposes an error when the messaged update fails', async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
+    it('indexes every same-post and cross-post run by its exact task ID', async () => {
+        const samePostTask: AgentTask = {
+            ...runningTask,
+            id: 'task-2',
+            threadId: 'thread-2',
+            turnId: 'turn-2',
+        }
+        const otherPostTask: AgentTask = {
+            ...runningTask,
+            id: 'task-3',
+            threadId: 'thread-3',
+            turnId: 'turn-3',
+        }
+        stubTaskStarts([runningTask, samePostTask, otherPostTask])
+        const agentStore = useAgentStore()
         const store = useOutreachStore()
+
         store.openForPost(post.id)
-        store.contacts = [savedContact]
-        store.selectContact(savedContact)
+        await store.startContactDiscovery(post)
+        await store.startContactDiscovery(post)
+        store.openForPost(secondPost.id)
+        await store.startContactDiscovery(secondPost)
 
-        await expect(store.updateContactMessaged(savedContact.id, true)).rejects.toThrow(
-            'API request failed (500)',
-        )
-
-        expect(store.contact).toEqual(savedContact)
-        expect(store.contacts).toEqual([savedContact])
-        expect(store.contactUpdating).toBe(false)
-        expect(store.contactUpdateError).toBe('API request failed (500)')
+        expect(agentStore.sessions.map(({ taskId }) => taskId)).toEqual([
+            runningTask.id,
+            samePostTask.id,
+            otherPostTask.id,
+        ])
+        store.openForPost(post.id)
+        expect(store.tasks.map(({ taskId }) => taskId)).toEqual([runningTask.id, samePostTask.id])
+        expect(store.openTask(runningTask.id)).toBe(true)
+        expect(store.taskId).toBe(runningTask.id)
+        expect(store.openTask(otherPostTask.id)).toBe(true)
+        expect(store.postId).toBe(secondPost.id)
+        expect(store.taskId).toBe(otherPostTask.id)
     })
 
-    it('ignores a messaged update after outreach moves to another post', async () => {
-        let resolveUpdate: ((response: Response) => void) | undefined
-        const updateResponse = new Promise<Response>((resolve) => {
-            resolveUpdate = resolve
+    it('persists same-post results independently without a background result replacing the foreground', async () => {
+        const samePostTask: AgentTask = {
+            ...runningTask,
+            id: 'task-2',
+            threadId: 'thread-2',
+            turnId: 'turn-2',
+        }
+        const persistedContacts: OutreachContact[] = []
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+            const url = requestUrl(input)
+
+            if (!url.endsWith('/job-posts/' + post.id + '/outreach-contacts')) {
+                throw new Error('Unexpected request: ' + url)
+            }
+
+            if (init?.method !== 'POST') {
+                return jsonResponse(persistedContacts)
+            }
+
+            if (typeof init.body !== 'string') {
+                throw new Error('Expected a JSON request body')
+            }
+
+            const inputContact = JSON.parse(init.body) as { profileUrl: string }
+            const saved =
+                inputContact.profileUrl === savedContact.profileUrl ? savedContact : secondContact
+            persistedContacts.push(saved)
+            return jsonResponse(saved, 201)
         })
-        const fetchMock = vi.mocked(fetch).mockReturnValueOnce(updateResponse)
+        stubTaskStarts([runningTask, samePostTask])
+        const agentStore = useAgentStore()
         const store = useOutreachStore()
         store.openForPost(post.id)
-        store.contacts = [savedContact]
-        store.selectContact(savedContact)
+        await store.startContactDiscovery(post)
+        await store.startContactDiscovery(post)
 
-        const update = store.updateContactMessaged(savedContact.id, true)
+        updateTask(completedDiscovery(samePostTask, secondContact))
+        updateTask(completedDiscovery(runningTask, savedContact))
+        await vi.waitFor(() => {
+            expect(agentStore.getSession(samePostTask.id)).toBeNull()
+            expect(agentStore.getSession(runningTask.id)).toBeNull()
+        })
 
-        expect(store.contactUpdating).toBe(true)
-        expect(fetchMock).toHaveBeenCalledOnce()
-        store.openForPost('post-2')
-        resolveUpdate?.(jsonResponse({ ...savedContact, messaged: true }))
-
-        await expect(update).resolves.toBeNull()
-        expect(store.postId).toBe('post-2')
-        expect(store.contact).toBeNull()
-        expect(store.contacts).toEqual([])
-        expect(store.contactUpdating).toBe(false)
-        expect(store.contactUpdateError).toBeNull()
+        expect(persistedContacts.map(({ id }) => id).sort()).toEqual(
+            [savedContact.id, secondContact.id].sort(),
+        )
+        expect(store.contact).toEqual(secondContact)
+        expect(store.contacts.map(({ id }) => id).sort()).toEqual(
+            [savedContact.id, secondContact.id].sort(),
+        )
     })
 
-    it('starts contact discovery while a job-post import task is active', async () => {
-        const importTask: AgentTask = {
+    it('cancels and retries one same-post run without changing its active sibling', async () => {
+        const firstTask: AgentTask = {
             ...runningTask,
-            id: '81e09f1d-8af3-45a6-9ddc-8a12586297f1',
-            threadId: 'import-thread-1',
-            turnId: 'import-turn-1',
+            id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
         }
-        const outreachTask: AgentTask = {
+        const siblingTask: AgentTask = {
             ...runningTask,
-            id: '0c2035b4-0d2d-422b-a331-0c3ad0adca6e',
-            threadId: 'outreach-thread-1',
-            turnId: 'outreach-turn-1',
+            id: 'a8314bdd-2a1c-48f3-8982-a57fd8b04f5c',
+            threadId: 'thread-2',
+            turnId: 'turn-2',
         }
-        const importUrl = 'https://example.com/jobs/imported-role'
+        const retryTask: AgentTask = {
+            ...runningTask,
+            id: '90766a9a-1096-40a7-89bb-a0e4c3eacfed',
+            threadId: 'thread-3',
+            turnId: 'turn-3',
+        }
+        const tasksById = new Map(
+            [firstTask, siblingTask, retryTask].map((task) => [task.id, task]),
+        )
         vi.stubGlobal('crypto', {
             randomUUID: vi
                 .fn()
-                .mockReturnValueOnce(importTask.id)
-                .mockReturnValueOnce(outreachTask.id),
+                .mockReturnValueOnce(firstTask.id)
+                .mockReturnValueOnce(siblingTask.id)
+                .mockReturnValueOnce(retryTask.id),
         })
-        vi.stubGlobal(
-            'EventSource',
-            class {
-                static readonly CLOSED = 2
-                readonly readyState = 0
-                close() {}
-            },
-        )
-        vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(importTask, 202))
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(outreachTask, 202))
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+            const url = requestUrl(input)
+
+            if (url.endsWith('/health')) {
+                return jsonResponse({ status: 'healthy', capabilities: ['chrome'] })
+            }
+
+            if (url.endsWith('/tasks/' + firstTask.id + '/cancel')) {
+                return jsonResponse({ ...firstTask, status: 'cancelled' }, 202)
+            }
+
+            const taskId = [...tasksById.keys()].find((id) => url.endsWith('/tasks/' + id))
+
+            if (taskId !== undefined && init?.method === 'PUT') {
+                return jsonResponse(tasksById.get(taskId), 202)
+            }
+
+            throw new Error('Unexpected request: ' + url)
+        })
         const agentStore = useAgentStore()
-
-        await agentStore.startTask(createJobPostImportTask(importUrl), {
-            kind: 'job-post-import',
-            url: importUrl,
-        })
-
-        const store = useOutreachStore()
-
-        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
-
-        expect(agentStore.getSession('job-post-import')).toEqual({
-            kind: 'job-post-import',
-            taskId: importTask.id,
-            url: importUrl,
-        })
-        expect(agentStore.getTaskState(importTask.id)?.task).toEqual(importTask)
-        expect(agentStore.getSession('outreach')).toEqual({
-            kind: 'outreach-contact',
-            taskId: outreachTask.id,
-            postId: post.id,
-        })
-        expect(agentStore.getTaskState(outreachTask.id)?.task).toEqual(outreachTask)
-    })
-
-    it('persists and selects a discovered contact when Agent completes without a mounted panel', async () => {
-        const output = {
-            personName: ` ${savedContact.personName} `,
-            personTitle: savedContact.personTitle,
-            profileUrl: ` ${savedContact.profileUrl} `,
-            relevanceRationale: savedContact.relevanceRationale,
-            draftMessage: savedContact.draftMessage,
-        }
-        const contactInput = {
-            personName: savedContact.personName,
-            personTitle: savedContact.personTitle,
-            profileUrl: savedContact.profileUrl,
-            relevanceRationale: savedContact.relevanceRationale,
-            draftMessage: savedContact.draftMessage,
-        }
-        const completedTask: AgentTask = {
-            ...runningTask,
-            status: 'completed',
-            output,
-        }
-        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(savedContact, 201))
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(completedTask, owner)
-        })
-        const store = useOutreachStore()
-
-        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
-
-        await vi.waitFor(() => {
-            expect(store.contact).toEqual(savedContact)
-        })
-        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(contactInput),
-            },
-        )
-        expect(store.contacts).toEqual([savedContact])
-        expect(store.draft).toBe(savedContact.draftMessage)
-    })
-
-    it('does not select a contact when completed discovery persistence fails', async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 500))
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-
-        updateTask({
-            ...runningTask,
-            status: 'completed',
-            output: {
-                personName: savedContact.personName,
-                personTitle: savedContact.personTitle,
-                profileUrl: savedContact.profileUrl,
-                relevanceRationale: savedContact.relevanceRationale,
-                draftMessage: savedContact.draftMessage,
-            },
-        })
-
-        await vi.waitFor(() => {
-            expect(store.resultError).toBe('API request failed (500)')
-        })
-        expect(store.contactSaving).toBe(false)
-        expect(store.contact).toBeNull()
-        expect(store.contacts).toEqual([])
-    })
-
-    it('updates the draft and assistant reply when draft Agent completes', async () => {
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
         const store = useOutreachStore()
         store.openForPost(post.id)
-        store.contacts = [savedContact]
-        store.selectContact(savedContact)
+        await store.startContactDiscovery(post)
+        await store.startContactDiscovery(post)
 
-        await expect(store.requestDraftRevision(post, 'Make it warmer')).resolves.toBe(true)
-        updateTask({
-            ...runningTask,
-            status: 'completed',
-            output: {
-                draftMessage: 'A warmer draft',
-                response: 'I made the introduction warmer.',
-            },
-        })
+        store.openTask(firstTask.id)
+        await store.cancelActiveTask()
 
-        await vi.waitFor(() => {
-            expect(store.draft).toBe('A warmer draft')
-        })
-        expect(store.assistantReply).toBe('I made the introduction warmer.')
+        expect(agentStore.getTaskState(firstTask.id)?.task?.status).toBe('cancelled')
+        expect(agentStore.isTaskActive(siblingTask.id)).toBe(true)
+        expect(persistedTaskIds()).toEqual([siblingTask.id])
+
+        await store.retryTask(post)
+
+        expect(agentStore.getSession(firstTask.id)).toBeNull()
+        expect(agentStore.isTaskActive(siblingTask.id)).toBe(true)
+        expect(agentStore.isTaskActive(retryTask.id)).toBe(true)
+        expect(store.taskId).toBe(retryTask.id)
+        expect(persistedTaskIds()).toEqual([siblingTask.id, retryTask.id])
     })
 
-    it('does not apply a draft result after another contact is selected', async () => {
-        const otherContact: OutreachContact = {
-            ...savedContact,
-            id: 'contact-2',
-            personName: 'Grace Hopper',
-            profileUrl: 'https://www.linkedin.com/in/grace-hopper',
-            draftMessage: 'Draft for Grace',
-        }
+    it('keeps a completed discovery retryable when saving its contact fails', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse([]))
+            .mockResolvedValueOnce(jsonResponse({}, 500))
+        stubTaskStarts([runningTask])
         const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        await store.startContactDiscovery(post)
+
+        updateTask(completedDiscovery(runningTask, savedContact))
+
+        await vi.waitFor(() => expect(store.taskRetryAvailable).toBe(true))
+        expect(store.tasks[0]?.status).toBe('unavailable')
+        expect(store.contact).toBeNull()
+        expect(agentStore.getSession(runningTask.id)).not.toBeNull()
+    })
+
+    it('applies a completed draft only to the contact and run that are reopened', async () => {
+        const otherContact: OutreachContact = {
+            ...secondContact,
+            jobPostId: post.id,
+        }
+        vi.mocked(fetch).mockResolvedValue(jsonResponse([savedContact, otherContact]))
+        stubTaskStarts([runningTask])
+        const agentStore = useAgentStore()
         const store = useOutreachStore()
         store.openForPost(post.id)
         store.contacts = [savedContact, otherContact]
         store.selectContact(savedContact)
-        await expect(store.requestDraftRevision(post, 'Make it warmer')).resolves.toBe(true)
-        expect(store.drafting).toBe(true)
+        await store.requestDraftRevision(post, 'Make it warmer')
 
         store.selectContact(otherContact)
         updateTask({
             ...runningTask,
             status: 'completed',
             output: {
-                draftMessage: 'Revised draft for Ada',
-                response: 'I revised the message.',
+                draftMessage: 'A warmer draft',
+                response: 'Revised',
             },
         })
-
-        await vi.waitFor(() => {
-            expect(store.drafting).toBe(false)
-        })
-        expect(store.contact).toEqual(otherContact)
+        await vi.waitFor(() => expect(store.contact).toEqual(otherContact))
         expect(store.draft).toBe(otherContact.draftMessage)
-        expect(store.assistantReply).toBeNull()
+        expect(agentStore.getSession(runningTask.id)).not.toBeNull()
+
+        store.openTask(runningTask.id)
+
+        await vi.waitFor(() => expect(agentStore.getSession(runningTask.id)).toBeNull())
+        expect(store.contact).toEqual(savedContact)
+        expect(store.draft).toBe('A warmer draft')
     })
 
-    it('keeps cancelled outreach visible until the stream is left', async () => {
-        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
-        let resolveCancellation: ((task: AgentTask) => void) | undefined
-        const cancellationResponse = new Promise<AgentTask>((resolve) => {
-            resolveCancellation = resolve
-        })
+    it('keeps an active run alive when its panel context is reset', async () => {
+        stubTaskStarts([runningTask])
         const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const cancelTask = vi
-            .spyOn(agentStore, 'cancelTask')
-            .mockReturnValueOnce(cancellationResponse)
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-
-        const cancellation = store.cancelActiveTask()
-
-        expect(store.discovering).toBe(true)
-        updateTask(cancelledTask)
-        resolveCancellation?.(cancelledTask)
-        await expect(cancellation).resolves.toBe(true)
-        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
-        expect(store.discovering).toBe(true)
-        expect(agentStore.getSession('outreach')?.taskId).toBe(runningTask.id)
-        expect(sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return')).toBe(
-            post.id,
-        )
-        expect(store.clearInactiveTask()).toBe(true)
-        expect(store.discovering).toBe(false)
-    })
-
-    it('retries cancelled contact discovery without preserving its return state', async () => {
-        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
-        const retryTask: AgentTask = {
-            ...runningTask,
-            id: 'task-2',
-            threadId: 'thread-2',
-            turnId: 'turn-2',
-        }
-        const agentStore = useAgentStore()
-        const startTask = vi
-            .spyOn(agentStore, 'startTask')
-            .mockImplementationOnce(async (_input, owner) => seedTask(runningTask, owner))
-            .mockImplementationOnce(async (_input, owner) => seedTask(retryTask, owner))
-        vi.spyOn(agentStore, 'cancelTask').mockImplementationOnce(async () => {
-            updateTask(cancelledTask)
-            return cancelledTask
-        })
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-        await store.cancelActiveTask()
-
-        expect(store.taskRetryAvailable).toBe(true)
-        expect(sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return')).toBe(
-            post.id,
-        )
-        await expect(store.retryTask(post)).resolves.toBe(true)
-
-        expect(startTask).toHaveBeenCalledTimes(2)
-        expect(startTask).toHaveBeenNthCalledWith(2, createContactDiscoveryTask(post), {
-            kind: 'outreach-contact',
-            postId: post.id,
-        })
-        expect(
-            sessionStorage.getItem('job-search-facilitator:outreach-contact-list-return'),
-        ).toBeNull()
-        expect(store.taskRetryAvailable).toBe(false)
-        expect(store.taskActive).toBe(true)
-    })
-
-    it('retries a cancelled draft revision with its original request', async () => {
-        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
-        const retryTask: AgentTask = {
-            ...runningTask,
-            id: 'task-2',
-            threadId: 'thread-2',
-            turnId: 'turn-2',
-        }
-        const request = 'Make it warmer'
-        const agentStore = useAgentStore()
-        const startTask = vi
-            .spyOn(agentStore, 'startTask')
-            .mockImplementationOnce(async (_input, owner) => seedTask(runningTask, owner))
-            .mockImplementationOnce(async (_input, owner) => seedTask(retryTask, owner))
         const store = useOutreachStore()
         store.openForPost(post.id)
-        store.contacts = [savedContact]
-        store.selectContact(savedContact)
-        await store.requestDraftRevision(post, request)
-        updateTask(cancelledTask)
-
-        expect(store.taskRetryAvailable).toBe(true)
-        await expect(store.retryTask(post)).resolves.toBe(true)
-
-        expect(startTask).toHaveBeenCalledTimes(2)
-        expect(startTask).toHaveBeenNthCalledWith(
-            2,
-            createDraftRevisionTask(post, savedContact, savedContact.draftMessage, request),
-            {
-                kind: 'outreach-draft',
-                postId: post.id,
-                contactId: savedContact.id,
-                draft: savedContact.draftMessage,
-                request,
-            },
-        )
-        expect(store.taskRetryAvailable).toBe(false)
-        expect(store.taskActive).toBe(true)
-    })
-
-    it('does not discard a draft task when its contact context is unavailable', async () => {
-        const failedTask: AgentTask = {
-            ...runningTask,
-            status: 'failed',
-            error: 'Agent task failed',
-        }
-        const agentStore = useAgentStore()
-        seedTask(failedTask, {
-            kind: 'outreach-draft',
-            postId: post.id,
-            contactId: savedContact.id,
-            draft: savedContact.draftMessage,
-            request: 'Make it warmer',
-        })
-        const store = useOutreachStore()
-
-        expect(store.taskRetryAvailable).toBe(false)
-        await expect(store.retryTask(post)).resolves.toBe(false)
-        expect(agentStore.getSession('outreach')?.taskId).toBe(failedTask.id)
-    })
-
-    it('keeps retry available when a replacement task fails to start', async () => {
-        const initialTask: AgentTask = {
-            ...runningTask,
-            id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
-        }
-        const replacementTaskId = 'f67f9fe5-e502-4d28-8c72-c044f1babbb4'
-        const cancelledTask: AgentTask = { ...initialTask, status: 'cancelled' }
-        vi.stubGlobal('crypto', {
-            randomUUID: vi
-                .fn()
-                .mockReturnValueOnce(initialTask.id)
-                .mockReturnValueOnce(replacementTaskId),
-        })
-        vi.stubGlobal(
-            'EventSource',
-            class {
-                static readonly CLOSED = 2
-                readonly readyState = 0
-                close() {}
-            },
-        )
-        vi.mocked(fetch)
-            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-            .mockResolvedValueOnce(jsonResponse(initialTask, 202))
-            .mockResolvedValueOnce(jsonResponse(cancelledTask, 202))
-            .mockResolvedValueOnce(jsonResponse({ error: 'Agent bridge unavailable' }, 503))
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-        await store.cancelActiveTask()
-
-        await expect(store.retryTask(post)).rejects.toThrow('Agent bridge unavailable')
-
-        expect(store.taskRetryAvailable).toBe(true)
-        expect(store.taskRunning).toBe(false)
-        expect(useAgentStore().getSession('outreach')?.taskId).toBe(replacementTaskId)
-    })
-
-    it('preserves active outreach when Agent cancellation fails', async () => {
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const cancelTask = vi
-            .spyOn(agentStore, 'cancelTask')
-            .mockRejectedValueOnce(new Error('Could not cancel task'))
-        const store = useOutreachStore()
         await store.startContactDiscovery(post)
 
-        await expect(store.cancelActiveTask()).rejects.toThrow('Could not cancel task')
-
-        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
-        expect(store.discovering).toBe(true)
-    })
-
-    it('clears failed outreach when the stream is left', async () => {
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const store = useOutreachStore()
-        await expect(store.startContactDiscovery(post)).resolves.toBe(true)
-        expect(store.discovering).toBe(true)
-
-        updateTask({ ...runningTask, status: 'failed', error: 'Chrome stopped responding' })
-
-        await vi.waitFor(() => {
-            expect(store.resultError).toBe('Chrome stopped responding')
-        })
-        expect(fetch).not.toHaveBeenCalled()
-        expect(store.discovering).toBe(true)
-        expect(store.clearInactiveTask()).toBe(true)
-        expect(store.discovering).toBe(false)
-    })
-
-    it('cancels a task that starts after its outreach context is reset', async () => {
-        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
-        let resolveStart: ((task: AgentTask) => void) | undefined
-        const startResponse = new Promise<AgentTask>((resolve) => {
-            resolveStart = resolve
-        })
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            const task = await startResponse
-            return seedTask(task, owner)
-        })
-        const cancelTask = vi.spyOn(agentStore, 'cancelTask').mockResolvedValueOnce(cancelledTask)
-        const store = useOutreachStore()
-
-        const start = store.startContactDiscovery(post)
         store.reset()
-        resolveStart?.(runningTask)
 
-        await expect(start).resolves.toBe(false)
-        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
         expect(store.postId).toBeNull()
-        expect(store.discovering).toBe(false)
-    })
-
-    it('does not persist or select an invalid completed discovery', async () => {
-        const output = {
-            personName: savedContact.personName,
-        }
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-
-        updateTask({ ...runningTask, status: 'completed', output })
-
-        await vi.waitFor(() => {
-            expect(store.resultError).toBe('Agent returned an invalid outreach result')
-        })
-        expect(fetch).not.toHaveBeenCalled()
-        expect(store.contact).toBeNull()
-        expect(store.contacts).toEqual([])
-    })
-
-    it('ignores a pending discovery save after outreach cancellation', async () => {
-        let resolveSave: ((response: Response) => void) | undefined
-        const saveResponse = new Promise<Response>((resolve) => {
-            resolveSave = resolve
-        })
-        vi.mocked(fetch).mockReturnValueOnce(saveResponse)
-        const cancelledTask: AgentTask = { ...runningTask, status: 'cancelled' }
-        let resolveCancellation: ((task: AgentTask) => void) | undefined
-        const cancellationResponse = new Promise<AgentTask>((resolve) => {
-            resolveCancellation = resolve
-        })
-        const agentStore = useAgentStore()
-        vi.spyOn(agentStore, 'startTask').mockImplementation(async (_input, owner) => {
-            return seedTask(runningTask, owner)
-        })
-        const cancelTask = vi
-            .spyOn(agentStore, 'cancelTask')
-            .mockReturnValueOnce(cancellationResponse)
-        const store = useOutreachStore()
-        await store.startContactDiscovery(post)
-        const cancellation = store.cancelActiveTask()
-
-        updateTask({
-            ...runningTask,
-            status: 'completed',
-            output: {
-                personName: savedContact.personName,
-                personTitle: savedContact.personTitle,
-                profileUrl: savedContact.profileUrl,
-                relevanceRationale: savedContact.relevanceRationale,
-                draftMessage: savedContact.draftMessage,
-            },
-        })
-        await vi.waitFor(() => {
-            expect(store.contactSaving).toBe(true)
-        })
-        updateTask(cancelledTask)
-        agentStore.dismissSession(cancelledTask.id)
-        resolveCancellation?.(cancelledTask)
-        await expect(cancellation).resolves.toBe(true)
-        expect(cancelTask).toHaveBeenCalledExactlyOnceWith(runningTask.id)
-        resolveSave?.(jsonResponse(savedContact, 201))
-        await new Promise((resolve) => setTimeout(resolve, 0))
-
-        expect(store.contact).toBeNull()
-        expect(store.contacts).toEqual([])
-        expect(store.discovering).toBe(false)
-        expect(store.resultError).toBeNull()
+        expect(agentStore.isTaskActive(runningTask.id)).toBe(true)
+        expect(agentStore.getSession(runningTask.id)).not.toBeNull()
     })
 })

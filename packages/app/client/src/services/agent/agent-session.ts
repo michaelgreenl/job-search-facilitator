@@ -1,5 +1,3 @@
-export type AgentTaskLane = 'job-post-import' | 'outreach'
-
 export type AgentSessionOwner =
     | { kind: 'job-post-import'; url: string }
     | { kind: 'outreach-contact'; postId: string }
@@ -14,9 +12,6 @@ export type AgentSessionOwner =
 export type AgentSession = AgentSessionOwner & { taskId: string }
 
 const agentSessionStorageKey = 'job-search-facilitator:agent-session'
-
-export const getAgentTaskLane = (owner: AgentSessionOwner): AgentTaskLane =>
-    owner.kind === 'job-post-import' ? 'job-post-import' : 'outreach'
 
 const getSessionStorage = () => (typeof sessionStorage === 'undefined' ? null : sessionStorage)
 
@@ -97,11 +92,9 @@ const parseStoredSessions = (value: unknown): AgentSession[] | null => {
     }
 
     const taskIds = new Set(validSessions.map(({ taskId }) => taskId))
-    const lanes = new Set(validSessions.map(getAgentTaskLane))
+    const importCount = validSessions.filter(({ kind }) => kind === 'job-post-import').length
 
-    return taskIds.size === validSessions.length && lanes.size === validSessions.length
-        ? validSessions
-        : null
+    return taskIds.size === validSessions.length && importCount <= 1 ? validSessions : null
 }
 
 export const readAgentSessions = (): AgentSession[] => {
@@ -156,27 +149,4 @@ export const writeAgentSessions = (sessions: AgentSession[]) => {
     } catch {
         // A storage failure must not prevent tasks from remaining usable in memory.
     }
-}
-
-export const agentSessionOwnersMatch = (left: AgentSession, right: AgentSessionOwner) => {
-    if (left.kind !== right.kind) {
-        return false
-    }
-
-    if (left.kind === 'job-post-import' && right.kind === 'job-post-import') {
-        return left.url === right.url
-    }
-
-    if (left.kind === 'outreach-contact' && right.kind === 'outreach-contact') {
-        return left.postId === right.postId
-    }
-
-    return (
-        left.kind === 'outreach-draft' &&
-        right.kind === 'outreach-draft' &&
-        left.postId === right.postId &&
-        left.contactId === right.contactId &&
-        left.draft === right.draft &&
-        left.request === right.request
-    )
 }

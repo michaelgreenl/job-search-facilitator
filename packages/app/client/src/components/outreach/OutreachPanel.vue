@@ -43,18 +43,19 @@ const {
     contacts,
     contactsError,
     contactsLoading,
-    discovering,
     drafting,
     draft,
-    taskVisible,
     resultError,
+    tasks,
     taskActive: isActive,
     taskCancelling: cancelling,
     taskConnectionState: connectionState,
     taskIssue: issue,
+    taskId,
     taskRetryAvailable: retryAvailable,
     taskRunning: running,
     taskStarting: starting,
+    taskVisible,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
     contact.value !== null ? 'draft' : taskVisible.value ? 'stream' : 'contacts',
@@ -86,29 +87,31 @@ watch(
 )
 
 watch(
-    taskVisible,
-    (hasTask) => {
-        if (hasTask) {
+    taskId,
+    (currentTaskId, previousTaskId) => {
+        if (currentTaskId !== null && currentTaskId !== previousTaskId) {
             panelView.value = 'stream'
-        } else {
+        } else if (currentTaskId === null && previousTaskId !== null) {
             panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
     },
     { immediate: true },
 )
 
+watch(isActive, (active, wasActive) => {
+    if (wasActive && !active && taskVisible.value) {
+        panelView.value = 'stream'
+    }
+})
+
 watch(contact, (selectedContact) => {
     if (taskVisible.value) {
-        if (drafting.value && selectedContact !== null) {
-            panelView.value = 'draft'
-        }
-
         return
     }
 
     if (selectedContact !== null) {
         panelView.value = 'draft'
-    } else if (!discovering.value) {
+    } else {
         panelView.value = 'contacts'
     }
 })
@@ -158,8 +161,14 @@ function toggleExpanded() {
 }
 
 function showContacts() {
-    outreachStore.clearInactiveTask()
-    outreachStore.clearContact()
+    if (!isActive.value && contactsError.value === null) {
+        outreachStore.clearInactiveTask()
+    }
+
+    if (!taskVisible.value) {
+        outreachStore.clearContact()
+    }
+
     panelView.value = 'contacts'
 
     if (props.post === null) {
@@ -179,7 +188,8 @@ function goBack() {
     }
 }
 
-function showStream() {
+function showStream(task: string) {
+    outreachStore.openTask(task)
     panelView.value = 'stream'
 }
 
@@ -221,7 +231,7 @@ async function copyDraft() {
         as="aside"
         :active="props.active"
         :adjacent="adjacent"
-        lane="outreach"
+        :task-id="taskId"
         eyebrow="Outreach"
         back-label="Back to saved contacts"
         back-test-id="back-to-saved-contacts"
@@ -269,9 +279,9 @@ async function copyDraft() {
                 <OutreachContactList
                     v-model:filter="contactFilter"
                     :contacts="contacts"
-                    :discovering="discovering && isActive"
                     :error="contactsError"
                     :loading="contactsLoading"
+                    :tasks="tasks"
                     @retry="emit('retryContacts')"
                     @select="selectContact"
                     @show-stream="showStream"
@@ -282,14 +292,9 @@ async function copyDraft() {
                     icon-size="md"
                     preset="primary"
                     tooltip="Find new"
+                    data-testid="discover-another-contact"
                     aria-label="Discover another contact"
-                    :disabled="
-                        isActive ||
-                        contactsLoading ||
-                        contactSaving ||
-                        contactUpdating ||
-                        contactsError !== null
-                    "
+                    :disabled="contactsLoading || contactUpdating || contactsError !== null"
                     @click="emit('discover')"
                 >
                     <span class="discover-contact-icon" aria-hidden="true">+</span>

@@ -8,13 +8,10 @@ import {
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
 import {
-    agentSessionOwnersMatch,
-    getAgentTaskLane,
     readAgentSessions,
     writeAgentSessions,
     type AgentSession,
     type AgentSessionOwner,
-    type AgentTaskLane,
 } from '@/services/agent/agent-session'
 import {
     AgentBridgeRequestError,
@@ -27,12 +24,12 @@ import {
     type AgentTaskConnection,
 } from '@/services/agent/agent-bridge'
 
-export {
-    getAgentTaskLane,
-    type AgentSession,
-    type AgentSessionOwner,
-    type AgentTaskLane,
-} from '@/services/agent/agent-session'
+export { type AgentSession, type AgentSessionOwner } from '@/services/agent/agent-session'
+
+export interface AgentTaskStart {
+    taskId: string
+    started: Promise<AgentTask>
+}
 
 export type AgentConnectionState =
     | 'idle'
@@ -91,6 +88,8 @@ const assertTaskIdentity = (task: AgentTask, taskId: string) => {
     }
 }
 
+const getSessionOwner = ({ taskId: _taskId, ...owner }: AgentSession): AgentSessionOwner => owner
+
 export const useAgentStore = defineStore('agent', () => {
     const initialSessions = readAgentSessions()
     const sessions = shallowRef<AgentSession[]>(initialSessions)
@@ -107,21 +106,16 @@ export const useAgentStore = defineStore('agent', () => {
         writeAgentSessions(sessions.value.filter(({ taskId }) => !nonRestorableTaskIds.has(taskId)))
     }
 
-    function getSession(lane: AgentTaskLane) {
-        return sessions.value.find((session) => getAgentTaskLane(session) === lane) ?? null
+    function getSession(taskId: string) {
+        return sessions.value.find((session) => session.taskId === taskId) ?? null
     }
 
     function getTaskState(taskId: string) {
         return taskStates.value[taskId] ?? null
     }
 
-    function getLaneTaskState(lane: AgentTaskLane) {
-        const session = getSession(lane)
-        return session === null ? null : getTaskState(session.taskId)
-    }
-
-    function isLaneTaskActive(lane: AgentTaskLane) {
-        const state = getLaneTaskState(lane)
+    function isTaskActive(taskId: string) {
+        const state = getTaskState(taskId)
         return state !== null && taskStateActive(state)
     }
 
@@ -152,12 +146,13 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
     function saveSession(nextSession: AgentSession) {
-        const lane = getAgentTaskLane(nextSession)
         nonRestorableTaskIds.delete(nextSession.taskId)
-        sessions.value = [
-            ...sessions.value.filter((session) => getAgentTaskLane(session) !== lane),
-            nextSession,
-        ]
+        const otherSessions = sessions.value.filter(
+            (session) =>
+                session.taskId !== nextSession.taskId &&
+                (nextSession.kind !== 'job-post-import' || session.kind !== 'job-post-import'),
+        )
+        sessions.value = [...otherSessions, nextSession]
         persistSessions()
     }
 
@@ -289,84 +284,95 @@ export const useAgentStore = defineStore('agent', () => {
         eventSources.set(taskId, connection)
     }
 
-    async function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner) {
-        const lane = getAgentTaskLane(owner)
-        const currentSession = getSession(lane)
-        const currentState = currentSession === null ? null : getTaskState(currentSession.taskId)
-
-        if (currentState !== null && taskStateActive(currentState)) {
-            throw new Error(`Another ${lane} Agent task is already active`)
-        }
-
-        const reuseReservedTask =
-            currentSession !== null &&
-            currentState?.task === null &&
-            currentState.sessionUnavailable &&
-            agentSessionOwnersMatch(currentSession, owner)
-        const taskId = reuseReservedTask ? currentSession.taskId : crypto.randomUUID()
-
-        if (currentSession !== null && currentSession.taskId !== taskId) {
-            closeConnection(currentSession.taskId, 'idle')
-            removeTaskState(currentSession.taskId)
-        }
-
+    function startReservedTask(
+        taskId: string,
+        input: StartAgentTaskInput,
+        owner: AgentSessionOwner,
+    ): AgentTaskStart {
         saveSession({ ...owner, taskId } as AgentSession)
         setTaskState({
             ...createTaskState(taskId),
             connectionState: 'connecting',
             starting: true,
         })
-        let taskRequestStarted = false
 
-        try {
-            const health = await fetchAgentHealth()
-            const unavailableCapability = input.capabilities.find(
-                (capability) => !health.capabilities.includes(capability),
+        const started = (async () => {
+            let taskRequestStarted = false
+
+            try {
+                const health = await fetchAgentHealth()
+                const unavailableCapability = input.capabilities.find(
+                    (capability) => !health.capabilities.includes(capability),
+                )
+
+                if (unavailableCapability !== undefined) {
+                    throw new Error(`Agent capability is unavailable: ${unavailableCapability}`)
+                }
+
+                taskRequestStarted = true
+                const currentTask = await startAgentTask(taskId, input)
+
+                assertTaskIdentity(currentTask, taskId)
+
+                if (getSession(taskId) === null) {
+                    return currentTask
+                }
+
+                updateTaskState(taskId, {
+                    task: currentTask,
+                    sessionUnavailable: false,
+                    error: null,
+                })
+
+                if (currentTask.status === 'running') {
+                    connect(taskId)
+                } else {
+                    finishTask(currentTask)
+                }
+
+                return currentTask
+            } catch (requestError) {
+                if (getSession(taskId) !== null) {
+                    updateTaskState(taskId, {
+                        sessionUnavailable:
+                            !taskRequestStarted || requestError instanceof AgentBridgeRequestError,
+                        error:
+                            requestError instanceof Error
+                                ? requestError.message
+                                : 'Could not start Agent task',
+                    })
+                    closeConnection(taskId, 'disconnected')
+                }
+
+                throw requestError
+            } finally {
+                updateTaskState(taskId, { starting: false })
+            }
+        })()
+
+        return { taskId, started }
+    }
+
+    function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner): AgentTaskStart {
+        if (owner.kind === 'job-post-import') {
+            const currentSession = sessions.value.find(
+                (session) => session.kind === 'job-post-import',
             )
 
-            if (unavailableCapability !== undefined) {
-                throw new Error(`Agent capability is unavailable: ${unavailableCapability}`)
+            if (currentSession !== undefined) {
+                const currentState = getTaskState(currentSession.taskId)
+
+                if (currentState !== null && taskStateActive(currentState)) {
+                    throw new Error('Another job-post-import Agent task is already active')
+                }
+
+                closeConnection(currentSession.taskId, 'idle')
+                removeSession(currentSession.taskId)
+                removeTaskState(currentSession.taskId)
             }
-
-            taskRequestStarted = true
-            const currentTask = await startAgentTask(taskId, input)
-
-            assertTaskIdentity(currentTask, taskId)
-
-            if (getSession(lane)?.taskId !== taskId) {
-                return currentTask
-            }
-
-            updateTaskState(taskId, {
-                task: currentTask,
-                sessionUnavailable: false,
-                error: null,
-            })
-
-            if (currentTask.status === 'running') {
-                connect(taskId)
-            } else {
-                finishTask(currentTask)
-            }
-
-            return currentTask
-        } catch (requestError) {
-            if (getSession(lane)?.taskId === taskId) {
-                updateTaskState(taskId, {
-                    sessionUnavailable:
-                        !taskRequestStarted || requestError instanceof AgentBridgeRequestError,
-                    error:
-                        requestError instanceof Error
-                            ? requestError.message
-                            : 'Could not start Agent task',
-                })
-                closeConnection(taskId, 'disconnected')
-            }
-
-            throw requestError
-        } finally {
-            updateTaskState(taskId, { starting: false })
         }
+
+        return startReservedTask(crypto.randomUUID(), input, owner)
     }
 
     async function restoreTask(taskId: string) {
@@ -469,6 +475,31 @@ export const useAgentStore = defineStore('agent', () => {
         removeSession(taskId)
         removeTaskState(taskId)
         return true
+    }
+
+    function retryTask(taskId: string, input: StartAgentTaskInput): AgentTaskStart {
+        const session = getSession(taskId)
+        const state = getTaskState(taskId)
+
+        if (session === null || state === null) {
+            throw new Error('Agent task session is unavailable')
+        }
+
+        if (taskStateActive(state)) {
+            throw new Error('Agent task is still active')
+        }
+
+        const owner = getSessionOwner(session)
+
+        if (state.task === null && state.sessionUnavailable) {
+            return startReservedTask(taskId, input, owner)
+        }
+
+        if (!dismissSession(taskId)) {
+            throw new Error('Agent task cannot be retried')
+        }
+
+        return startTask(input, owner)
     }
 
     async function resolvePermission(taskId: string, decision: AgentPermissionDecision) {
@@ -575,9 +606,9 @@ export const useAgentStore = defineStore('agent', () => {
         taskStates,
         getSession,
         getTaskState,
-        getLaneTaskState,
-        isLaneTaskActive,
+        isTaskActive,
         startTask,
+        retryTask,
         restoreTask,
         restoreSessions,
         dismissSession,
