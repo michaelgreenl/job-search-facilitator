@@ -18,11 +18,11 @@ export const navigationRoutes = {
         component: () => import('@/views/ApplyView.vue'),
         meta: { title: 'Apply' },
     },
-    results: {
-        path: '/results',
-        name: 'Results',
-        component: () => import('@/views/ResultsView.vue'),
-        meta: { title: 'Results' },
+    track: {
+        path: '/track',
+        name: 'Track',
+        component: () => import('@/views/TrackView.vue'),
+        meta: { title: 'Track' },
     },
 }
 
