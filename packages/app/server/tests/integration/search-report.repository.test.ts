@@ -333,6 +333,74 @@ describe('job post repository', () => {
         )
     })
 
+    it('selects tracked posts by applied or messaged outreach status', async () => {
+        const sourceKeys = [
+            'example-source:neither',
+            'example-source:applied',
+            'example-source:messaged',
+            'example-source:both',
+            'example-source:unmessaged',
+        ]
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-12',
+            createReportInput({
+                results: sourceKeys.map((sourceKey, index) =>
+                    createResultInput({
+                        agentRank: index + 1,
+                        post: { sourceKey },
+                    }),
+                ),
+            }),
+        )
+        const postsBySourceKey = new Map(
+            report.report.results.map(({ post }) => [post.sourceKey, post]),
+        )
+        const appliedPost = postsBySourceKey.get('example-source:applied')!
+        const messagedPost = postsBySourceKey.get('example-source:messaged')!
+        const bothPost = postsBySourceKey.get('example-source:both')!
+        const unmessagedPost = postsBySourceKey.get('example-source:unmessaged')!
+
+        await Promise.all([
+            jobPostRepository.update(appliedPost.id, {
+                applicationStatus: 'awaiting-response',
+            }),
+            jobPostRepository.update(bothPost.id, { applicationStatus: 'interviewing' }),
+        ])
+
+        const contacts = await Promise.all(
+            [messagedPost, bothPost, unmessagedPost].map((post) =>
+                outreachContactRepository.create(post.id, {
+                    personName: `Contact for ${post.sourceKey}`,
+                    personTitle: 'Engineering Manager',
+                    profileUrl: `https://www.linkedin.com/in/${post.id}`,
+                    relevanceRationale: 'Their role aligns with the position.',
+                    draftMessage: 'Hello, I would value your perspective on the role.',
+                }),
+            ),
+        )
+
+        if (contacts.some((contact) => contact === null)) {
+            throw new Error('Could not create tracking contacts')
+        }
+
+        await Promise.all(
+            contacts.slice(0, 2).map((contact) =>
+                outreachContactRepository.update(contact!.jobPostId, contact!.id, {
+                    messaged: true,
+                }),
+            ),
+        )
+
+        const trackedSourceKeys = (await jobPostRepository.findTracked())
+            .map(({ sourceKey }) => sourceKey)
+            .sort()
+
+        expect(trackedSourceKeys).toEqual(
+            ['example-source:applied', 'example-source:both', 'example-source:messaged'].sort(),
+        )
+    })
+
     it('selects one deterministic report recommendation for each Apply queue post', async () => {
         const sourceKey = 'example-source:recommendation-context'
         const reports = [

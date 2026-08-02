@@ -32,6 +32,7 @@ export interface UserAddedJobPostUpsertResult {
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
     findApplyQueue(): Promise<ApplyQueueItem[]>
+    findTracked(): Promise<JobPost[]>
     findUserAdded(): Promise<UserAddedJobPost[]>
     findById(id: string): Promise<JobPost | null>
     upsertUserAdded(input: CreateUserAddedJobPostInput): Promise<UserAddedJobPostUpsertResult>
@@ -45,6 +46,13 @@ const applyQueueWhere = {
         not: null,
         notIn: ['FORGO'],
     },
+} satisfies Prisma.JobPostWhereInput
+
+const trackedWhere = {
+    OR: [
+        { applicationStatus: { not: 'NOT_APPLIED' } },
+        { outreachContacts: { some: { messaged: true } } },
+    ],
 } satisfies Prisma.JobPostWhereInput
 
 // Archived reports remain eligible. Recency is report date, then creation time, then ID;
@@ -101,6 +109,15 @@ export const jobPostRepository: JobPostRepository = {
             recommendationContext:
                 post.results[0] === undefined ? null : toRecommendationContext(post.results[0]),
         }))
+    },
+
+    async findTracked() {
+        const posts = await prisma.jobPost.findMany({
+            where: trackedWhere,
+            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        })
+
+        return posts.map(toJobPost)
     },
 
     async findUserAdded() {

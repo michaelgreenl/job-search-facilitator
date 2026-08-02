@@ -19,6 +19,10 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         response.json(await repository.findApplyQueue())
     },
 
+    listTracked: async (_request: Request, response: Response): Promise<void> => {
+        response.json(await repository.findTracked())
+    },
+
     listUserAdded: async (_request: Request, response: Response): Promise<void> => {
         response.json(await repository.findUserAdded())
     },

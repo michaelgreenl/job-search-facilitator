@@ -9,6 +9,7 @@ export const createJobPostRouter = (repository: JobPostRepository) => {
     router.get('/', controller.list)
     router.post('/', controller.createUserAdded)
     router.get('/apply-queue', controller.listApplyQueue)
+    router.get('/tracked', controller.listTracked)
     router.get('/user-added', controller.listUserAdded)
     router.get('/:id', controller.getById)
     router.patch('/:id', controller.updateById)

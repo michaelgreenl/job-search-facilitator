@@ -26,6 +26,13 @@ export async function fetchApplyQueue() {
     return parseApiResponse(response, parseApplyQueueItems, path)
 }
 
+export async function fetchTrackedPosts() {
+    const path = '/job-posts/tracked'
+    const response = await fetch(`${apiUrl}${path}`, undefined)
+
+    return parseApiResponse(response, parseJobPosts, path)
+}
+
 export async function fetchUserAddedJobPosts() {
     const path = '/job-posts/user-added'
     const response = await fetch(`${apiUrl}${path}`, undefined)

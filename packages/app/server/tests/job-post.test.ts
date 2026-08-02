@@ -35,6 +35,10 @@ const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
     recommendationContext: null,
 }
+const trackedPost: JobPost = {
+    ...existingPost,
+    applicationStatus: 'awaiting-response',
+}
 const userAddedPost: UserAddedJobPost = {
     agentLabel: 'target',
     fitRationale: 'Strong TypeScript experience',
@@ -72,6 +76,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
 const createFakeRepository = () => {
     const findMany = vi.fn(async () => [existingPost])
     const findApplyQueue = vi.fn(async () => [applyQueueItem])
+    const findTracked = vi.fn(async () => [trackedPost])
     const findUserAdded = vi.fn(async () => [userAddedPost])
     const findById = vi.fn(async (_id: string): Promise<JobPost | null> => existingPost)
     const upsertUserAdded = vi.fn(async (_input: CreateUserAddedJobPostInput) => ({
@@ -85,6 +90,7 @@ const createFakeRepository = () => {
     const repository: JobPostRepository = {
         findMany,
         findApplyQueue,
+        findTracked,
         findUserAdded,
         findById,
         upsertUserAdded,
@@ -93,6 +99,7 @@ const createFakeRepository = () => {
 
     return {
         findApplyQueue,
+        findTracked,
         findById,
         findMany,
         findUserAdded,
@@ -126,6 +133,16 @@ describe('job post routes', () => {
             .expect(200, [applyQueueItem])
 
         expect(findApplyQueue).toHaveBeenCalledOnce()
+    })
+
+    it('lists tracked posts', async () => {
+        const { findTracked, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .get('/job-posts/tracked')
+            .expect(200, [trackedPost])
+
+        expect(findTracked).toHaveBeenCalledOnce()
     })
 
     it('lists posts added by the user', async () => {
