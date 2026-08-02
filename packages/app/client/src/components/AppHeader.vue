@@ -110,10 +110,10 @@ $nav-surface-height: 4.25rem;
 .nav-surface {
     display: flex;
     order: 1;
-    gap: $space-4;
+    gap: calc($space-4 + 0.25rem);
     align-items: center;
     min-height: $nav-surface-height;
-    padding: $space-3 $space-4 $space-3 $space-3;
+    padding: $space-3 calc($space-4 + 0.25rem) $space-3 $space-3;
     border-top: 0;
     border-radius: 0 0 $radius-lg $radius-lg;
 }
@@ -185,7 +185,7 @@ $nav-surface-height: 4.25rem;
 
 .nav-links {
     display: flex;
-    gap: $space-5;
+    gap: calc($space-4 + 0.25rem);
     align-items: center;
 }
 
