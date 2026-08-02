@@ -41,7 +41,7 @@ onMounted(() => void loadTrackedPosts())
             data-testid="track-posts-panel"
             active
             :adjacent="false"
-            eyebrow="Track"
+            eyebrow="Tracked"
             title="Applications"
             title-tag="h1"
             :posts="trackPosts"
