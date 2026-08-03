@@ -1,0 +1,7 @@
+model ApplicationSnapshot {
+  jobPostId  String   @id @db.Uuid
+  content    String
+  sourceUrl  String
+  capturedAt DateTime @db.Timestamptz(3)
+  jobPost    JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+}

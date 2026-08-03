@@ -51,6 +51,8 @@ export interface OutreachContact {
     relevanceRationale: string
     draftMessage: string
     messaged: boolean
+    messagedAt: IsoDateTime | null
+    respondedAt: IsoDateTime | null
     createdAt: IsoDateTime
     updatedAt: IsoDateTime
 }
@@ -67,4 +69,7 @@ export interface DraftRevisionResult {
     response: string
 }
 
-export type UpdateOutreachContactInput = Pick<OutreachContact, 'messaged'>
+export interface UpdateOutreachContactInput {
+    messaged?: boolean
+    responded?: boolean
+}

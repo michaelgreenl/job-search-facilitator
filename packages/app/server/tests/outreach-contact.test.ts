@@ -19,6 +19,8 @@ const existingContact: OutreachContact = {
     relevanceRationale: 'Her visible role aligns with the position.',
     draftMessage: 'Hi Ada, I would value your perspective on the role.',
     messaged: true,
+    messagedAt: '2026-07-21T12:00:00.000Z',
+    respondedAt: null,
     createdAt: '2026-07-21T12:00:00.000Z',
     updatedAt: '2026-07-21T12:00:00.000Z',
 }
@@ -50,7 +52,16 @@ const createFakeRepository = () => {
             _postId: string,
             _contactId: string,
             input: UpdateOutreachContactInput,
-        ): Promise<OutreachContact | null> => ({ ...existingContact, ...input }),
+        ): Promise<OutreachContact | null> => ({
+            ...existingContact,
+            messaged: input.messaged ?? existingContact.messaged,
+            respondedAt:
+                input.responded === undefined
+                    ? existingContact.respondedAt
+                    : input.responded
+                      ? existingContact.updatedAt
+                      : null,
+        }),
     )
     const repository = { create, findByJobPostId, update }
 

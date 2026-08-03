@@ -33,6 +33,7 @@ const post: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/post-1',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-13T12:00:00.000Z',
@@ -48,6 +49,8 @@ const savedContact: OutreachContact = {
     relevanceRationale: 'Her title aligns with the role.',
     draftMessage: 'Initial draft',
     messaged: false,
+    messagedAt: null,
+    respondedAt: null,
     createdAt: '2026-07-21T12:00:00.000Z',
     updatedAt: '2026-07-21T12:00:00.000Z',
 }

@@ -2,7 +2,6 @@ import type {
     CreateUserAddedJobPostInput,
     JobPostInput,
     JobSearchResultInput,
-    TrackingAutomationResult,
     UpsertJobSearchReportInput,
 } from '@job-search-facilitator/core'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -12,7 +11,6 @@ import {
     outreachRunRepository,
 } from '../../src/db/repositories/outreach.repository.ts'
 import { searchReportRepository } from '../../src/db/repositories/search-report.repository.ts'
-import { trackRepository } from '../../src/db/repositories/track.repository.ts'
 import { prisma } from '../../src/db/prisma.ts'
 
 const databaseUrl = process.env.DATABASE_URL
@@ -395,7 +393,7 @@ describe('job post repository', () => {
         )
 
         const trackedSourceKeys = (await jobPostRepository.findTracked())
-            .map(({ sourceKey }) => sourceKey)
+            .map(({ post }) => post.sourceKey)
             .sort()
 
         expect(trackedSourceKeys).toEqual(
@@ -576,80 +574,6 @@ describe('outreach contact repository', () => {
         expect(contacts).toHaveLength(2)
         expect(contacts.map(({ id }) => id)).toEqual(expect.arrayContaining([first.id, second.id]))
         expect(contacts.find(({ id }) => id === first.id)?.messaged).toBe(true)
-    })
-})
-
-describe('Track repository', () => {
-    it('applies one automation result idempotently', async () => {
-        const report = await searchReportRepository.upsertById(
-            '11111111-1111-4111-8111-111111111111',
-            '2026-08-03',
-            createReportInput(),
-        )
-        const post = report.report.results[0]!.post
-        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
-        const contact = await outreachContactRepository.create(post.id, {
-            personName: 'Ada Lovelace',
-            personTitle: 'Engineering Manager',
-            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-            relevanceRationale: 'Her visible role aligns with the position.',
-            draftMessage: 'Hi Ada, I would value your perspective on the role.',
-        })
-
-        if (contact === null) {
-            throw new Error('Could not create outreach contact')
-        }
-
-        await outreachContactRepository.update(post.id, contact.id, { messaged: true })
-        const applicationUpdate = await prisma.trackingActivity.findFirstOrThrow({
-            where: { jobPostId: post.id, applicationStatus: { not: null } },
-            orderBy: { occurredAt: 'desc' },
-        })
-        const occurredAt = new Date(applicationUpdate.occurredAt.getTime() + 1_000)
-        const result = {
-            sourceErrors: { gmail: null, linkedin: null },
-            observations: [
-                {
-                    jobPostId: post.id,
-                    outreachContactId: null,
-                    type: 'interview-requested',
-                    applicationStatus: 'interviewing',
-                    source: 'gmail',
-                    externalId: 'gmail:interview-thread',
-                    summary: 'Interview requested',
-                    sourceUrl: null,
-                    occurredAt: occurredAt.toISOString(),
-                },
-                {
-                    jobPostId: post.id,
-                    outreachContactId: contact.id,
-                    type: 'outreach-response-received',
-                    applicationStatus: null,
-                    source: 'linkedin',
-                    externalId: 'linkedin:ada-response',
-                    summary: 'Ada responded',
-                    sourceUrl: contact.profileUrl,
-                    occurredAt: occurredAt.toISOString(),
-                },
-            ],
-            nextSteps: [],
-        } satisfies TrackingAutomationResult
-
-        const first = await trackRepository.applyAutomationResult(result)
-        const repeated = await trackRepository.applyAutomationResult(result)
-        const trackedPosts = await trackRepository.findTracked()
-
-        expect({
-            first,
-            repeated,
-            applicationStatus: trackedPosts[0]?.post.applicationStatus,
-            outreachStatus: trackedPosts[0]?.contacts[0]?.status,
-        }).toEqual({
-            first: { createdActivities: 2 },
-            repeated: { createdActivities: 0 },
-            applicationStatus: 'interviewing',
-            outreachStatus: 'responded',
-        })
     })
 })
 

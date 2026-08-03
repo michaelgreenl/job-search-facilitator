@@ -2,14 +2,21 @@ import type {
     ApplyQueueItem,
     CreateUserAddedJobPostInput,
     JobPost,
+    JobPostNextStep,
     JobRecommendationContext,
+    SaveJobPostNextStepInput,
+    TrackedJobPost,
     UpdateJobPostInput,
     UpdateJobPostResult,
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
+import { toApplicationSnapshot } from '../mappers/application.mapper.ts'
+import { toJobPostActivity } from '../mappers/job-post-activity.mapper.ts'
 import {
     toJobPost,
+    toJobPostNextStep,
+    toJobPostSnapshot,
     toPrismaJobPostListingData,
     toPrismaApplicationStatus,
     toPrismaPostStatus,
@@ -17,6 +24,7 @@ import {
     toUserAddedJobPost,
     userAddedJobPostInclude,
 } from '../mappers/job-post.mapper.ts'
+import { toOutreachContact } from '../mappers/outreach.mapper.ts'
 import {
     toJobRecommendation,
     toPrismaAgentLabel,
@@ -32,11 +40,12 @@ export interface UserAddedJobPostUpsertResult {
 export interface JobPostRepository {
     findMany(): Promise<JobPost[]>
     findApplyQueue(): Promise<ApplyQueueItem[]>
-    findTracked(): Promise<JobPost[]>
+    findTracked(): Promise<TrackedJobPost[]>
     findUserAdded(): Promise<UserAddedJobPost[]>
     findById(id: string): Promise<JobPost | null>
     upsertUserAdded(input: CreateUserAddedJobPostInput): Promise<UserAddedJobPostUpsertResult>
     update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
+    saveNextStep(id: string, input: SaveJobPostNextStepInput): Promise<JobPostNextStep | null>
 }
 
 // postStatus and archivedAt remain outside this policy until their Apply queue behavior is defined.
@@ -46,13 +55,6 @@ const applyQueueWhere = {
         not: null,
         notIn: ['FORGO'],
     },
-} satisfies Prisma.JobPostWhereInput
-
-export const trackedJobPostWhere = {
-    OR: [
-        { applicationStatus: { not: 'NOT_APPLIED' } },
-        { outreachContacts: { some: { messaged: true } } },
-    ],
 } satisfies Prisma.JobPostWhereInput
 
 // Archived reports remain eligible. Recency is report date, then creation time, then ID;
@@ -80,12 +82,43 @@ type PrismaApplyQueuePost = Prisma.JobPostGetPayload<{
     include: typeof applyQueueInclude
 }>
 
+const trackedJobPostInclude = {
+    outreachContacts: {
+        where: { messaged: true },
+        orderBy: [{ messagedAt: 'desc' }, { id: 'asc' }],
+    },
+    snapshot: true,
+    applicationSnapshot: true,
+    activities: { orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }] },
+} satisfies Prisma.JobPostInclude
+
+const trackedJobPostWhere = {
+    OR: [
+        { applicationStatus: { not: 'NOT_APPLIED' } },
+        { outreachContacts: { some: { messaged: true } } },
+    ],
+} satisfies Prisma.JobPostWhereInput
+
+type PrismaTrackedJobPost = Prisma.JobPostGetPayload<{
+    include: typeof trackedJobPostInclude
+}>
+
 const toRecommendationContext = (
     result: PrismaApplyQueuePost['results'][number],
 ): JobRecommendationContext => ({
     reportId: result.report.id,
     reportDate: result.report.reportDate.toISOString().slice(0, 10),
     ...toJobRecommendation(result),
+})
+
+const toTrackedJobPost = (post: PrismaTrackedJobPost): TrackedJobPost => ({
+    post: toJobPost(post),
+    contacts: post.outreachContacts.map(toOutreachContact),
+    jobPostSnapshot: post.snapshot === null ? null : toJobPostSnapshot(post.snapshot),
+    applicationSnapshot:
+        post.applicationSnapshot === null ? null : toApplicationSnapshot(post.applicationSnapshot),
+    activities: post.activities.map(toJobPostActivity),
+    nextStep: toJobPostNextStep(post),
 })
 
 export const jobPostRepository: JobPostRepository = {
@@ -114,10 +147,11 @@ export const jobPostRepository: JobPostRepository = {
     async findTracked() {
         const posts = await prisma.jobPost.findMany({
             where: trackedJobPostWhere,
-            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+            include: trackedJobPostInclude,
+            orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
         })
 
-        return posts.map(toJobPost)
+        return posts.map(toTrackedJobPost)
     },
 
     async findUserAdded() {
@@ -179,10 +213,6 @@ export const jobPostRepository: JobPostRepository = {
     async update(id, input) {
         const data: Prisma.JobPostUpdateInput = {}
 
-        if (input.applicationStatus !== undefined) {
-            data.applicationStatus = toPrismaApplicationStatus(input.applicationStatus)
-        }
-
         if (input.postStatus !== undefined) {
             data.postStatus = toPrismaPostStatus(input.postStatus)
         }
@@ -199,20 +229,38 @@ export const jobPostRepository: JobPostRepository = {
             return await prisma.$transaction(async (transaction) => {
                 const existing = await transaction.jobPost.findUnique({
                     where: { id },
-                    select: { applicationStatus: true },
+                    select: { applicationStatus: true, appliedAt: true },
                 })
 
                 if (existing === null) {
                     return null
                 }
 
+                const applicationStatus =
+                    input.applicationStatus === undefined
+                        ? undefined
+                        : toPrismaApplicationStatus(input.applicationStatus)
+                const applicationStatusChanged =
+                    applicationStatus !== undefined &&
+                    applicationStatus !== existing.applicationStatus
+                const statusChangedAt = applicationStatusChanged ? new Date() : null
+
+                if (applicationStatus !== undefined) {
+                    data.applicationStatus = applicationStatus
+                }
+
+                if (statusChangedAt !== null) {
+                    data.applicationStatusUpdatedAt = statusChangedAt
+                    data.appliedAt =
+                        applicationStatus === 'NOT_APPLIED'
+                            ? null
+                            : (existing.appliedAt ?? statusChangedAt)
+                }
+
                 const post = await transaction.jobPost.update({ where: { id }, data })
 
-                if (
-                    input.applicationStatus !== undefined &&
-                    existing.applicationStatus !== post.applicationStatus
-                ) {
-                    await transaction.trackingActivity.create({
+                if (statusChangedAt !== null) {
+                    await transaction.jobPostActivity.create({
                         data: {
                             jobPostId: id,
                             type:
@@ -220,10 +268,13 @@ export const jobPostRepository: JobPostRepository = {
                                 post.applicationStatus === 'AWAITING_RESPONSE'
                                     ? 'APPLICATION_SUBMITTED'
                                     : 'APPLICATION_STATUS_CHANGED',
-                            applicationStatus: post.applicationStatus,
                             source: 'MANUAL',
-                            summary: `Application status changed to ${input.applicationStatus}`,
-                            occurredAt: new Date(),
+                            summary:
+                                existing.applicationStatus === 'NOT_APPLIED' &&
+                                post.applicationStatus === 'AWAITING_RESPONSE'
+                                    ? 'Application submitted'
+                                    : `Application status changed to ${input.applicationStatus}`,
+                            occurredAt: statusChangedAt,
                         },
                     })
                 }
@@ -241,6 +292,29 @@ export const jobPostRepository: JobPostRepository = {
                     inApplyQueue: applyQueuePost !== null,
                 }
             })
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+                return null
+            }
+
+            throw error
+        }
+    },
+
+    async saveNextStep(id, input) {
+        try {
+            const post = await prisma.jobPost.update({
+                where: { id },
+                data: {
+                    nextStepTitle: input.title,
+                    nextStepDueAt: new Date(input.dueAt),
+                    nextStepCompletedAt:
+                        input.completedAt === null ? null : new Date(input.completedAt),
+                    nextStepSource: 'MANUAL',
+                },
+            })
+
+            return toJobPostNextStep(post)
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
                 return null

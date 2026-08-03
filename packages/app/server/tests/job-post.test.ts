@@ -2,6 +2,9 @@ import type {
     ApplyQueueItem,
     CreateUserAddedJobPostInput,
     JobPost,
+    JobPostNextStep,
+    SaveJobPostNextStepInput,
+    TrackedJobPost,
     UpdateJobPostInput,
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
@@ -24,6 +27,7 @@ const existingPost: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/123',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
@@ -35,9 +39,17 @@ const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
     recommendationContext: null,
 }
-const trackedPost: JobPost = {
-    ...existingPost,
-    applicationStatus: 'awaiting-response',
+const trackedPost: TrackedJobPost = {
+    post: {
+        ...existingPost,
+        applicationStatus: 'awaiting-response',
+        appliedAt: '2026-07-12T10:00:00.000Z',
+    },
+    contacts: [],
+    jobPostSnapshot: null,
+    applicationSnapshot: null,
+    activities: [],
+    nextStep: null,
 }
 const userAddedPost: UserAddedJobPost = {
     agentLabel: 'target',
@@ -87,6 +99,11 @@ const createFakeRepository = () => {
         post: { ...existingPost, ...input },
         inApplyQueue: false,
     }))
+    const saveNextStep = vi.fn(
+        async (_id: string, input: SaveJobPostNextStepInput): Promise<JobPostNextStep | null> => ({
+            ...input,
+        }),
+    )
     const repository: JobPostRepository = {
         findMany,
         findApplyQueue,
@@ -95,6 +112,7 @@ const createFakeRepository = () => {
         findById,
         upsertUserAdded,
         update,
+        saveNextStep,
     }
 
     return {
@@ -104,6 +122,7 @@ const createFakeRepository = () => {
         findMany,
         findUserAdded,
         repository,
+        saveNextStep,
         update,
         upsertUserAdded,
     }
@@ -112,7 +131,7 @@ const createFakeRepository = () => {
 const createTestApp = (repository: JobPostRepository) => {
     const app = express()
     app.use(express.json())
-    app.use('/job-posts', createJobPostRouter(repository))
+    app.use('/job-posts', createJobPostRouter(repository, { save: vi.fn(async () => true) }))
     return app
 }
 

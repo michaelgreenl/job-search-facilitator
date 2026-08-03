@@ -19,31 +19,49 @@ enum UserLabel {
   FORGO     @map("forgo")
 }
 
+enum JobPostNextStepSource {
+  MANUAL     @map("manual")
+  AUTOMATION @map("automation")
+}
+
 model JobPost {
-  id                 String                @id @default(uuid()) @db.Uuid
-  sourceKey          String                @unique
-  roleTitle          String
-  company            String
-  location           String?
-  compensation       String?
-  techStack          String
-  postSource         String
-  postUrl            String
-  applicationUrl     String
-  postStatus         PostStatus            @default(UNKNOWN)
-  applicationStatus  ApplicationStatus     @default(NOT_APPLIED)
-  userLabel          UserLabel?
-  archivedAt         DateTime?             @db.Timestamptz(3)
-  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime              @updatedAt @db.Timestamptz(3)
-  results            JobSearchResult[]
-  outreachContacts   OutreachContact[]
-  outreachRuns       OutreachRun[]
-  userAdded          UserAddedJobPost?
-  snapshot           JobPostSnapshot?
-  applicationFiles   ApplicationArtifact[]
-  trackingActivities TrackingActivity[]
-  nextStep           JobNextStep?
+  id                         String                 @id @default(uuid()) @db.Uuid
+  sourceKey                  String                 @unique
+  roleTitle                  String
+  company                    String
+  location                   String?
+  compensation               String?
+  techStack                  String
+  postSource                 String
+  postUrl                    String
+  applicationUrl             String
+  postStatus                 PostStatus             @default(UNKNOWN)
+  applicationStatus          ApplicationStatus      @default(NOT_APPLIED)
+  appliedAt                  DateTime?              @db.Timestamptz(3)
+  applicationStatusUpdatedAt DateTime?              @db.Timestamptz(3)
+  nextStepTitle              String?
+  nextStepDueAt              DateTime?              @db.Timestamptz(3)
+  nextStepCompletedAt        DateTime?              @db.Timestamptz(3)
+  nextStepSource             JobPostNextStepSource?
+  userLabel                  UserLabel?
+  archivedAt                 DateTime?              @db.Timestamptz(3)
+  createdAt                  DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime               @updatedAt @db.Timestamptz(3)
+  results                    JobSearchResult[]
+  outreachContacts           OutreachContact[]
+  outreachRuns               OutreachRun[]
+  userAdded                  UserAddedJobPost?
+  snapshot                   JobPostSnapshot?
+  applicationSnapshot        ApplicationSnapshot?
+  activities                 JobPostActivity[]
+}
+
+model JobPostSnapshot {
+  jobPostId   String   @id @db.Uuid
+  description String
+  sourceUrl   String
+  capturedAt  DateTime @db.Timestamptz(3)
+  jobPost     JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
 }
 
 model UserAddedJobPost {

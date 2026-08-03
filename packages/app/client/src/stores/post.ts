@@ -10,7 +10,6 @@ import { ref, shallowRef } from 'vue'
 import {
     createUserAddedJobPost,
     fetchApplyQueue as requestApplyQueue,
-    fetchTrackedPosts as requestTrackedPosts,
     fetchJobPost as requestJobPost,
     fetchJobPosts as requestJobPosts,
     fetchUserAddedJobPosts,
@@ -117,8 +116,6 @@ export const usePostStore = defineStore('posts', () => {
 
     const fetchApplyQueue = () => load(requestApplyQueue, upsertApplyQueue)
 
-    const fetchTrackedPosts = () => load(requestTrackedPosts, upsertPosts)
-
     const fetchUserAddedPosts = () => {
         const requestMutationRevision = userAddedMutationRevision
 
@@ -159,7 +156,6 @@ export const usePostStore = defineStore('posts', () => {
         error,
         fetchPosts,
         fetchApplyQueue,
-        fetchTrackedPosts,
         fetchUserAddedPosts,
         addUserAddedPost,
         fetchPost,

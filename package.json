@@ -24,7 +24,7 @@
         "dev:db:stop": "docker compose -f packages/app/server/docker-compose.yml down",
         "dev:db:clean": "pnpm run dev:db:backup && docker compose -f packages/app/server/docker-compose.yml down -v",
         "prisma:generate": "pnpm --filter @job-search-facilitator/core run generate",
-        "test": "pnpm --filter @job-search-facilitator/core --filter client --filter server --filter agent-bridge run test",
+        "test": "pnpm --filter client --filter server --filter agent-bridge run test",
         "test:integration": "node packages/app/server/tests/run-integration.ts",
         "build": "pnpm run prisma:generate && pnpm --filter client --filter server --filter agent-bridge run build",
         "typecheck": "pnpm run prisma:generate && pnpm -r run typecheck",

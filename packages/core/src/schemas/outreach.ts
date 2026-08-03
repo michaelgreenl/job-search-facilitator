@@ -13,7 +13,7 @@ import {
     toAgentOutputSchema,
 } from './shared.ts'
 
-const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
+export const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     id: z.uuid(),
     jobPostId: z.uuid(),
     personName: nonBlankStringSchema,
@@ -22,6 +22,8 @@ const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     relevanceRationale: nonBlankStringSchema,
     draftMessage: nonBlankStringSchema,
     messaged: z.boolean(),
+    messagedAt: isoDateTimeSchema.nullable(),
+    respondedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
 })

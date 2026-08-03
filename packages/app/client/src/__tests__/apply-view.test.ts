@@ -16,6 +16,7 @@ import { useAgentStore } from '@/stores/agent'
 import { makeAgentTask } from '@/test/fixtures/agent'
 import { makeJobPost, makeRecommendationContext } from '@/test/fixtures/job-post'
 import { makeOutreachContact } from '@/test/fixtures/outreach'
+import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestUrl } from '@/test/support/http'
 import { mountVue, type MountedVueComponent } from '@/test/support/mount'
@@ -218,6 +219,73 @@ describe('apply view', () => {
                     ?.getAttribute('data-active'),
             ).toBe('true'),
         )
+    })
+
+    it('captures the filled application and job post before submission', async () => {
+        let savedCapture: unknown
+        const capture = {
+            jobPost: {
+                description: 'Complete job description',
+                sourceUrl: posts[0]!.postUrl,
+            },
+            application: {
+                content: 'Name: Applicant',
+                sourceUrl: posts[0]!.applicationUrl,
+            },
+        }
+        const harness = new AgentBridgeHarness({
+            fallback: (input, init) => {
+                const url = requestUrl(input)
+
+                if (url.endsWith('/api/job-posts/apply-queue')) {
+                    return jsonResponse(applyQueueItems)
+                }
+
+                if (
+                    url.endsWith(`/api/job-posts/${posts[0]!.id}/application-capture`) &&
+                    init?.method === 'PUT'
+                ) {
+                    if (typeof init.body !== 'string') {
+                        throw new Error('Expected application capture JSON')
+                    }
+
+                    savedCapture = JSON.parse(init.body)
+                    return new Response(null, { status: 204 })
+                }
+
+                throw new Error(`Unexpected request: ${url}`)
+            },
+        })
+        vi.stubGlobal('fetch', harness.fetch)
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'capture-application').click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[data-testid="application-capture-panel"]')).not.toBeNull()
+            expect(FakeEventSource.forTask(runningAgentTask.id)).not.toBeUndefined()
+        })
+
+        harness.complete(runningAgentTask.id, capture)
+
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="apply-viewer-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true'),
+        )
+        expect(
+            harness.requests.some(
+                ({ method, url }) =>
+                    method === 'PUT' &&
+                    url.endsWith(`/api/job-posts/${posts[0]!.id}/application-capture`),
+            ),
+        ).toBe(true)
+        expect(savedCapture).toEqual(capture)
     })
 
     it('reuses saved contacts and navigates between contact and draft panels', async () => {

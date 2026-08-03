@@ -1,8 +1,4 @@
-import {
-    AGENT_CAPABILITIES,
-    parseTrackingAutomationContext,
-    type StartAgentTaskInput,
-} from '@job-search-facilitator/core'
+import { AGENT_CAPABILITIES } from '@job-search-facilitator/core'
 import {
     ACCEPTED,
     BAD_REQUEST,
@@ -15,7 +11,6 @@ import express from 'express'
 import { z } from 'zod'
 import type { AgentTaskManager, AgentTaskStreamEvent } from '../tasks/agent-task-manager.ts'
 import { InvalidAgentOutputSchemaError } from '../tasks/output-schema.ts'
-import { createTrackingTask } from '../tasks/tracking-task.ts'
 
 const startAgentTaskInputSchema = z.strictObject({
     prompt: z.string().trim().min(1),
@@ -25,36 +20,12 @@ const startAgentTaskInputSchema = z.strictObject({
     }),
     capabilities: z.array(z.enum(AGENT_CAPABILITIES)).default([]),
 })
-const trackingTaskInputSchema = z.strictObject({
-    kind: z.literal('tracking'),
-    context: z.unknown(),
-})
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })
 const taskPermissionParamsSchema = z.strictObject({ id: z.uuid(), permissionId: z.uuid() })
 const taskPermissionInputSchema = z.strictObject({ decision: z.enum(['approve', 'decline']) })
 
 const taskNotFound = { error: 'Agent task not found' }
-
-const parseTaskInput = (value: unknown): StartAgentTaskInput | null => {
-    const generic = startAgentTaskInputSchema.safeParse(value)
-
-    if (generic.success) {
-        return generic.data
-    }
-
-    const tracking = trackingTaskInputSchema.safeParse(value)
-
-    if (!tracking.success) {
-        return null
-    }
-
-    try {
-        return createTrackingTask(parseTrackingAutomationContext(tracking.data.context))
-    } catch {
-        return null
-    }
-}
 
 const sendEvent = (response: express.Response, { id, event }: AgentTaskStreamEvent) => {
     response.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
@@ -68,9 +39,9 @@ export const createTaskRouter = (taskManager: AgentTaskManager) => {
         response: express.Response,
         taskId?: string,
     ) => {
-        const input = parseTaskInput(request.body)
+        const input = startAgentTaskInputSchema.safeParse(request.body)
 
-        if (input === null) {
+        if (!input.success) {
             response.status(BAD_REQUEST).json({ error: 'Invalid request' })
             return
         }
@@ -92,7 +63,7 @@ export const createTaskRouter = (taskManager: AgentTaskManager) => {
         }
 
         try {
-            response.status(ACCEPTED).json(await taskManager.start(input, taskId))
+            response.status(ACCEPTED).json(await taskManager.start(input.data, taskId))
         } catch (error) {
             if (error instanceof InvalidAgentOutputSchemaError) {
                 response.status(BAD_REQUEST).json({ error: 'Invalid request' })

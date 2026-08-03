@@ -21,13 +21,25 @@ export const createParser =
 
 export const nonBlankStringSchema = z.string().refine((value) => value.trim().length > 0)
 export const isoDateTimeSchema = z.iso.datetime({ offset: true })
+const parseUrl = (value: string) => {
+    try {
+        return new URL(value)
+    } catch {
+        return null
+    }
+}
 export const httpUrlSchema = z.url().refine((value) => {
-    const protocol = new URL(value).protocol
+    const protocol = parseUrl(value)?.protocol
 
     return protocol === 'http:' || protocol === 'https:'
 })
 export const linkedInProfileUrlSchema = z.url().refine((value) => {
-    const url = new URL(value)
+    const url = parseUrl(value)
+
+    if (url === null) {
+        return false
+    }
+
     const linkedInHost = url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com')
 
     return url.protocol === 'https:' && linkedInHost && url.pathname.startsWith('/in/')

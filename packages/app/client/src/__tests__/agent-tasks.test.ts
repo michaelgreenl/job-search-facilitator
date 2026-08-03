@@ -16,6 +16,7 @@ const post: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/post-id',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: 'P1',
     archivedAt: null,
     createdAt: '2026-07-20T12:00:00.000Z',
@@ -31,6 +32,8 @@ const contact: OutreachContact = {
     relevanceRationale: 'Her visible role is relevant to the team.',
     draftMessage: 'Hi Ada, could I ask about the team?',
     messaged: false,
+    messagedAt: null,
+    respondedAt: null,
     createdAt: '2026-07-20T12:00:00.000Z',
     updatedAt: '2026-07-20T12:00:00.000Z',
 }

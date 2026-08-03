@@ -9,9 +9,12 @@ import {
     type CreateUserAddedJobPostInput,
     type JobPost,
     type JobPostInput,
+    type JobPostNextStep,
+    type JobPostSnapshot,
     type JobRecommendationContext,
     type JobSearchReport,
     type JobSearchResult,
+    type SaveJobPostNextStepInput,
     type StandaloneJobRecommendation,
     type UpdateJobPostResult,
     type UserAddedJobPost,
@@ -60,7 +63,7 @@ export const createUserAddedJobPostInputSchema = z.strictObject({
     post: jobPostInputSchema,
 }) satisfies z.ZodType<CreateUserAddedJobPostInput>
 
-const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
+export const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     id: z.uuid(),
     sourceKey: nonBlankStringSchema,
     roleTitle: nonBlankStringSchema,
@@ -73,10 +76,29 @@ const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     applicationUrl: httpUrlSchema,
     postStatus: z.enum(POST_STATUSES),
     applicationStatus: z.enum(APPLICATION_STATUSES),
+    appliedAt: isoDateTimeSchema.nullable(),
     userLabel: z.enum(USER_LABELS).nullable(),
     archivedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
+})
+
+export const jobPostSnapshotSchema: z.ZodType<JobPostSnapshot> = z.looseObject({
+    description: nonBlankStringSchema,
+    sourceUrl: httpUrlSchema,
+    capturedAt: isoDateTimeSchema,
+})
+
+export const jobPostNextStepSchema: z.ZodType<JobPostNextStep> = z.looseObject({
+    title: nonBlankStringSchema,
+    dueAt: isoDateTimeSchema,
+    completedAt: isoDateTimeSchema.nullable(),
+})
+
+export const saveJobPostNextStepInputSchema: z.ZodType<SaveJobPostNextStepInput> = z.strictObject({
+    title: z.string().trim().min(1),
+    dueAt: isoDateTimeSchema,
+    completedAt: isoDateTimeSchema.nullable(),
 })
 
 const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject({
@@ -142,6 +164,7 @@ export const parseCreateUserAddedJobPostInput = createParser<CreateUserAddedJobP
 )
 export const parseJobPost = createParser('Job post', jobPostSchema)
 export const parseJobPosts = createParser('Job posts', z.array(jobPostSchema))
+export const parseJobPostNextStep = createParser('Job post next step', jobPostNextStepSchema)
 export const parseUserAddedJobPost = createParser('User-added job post', userAddedJobPostSchema)
 export const parseUserAddedJobPosts = createParser(
     'User-added job posts',

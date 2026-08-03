@@ -5,6 +5,8 @@ export type JobPostViewPanelMode =
           kind: 'apply'
           applicationUpdating: boolean
           applicationError: string | null
+          captureDisabled: boolean
+          captureMessage: string | null
           outreachDisabled: boolean
       }
 </script>
@@ -41,6 +43,7 @@ const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     openOutreach: []
     markApplied: []
+    captureApplication: []
     back: []
 }>()
 
@@ -199,6 +202,15 @@ function selectLabel(value: string) {
                     >
                         Open application ↗
                     </BaseButton>
+                    <BaseButton
+                        v-if="applyMode"
+                        data-testid="capture-application"
+                        preset="outline"
+                        :disabled="applyMode.captureDisabled"
+                        @click="emit('captureApplication')"
+                    >
+                        Capture application
+                    </BaseButton>
                 </div>
 
                 <BaseDropdown
@@ -216,6 +228,9 @@ function selectLabel(value: string) {
 
             <p v-if="postError" class="label-error" data-testid="job-post-error" role="alert">
                 {{ postError }}
+            </p>
+            <p v-if="applyMode?.captureMessage" class="capture-message" role="status">
+                {{ applyMode.captureMessage }}
             </p>
 
             <div v-if="hasContent" class="post-content">
@@ -374,6 +389,12 @@ function selectLabel(value: string) {
 
 .label-error {
     color: lighten-color($color-red-600, 25%);
+    font-size: 0.8125rem;
+}
+
+.capture-message {
+    margin: 0;
+    color: $color-ink-muted;
     font-size: 0.8125rem;
 }
 

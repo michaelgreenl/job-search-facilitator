@@ -20,6 +20,7 @@ export function makeJobPost(overrides: Partial<JobPost> = {}): JobPost {
         applicationUrl: `https://apply.example.com/jobs/${id}`,
         postStatus: 'active',
         applicationStatus: 'not-applied',
+        appliedAt: null,
         userLabel: null,
         archivedAt: null,
         createdAt: '2026-07-20T12:00:00.000Z',

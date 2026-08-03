@@ -8,9 +8,9 @@ import type {
     UpdateOutreachRunInput,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
+import { toOutreachContact } from '../mappers/outreach.mapper.ts'
 import { prisma } from '../prisma.ts'
 
-type PrismaOutreachContact = Prisma.OutreachContactGetPayload<object>
 type PrismaOutreachRun = Prisma.OutreachRunGetPayload<object>
 
 const statusToApi = {
@@ -19,19 +19,6 @@ const statusToApi = {
     COMPLETED: 'completed',
     FAILED: 'failed',
 } satisfies Record<PrismaOutreachRun['status'], OutreachRunStatus>
-
-export const toOutreachContact = (contact: PrismaOutreachContact): OutreachContact => ({
-    id: contact.id,
-    jobPostId: contact.jobPostId,
-    personName: contact.personName,
-    personTitle: contact.personTitle,
-    profileUrl: contact.profileUrl,
-    relevanceRationale: contact.relevanceRationale,
-    draftMessage: contact.draftMessage,
-    messaged: contact.messaged,
-    createdAt: contact.createdAt.toISOString(),
-    updatedAt: contact.updatedAt.toISOString(),
-})
 
 const toOutreachRun = (run: PrismaOutreachRun): OutreachRun => ({
     id: run.id,
@@ -100,13 +87,34 @@ export const outreachContactRepository: OutreachContactRepository = {
                     return null
                 }
 
+                const now = new Date()
+                const messaged = input.responded === true ? true : input.messaged
+                const data: Prisma.OutreachContactUpdateInput = {}
+
+                if (messaged !== undefined) {
+                    data.messaged = messaged
+                    data.messagedAt = messaged ? (existing.messagedAt ?? now) : null
+
+                    if (!messaged) {
+                        data.respondedAt = null
+                        data.responseStatusUpdatedAt = now
+                    } else if (!existing.messaged) {
+                        data.responseStatusUpdatedAt = now
+                    }
+                }
+
+                if (input.responded !== undefined) {
+                    data.respondedAt = input.responded ? now : null
+                    data.responseStatusUpdatedAt = now
+                }
+
                 const contact = await transaction.outreachContact.update({
                     where: { id: contactId, jobPostId },
-                    data: input,
+                    data,
                 })
 
                 if (!existing.messaged && contact.messaged) {
-                    await transaction.trackingActivity.create({
+                    await transaction.jobPostActivity.create({
                         data: {
                             jobPostId,
                             outreachContactId: contactId,
@@ -114,7 +122,21 @@ export const outreachContactRepository: OutreachContactRepository = {
                             source: 'MANUAL',
                             summary: `Messaged ${contact.personName}`,
                             sourceUrl: contact.profileUrl,
-                            occurredAt: new Date(),
+                            occurredAt: now,
+                        },
+                    })
+                }
+
+                if (existing.respondedAt === null && contact.respondedAt !== null) {
+                    await transaction.jobPostActivity.create({
+                        data: {
+                            jobPostId,
+                            outreachContactId: contactId,
+                            type: 'OUTREACH_RESPONSE_RECEIVED',
+                            source: 'MANUAL',
+                            summary: `Received a response from ${contact.personName}`,
+                            sourceUrl: contact.profileUrl,
+                            occurredAt: now,
                         },
                     })
                 }

@@ -30,9 +30,16 @@ export const outreachContactInputSchema = z.strictObject({
     draftMessage: nonBlankString,
 })
 
-export const updateOutreachContactInputSchema = z.strictObject({
-    messaged: z.boolean(),
-})
+export const updateOutreachContactInputSchema = z
+    .strictObject({
+        messaged: z.boolean().optional(),
+        responded: z.boolean().optional(),
+    })
+    .refine(
+        (input) =>
+            Object.keys(input).length > 0 &&
+            !(input.messaged === false && input.responded === true),
+    )
 
 export const outreachRunIdParamsSchema = z.strictObject({
     runId: z.uuid(),

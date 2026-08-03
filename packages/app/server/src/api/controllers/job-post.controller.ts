@@ -4,6 +4,7 @@ import type { JobPostRepository } from '../../db/repositories/job-post.repositor
 import {
     createUserAddedJobPostInputSchema,
     jobPostIdParamsSchema,
+    saveJobPostNextStepInputSchema,
     updateJobPostInputSchema,
 } from '../schemas/job-post.schema.ts'
 
@@ -75,5 +76,24 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         }
 
         response.json(updateResult)
+    },
+
+    saveNextStep: async (request: Request, response: Response): Promise<void> => {
+        const params = jobPostIdParamsSchema.safeParse(request.params)
+        const input = saveJobPostNextStepInputSchema.safeParse(request.body)
+
+        if (!params.success || !input.success) {
+            response.status(BAD_REQUEST).json(invalidRequest)
+            return
+        }
+
+        const nextStep = await repository.saveNextStep(params.data.id, input.data)
+
+        if (nextStep === null) {
+            response.status(NOT_FOUND).json(jobPostNotFound)
+            return
+        }
+
+        response.json(nextStep)
     },
 })

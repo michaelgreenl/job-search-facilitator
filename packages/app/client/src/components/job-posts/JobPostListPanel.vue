@@ -63,6 +63,8 @@ const emit = defineEmits<{
             <slot name="heading-controls" />
         </template>
 
+        <slot name="summary" />
+
         <ul
             v-if="pending || (!loading && !error && posts.length)"
             class="card-list"

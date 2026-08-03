@@ -16,7 +16,7 @@ import {
     createOutreachContact,
     fetchOutreachContacts,
     updateOutreachContact,
-} from '@/services/agent/agent-tasks'
+} from '@/services/outreach'
 import { useAgentStore, type AgentSession, type AgentSessionOwner } from './agent'
 
 const outreachDraftStyle =
@@ -67,7 +67,7 @@ const clearOutreachContactListReturn = () => {
     }
 }
 
-type OutreachAgentSession = Exclude<AgentSession, { kind: 'job-post-import' }>
+type OutreachAgentSession = Extract<AgentSession, { kind: 'outreach-contact' | 'outreach-draft' }>
 
 export interface OutreachTaskItem {
     taskId: string
