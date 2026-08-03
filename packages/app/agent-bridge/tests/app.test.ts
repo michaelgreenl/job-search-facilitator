@@ -12,6 +12,10 @@ const taskInput = {
     outputSchema: { type: 'object' },
     capabilities: ['chrome'],
 }
+const trackingTaskInput = {
+    kind: 'tracking',
+    context: { requestedAt: '2026-08-03T12:00:00.000Z', posts: [] },
+}
 
 const parseEventStream = (body: string): Array<{ id: number; event: AgentTaskEvent }> =>
     body
@@ -42,7 +46,7 @@ describe('Agent bridge routes', () => {
             .get('/health')
             .expect(200, { status: 'healthy', capabilities: ['chrome'] })
 
-        const response = await request(app).post('/tasks').send(taskInput).expect(202)
+        const response = await request(app).post('/tasks').send(trackingTaskInput).expect(202)
 
         expect(response.body).toMatchObject({
             status: 'running',

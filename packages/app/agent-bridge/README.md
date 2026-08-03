@@ -18,6 +18,7 @@ The bridge listens on `127.0.0.1:3001` by default. See `.env.example` for its op
 
 - `GET /health` reports current Agent runtime readiness and its discovered capabilities.
 - `POST /tasks` starts a structured task.
+- A task body with `kind: "tracking"` starts one read-only Gmail and LinkedIn tracking pass from server-provided eligible-post context.
 - `GET /tasks/:id` returns its current state.
 - `POST /tasks/:id/cancel` interrupts a running task.
 - `GET /tasks/:id/events` streams user-safe progress with server-sent events.
