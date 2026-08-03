@@ -23,3 +23,8 @@ export {
 } from './outreach.ts'
 export type { RuntimeParser } from './shared.ts'
 export { parseAgentHealth, parseAgentTask, parseAgentTaskEvent } from './agent.ts'
+export {
+    createTrackingAutomationOutputSchema,
+    parseTrackingAutomationContext,
+    parseTrackingAutomationResult,
+} from './tracking.ts'

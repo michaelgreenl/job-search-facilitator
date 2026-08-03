@@ -1,4 +1,5 @@
-import type { ApplicationStatus, IsoDateTime } from './jobs.ts'
+import type { ApplicationStatus, IsoDateTime, JobPost } from './jobs.ts'
+import type { OutreachContact } from './outreach.ts'
 
 export const TRACKING_ACTIVITY_SOURCES = ['manual', 'gmail', 'linkedin', 'system'] as const
 
@@ -91,3 +92,77 @@ export type SaveJobNextStepInput = Pick<
     JobNextStep,
     'title' | 'dueAt' | 'completedAt' | 'sourceActivityId'
 >
+
+export type TrackingOutreachStatus = 'response-pending' | 'responded'
+
+export type TrackedOutreachContact = OutreachContact & {
+    status: TrackingOutreachStatus
+}
+
+export interface TrackedJobPost {
+    post: JobPost
+    contacts: TrackedOutreachContact[]
+    snapshot: JobPostSnapshot | null
+    applicationArtifacts: ApplicationArtifact[]
+    activities: TrackingActivity[]
+    nextStep: JobNextStep | null
+}
+
+export const TRACKING_AUTOMATION_SOURCES = ['gmail', 'linkedin'] as const
+
+export type TrackingAutomationSource = (typeof TRACKING_AUTOMATION_SOURCES)[number]
+
+export interface TrackingAutomationContactContext {
+    id: string
+    personName: string
+    personTitle: string
+    profileUrl: string
+    messagedAt: IsoDateTime
+    status: TrackingOutreachStatus
+}
+
+export interface TrackingAutomationPostContext {
+    id: string
+    company: string
+    roleTitle: string
+    postUrl: string
+    applicationUrl: string
+    applicationStatus: ApplicationStatus
+    eligibleSince: IsoDateTime
+    lastObservedAt: Record<TrackingAutomationSource, IsoDateTime | null>
+    contacts: TrackingAutomationContactContext[]
+}
+
+export interface TrackingAutomationContext {
+    requestedAt: IsoDateTime
+    posts: TrackingAutomationPostContext[]
+}
+
+export interface TrackingAutomationObservation {
+    jobPostId: string
+    outreachContactId: string | null
+    type: TrackingActivityType
+    applicationStatus: ApplicationStatus | null
+    source: TrackingAutomationSource
+    externalId: string
+    summary: string
+    sourceUrl: string | null
+    occurredAt: IsoDateTime
+}
+
+export interface TrackingAutomationNextStep {
+    jobPostId: string
+    title: string
+    dueAt: IsoDateTime
+    source: Pick<TrackingAutomationObservation, 'source' | 'externalId' | 'type'> | null
+}
+
+export interface TrackingAutomationResult {
+    sourceErrors: Record<TrackingAutomationSource, string | null>
+    observations: TrackingAutomationObservation[]
+    nextSteps: TrackingAutomationNextStep[]
+}
+
+export interface ApplyTrackingAutomationResult {
+    createdActivities: number
+}
