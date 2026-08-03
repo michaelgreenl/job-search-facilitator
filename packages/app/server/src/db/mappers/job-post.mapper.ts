@@ -90,6 +90,9 @@ export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPo
 export const toPrismaApplicationStatus = (status: ApplicationStatus) =>
     applicationStatusToPrisma[status]
 
+export const toApiApplicationStatus = (status: PrismaJobPost['applicationStatus']) =>
+    applicationStatusToApi[status]
+
 export const toPrismaPostStatus = (status: PostStatus) => postStatusToPrisma[status]
 
 export const toPrismaUserLabel = (label: UserLabel) => userLabelToPrisma[label]

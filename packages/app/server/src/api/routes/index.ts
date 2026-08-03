@@ -5,9 +5,11 @@ import {
     outreachRunRepository,
 } from '../../db/repositories/outreach.repository.ts'
 import { searchReportRepository } from '../../db/repositories/search-report.repository.ts'
+import { trackRepository } from '../../db/repositories/track.repository.ts'
 import { createJobPostRouter } from './job-post.route.ts'
 import { createOutreachContactRouter, createOutreachRunRouter } from './outreach.route.ts'
 import { createSearchReportRouter } from './search-report.route.ts'
+import { createTrackingRouter } from './tracking.route.ts'
 
 export const apiRouter = express.Router()
 
@@ -18,3 +20,4 @@ apiRouter.use(
 )
 apiRouter.use('/job-search-reports', createSearchReportRouter(searchReportRepository))
 apiRouter.use('/outreach-runs', createOutreachRunRouter(outreachRunRepository))
+apiRouter.use('/tracking', createTrackingRouter(trackRepository))

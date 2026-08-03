@@ -48,7 +48,7 @@ const applyQueueWhere = {
     },
 } satisfies Prisma.JobPostWhereInput
 
-const trackedWhere = {
+export const trackedJobPostWhere = {
     OR: [
         { applicationStatus: { not: 'NOT_APPLIED' } },
         { outreachContacts: { some: { messaged: true } } },
@@ -113,7 +113,7 @@ export const jobPostRepository: JobPostRepository = {
 
     async findTracked() {
         const posts = await prisma.jobPost.findMany({
-            where: trackedWhere,
+            where: trackedJobPostWhere,
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         })
 
@@ -196,21 +196,51 @@ export const jobPostRepository: JobPostRepository = {
         }
 
         try {
-            const [post, applyQueuePost] = await prisma.$transaction([
-                prisma.jobPost.update({ where: { id }, data }),
-                prisma.jobPost.findFirst({
+            return await prisma.$transaction(async (transaction) => {
+                const existing = await transaction.jobPost.findUnique({
+                    where: { id },
+                    select: { applicationStatus: true },
+                })
+
+                if (existing === null) {
+                    return null
+                }
+
+                const post = await transaction.jobPost.update({ where: { id }, data })
+
+                if (
+                    input.applicationStatus !== undefined &&
+                    existing.applicationStatus !== post.applicationStatus
+                ) {
+                    await transaction.trackingActivity.create({
+                        data: {
+                            jobPostId: id,
+                            type:
+                                existing.applicationStatus === 'NOT_APPLIED' &&
+                                post.applicationStatus === 'AWAITING_RESPONSE'
+                                    ? 'APPLICATION_SUBMITTED'
+                                    : 'APPLICATION_STATUS_CHANGED',
+                            applicationStatus: post.applicationStatus,
+                            source: 'MANUAL',
+                            summary: `Application status changed to ${input.applicationStatus}`,
+                            occurredAt: new Date(),
+                        },
+                    })
+                }
+
+                const applyQueuePost = await transaction.jobPost.findFirst({
                     where: {
                         id,
                         AND: applyQueueWhere,
                     },
                     select: { id: true },
-                }),
-            ])
+                })
 
-            return {
-                post: toJobPost(post),
-                inApplyQueue: applyQueuePost !== null,
-            }
+                return {
+                    post: toJobPost(post),
+                    inApplyQueue: applyQueuePost !== null,
+                }
+            })
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
                 return null

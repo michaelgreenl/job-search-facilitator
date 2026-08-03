@@ -20,7 +20,7 @@ const statusToApi = {
     FAILED: 'failed',
 } satisfies Record<PrismaOutreachRun['status'], OutreachRunStatus>
 
-const toOutreachContact = (contact: PrismaOutreachContact): OutreachContact => ({
+export const toOutreachContact = (contact: PrismaOutreachContact): OutreachContact => ({
     id: contact.id,
     jobPostId: contact.jobPostId,
     personName: contact.personName,
@@ -91,12 +91,36 @@ export const outreachContactRepository: OutreachContactRepository = {
 
     async update(jobPostId, contactId, input) {
         try {
-            const contact = await prisma.outreachContact.update({
-                where: { id: contactId, jobPostId },
-                data: input,
-            })
+            return await prisma.$transaction(async (transaction) => {
+                const existing = await transaction.outreachContact.findUnique({
+                    where: { id: contactId, jobPostId },
+                })
 
-            return toOutreachContact(contact)
+                if (existing === null) {
+                    return null
+                }
+
+                const contact = await transaction.outreachContact.update({
+                    where: { id: contactId, jobPostId },
+                    data: input,
+                })
+
+                if (!existing.messaged && contact.messaged) {
+                    await transaction.trackingActivity.create({
+                        data: {
+                            jobPostId,
+                            outreachContactId: contactId,
+                            type: 'OUTREACH_SENT',
+                            source: 'MANUAL',
+                            summary: `Messaged ${contact.personName}`,
+                            sourceUrl: contact.profileUrl,
+                            occurredAt: new Date(),
+                        },
+                    })
+                }
+
+                return toOutreachContact(contact)
+            })
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
                 return null
