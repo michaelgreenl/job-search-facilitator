@@ -9,6 +9,13 @@ describe('GET /health', () => {
 })
 
 describe('API routes', () => {
+    it('accepts detailed report-sized JSON bodies before routing', async () => {
+        await request(app)
+            .post('/api/not-a-route')
+            .send({ report: 'x'.repeat(170_000) })
+            .expect(404)
+    })
+
     it.each(['/api/job-posts/invalid-id', '/api/job-search-reports/invalid-id'])(
         'mounts %s',
         async (path) => {
