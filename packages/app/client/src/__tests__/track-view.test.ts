@@ -12,7 +12,7 @@ import { jsonResponse, requestUrl } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
 
 describe('track view', () => {
-    it('summarizes tracked work and opens the first job with its saved history', async () => {
+    it('restores the selected job and summarizes tracked work', async () => {
         const first = makeTrackedJobPost({
             post: makeJobPost({
                 id: '30000000-0000-4000-8000-000000000001',
@@ -31,11 +31,6 @@ describe('track view', () => {
                 sourceUrl: 'https://apply.example.com/jobs/acme',
                 capturedAt: '2026-07-20T12:00:00.000Z',
             },
-            nextStep: {
-                title: 'Prepare for Acme interview',
-                dueAt: '2026-08-04T14:00:00.000Z',
-                completedAt: null,
-            },
         })
         const second = makeTrackedJobPost({
             post: makeJobPost({
@@ -46,20 +41,56 @@ describe('track view', () => {
             }),
             contacts: [],
         })
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([first, second])))
-
-        const { root } = mountVue(TrackView, {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse([first, second])),
+        )
+        const firstMount = mountVue(TrackView, {
             install: (app) => app.use(createPinia()),
         })
 
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="tracked-job-detail"]')).not.toBeNull(),
+            expect(
+                firstMount.root.querySelector('[data-testid="tracked-job-detail"]'),
+            ).not.toBeNull(),
         )
 
         expect(
-            root.querySelector('[data-testid="tracked-job-detail"]')?.getAttribute('data-post-id'),
+            firstMount.root
+                .querySelector('[data-testid="tracked-job-detail"]')
+                ?.getAttribute('data-post-id'),
         ).toBe(first.post.id)
-        expect(root.querySelector('[data-testid="track-next-step"]')).not.toBeNull()
+        expect(
+            firstMount.root.querySelector('[data-testid="view-application-snapshot"]'),
+        ).not.toBeNull()
+        expect(
+            firstMount.root.querySelector('[data-testid="view-job-post-snapshot"]'),
+        ).not.toBeNull()
+        firstMount.root
+            .querySelector<HTMLButtonElement>(`[data-testid="job-post-card-${second.post.id}"]`)!
+            .click()
+        await vi.waitFor(() =>
+            expect(
+                firstMount.root
+                    .querySelector('[data-testid="tracked-job-detail"]')
+                    ?.getAttribute('data-post-id'),
+            ).toBe(second.post.id),
+        )
+        expect(sessionStorage.getItem('job-search-facilitator:track-selected-post')).toBe(
+            second.post.id,
+        )
+        firstMount.unmount()
+
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="tracked-job-detail"]')
+                    ?.getAttribute('data-post-id'),
+            ).toBe(second.post.id),
+        )
         expect(
             root
                 .querySelector('[data-testid="active-application-count"]')
@@ -70,8 +101,6 @@ describe('track view', () => {
                 .querySelector('[data-testid="closed-application-count"]')
                 ?.getAttribute('data-count'),
         ).toBe('1')
-        expect(root.querySelector('[data-testid="view-application-snapshot"]')).not.toBeNull()
-        expect(root.querySelector('[data-testid="view-job-post-snapshot"]')).not.toBeNull()
     })
 
     it('submits one completed update check and refreshes tracked jobs', async () => {

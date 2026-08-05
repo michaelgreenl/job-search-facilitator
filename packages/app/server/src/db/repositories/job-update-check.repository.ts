@@ -45,34 +45,6 @@ const activityData = (update: JobUpdate): Prisma.JobPostActivityCreateManyInput 
     occurredAt: new Date(update.occurredAt),
 })
 
-const suggestNextStep = async (
-    transaction: Prisma.TransactionClient,
-    jobPostId: string,
-    title: string,
-    dueAt: Date,
-) => {
-    await transaction.jobPost.updateMany({
-        where: {
-            id: jobPostId,
-            OR: [
-                { nextStepTitle: null },
-                {
-                    nextStepSource: 'AUTOMATION',
-                    nextStepCompletedAt: null,
-                    nextStepDueAt: { lt: dueAt },
-                },
-                { nextStepCompletedAt: { lt: dueAt } },
-            ],
-        },
-        data: {
-            nextStepTitle: title,
-            nextStepDueAt: dueAt,
-            nextStepCompletedAt: null,
-            nextStepSource: 'AUTOMATION',
-        },
-    })
-}
-
 export interface JobUpdateCheckRepository {
     getContext(): Promise<JobUpdateCheckContext>
     save(result: JobUpdateCheckResult): Promise<SavedJobUpdates>
@@ -176,7 +148,6 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
                 where: { id: { in: jobPostIds } },
                 select: {
                     id: true,
-                    company: true,
                     applicationStatus: true,
                     appliedAt: true,
                     applicationStatusUpdatedAt: true,
@@ -184,7 +155,6 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
                         where: { messaged: true, respondedAt: null, messagedAt: { not: null } },
                         select: {
                             id: true,
-                            personName: true,
                             messagedAt: true,
                             responseStatusUpdatedAt: true,
                         },
@@ -293,7 +263,7 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
                         continue
                     }
 
-                    const changed = await transaction.jobPost.updateMany({
+                    await transaction.jobPost.updateMany({
                         where: {
                             id: post.id,
                             applicationStatus: { in: priorStatuses },
@@ -307,30 +277,9 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
                             applicationStatusUpdatedAt: occurredAt,
                         },
                     })
-
-                    if (changed.count === 1 && update.status === 'interviewing') {
-                        await suggestNextStep(
-                            transaction,
-                            post.id,
-                            `Prepare for ${post.company} interview`,
-                            occurredAt,
-                        )
-                    } else if (
-                        changed.count === 1 &&
-                        (update.status === 'rejected' || update.status === 'hired')
-                    ) {
-                        await transaction.jobPost.updateMany({
-                            where: {
-                                id: post.id,
-                                nextStepSource: 'AUTOMATION',
-                                nextStepCompletedAt: null,
-                            },
-                            data: { nextStepCompletedAt: occurredAt },
-                        })
-                    }
                 } else if (update.kind === 'outreach-response') {
                     const contact = contactsById.get(update.outreachContactId)!
-                    const changed = await transaction.outreachContact.updateMany({
+                    await transaction.outreachContact.updateMany({
                         where: {
                             id: contact.id,
                             jobPostId: post.id,
@@ -343,22 +292,6 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
                         },
                         data: { respondedAt: occurredAt, responseStatusUpdatedAt: occurredAt },
                     })
-
-                    if (changed.count === 1) {
-                        await suggestNextStep(
-                            transaction,
-                            post.id,
-                            `Reply to ${contact.personName}`,
-                            occurredAt,
-                        )
-                    }
-                } else {
-                    await suggestNextStep(
-                        transaction,
-                        post.id,
-                        `Review possible update from ${post.company}`,
-                        occurredAt,
-                    )
                 }
             }
 

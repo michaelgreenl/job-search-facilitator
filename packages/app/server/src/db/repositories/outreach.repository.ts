@@ -113,6 +113,24 @@ export const outreachContactRepository: OutreachContactRepository = {
                     data,
                 })
 
+                const manualActivityTypes: Array<'OUTREACH_SENT' | 'OUTREACH_RESPONSE_RECEIVED'> =
+                    !contact.messaged || !existing.messaged
+                        ? ['OUTREACH_SENT', 'OUTREACH_RESPONSE_RECEIVED']
+                        : contact.respondedAt === null || existing.respondedAt === null
+                          ? ['OUTREACH_RESPONSE_RECEIVED']
+                          : []
+
+                if (manualActivityTypes.length > 0) {
+                    await transaction.jobPostActivity.deleteMany({
+                        where: {
+                            jobPostId,
+                            outreachContactId: contactId,
+                            source: 'MANUAL',
+                            type: { in: manualActivityTypes },
+                        },
+                    })
+                }
+
                 if (!existing.messaged && contact.messaged) {
                     await transaction.jobPostActivity.create({
                         data: {

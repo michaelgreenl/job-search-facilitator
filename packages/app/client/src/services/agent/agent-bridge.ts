@@ -22,12 +22,34 @@ export class AgentBridgeRequestError extends Error {
     }
 }
 
+const serializedErrorSuffix = /(?:^|:\s*)(\{[\s\S]*\}|\[[\s\S]*\])$/
+
+export const toUserFacingAgentError = (message: string, fallback: string) => {
+    const trimmed = message.trim()
+    const serializedError = serializedErrorSuffix.exec(trimmed)?.[1]
+
+    if (serializedError !== undefined) {
+        try {
+            const value: unknown = JSON.parse(serializedError)
+
+            if (typeof value === 'object' && value !== null) {
+                return fallback
+            }
+        } catch {
+            // Keep readable plain-text errors intact.
+        }
+    }
+
+    return trimmed || fallback
+}
+
 async function requestAgentBridge(path: string, init?: RequestInit) {
     const response = await fetch(`${agentBridgeUrl}${path}`, init)
 
     if (!response.ok) {
+        const fallback = `Agent request failed (${response.status})`
         throw new AgentBridgeRequestError(
-            (await readResponseError(response)) ?? `Agent request failed (${response.status})`,
+            toUserFacingAgentError((await readResponseError(response)) ?? fallback, fallback),
             response.status,
         )
     }

@@ -2,9 +2,7 @@ import type {
     ApplyQueueItem,
     CreateUserAddedJobPostInput,
     JobPost,
-    JobPostNextStep,
     JobRecommendationContext,
-    SaveJobPostNextStepInput,
     TrackedJobPost,
     UpdateJobPostInput,
     UpdateJobPostResult,
@@ -15,7 +13,6 @@ import { toApplicationSnapshot } from '../mappers/application.mapper.ts'
 import { toJobPostActivity } from '../mappers/job-post-activity.mapper.ts'
 import {
     toJobPost,
-    toJobPostNextStep,
     toJobPostSnapshot,
     toPrismaJobPostListingData,
     toPrismaApplicationStatus,
@@ -45,7 +42,6 @@ export interface JobPostRepository {
     findById(id: string): Promise<JobPost | null>
     upsertUserAdded(input: CreateUserAddedJobPostInput): Promise<UserAddedJobPostUpsertResult>
     update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
-    saveNextStep(id: string, input: SaveJobPostNextStepInput): Promise<JobPostNextStep | null>
 }
 
 // postStatus and archivedAt remain outside this policy until their Apply queue behavior is defined.
@@ -99,6 +95,20 @@ const trackedJobPostWhere = {
     ],
 } satisfies Prisma.JobPostWhereInput
 
+const applicationStatusStage = {
+    NOT_APPLIED: 0,
+    AWAITING_RESPONSE: 1,
+    INTERVIEWING: 2,
+    REJECTED: 3,
+    HIRED: 3,
+} as const
+
+const manualStatusChanges = [
+    { stage: 2, summary: 'Application status changed to interviewing' },
+    { stage: 3, summary: 'Application status changed to rejected' },
+    { stage: 3, summary: 'Application status changed to job offer' },
+] as const
+
 type PrismaTrackedJobPost = Prisma.JobPostGetPayload<{
     include: typeof trackedJobPostInclude
 }>
@@ -118,7 +128,6 @@ const toTrackedJobPost = (post: PrismaTrackedJobPost): TrackedJobPost => ({
     applicationSnapshot:
         post.applicationSnapshot === null ? null : toApplicationSnapshot(post.applicationSnapshot),
     activities: post.activities.map(toJobPostActivity),
-    nextStep: toJobPostNextStep(post),
 })
 
 export const jobPostRepository: JobPostRepository = {
@@ -260,23 +269,65 @@ export const jobPostRepository: JobPostRepository = {
                 const post = await transaction.jobPost.update({ where: { id }, data })
 
                 if (statusChangedAt !== null) {
-                    await transaction.jobPostActivity.create({
-                        data: {
-                            jobPostId: id,
-                            type:
-                                existing.applicationStatus === 'NOT_APPLIED' &&
-                                post.applicationStatus === 'AWAITING_RESPONSE'
-                                    ? 'APPLICATION_SUBMITTED'
-                                    : 'APPLICATION_STATUS_CHANGED',
-                            source: 'MANUAL',
-                            summary:
-                                existing.applicationStatus === 'NOT_APPLIED' &&
-                                post.applicationStatus === 'AWAITING_RESPONSE'
-                                    ? 'Application submitted'
-                                    : `Application status changed to ${input.applicationStatus}`,
-                            occurredAt: statusChangedAt,
-                        },
-                    })
+                    const resetsApplication =
+                        existing.applicationStatus === 'NOT_APPLIED' ||
+                        post.applicationStatus === 'NOT_APPLIED'
+                    const reversesApplication =
+                        applicationStatusStage[post.applicationStatus] <
+                        applicationStatusStage[existing.applicationStatus]
+                    const replacesTerminalOutcome =
+                        applicationStatusStage[post.applicationStatus] === 3 &&
+                        applicationStatusStage[existing.applicationStatus] === 3
+
+                    if (resetsApplication) {
+                        await transaction.jobPostActivity.deleteMany({
+                            where: {
+                                jobPostId: id,
+                                source: 'MANUAL',
+                                type: {
+                                    in: ['APPLICATION_SUBMITTED', 'APPLICATION_STATUS_CHANGED'],
+                                },
+                            },
+                        })
+                    } else if (reversesApplication || replacesTerminalOutcome) {
+                        const selectedStage = applicationStatusStage[post.applicationStatus]
+                        const summaries = manualStatusChanges
+                            .filter(
+                                ({ stage }) =>
+                                    stage > selectedStage ||
+                                    (replacesTerminalOutcome && stage === selectedStage),
+                            )
+                            .map(({ summary }) => summary)
+
+                        await transaction.jobPostActivity.deleteMany({
+                            where: {
+                                jobPostId: id,
+                                source: 'MANUAL',
+                                type: 'APPLICATION_STATUS_CHANGED',
+                                summary: { in: summaries },
+                            },
+                        })
+                    }
+
+                    if (post.applicationStatus !== 'NOT_APPLIED' && !reversesApplication) {
+                        await transaction.jobPostActivity.create({
+                            data: {
+                                jobPostId: id,
+                                type:
+                                    existing.applicationStatus === 'NOT_APPLIED' &&
+                                    post.applicationStatus === 'AWAITING_RESPONSE'
+                                        ? 'APPLICATION_SUBMITTED'
+                                        : 'APPLICATION_STATUS_CHANGED',
+                                source: 'MANUAL',
+                                summary:
+                                    existing.applicationStatus === 'NOT_APPLIED' &&
+                                    post.applicationStatus === 'AWAITING_RESPONSE'
+                                        ? 'Application submitted'
+                                        : `Application status changed to ${input.applicationStatus === 'hired' ? 'job offer' : input.applicationStatus}`,
+                                occurredAt: statusChangedAt,
+                            },
+                        })
+                    }
                 }
 
                 const applyQueuePost = await transaction.jobPost.findFirst({
@@ -292,29 +343,6 @@ export const jobPostRepository: JobPostRepository = {
                     inApplyQueue: applyQueuePost !== null,
                 }
             })
-        } catch (error) {
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-                return null
-            }
-
-            throw error
-        }
-    },
-
-    async saveNextStep(id, input) {
-        try {
-            const post = await prisma.jobPost.update({
-                where: { id },
-                data: {
-                    nextStepTitle: input.title,
-                    nextStepDueAt: new Date(input.dueAt),
-                    nextStepCompletedAt:
-                        input.completedAt === null ? null : new Date(input.completedAt),
-                    nextStepSource: 'MANUAL',
-                },
-            })
-
-            return toJobPostNextStep(post)
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
                 return null

@@ -9,12 +9,10 @@ import {
     type CreateUserAddedJobPostInput,
     type JobPost,
     type JobPostInput,
-    type JobPostNextStep,
     type JobPostSnapshot,
     type JobRecommendationContext,
     type JobSearchReport,
     type JobSearchResult,
-    type SaveJobPostNextStepInput,
     type StandaloneJobRecommendation,
     type UpdateJobPostResult,
     type UserAddedJobPost,
@@ -89,18 +87,6 @@ export const jobPostSnapshotSchema: z.ZodType<JobPostSnapshot> = z.looseObject({
     capturedAt: isoDateTimeSchema,
 })
 
-export const jobPostNextStepSchema: z.ZodType<JobPostNextStep> = z.looseObject({
-    title: nonBlankStringSchema,
-    dueAt: isoDateTimeSchema,
-    completedAt: isoDateTimeSchema.nullable(),
-})
-
-export const saveJobPostNextStepInputSchema: z.ZodType<SaveJobPostNextStepInput> = z.strictObject({
-    title: z.string().trim().min(1),
-    dueAt: isoDateTimeSchema,
-    completedAt: isoDateTimeSchema.nullable(),
-})
-
 const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject({
     post: jobPostSchema,
     inApplyQueue: z.boolean(),
@@ -164,7 +150,6 @@ export const parseCreateUserAddedJobPostInput = createParser<CreateUserAddedJobP
 )
 export const parseJobPost = createParser('Job post', jobPostSchema)
 export const parseJobPosts = createParser('Job posts', z.array(jobPostSchema))
-export const parseJobPostNextStep = createParser('Job post next step', jobPostNextStepSchema)
 export const parseUserAddedJobPost = createParser('User-added job post', userAddedJobPostSchema)
 export const parseUserAddedJobPosts = createParser(
     'User-added job posts',

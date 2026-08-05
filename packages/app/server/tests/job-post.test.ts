@@ -2,8 +2,6 @@ import type {
     ApplyQueueItem,
     CreateUserAddedJobPostInput,
     JobPost,
-    JobPostNextStep,
-    SaveJobPostNextStepInput,
     TrackedJobPost,
     UpdateJobPostInput,
     UserAddedJobPost,
@@ -49,7 +47,6 @@ const trackedPost: TrackedJobPost = {
     jobPostSnapshot: null,
     applicationSnapshot: null,
     activities: [],
-    nextStep: null,
 }
 const userAddedPost: UserAddedJobPost = {
     agentLabel: 'target',
@@ -99,11 +96,6 @@ const createFakeRepository = () => {
         post: { ...existingPost, ...input },
         inApplyQueue: false,
     }))
-    const saveNextStep = vi.fn(
-        async (_id: string, input: SaveJobPostNextStepInput): Promise<JobPostNextStep | null> => ({
-            ...input,
-        }),
-    )
     const repository: JobPostRepository = {
         findMany,
         findApplyQueue,
@@ -112,7 +104,6 @@ const createFakeRepository = () => {
         findById,
         upsertUserAdded,
         update,
-        saveNextStep,
     }
 
     return {
@@ -122,7 +113,6 @@ const createFakeRepository = () => {
         findMany,
         findUserAdded,
         repository,
-        saveNextStep,
         update,
         upsertUserAdded,
     }

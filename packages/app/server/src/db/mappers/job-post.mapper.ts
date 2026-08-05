@@ -2,7 +2,6 @@ import type {
     ApplicationStatus,
     JobPost,
     JobPostInput,
-    JobPostNextStep,
     JobPostSnapshot,
     PostStatus,
     UserAddedJobPost,
@@ -89,15 +88,6 @@ export const toJobPostSnapshot = (snapshot: PrismaJobPostSnapshot): JobPostSnaps
     sourceUrl: snapshot.sourceUrl,
     capturedAt: snapshot.capturedAt.toISOString(),
 })
-
-export const toJobPostNextStep = (post: PrismaJobPost): JobPostNextStep | null =>
-    post.nextStepTitle === null || post.nextStepDueAt === null
-        ? null
-        : {
-              title: post.nextStepTitle,
-              dueAt: post.nextStepDueAt.toISOString(),
-              completedAt: post.nextStepCompletedAt?.toISOString() ?? null,
-          }
 
 export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPost => ({
     ...toStandaloneJobRecommendation(item),

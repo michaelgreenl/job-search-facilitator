@@ -22,7 +22,6 @@ export function makeTrackedJobPost(overrides: Partial<TrackedJobPost> = {}): Tra
         jobPostSnapshot: null,
         applicationSnapshot: null,
         activities: [],
-        nextStep: null,
         ...overrides,
     }
 }

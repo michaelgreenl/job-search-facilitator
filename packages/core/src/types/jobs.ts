@@ -52,14 +52,6 @@ export interface JobPostSnapshot {
     capturedAt: IsoDateTime
 }
 
-export interface JobPostNextStep {
-    title: string
-    dueAt: IsoDateTime
-    completedAt: IsoDateTime | null
-}
-
-export type SaveJobPostNextStepInput = JobPostNextStep
-
 export interface JobPostInput {
     sourceKey: string
     roleTitle: string

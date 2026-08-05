@@ -20,7 +20,6 @@ export const createJobPostRouter = (
     router.get('/tracked', controller.listTracked)
     router.get('/user-added', controller.listUserAdded)
     router.put('/:id/application-capture', applicationCaptureController.save)
-    router.put('/:id/next-step', controller.saveNextStep)
     router.get('/:id', controller.getById)
     router.patch('/:id', controller.updateById)
 

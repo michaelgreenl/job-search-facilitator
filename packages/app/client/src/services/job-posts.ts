@@ -2,13 +2,11 @@ import {
     parseApplyQueueItems,
     parseJobPost,
     parseJobPosts,
-    parseJobPostNextStep,
     parseTrackedJobPosts,
     parseUpdateJobPostResult,
     parseUserAddedJobPost,
     parseUserAddedJobPosts,
     type CreateUserAddedJobPostInput,
-    type SaveJobPostNextStepInput,
     type UpdateJobPostInput,
 } from '@job-search-facilitator/core'
 import { parseApiResponse } from '@/api'
@@ -34,17 +32,6 @@ export async function fetchTrackedPosts() {
     const response = await fetch(`${apiUrl}${path}`, undefined)
 
     return parseApiResponse(response, parseTrackedJobPosts, path)
-}
-
-export async function saveJobPostNextStep(id: string, input: SaveJobPostNextStepInput) {
-    const path = `/job-posts/${encodeURIComponent(id)}/next-step`
-    const response = await fetch(`${apiUrl}${path}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-
-    return parseApiResponse(response, parseJobPostNextStep, path)
 }
 
 export async function fetchUserAddedJobPosts() {

@@ -21,6 +21,7 @@ import {
     fetchAgentTask,
     resolveAgentPermission,
     startAgentTask,
+    toUserFacingAgentError,
     type AgentTaskConnection,
 } from '@/services/agent/agent-bridge'
 
@@ -169,8 +170,16 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
     function finishTask(currentTask: AgentTask) {
-        updateTaskState(currentTask.id, {
-            task: currentTask,
+        const task =
+            currentTask.status === 'failed'
+                ? {
+                      ...currentTask,
+                      error: toUserFacingAgentError(currentTask.error, 'Agent task failed'),
+                  }
+                : currentTask
+
+        updateTaskState(task.id, {
+            task,
             pendingPermission: null,
             alwaysAllowBrowserActions: false,
             permissionSubmitting: false,
@@ -178,12 +187,14 @@ export const useAgentStore = defineStore('agent', () => {
             sessionUnavailable: false,
             error: null,
         })
-        closeConnection(currentTask.id, 'closed')
+        closeConnection(task.id, 'closed')
 
-        if (currentTask.status === 'cancelled') {
-            nonRestorableTaskIds.add(currentTask.id)
+        if (task.status === 'cancelled') {
+            nonRestorableTaskIds.add(task.id)
             persistSessions()
         }
+
+        return task
     }
 
     function disconnectConnectedTask(taskId: string, message: string) {
@@ -326,11 +337,10 @@ export const useAgentStore = defineStore('agent', () => {
 
                 if (currentTask.status === 'running') {
                     connect(taskId)
-                } else {
-                    finishTask(currentTask)
+                    return currentTask
                 }
 
-                return currentTask
+                return finishTask(currentTask)
             } catch (requestError) {
                 if (getSession(taskId) !== null) {
                     updateTaskState(taskId, {
@@ -428,11 +438,10 @@ export const useAgentStore = defineStore('agent', () => {
 
                 if (currentTask.status === 'running') {
                     connect(taskId)
-                } else {
-                    finishTask(currentTask)
+                    return currentTask
                 }
 
-                return currentTask
+                return finishTask(currentTask)
             } catch (requestError) {
                 if (sessions.value.some((candidate) => candidate.taskId === taskId)) {
                     updateTaskState(taskId, {
@@ -580,11 +589,10 @@ export const useAgentStore = defineStore('agent', () => {
             assertTaskIdentity(currentTask, taskId)
 
             if (currentTask.status !== 'running') {
-                finishTask(currentTask)
-            } else {
-                updateTaskState(taskId, { task: currentTask })
+                return finishTask(currentTask)
             }
 
+            updateTaskState(taskId, { task: currentTask })
             return currentTask
         } catch (requestError) {
             updateTaskState(taskId, {

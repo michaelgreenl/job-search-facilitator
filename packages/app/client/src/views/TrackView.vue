@@ -1,21 +1,36 @@
 <script setup lang="ts">
-import {
-    type ApplicationStatus,
-    type SaveJobPostNextStepInput,
-    type TrackedJobPost,
-} from '@job-search-facilitator/core'
+import { type ApplicationStatus, type TrackedJobPost } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
 import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
-import { fetchTrackedPosts, saveJobPostNextStep } from '@/services/job-posts'
+import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
 import { useJobUpdateCheckStore } from '@/stores/job-update-check'
 import { usePostStore } from '@/stores/post'
 
 type ActivePanel = 'check' | 'detail' | 'posts'
+const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
+const readSelectedPostId = () => {
+    try {
+        return globalThis.sessionStorage.getItem(selectedPostStorageKey)
+    } catch {
+        return null
+    }
+}
+const storeSelectedPostId = (postId: string | null) => {
+    try {
+        if (postId === null) {
+            globalThis.sessionStorage.removeItem(selectedPostStorageKey)
+        } else {
+            globalThis.sessionStorage.setItem(selectedPostStorageKey, postId)
+        }
+    } catch {
+        // The page remains usable when storage is unavailable.
+    }
+}
 
 const postStore = usePostStore()
 const checkStore = useJobUpdateCheckStore()
@@ -30,14 +45,12 @@ const {
     taskState: checkState,
 } = storeToRefs(checkStore)
 const entries = shallowRef<TrackedJobPost[]>([])
-const selectedPostId = shallowRef<string | null>(null)
+const selectedPostId = shallowRef<string | null>(readSelectedPostId())
 const activePanel = shallowRef<ActivePanel>('posts')
 const loading = shallowRef(true)
 const error = shallowRef<string | null>(null)
 const statusUpdatingPostId = shallowRef<string | null>(null)
 const statusError = shallowRef<string | null>(null)
-const nextStepSavingPostId = shallowRef<string | null>(null)
-const nextStepError = shallowRef<string | null>(null)
 const contactUpdatingId = shallowRef<string | null>(null)
 const contactError = shallowRef<string | null>(null)
 let loadRevision = 0
@@ -49,10 +62,6 @@ const trackedPosts = computed(() => entries.value.map(({ post }) => post))
 const statusUpdating = computed(
     () =>
         statusUpdatingPostId.value !== null && statusUpdatingPostId.value === selectedPostId.value,
-)
-const nextStepSaving = computed(
-    () =>
-        nextStepSavingPostId.value !== null && nextStepSavingPostId.value === selectedPostId.value,
 )
 const selectedContactUpdatingId = computed(() =>
     selectedEntry.value?.contacts.some(({ id }) => id === contactUpdatingId.value)
@@ -90,16 +99,6 @@ const attentionItems = computed(() => {
 
     return entries.value
         .flatMap((entry) => {
-            if (entry.nextStep?.completedAt === null) {
-                return [
-                    {
-                        postId: entry.post.id,
-                        title: entry.nextStep.title,
-                        dueAt: entry.nextStep.dueAt,
-                    },
-                ]
-            }
-
             const pendingContact = entry.contacts.find(
                 ({ messagedAt, respondedAt }) =>
                     respondedAt === null &&
@@ -140,21 +139,19 @@ const attentionItems = computed(() => {
         .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt))
 })
 
-watch(
-    entries,
-    (currentEntries) => {
-        if (currentEntries.some(({ post }) => post.id === selectedPostId.value)) {
-            return
-        }
+watch(entries, (currentEntries) => {
+    if (currentEntries.some(({ post }) => post.id === selectedPostId.value)) {
+        return
+    }
 
-        selectedPostId.value = currentEntries[0]?.post.id ?? null
+    selectedPostId.value = currentEntries[0]?.post.id ?? null
 
-        if (selectedPostId.value === null) {
-            activePanel.value = 'posts'
-        }
-    },
-    { immediate: true },
-)
+    if (selectedPostId.value === null) {
+        activePanel.value = 'posts'
+    }
+})
+
+watch(selectedPostId, storeSelectedPostId)
 
 watch(checkSavedRevision, () => {
     void loadTrackedPosts(false).then((loaded) => {
@@ -200,7 +197,6 @@ async function loadTrackedPosts(showLoading = true) {
 function selectPost(postId: string) {
     selectedPostId.value = postId
     statusError.value = null
-    nextStepError.value = null
     contactError.value = null
     activePanel.value = 'detail'
 }
@@ -228,33 +224,6 @@ async function updateApplicationStatus(status: ApplicationStatus) {
     } finally {
         if (statusUpdatingPostId.value === entry.post.id) {
             statusUpdatingPostId.value = null
-        }
-    }
-}
-
-async function saveNextStep(input: SaveJobPostNextStepInput) {
-    const entry = selectedEntry.value
-
-    if (entry === null || nextStepSavingPostId.value !== null) {
-        return
-    }
-
-    nextStepSavingPostId.value = entry.post.id
-    nextStepError.value = null
-
-    try {
-        const nextStep = await saveJobPostNextStep(entry.post.id, input)
-        entries.value = entries.value.map((current) =>
-            current.post.id === entry.post.id ? { ...current, nextStep } : current,
-        )
-    } catch (requestError) {
-        if (selectedPostId.value === entry.post.id) {
-            nextStepError.value =
-                requestError instanceof Error ? requestError.message : 'Could not save next step'
-        }
-    } finally {
-        if (nextStepSavingPostId.value === entry.post.id) {
-            nextStepSavingPostId.value = null
         }
     }
 }
@@ -375,7 +344,7 @@ onMounted(() => {
                             <dd>{{ pendingOutreach }}</dd>
                         </div>
                         <div data-testid="outreach-response-count" :data-count="outreachResponses">
-                            <dt>Responses</dt>
+                            <dt>Outreach Responses</dt>
                             <dd>{{ outreachResponses }}</dd>
                         </div>
                     </dl>
@@ -407,12 +376,9 @@ onMounted(() => {
             :contact-error="contactError"
             :contact-updating-id="selectedContactUpdatingId"
             :entry="selectedEntry"
-            :next-step-error="nextStepError"
-            :next-step-saving="nextStepSaving"
             :status-error="statusError"
             :status-updating="statusUpdating"
             @back="activePanel = 'posts'"
-            @save-next-step="saveNextStep"
             @update-contact="updateContact"
             @update-status="updateApplicationStatus"
         />
@@ -456,7 +422,9 @@ onMounted(() => {
 }
 
 .track-post-list {
-    max-width: 36rem;
+    @include bp-md-tablet {
+        max-width: 36rem;
+    }
 }
 
 .track-summary {
@@ -467,15 +435,17 @@ onMounted(() => {
 .track-stats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: $space-2;
+    gap: $space-1 $space-4;
     margin: 0;
 
     div {
-        display: grid;
-        gap: $space-1;
-        padding: $space-3;
-        background: $color-ink-alpha-5;
-        border-radius: $radius-sm;
+        display: flex;
+        gap: $space-2;
+        align-items: baseline;
+        justify-content: space-between;
+        min-width: 0;
+        padding: $space-1 0;
+        border-bottom: 1px solid $color-ink-alpha-9;
     }
 
     dt {
@@ -484,8 +454,9 @@ onMounted(() => {
     }
 
     dd {
+        flex: none;
         margin: 0;
-        font-size: 1.125rem;
+        font-size: 0.9375rem;
         font-weight: 650;
     }
 }

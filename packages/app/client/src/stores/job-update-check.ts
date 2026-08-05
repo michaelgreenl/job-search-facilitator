@@ -1,6 +1,7 @@
 import { parseJobUpdateCheckResult } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
+import { toUserFacingAgentError } from '@/services/agent/agent-bridge'
 import { createJobUpdateCheckTask } from '@/services/agent/job-update-check-task'
 import { fetchJobUpdateCheckContext, saveJobUpdates } from '@/services/job-update-check'
 import { useAgentStore } from './agent'
@@ -73,7 +74,14 @@ export const useJobUpdateCheckStore = defineStore('job-update-check', () => {
                     : `${saved.createdActivities} new update${saved.createdActivities === 1 ? '' : 's'} found.`
 
             if (result.warnings.length > 0) {
-                notice.value += ` ${result.warnings.join(' ')}`
+                const warnings = [
+                    ...new Set(
+                        result.warnings.map((warning) =>
+                            toUserFacingAgentError(warning, 'Some sources could not be checked.'),
+                        ),
+                    ),
+                ]
+                notice.value += ` ${warnings.join(' ')}`
             }
 
             agentStore.dismissSession(currentTaskId)

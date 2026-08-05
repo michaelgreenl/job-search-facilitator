@@ -80,7 +80,119 @@ describe('application capture and job update repositories', () => {
         })
     })
 
-    it('applies each observed update once without regressing status or overwriting a manual next step', async () => {
+    it('removes manual activity when application and outreach updates are reversed', async () => {
+        const post = await createJobPost()
+        const contact = await outreachContactRepository.create(post.id, {
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her role aligns with the position.',
+            draftMessage: 'Hi Ada, could I ask about the team?',
+        })
+
+        if (contact === null) {
+            throw new Error('Could not create outreach contact')
+        }
+
+        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
+        await jobPostRepository.update(post.id, { applicationStatus: 'interviewing' })
+        const interviewingActivity = await prisma.jobPostActivity.findFirst({
+            where: {
+                jobPostId: post.id,
+                source: 'MANUAL',
+                type: 'APPLICATION_STATUS_CHANGED',
+            },
+            select: { id: true },
+        })
+
+        if (interviewingActivity === null) {
+            throw new Error('Interviewing activity was not created')
+        }
+
+        await jobPostRepository.update(post.id, { applicationStatus: 'rejected' })
+        await jobPostRepository.update(post.id, { applicationStatus: 'interviewing' })
+        let applicationStatusActivity = await prisma.jobPostActivity.findMany({
+            where: {
+                jobPostId: post.id,
+                source: 'MANUAL',
+                type: 'APPLICATION_STATUS_CHANGED',
+            },
+            select: { id: true },
+        })
+
+        expect(applicationStatusActivity).toEqual([interviewingActivity])
+
+        await jobPostRepository.update(post.id, { applicationStatus: 'rejected' })
+        const rejectedActivity = await prisma.jobPostActivity.findFirst({
+            where: {
+                jobPostId: post.id,
+                source: 'MANUAL',
+                type: 'APPLICATION_STATUS_CHANGED',
+                id: { not: interviewingActivity.id },
+            },
+            select: { id: true },
+        })
+
+        if (rejectedActivity === null) {
+            throw new Error('Rejected activity was not created')
+        }
+
+        await jobPostRepository.update(post.id, { applicationStatus: 'hired' })
+        applicationStatusActivity = await prisma.jobPostActivity.findMany({
+            where: {
+                jobPostId: post.id,
+                source: 'MANUAL',
+                type: 'APPLICATION_STATUS_CHANGED',
+            },
+            select: { id: true },
+        })
+
+        expect({
+            count: applicationStatusActivity.length,
+            retainedInterviewing: applicationStatusActivity.some(
+                ({ id }) => id === interviewingActivity.id,
+            ),
+            retainedRejected: applicationStatusActivity.some(
+                ({ id }) => id === rejectedActivity.id,
+            ),
+        }).toEqual({ count: 2, retainedInterviewing: true, retainedRejected: false })
+
+        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
+        await outreachContactRepository.update(post.id, contact.id, { messaged: true })
+        await outreachContactRepository.update(post.id, contact.id, { responded: true })
+        await prisma.jobPostActivity.create({
+            data: {
+                jobPostId: post.id,
+                type: 'APPLICATION_ACKNOWLEDGED',
+                source: 'GMAIL',
+                externalId: 'gmail:acknowledged',
+                summary: 'Application acknowledged',
+                occurredAt: new Date(),
+            },
+        })
+
+        await outreachContactRepository.update(post.id, contact.id, { responded: false })
+        const afterResponseReversal = await prisma.jobPostActivity.findMany({
+            where: { jobPostId: post.id, source: 'MANUAL' },
+            select: { type: true },
+        })
+
+        expect(afterResponseReversal.map(({ type }) => type).sort()).toEqual([
+            'APPLICATION_SUBMITTED',
+            'OUTREACH_SENT',
+        ])
+
+        await outreachContactRepository.update(post.id, contact.id, { messaged: false })
+        await jobPostRepository.update(post.id, { applicationStatus: 'not-applied' })
+        const remainingActivities = await prisma.jobPostActivity.findMany({
+            where: { jobPostId: post.id },
+            select: { source: true, type: true },
+        })
+
+        expect(remainingActivities).toEqual([{ source: 'GMAIL', type: 'APPLICATION_ACKNOWLEDGED' }])
+    })
+
+    it('applies each observed update once without regressing status', async () => {
         const post = await createJobPost()
         await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
         const contact = await outreachContactRepository.create(post.id, {
@@ -125,11 +237,6 @@ describe('application capture and job update repositories', () => {
 
         const first = await jobUpdateCheckRepository.save(initialResult)
         const repeated = await jobUpdateCheckRepository.save(initialResult)
-        await jobPostRepository.saveNextStep(post.id, {
-            title: 'User-owned next step',
-            dueAt: new Date(observedAt.getTime() + 86_400_000).toISOString(),
-            completedAt: null,
-        })
         const laterResult = {
             warnings: [],
             updates: [
@@ -163,11 +270,9 @@ describe('application capture and job update repositories', () => {
         expect({
             applicationStatus: tracked.post.applicationStatus,
             responded: tracked.contacts[0]?.respondedAt !== null,
-            nextStepTitle: tracked.nextStep?.title,
         }).toEqual({
             applicationStatus: 'interviewing',
             responded: true,
-            nextStepTitle: 'User-owned next step',
         })
     })
 })

@@ -2,13 +2,13 @@
 import {
     APPLICATION_STATUSES,
     type ApplicationStatus,
-    type SaveJobPostNextStepInput,
     type TrackedJobPost,
 } from '@job-search-facilitator/core'
 import { computed, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import TrackSnapshotPopUp from './TrackSnapshotPopUp.vue'
 
 const props = defineProps<{
@@ -17,15 +17,12 @@ const props = defineProps<{
     contactError: string | null
     contactUpdatingId: string | null
     entry: TrackedJobPost
-    nextStepError: string | null
-    nextStepSaving: boolean
     statusError: string | null
     statusUpdating: boolean
 }>()
 
 const emit = defineEmits<{
     back: []
-    saveNextStep: [input: SaveJobPostNextStepInput]
     updateContact: [contactId: string, responded: boolean]
     updateStatus: [status: ApplicationStatus]
 }>()
@@ -35,7 +32,7 @@ const statusLabels: Record<ApplicationStatus, string> = {
     'awaiting-response': 'Awaiting response',
     interviewing: 'Interviewing',
     rejected: 'Rejected',
-    hired: 'Hired',
+    hired: 'Job Offer',
 }
 const statusOptions: BaseDropdownOption[] = APPLICATION_STATUSES.map((status) => ({
     value: status,
@@ -49,30 +46,13 @@ const statusOptions: BaseDropdownOption[] = APPLICATION_STATUSES.map((status) =>
                 ? 'muted'
                 : 'default',
 }))
-const editingNextStep = shallowRef(false)
-const nextStepTitle = shallowRef('')
-const nextStepDueAt = shallowRef('')
 const openSnapshot = shallowRef<'application' | 'job-post' | null>(null)
 
-const toLocalDateTime = (value: string | null) => {
-    if (value === null) {
-        return ''
-    }
-
-    const date = new Date(value)
-    const offset = date.getTimezoneOffset() * 60_000
-    return new Date(date.getTime() - offset).toISOString().slice(0, 16)
-}
-
 watch(
-    () => [props.entry.post.id, props.entry.nextStep] as const,
-    ([, nextStep]) => {
-        editingNextStep.value = false
-        nextStepTitle.value = nextStep?.title ?? ''
-        nextStepDueAt.value = toLocalDateTime(nextStep?.dueAt ?? null)
+    () => props.entry.post.id,
+    () => {
         openSnapshot.value = null
     },
-    { immediate: true },
 )
 
 const statusLabel = computed(() => statusLabels[props.entry.post.applicationStatus])
@@ -105,39 +85,6 @@ const formatDate = (value: string) =>
 function selectStatus(value: string) {
     if (APPLICATION_STATUSES.some((status) => status === value)) {
         emit('updateStatus', value as ApplicationStatus)
-    }
-}
-
-function startNextStepEdit() {
-    const nextStep = props.entry.nextStep
-    editingNextStep.value = true
-    nextStepTitle.value = nextStep?.title ?? ''
-    nextStepDueAt.value = toLocalDateTime(nextStep?.dueAt ?? new Date().toISOString())
-}
-
-function saveNextStep() {
-    const dueAt = new Date(nextStepDueAt.value)
-
-    if (!nextStepTitle.value.trim() || Number.isNaN(dueAt.getTime())) {
-        return
-    }
-
-    emit('saveNextStep', {
-        title: nextStepTitle.value.trim(),
-        dueAt: dueAt.toISOString(),
-        completedAt: null,
-    })
-}
-
-function completeNextStep() {
-    const nextStep = props.entry.nextStep
-
-    if (nextStep !== null) {
-        emit('saveNextStep', {
-            title: nextStep.title,
-            dueAt: nextStep.dueAt,
-            completedAt: new Date().toISOString(),
-        })
     }
 }
 </script>
@@ -181,64 +128,6 @@ function completeNextStep() {
             <p v-if="statusError" class="error" role="alert">{{ statusError }}</p>
 
             <section class="detail-section">
-                <div class="section-heading">
-                    <span class="section-label">Next step</span>
-                    <BaseButton
-                        preset="text"
-                        data-testid="edit-next-step"
-                        :disabled="nextStepSaving"
-                        @click="startNextStepEdit"
-                    >
-                        {{ entry.nextStep === null ? 'Add' : 'Edit' }}
-                    </BaseButton>
-                </div>
-
-                <form v-if="editingNextStep" class="next-step-form" @submit.prevent="saveNextStep">
-                    <label>
-                        <span>Action</span>
-                        <input v-model="nextStepTitle" data-testid="next-step-title" required />
-                    </label>
-                    <label>
-                        <span>Due</span>
-                        <input
-                            v-model="nextStepDueAt"
-                            data-testid="next-step-due-at"
-                            type="datetime-local"
-                            required
-                        />
-                    </label>
-                    <div class="form-actions">
-                        <BaseButton preset="outline" @click="editingNextStep = false">
-                            Cancel
-                        </BaseButton>
-                        <BaseButton
-                            data-testid="save-next-step"
-                            type="submit"
-                            :disabled="nextStepSaving"
-                        >
-                            {{ nextStepSaving ? 'Saving…' : 'Save' }}
-                        </BaseButton>
-                    </div>
-                </form>
-                <div v-else-if="entry.nextStep" class="next-step" data-testid="track-next-step">
-                    <strong :class="{ completed: entry.nextStep.completedAt !== null }">
-                        {{ entry.nextStep.title }}
-                    </strong>
-                    <span>Due {{ formatDate(entry.nextStep.dueAt) }}</span>
-                    <BaseButton
-                        v-if="entry.nextStep.completedAt === null"
-                        preset="text"
-                        :disabled="nextStepSaving"
-                        @click="completeNextStep"
-                    >
-                        Mark done
-                    </BaseButton>
-                </div>
-                <p v-else class="empty-copy">No next step set.</p>
-                <p v-if="nextStepError" class="error" role="alert">{{ nextStepError }}</p>
-            </section>
-
-            <section class="detail-section">
                 <span class="section-label">Contacts</span>
                 <ul v-if="entry.contacts.length" class="contact-list">
                     <li v-for="contact in entry.contacts" :key="contact.id">
@@ -246,19 +135,29 @@ function completeNextStep() {
                             <strong>{{ contact.personName }}</strong>
                             <span>{{ contact.personTitle }}</span>
                         </div>
-                        <BaseButton
-                            preset="text"
+                        <button
+                            class="response-status-button"
+                            :class="{
+                                'is-responded': contact.respondedAt !== null,
+                                'is-updating': contactUpdatingId === contact.id,
+                            }"
+                            :data-testid="`track-contact-response-toggle-${contact.id}`"
+                            type="button"
+                            :aria-pressed="contact.respondedAt !== null"
                             :disabled="contactUpdatingId !== null"
                             @click="emit('updateContact', contact.id, contact.respondedAt === null)"
                         >
-                            {{
-                                contactUpdatingId === contact.id
-                                    ? 'Saving…'
-                                    : contact.respondedAt === null
-                                      ? 'Response pending'
-                                      : 'Responded'
-                            }}
-                        </BaseButton>
+                            <LoadingSpinner
+                                v-if="contactUpdatingId === contact.id"
+                                class="response-spinner"
+                            />
+                            <template v-if="contactUpdatingId === contact.id">Saving…</template>
+                            <template v-else-if="contact.respondedAt !== null">
+                                <span aria-hidden="true">✓</span>
+                                Responded
+                            </template>
+                            <template v-else>Mark as responded</template>
+                        </button>
                     </li>
                 </ul>
                 <p v-else class="empty-copy">No messaged contacts.</p>
@@ -351,13 +250,11 @@ function completeNextStep() {
 
 .location,
 .empty-copy,
-.next-step span,
-.contact-list span {
+.contact-list li > div span {
     color: $color-ink-muted;
 }
 
 .status-row,
-.section-heading,
 .contact-list li {
     display: flex;
     gap: $space-3;
@@ -367,7 +264,6 @@ function completeNextStep() {
 
 .status-row > div,
 .detail-section,
-.next-step,
 .contact-list li > div {
     display: grid;
     gap: $space-1;
@@ -380,39 +276,11 @@ function completeNextStep() {
     border-radius: $radius-md;
 }
 
-.next-step-form {
-    display: grid;
-    gap: $space-3;
-
-    label {
-        display: grid;
-        gap: $space-1;
-        color: $color-ink-muted;
-        font-size: 0.75rem;
-    }
-
-    input {
-        min-width: 0;
-        padding: $space-2 $space-3;
-        color: $color-ink;
-        color-scheme: dark;
-        background: $color-ink-alpha-5;
-        border: 1px solid $color-signal-light-alpha-18;
-        border-radius: $radius-sm;
-    }
-}
-
-.form-actions,
 .snapshot-actions {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
     justify-content: flex-end;
-}
-
-.completed {
-    text-decoration: line-through;
-    opacity: 0.65;
 }
 
 .contact-list,
@@ -428,8 +296,46 @@ function completeNextStep() {
     align-items: start;
 }
 
-.contact-list span {
+.contact-list li > div span {
     font-size: 0.8125rem;
+}
+
+.response-status-button {
+    display: inline-flex;
+    width: fit-content;
+    gap: $space-1;
+    align-items: center;
+    padding: $space-1 $space-2;
+    color: $color-ink-secondary;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid $color-ink-alpha-50;
+    border-radius: $radius-full;
+
+    &:not(.is-responded):hover:not(:disabled) {
+        color: $color-ink;
+        border-color: $color-signal-light-alpha-50;
+    }
+
+    &.is-responded {
+        color: lighten-color($color-green-600, 35%);
+        background: $color-green-600-alpha-25;
+        border-color: $color-green-600-alpha-55;
+    }
+
+    &.is-updating {
+        cursor: wait;
+        opacity: 0.7;
+    }
+}
+
+.response-spinner {
+    width: 0.6875rem;
+    height: 0.6875rem;
+    border-width: 1.5px;
 }
 
 .activity-list li {
