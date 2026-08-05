@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { type ApplicationStatus, type TrackedJobPost } from '@job-search-facilitator/core'
-import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
-import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
 import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
-import { useJobUpdateCheckStore } from '@/stores/job-update-check'
 import { usePostStore } from '@/stores/post'
 
-type ActivePanel = 'check' | 'detail' | 'posts'
+type ActivePanel = 'detail' | 'posts'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
 const readSelectedPostId = () => {
     try {
@@ -33,17 +30,6 @@ const storeSelectedPostId = (postId: string | null) => {
 }
 
 const postStore = usePostStore()
-const checkStore = useJobUpdateCheckStore()
-const {
-    canRetry: checkCanRetry,
-    issue: checkIssue,
-    notice: checkNotice,
-    running: checkRunning,
-    savedRevision: checkSavedRevision,
-    saving: checkSaving,
-    taskId: checkTaskId,
-    taskState: checkState,
-} = storeToRefs(checkStore)
 const entries = shallowRef<TrackedJobPost[]>([])
 const selectedPostId = shallowRef<string | null>(readSelectedPostId())
 const activePanel = shallowRef<ActivePanel>('posts')
@@ -153,12 +139,6 @@ watch(entries, (currentEntries) => {
 
 watch(selectedPostId, storeSelectedPostId)
 
-watch(checkSavedRevision, () => {
-    void loadTrackedPosts(false).then((loaded) => {
-        activePanel.value = loaded && selectedEntry.value !== null ? 'detail' : 'posts'
-    })
-})
-
 async function loadTrackedPosts(showLoading = true) {
     const revision = ++loadRevision
 
@@ -257,32 +237,8 @@ async function updateContact(contactId: string, responded: boolean) {
     }
 }
 
-async function startUpdateCheck() {
-    if (checkTaskId.value !== null) {
-        activePanel.value = 'check'
-        return
-    }
-
-    if (await checkStore.start().catch(() => false)) {
-        activePanel.value = 'check'
-    }
-}
-
-async function retryUpdateCheck() {
-    await checkStore.retry().catch(() => false)
-}
-
-async function cancelUpdateCheck() {
-    await checkStore.cancel().catch(() => undefined)
-}
-
 onMounted(() => {
     void loadTrackedPosts()
-
-    if (checkTaskId.value !== null) {
-        activePanel.value = 'check'
-        void checkStore.restore().catch(() => undefined)
-    }
 })
 </script>
 
@@ -305,23 +261,6 @@ onMounted(() => {
             @select="selectPost"
             @retry="loadTrackedPosts"
         >
-            <template #heading-controls>
-                <BaseButton
-                    data-testid="check-job-updates"
-                    preset="outline"
-                    :disabled="loading || (checkTaskId === null && checkRunning)"
-                    @click="startUpdateCheck"
-                >
-                    {{
-                        checkTaskId === null
-                            ? checkRunning
-                                ? 'Starting…'
-                                : 'Check for updates'
-                            : 'View check'
-                    }}
-                </BaseButton>
-            </template>
-
             <template #summary>
                 <div class="track-summary">
                     <dl class="track-stats">
@@ -348,11 +287,6 @@ onMounted(() => {
                             <dd>{{ outreachResponses }}</dd>
                         </div>
                     </dl>
-
-                    <p v-if="checkNotice" class="check-notice" role="status">{{ checkNotice }}</p>
-                    <p v-if="checkIssue && activePanel !== 'check'" class="error" role="alert">
-                        {{ checkIssue }}
-                    </p>
 
                     <section v-if="attentionItems.length" class="attention">
                         <span class="section-label">Needs attention</span>
@@ -381,29 +315,6 @@ onMounted(() => {
             @back="activePanel = 'posts'"
             @update-contact="updateContact"
             @update-status="updateApplicationStatus"
-        />
-
-        <AgentTaskPanel
-            v-if="checkTaskId !== null"
-            class="track-panel glass-frame"
-            data-testid="job-update-check-panel"
-            :active="activePanel === 'check'"
-            :adjacent="false"
-            :task-id="checkTaskId"
-            eyebrow="Track"
-            title="Checking for updates"
-            back-label="Back to tracked jobs"
-            back-test-id="back-from-update-check"
-            :cancelling="checkState?.cancelling ?? false"
-            :running="checkRunning"
-            :issue="checkIssue"
-            :status-message="checkSaving ? 'Saving updates…' : null"
-            cancel-test-id="cancel-update-check"
-            :retry-available="checkCanRetry"
-            retry-test-id="retry-update-check"
-            @back="activePanel = selectedEntry === null ? 'posts' : 'detail'"
-            @cancel="cancelUpdateCheck"
-            @retry="retryUpdateCheck"
         />
     </section>
 </template>
@@ -483,17 +394,9 @@ onMounted(() => {
     text-transform: uppercase;
 }
 
-.check-notice,
-.error {
-    margin: 0;
-    font-size: 0.8125rem;
-}
-
-.check-notice {
-    color: $color-ink-muted;
-}
-
 .error {
     color: lighten-color($color-red-600, 20%);
+    margin: 0;
+    font-size: 0.8125rem;
 }
 </style>

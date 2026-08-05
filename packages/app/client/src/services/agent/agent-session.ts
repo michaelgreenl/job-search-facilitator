@@ -1,7 +1,6 @@
 export type AgentSessionOwner =
     | { kind: 'job-post-import'; url: string }
     | { kind: 'application-capture'; postId: string }
-    | { kind: 'job-update-check' }
     | { kind: 'outreach-contact'; postId: string }
     | {
           kind: 'outreach-draft'
@@ -52,13 +51,6 @@ const parseAgentSession = (value: unknown): AgentSession | null => {
             kind: session.kind,
             taskId: session.taskId,
             postId: session.postId,
-        }
-    }
-
-    if (session.kind === 'job-update-check') {
-        return {
-            kind: session.kind,
-            taskId: session.taskId,
         }
     }
 

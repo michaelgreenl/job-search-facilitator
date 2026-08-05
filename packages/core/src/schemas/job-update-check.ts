@@ -1,18 +1,11 @@
 import { z } from 'zod'
-import type { AgentOutputSchema } from '../types/agent.ts'
 import {
     JOB_UPDATE_SOURCES,
     type JobUpdateCheckContext,
     type JobUpdateCheckResult,
     type SavedJobUpdates,
 } from '../types/job-update-check.ts'
-import {
-    createParser,
-    httpUrlSchema,
-    isoDateTimeSchema,
-    nonBlankStringSchema,
-    toAgentOutputSchema,
-} from './shared.ts'
+import { createParser, httpUrlSchema, isoDateTimeSchema, nonBlankStringSchema } from './shared.ts'
 
 const jobUpdateCheckContextSchema: z.ZodType<JobUpdateCheckContext> = z.strictObject({
     posts: z.array(
@@ -41,48 +34,48 @@ const jobUpdateCheckContextSchema: z.ZodType<JobUpdateCheckContext> = z.strictOb
     ),
 })
 
-const agentId = z
+const updateId = z
     .string()
     .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
-const agentDateTime = z
+const updateDateTime = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/)
-const agentText = z.string().regex(/\S/)
-const agentUrl = z.string().regex(/^https?:\/\/\S+$/)
+const updateText = z.string().regex(/\S/)
+const updateUrl = z.string().regex(/^https?:\/\/\S+$/)
 const evidence = {
-    jobPostId: agentId,
-    externalId: agentText,
-    summary: agentText,
-    sourceUrl: agentUrl.nullable(),
-    occurredAt: agentDateTime,
+    jobPostId: updateId,
+    externalId: updateText,
+    summary: updateText,
+    sourceUrl: updateUrl.nullable(),
+    occurredAt: updateDateTime,
 }
 
-const agentJobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = z.strictObject({
-    warnings: z.array(agentText),
-    updates: z.array(
-        z.discriminatedUnion('kind', [
-            z.strictObject({
-                ...evidence,
-                kind: z.literal('application-status'),
-                source: z.literal('gmail'),
-                status: z.enum(['awaiting-response', 'interviewing', 'rejected', 'hired']),
-            }),
-            z.strictObject({
-                ...evidence,
-                kind: z.literal('outreach-response'),
-                source: z.enum(JOB_UPDATE_SOURCES),
-                outreachContactId: agentId,
-            }),
-            z.strictObject({
-                ...evidence,
-                kind: z.literal('review-needed'),
-                source: z.enum(JOB_UPDATE_SOURCES),
-                outreachContactId: agentId.nullable(),
-            }),
-        ]),
-    ),
-})
-const jobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = agentJobUpdateCheckResultSchema
+const jobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = z
+    .strictObject({
+        warnings: z.array(updateText),
+        updates: z.array(
+            z.discriminatedUnion('kind', [
+                z.strictObject({
+                    ...evidence,
+                    kind: z.literal('application-status'),
+                    source: z.literal('gmail'),
+                    status: z.enum(['awaiting-response', 'interviewing', 'rejected', 'hired']),
+                }),
+                z.strictObject({
+                    ...evidence,
+                    kind: z.literal('outreach-response'),
+                    source: z.enum(JOB_UPDATE_SOURCES),
+                    outreachContactId: updateId,
+                }),
+                z.strictObject({
+                    ...evidence,
+                    kind: z.literal('review-needed'),
+                    source: z.enum(JOB_UPDATE_SOURCES),
+                    outreachContactId: updateId.nullable(),
+                }),
+            ]),
+        ),
+    })
     .superRefine(({ updates }, context) => {
         updates.forEach((update, index) => {
             if (!isoDateTimeSchema.safeParse(update.occurredAt).success) {
@@ -113,10 +106,6 @@ const jobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = agentJobUpda
 const savedJobUpdatesSchema: z.ZodType<SavedJobUpdates> = z.looseObject({
     createdActivities: z.number().int().nonnegative(),
 })
-const jobUpdateCheckOutputSchema = toAgentOutputSchema(agentJobUpdateCheckResultSchema)
-
-export const createJobUpdateCheckOutputSchema = (): AgentOutputSchema =>
-    structuredClone(jobUpdateCheckOutputSchema)
 export const parseJobUpdateCheckContext = createParser(
     'Job update check context',
     jobUpdateCheckContextSchema,

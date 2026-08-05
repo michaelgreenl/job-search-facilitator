@@ -29,7 +29,6 @@ export {
 export type { RuntimeParser } from './shared.ts'
 export { parseAgentHealth, parseAgentTask, parseAgentTaskEvent } from './agent.ts'
 export {
-    createJobUpdateCheckOutputSchema,
     parseJobUpdateCheckContext,
     parseJobUpdateCheckResult,
     parseSavedJobUpdates,

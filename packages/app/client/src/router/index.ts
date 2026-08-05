@@ -66,12 +66,7 @@ export const createPersistedAgentSessionGuard = (
         }
 
         await agentStore.restoreSessions().catch(() => undefined)
-        const routeName =
-            session.kind === 'job-post-import'
-                ? 'review'
-                : session.kind === 'job-update-check'
-                  ? 'track'
-                  : 'apply'
+        const routeName = session.kind === 'job-post-import' ? 'review' : 'apply'
 
         return to.name === routeName ? undefined : { name: routeName }
     }
