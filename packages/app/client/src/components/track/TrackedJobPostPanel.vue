@@ -123,20 +123,15 @@ function selectStatus(value: string) {
             <p v-if="statusError" class="error" role="alert">{{ statusError }}</p>
 
             <section class="detail-section outreach-section">
-                <div class="outreach-section-heading">
-                    <span class="section-label">Outreach</span>
-                    <OutreachDiscoverButton
-                        :disabled="outreachDisabled"
-                        test-id="track-discover-contact"
-                        @click="emit('discoverContact')"
-                    />
-                </div>
+                <span class="section-label">Outreach</span>
 
                 <OutreachContactList
                     v-model:filter="contactFilter"
                     :contacts="outreachContacts"
                     :error="outreachContactsError"
                     :loading="outreachContactsLoading"
+                    :show-filter="false"
+                    :show-messaged-status="false"
                     :tasks="outreachTasks"
                     @retry="emit('retryOutreachContacts')"
                     @select="emit('selectContact', $event)"
@@ -169,6 +164,12 @@ function selectStatus(value: string) {
                     </template>
                 </OutreachContactList>
                 <p v-if="contactError" class="error" role="alert">{{ contactError }}</p>
+                <OutreachDiscoverButton
+                    class="outreach-discover-button"
+                    :disabled="outreachDisabled"
+                    test-id="track-discover-contact"
+                    @click="emit('discoverContact')"
+                />
             </section>
 
             <section class="detail-section activity-section">
@@ -279,11 +280,8 @@ function selectStatus(value: string) {
     gap: $space-3;
 }
 
-.outreach-section-heading {
-    display: flex;
-    gap: $space-3;
-    align-items: center;
-    justify-content: space-between;
+.outreach-discover-button {
+    justify-self: end;
 }
 
 .artifact-actions {

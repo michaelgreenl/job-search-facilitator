@@ -19,12 +19,20 @@ const contactFilterOptions: BaseDropdownOption[] = [
 const isContactFilter = (value: string): value is OutreachContactFilter =>
     contactFilterOptions.some((option) => option.value === value)
 
-const props = defineProps<{
-    contacts: OutreachContact[]
-    error: string | null
-    loading: boolean
-    tasks: OutreachTaskListItem[]
-}>()
+const props = withDefaults(
+    defineProps<{
+        contacts: OutreachContact[]
+        error: string | null
+        loading: boolean
+        showFilter?: boolean
+        showMessagedStatus?: boolean
+        tasks: OutreachTaskListItem[]
+    }>(),
+    {
+        showFilter: true,
+        showMessagedStatus: true,
+    },
+)
 
 const emit = defineEmits<{
     select: [contact: OutreachContact]
@@ -68,6 +76,7 @@ function selectContactFilter(value: string) {
                 <span class="contact-history-count">{{ filteredContacts.length }}</span>
             </div>
             <BaseDropdown
+                v-if="showFilter"
                 class="contact-filter-dropdown"
                 accessible-label="Filter saved contacts"
                 test-id="contact-filter"
@@ -94,6 +103,7 @@ function selectContactFilter(value: string) {
                     <OutreachContactCard
                         :contact="savedContact"
                         selectable
+                        :show-messaged-status="showMessagedStatus"
                         @select="emit('select', savedContact)"
                     >
                         <template v-if="$slots.contactActions" #actions>

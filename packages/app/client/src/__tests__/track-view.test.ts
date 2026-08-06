@@ -146,6 +146,10 @@ describe('track view', () => {
         )
 
         expect(root.querySelector('[data-testid="track-discover-contact"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="contact-filter"]')).toBeNull()
+        expect(
+            root.querySelector(`[data-testid="track-contact-response-toggle-${contact.id}"]`),
+        ).not.toBeNull()
         expect(root.querySelectorAll('[data-testid="outreach-contact-list"]')).toHaveLength(1)
         root.querySelector<HTMLButtonElement>(
             `[data-testid="outreach-contact-${contact.id}-select"]`,

@@ -30,6 +30,7 @@ const props = withDefaults(
         messagedUpdating?: boolean
         selectable?: boolean
         showMessagedControl?: boolean
+        showMessagedStatus?: boolean
         task?: OutreachTaskListItem
     }>(),
     {
@@ -39,6 +40,7 @@ const props = withDefaults(
         messagedUpdating: false,
         selectable: false,
         showMessagedControl: false,
+        showMessagedStatus: true,
         task: undefined,
     },
 )
@@ -164,7 +166,12 @@ function toggleMessaged() {
                     </template>
                     <template v-else>Mark as messaged</template>
                 </button>
-                <span v-else-if="contact.messaged" class="messaged-status"> Messaged </span>
+                <div v-if="$slots.actions" class="contact-actions">
+                    <slot name="actions" :contact="contact" />
+                </div>
+                <span v-else-if="showMessagedStatus && contact.messaged" class="messaged-status">
+                    Messaged
+                </span>
             </div>
             <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
                 {{ messagedError }}
@@ -178,9 +185,6 @@ function toggleMessaged() {
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
-            <div v-if="$slots.actions" class="contact-actions">
-                <slot name="actions" :contact="contact" />
-            </div>
             <div class="rationale-copy">
                 <p
                     :id="descriptionId"
@@ -325,8 +329,6 @@ function toggleMessaged() {
     position: relative;
     z-index: 2;
     display: flex;
-    justify-content: flex-end;
-    margin-top: $space-1;
 }
 
 .rationale-copy {
