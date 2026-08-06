@@ -221,6 +221,23 @@ describe('apply view', () => {
         )
     })
 
+    it('restores the selected post when the Apply view remounts', async () => {
+        vi.mocked(fetch).mockImplementation(async () => jsonResponse(applyQueueItems))
+        const firstRoot = await mountApplyView()
+
+        await selectPost(firstRoot, posts[1]!.id)
+        expect(sessionStorage.getItem('job-search-facilitator:apply-selected-post')).toBe(
+            posts[1]!.id,
+        )
+        mountedApps.at(-1)?.unmount()
+
+        const secondRoot = await mountApplyView()
+
+        await vi.waitFor(() =>
+            expect(postButton(secondRoot, posts[1]!.id).getAttribute('aria-pressed')).toBe('true'),
+        )
+    })
+
     it('uploads and removes a user-selected resume artifact for the selected post', async () => {
         let uploadRequest: RequestInit | undefined
         let removeRequest: RequestInit | undefined
