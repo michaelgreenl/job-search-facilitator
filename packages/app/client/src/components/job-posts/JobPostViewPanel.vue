@@ -8,7 +8,6 @@ export type JobPostViewPanelMode =
           applicationUpdating: boolean
           applicationError: string | null
           artifactError: string | null
-          artifactMessage: string | null
           applicationArtifacts: readonly ApplicationArtifact[]
           artifactRemoving: ApplicationArtifactKind | null
           artifactUploading: ApplicationArtifactKind | null
@@ -354,9 +353,14 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                     data-testid="application-artifact-uploads"
                     aria-labelledby="artifact-upload-label"
                 >
-                    <span id="artifact-upload-label" class="footer-label">
-                        Upload application artifacts
-                    </span>
+                    <div class="artifact-upload-heading">
+                        <span id="artifact-upload-label" class="footer-label">
+                            Upload application artifacts
+                        </span>
+                        <p v-if="applyMode.artifactError" class="artifact-error" role="alert">
+                            {{ applyMode.artifactError }}
+                        </p>
+                    </div>
                     <div class="primary-actions">
                         <template v-for="option in ARTIFACT_OPTIONS" :key="option.kind">
                             <button
@@ -416,12 +420,6 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                             </label>
                         </template>
                     </div>
-                    <p v-if="applyMode.artifactError" class="artifact-error" role="alert">
-                        {{ applyMode.artifactError }}
-                    </p>
-                    <p v-else-if="applyMode.artifactMessage" class="artifact-message" role="status">
-                        {{ applyMode.artifactMessage }}
-                    </p>
                 </section>
 
                 <BaseButton
@@ -618,6 +616,14 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     gap: $space-2;
 }
 
+.artifact-upload-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-1 $space-3;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
 .footer-label {
     color: $color-ink-muted;
     font-family: $font-family-mono;
@@ -706,18 +712,11 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     }
 }
 
-.artifact-error,
-.artifact-message {
-    margin: 0;
-    font-size: 0.75rem;
-}
-
 .artifact-error {
+    margin: 0;
     color: lighten-color($color-red-600, 25%);
-}
-
-.artifact-message {
-    color: $color-ink-muted;
+    font-size: 0.75rem;
+    text-align: right;
 }
 
 @container post-content (min-width: 40rem) {

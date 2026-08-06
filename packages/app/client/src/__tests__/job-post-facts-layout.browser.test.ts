@@ -34,7 +34,6 @@ async function mountViewer(width: number) {
                 applicationUpdating: false,
                 applicationError: null,
                 artifactError: null,
-                artifactMessage: null,
                 applicationArtifacts: [],
                 artifactRemoving: null,
                 artifactUploading: null,

@@ -89,7 +89,6 @@ const applicationError = shallowRef<string | null>(null)
 const artifactUploading = shallowRef<ApplicationArtifactKind | null>(null)
 const artifactRemoving = shallowRef<ApplicationArtifactKind | null>(null)
 const artifactError = shallowRef<string | null>(null)
-const artifactMessage = shallowRef<string | null>(null)
 const applyQueuePostIds = shallowRef<readonly string[] | null>(null)
 const retainedForgoneLabelByPostId = reactive(new Map<string, ApplyLabel>())
 const recommendationContextByPostId = shallowRef<
@@ -147,7 +146,6 @@ const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
     applicationError: applicationError.value,
     artifactError: artifactError.value,
-    artifactMessage: artifactMessage.value,
     applicationArtifacts: selectedApplicationArtifacts.value,
     artifactRemoving: artifactRemoving.value,
     artifactUploading: artifactUploading.value,
@@ -179,7 +177,6 @@ watch(
             labelError.value = null
             applicationError.value = null
             artifactError.value = null
-            artifactMessage.value = null
         }
 
         if (selectedPostId.value === null) {
@@ -202,7 +199,6 @@ function selectPost(postId: string) {
     labelError.value = null
     applicationError.value = null
     artifactError.value = null
-    artifactMessage.value = null
     activePanel.value = 'viewer'
 }
 
@@ -446,7 +442,6 @@ async function uploadArtifact(kind: ApplicationArtifactKind, file: File) {
     const postId = post.id
     artifactUploading.value = kind
     artifactError.value = null
-    artifactMessage.value = null
 
     try {
         const artifact = await uploadApplicationArtifact(postId, kind, file)
@@ -456,10 +451,6 @@ async function uploadArtifact(kind: ApplicationArtifactKind, file: File) {
             ),
             artifact,
         ])
-
-        if (selectedPostId.value === postId) {
-            artifactMessage.value = `${artifact.fileName} uploaded.`
-        }
     } catch (error) {
         if (selectedPostId.value === postId) {
             artifactError.value =
@@ -480,7 +471,6 @@ async function removeArtifact(kind: ApplicationArtifactKind) {
     const postId = post.id
     artifactRemoving.value = kind
     artifactError.value = null
-    artifactMessage.value = null
 
     try {
         await removeApplicationArtifact(postId, kind)
@@ -490,10 +480,6 @@ async function removeArtifact(kind: ApplicationArtifactKind) {
                 (currentArtifact) => currentArtifact.kind !== kind,
             ),
         )
-
-        if (selectedPostId.value === postId) {
-            artifactMessage.value = 'Artifact removed.'
-        }
     } catch (error) {
         if (selectedPostId.value === postId) {
             artifactError.value =
