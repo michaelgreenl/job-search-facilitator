@@ -16,7 +16,6 @@ import { useAgentStore } from '@/stores/agent'
 import { makeAgentTask } from '@/test/fixtures/agent'
 import { makeJobPost, makeRecommendationContext } from '@/test/fixtures/job-post'
 import { makeOutreachContact } from '@/test/fixtures/outreach'
-import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestUrl } from '@/test/support/http'
 import { mountVue, type MountedVueComponent } from '@/test/support/mount'
@@ -50,11 +49,12 @@ const createRecommendation = (post: JobPost, index: number): JobRecommendationCo
 const applyQueueItems: ApplyQueueItem[] = posts.map((post, index) => ({
     post,
     recommendationContext: createRecommendation(post, index),
+    applicationArtifacts: [],
 }))
 const createApplyQueueItem = (
     post: JobPost,
     recommendationContext: JobRecommendationContext | null = null,
-): ApplyQueueItem => ({ post, recommendationContext })
+): ApplyQueueItem => ({ post, recommendationContext, applicationArtifacts: [] })
 
 const runningAgentTask = makeAgentTask({
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -221,71 +221,65 @@ describe('apply view', () => {
         )
     })
 
-    it('captures the filled application and job post before submission', async () => {
-        let savedCapture: unknown
-        const capture = {
-            jobPost: {
-                description: 'Complete job description',
-                sourceUrl: posts[0]!.postUrl,
-            },
-            application: {
-                content: 'Name: Applicant',
-                sourceUrl: posts[0]!.applicationUrl,
-            },
-        }
-        const harness = new AgentBridgeHarness({
-            fallback: (input, init) => {
-                const url = requestUrl(input)
-
-                if (url.endsWith('/api/job-posts/apply-queue')) {
-                    return jsonResponse(applyQueueItems)
-                }
-
-                if (
-                    url.endsWith(`/api/job-posts/${posts[0]!.id}/application-capture`) &&
-                    init?.method === 'PUT'
-                ) {
-                    if (typeof init.body !== 'string') {
-                        throw new Error('Expected application capture JSON')
-                    }
-
-                    savedCapture = JSON.parse(init.body)
-                    return new Response(null, { status: 204 })
-                }
-
-                throw new Error(`Unexpected request: ${url}`)
-            },
+    it('uploads and removes a user-selected resume artifact for the selected post', async () => {
+        let uploadRequest: RequestInit | undefined
+        let removeRequest: RequestInit | undefined
+        const resume = new File(['%PDF-1.7 fixture'], 'frontend-resume.pdf', {
+            type: 'application/pdf',
         })
-        vi.stubGlobal('fetch', harness.fetch)
-        FakeEventSource.reset()
-        vi.stubGlobal('EventSource', FakeEventSource)
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+            const url = requestUrl(input)
+
+            if (url.endsWith('/api/job-posts/apply-queue')) {
+                return jsonResponse(applyQueueItems)
+            }
+
+            if (
+                url.endsWith(`/api/job-posts/${posts[0]!.id}/artifacts/resume`) &&
+                init?.method === 'PUT'
+            ) {
+                uploadRequest = init
+                return jsonResponse({
+                    kind: 'resume',
+                    fileName: resume.name,
+                    mediaType: resume.type,
+                    sizeBytes: resume.size,
+                    uploadedAt: '2026-08-05T20:00:00.000Z',
+                })
+            }
+
+            if (
+                url.endsWith(`/api/job-posts/${posts[0]!.id}/artifacts/resume`) &&
+                init?.method === 'DELETE'
+            ) {
+                removeRequest = init
+                return new Response(null, { status: 204 })
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
         const root = await mountApplyView()
 
         await selectPost(root, posts[0]!.id)
-        findTestButton(root, 'capture-application').click()
-
-        await vi.waitFor(() => {
-            expect(root.querySelector('[data-testid="application-capture-panel"]')).not.toBeNull()
-            expect(FakeEventSource.forTask(runningAgentTask.id)).not.toBeUndefined()
-        })
-
-        harness.complete(runningAgentTask.id, capture)
+        const input = root.querySelector<HTMLInputElement>('[data-testid="resume-artifact-input"]')!
+        Object.defineProperty(input, 'files', { configurable: true, value: [resume] })
+        input.dispatchEvent(new Event('change', { bubbles: true }))
 
         await vi.waitFor(() =>
-            expect(
-                root
-                    .querySelector('[data-testid="apply-viewer-panel"]')
-                    ?.getAttribute('data-active'),
-            ).toBe('true'),
+            expect(root.querySelector('[data-testid="remove-resume-artifact"]')).not.toBeNull(),
         )
-        expect(
-            harness.requests.some(
-                ({ method, url }) =>
-                    method === 'PUT' &&
-                    url.endsWith(`/api/job-posts/${posts[0]!.id}/application-capture`),
-            ),
-        ).toBe(true)
-        expect(savedCapture).toEqual(capture)
+        expect(uploadRequest?.method).toBe('PUT')
+        expect(uploadRequest?.body).toBe(resume)
+        expect(new Headers(uploadRequest?.headers).get('x-artifact-filename')).toBe(
+            encodeURIComponent(resume.name),
+        )
+
+        findTestButton(root, 'remove-resume-artifact').click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="resume-artifact-input"]')).not.toBeNull(),
+        )
+        expect(removeRequest?.method).toBe('DELETE')
     })
 
     it('reuses saved contacts and navigates between contact and draft panels', async () => {

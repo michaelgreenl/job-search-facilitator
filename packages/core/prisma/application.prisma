@@ -1,7 +1,27 @@
+/// Legacy agent-captured text retained for data preservation. New application artifacts use ApplicationArtifact.
 model ApplicationSnapshot {
   jobPostId  String   @id @db.Uuid
   content    String
   sourceUrl  String
   capturedAt DateTime @db.Timestamptz(3)
   jobPost    JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+}
+
+enum ApplicationArtifactKind {
+  RESUME           @map("resume")
+  COVER_LETTER     @map("cover-letter")
+  APPLICATION_PAGE @map("application-page")
+}
+
+model ApplicationArtifact {
+  jobPostId String                  @db.Uuid
+  kind      ApplicationArtifactKind
+  fileName  String
+  mediaType String
+  sizeBytes Int
+  content   Bytes
+  uploadedAt DateTime               @default(now()) @db.Timestamptz(3)
+  jobPost   JobPost                 @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@id([jobPostId, kind])
 }

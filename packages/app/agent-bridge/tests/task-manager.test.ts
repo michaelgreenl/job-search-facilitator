@@ -37,6 +37,7 @@ const userAddedJobPostOutput = {
     legitimacyNotes: null,
     post: {
         sourceKey: 'example-source:123',
+        description: 'Complete example job description',
         roleTitle: 'Software Engineer',
         company: 'Example Company',
         location: 'Detroit, MI',

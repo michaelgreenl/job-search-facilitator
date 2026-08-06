@@ -9,7 +9,7 @@ import type {
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
-import { toApplicationSnapshot } from '../mappers/application.mapper.ts'
+import { toApplicationArtifact } from '../mappers/application-artifact.mapper.ts'
 import { toJobPostActivity } from '../mappers/job-post-activity.mapper.ts'
 import {
     toJobPost,
@@ -72,6 +72,16 @@ const applyQueueInclude = {
             },
         },
     },
+    applicationArtifacts: {
+        select: {
+            kind: true,
+            fileName: true,
+            mediaType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+        },
+        orderBy: { kind: 'asc' },
+    },
 } satisfies Prisma.JobPostInclude
 
 type PrismaApplyQueuePost = Prisma.JobPostGetPayload<{
@@ -84,7 +94,16 @@ const trackedJobPostInclude = {
         orderBy: [{ messagedAt: 'desc' }, { id: 'asc' }],
     },
     snapshot: true,
-    applicationSnapshot: true,
+    applicationArtifacts: {
+        select: {
+            kind: true,
+            fileName: true,
+            mediaType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+        },
+        orderBy: { kind: 'asc' },
+    },
     activities: { orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }] },
 } satisfies Prisma.JobPostInclude
 
@@ -125,8 +144,7 @@ const toTrackedJobPost = (post: PrismaTrackedJobPost): TrackedJobPost => ({
     post: toJobPost(post),
     contacts: post.outreachContacts.map(toOutreachContact),
     jobPostSnapshot: post.snapshot === null ? null : toJobPostSnapshot(post.snapshot),
-    applicationSnapshot:
-        post.applicationSnapshot === null ? null : toApplicationSnapshot(post.applicationSnapshot),
+    applicationArtifacts: post.applicationArtifacts.map(toApplicationArtifact),
     activities: post.activities.map(toJobPostActivity),
 })
 
@@ -150,6 +168,7 @@ export const jobPostRepository: JobPostRepository = {
             post: toJobPost(post),
             recommendationContext:
                 post.results[0] === undefined ? null : toRecommendationContext(post.results[0]),
+            applicationArtifacts: post.applicationArtifacts.map(toApplicationArtifact),
         }))
     },
 
@@ -189,6 +208,20 @@ export const jobPostRepository: JobPostRepository = {
                 },
                 update: listingData,
                 select: { id: true },
+            })
+            await transaction.jobPostSnapshot.upsert({
+                where: { jobPostId: post.id },
+                create: {
+                    jobPostId: post.id,
+                    description: input.post.description,
+                    sourceUrl: input.post.postUrl,
+                    capturedAt: new Date(),
+                },
+                update: {
+                    description: input.post.description,
+                    sourceUrl: input.post.postUrl,
+                    capturedAt: new Date(),
+                },
             })
             const recommendationData = {
                 agentLabel: toPrismaAgentLabel(input.agentLabel),

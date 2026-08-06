@@ -1,3 +1,5 @@
+import type { ApplicationArtifact } from './applications.ts'
+
 export const APPLICATION_STATUSES = [
     'not-applied',
     'awaiting-response',
@@ -54,6 +56,7 @@ export interface JobPostSnapshot {
 
 export interface JobPostInput {
     sourceKey: string
+    description: string
     roleTitle: string
     company: string
     location: string | null
@@ -131,4 +134,5 @@ export type UserAddedJobPost = StandaloneJobRecommendation & {
 export interface ApplyQueueItem {
     post: JobPost
     recommendationContext: JobRecommendationContext | null
+    applicationArtifacts: ApplicationArtifact[]
 }

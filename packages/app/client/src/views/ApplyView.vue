@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import {
     USER_LABELS,
+    type ApplicationArtifact,
+    type ApplicationArtifactKind,
     type JobPost,
     type JobRecommendationContext,
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
-import AgentTaskPanel from '@/components/agent/AgentTaskPanel.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import JobPostViewPanel, {
@@ -15,13 +16,16 @@ import JobPostViewPanel, {
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
-import { useApplicationCaptureStore } from '@/stores/application-capture'
+import {
+    removeApplicationArtifact,
+    uploadApplicationArtifact,
+} from '@/services/application-artifacts'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'capture' | 'posts' | 'viewer' | 'outreach'
+type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postFilterOptions: BaseDropdownOption[] = [
@@ -36,7 +40,6 @@ const isPostFilter = (value: string): value is PostFilter =>
     value === 'all' || applyLabels.some((label) => label === value)
 const postStore = usePostStore()
 const outreachStore = useOutreachStore()
-const captureStore = useApplicationCaptureStore()
 const {
     postId: outreachPostId,
     contact: outreachContact,
@@ -44,44 +47,35 @@ const {
     taskVisible: outreachTaskVisible,
     restoreContactListPending,
 } = storeToRefs(outreachStore)
-const {
-    canRetry: captureCanRetry,
-    issue: captureIssue,
-    lastSavedPostId,
-    postId: capturePostId,
-    running: captureRunning,
-    saving: captureSaving,
-    taskId: captureTaskId,
-    taskState: captureTaskState,
-} = storeToRefs(captureStore)
 const postFilter = shallowRef<PostFilter>('all')
 const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
 const startupOutreachPostId =
     startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
         ? outreachPostId.value
         : null
-const startupCapturePostId = capturePostId.value
 const activePanel = shallowRef<ActivePanel>(
-    startupCapturePostId !== null
-        ? 'capture'
-        : outreachPostId.value !== null &&
-            (outreachTaskVisible.value || restoreContactListPending.value)
-          ? 'outreach'
-          : 'posts',
+    outreachPostId.value !== null && (outreachTaskVisible.value || restoreContactListPending.value)
+        ? 'outreach'
+        : 'posts',
 )
 const outreachExpanded = shallowRef(false)
-const selectedPostId = shallowRef<string | null>(startupCapturePostId ?? outreachPostId.value)
+const selectedPostId = shallowRef<string | null>(outreachPostId.value)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
+const artifactUploading = shallowRef<ApplicationArtifactKind | null>(null)
+const artifactRemoving = shallowRef<ApplicationArtifactKind | null>(null)
+const artifactError = shallowRef<string | null>(null)
+const artifactMessage = shallowRef<string | null>(null)
 const applyQueuePostIds = shallowRef<readonly string[] | null>(null)
 const retainedForgoneLabelByPostId = reactive(new Map<string, ApplyLabel>())
 const recommendationContextByPostId = shallowRef<
     ReadonlyMap<string, JobRecommendationContext | null>
 >(new Map())
+const artifactsByPostId = reactive(new Map<string, ApplicationArtifact[]>())
 let viewMounted = true
 
 onBeforeUnmount(() => {
@@ -114,6 +108,9 @@ const postFilterLabel = computed(
 const selectedPost = computed(() =>
     selectedPostId.value === null ? null : postStore.findPost(selectedPostId.value),
 )
+const selectedApplicationArtifacts = computed(() =>
+    selectedPostId.value === null ? [] : (artifactsByPostId.get(selectedPostId.value) ?? []),
+)
 const selectedRecommendationContext = computed(() =>
     selectedPostId.value === null
         ? null
@@ -129,9 +126,11 @@ const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
     applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
     applicationError: applicationError.value,
-    captureDisabled: applicationUpdating.value || labelUpdating.value,
-    captureMessage:
-        selectedPostId.value === null ? null : captureStore.messageFor(selectedPostId.value),
+    artifactError: artifactError.value,
+    artifactMessage: artifactMessage.value,
+    applicationArtifacts: selectedApplicationArtifacts.value,
+    artifactRemoving: artifactRemoving.value,
+    artifactUploading: artifactUploading.value,
     outreachDisabled: outreachActionDisabled.value,
 }))
 
@@ -140,8 +139,7 @@ watch(
     (posts) => {
         if (
             posts.some(({ id }) => id === selectedPostId.value) ||
-            (activePanel.value === 'outreach' && outreachPostId.value !== null) ||
-            (activePanel.value === 'capture' && capturePostId.value !== null)
+            (activePanel.value === 'outreach' && outreachPostId.value !== null)
         ) {
             return
         }
@@ -156,6 +154,8 @@ watch(
             outreachExpanded.value = false
             labelError.value = null
             applicationError.value = null
+            artifactError.value = null
+            artifactMessage.value = null
         }
 
         if (selectedPostId.value === null) {
@@ -164,13 +164,6 @@ watch(
     },
     { immediate: true },
 )
-
-watch(lastSavedPostId, (postId) => {
-    if (postId !== null && viewMounted) {
-        selectedPostId.value = postId
-        activePanel.value = 'viewer'
-    }
-})
 
 function selectPost(postId: string) {
     const changed = postId !== selectedPostId.value
@@ -183,6 +176,8 @@ function selectPost(postId: string) {
     outreachExpanded.value = false
     labelError.value = null
     applicationError.value = null
+    artifactError.value = null
+    artifactMessage.value = null
     activePanel.value = 'viewer'
 }
 
@@ -307,29 +302,6 @@ async function cancelOutreach() {
     await outreachStore.cancelActiveTask().catch(() => false)
 }
 
-async function openApplicationCapture() {
-    const post = selectedPost.value
-
-    if (post === null) {
-        return
-    }
-
-    try {
-        selectedPostId.value = await captureStore.start(post)
-        activePanel.value = 'capture'
-    } catch {
-        activePanel.value = 'capture'
-    }
-}
-
-async function cancelApplicationCapture() {
-    await captureStore.cancel().catch(() => undefined)
-}
-
-async function retryApplicationCapture() {
-    await captureStore.retry().catch(() => undefined)
-}
-
 async function retryOutreach() {
     if (outreachPost.value !== null) {
         const retry =
@@ -439,17 +411,86 @@ async function markApplied() {
     }
 }
 
+async function uploadArtifact(kind: ApplicationArtifactKind, file: File) {
+    const post = selectedPost.value
+
+    if (post === null || artifactUploading.value !== null || artifactRemoving.value !== null) {
+        return
+    }
+
+    const postId = post.id
+    artifactUploading.value = kind
+    artifactError.value = null
+    artifactMessage.value = null
+
+    try {
+        const artifact = await uploadApplicationArtifact(postId, kind, file)
+        artifactsByPostId.set(postId, [
+            ...(artifactsByPostId.get(postId) ?? []).filter(
+                (currentArtifact) => currentArtifact.kind !== kind,
+            ),
+            artifact,
+        ])
+
+        if (selectedPostId.value === postId) {
+            artifactMessage.value = `${artifact.fileName} uploaded.`
+        }
+    } catch (error) {
+        if (selectedPostId.value === postId) {
+            artifactError.value =
+                error instanceof Error ? error.message : 'Could not upload application artifact'
+        }
+    } finally {
+        artifactUploading.value = null
+    }
+}
+
+async function removeArtifact(kind: ApplicationArtifactKind) {
+    const post = selectedPost.value
+
+    if (post === null || artifactUploading.value !== null || artifactRemoving.value !== null) {
+        return
+    }
+
+    const postId = post.id
+    artifactRemoving.value = kind
+    artifactError.value = null
+    artifactMessage.value = null
+
+    try {
+        await removeApplicationArtifact(postId, kind)
+        artifactsByPostId.set(
+            postId,
+            (artifactsByPostId.get(postId) ?? []).filter(
+                (currentArtifact) => currentArtifact.kind !== kind,
+            ),
+        )
+
+        if (selectedPostId.value === postId) {
+            artifactMessage.value = 'Artifact removed.'
+        }
+    } catch (error) {
+        if (selectedPostId.value === postId) {
+            artifactError.value =
+                error instanceof Error ? error.message : 'Could not remove application artifact'
+        }
+    } finally {
+        artifactRemoving.value = null
+    }
+}
+
 async function loadApplyQueue() {
     listLoading.value = true
     listError.value = null
 
     try {
         const items = await postStore.fetchApplyQueue()
+        artifactsByPostId.clear()
+        for (const item of items) {
+            artifactsByPostId.set(item.post.id, [...item.applicationArtifacts])
+        }
         const queuePostIds = items.map(({ post }) => post.id)
-        const sessionPostIds = [
-            ...startupOutreachTaskPostIds,
-            ...(startupCapturePostId === null ? [] : [startupCapturePostId]),
-        ]
+        const sessionPostIds = [...startupOutreachTaskPostIds]
         const omittedTaskPostIds = [...new Set(sessionPostIds)].filter(
             (postId) => !queuePostIds.includes(postId),
         )
@@ -525,38 +566,12 @@ async function restoreOutreach() {
     }
 }
 
-async function restoreApplicationCapture() {
-    const restoredPostId = startupCapturePostId
-
-    if (restoredPostId === null) {
-        return
-    }
-
-    if (postStore.findPost(restoredPostId) === null) {
-        await postStore.fetchPost(restoredPostId).catch(() => null)
-    }
-
-    if (!viewMounted || capturePostId.value !== restoredPostId) {
-        return
-    }
-
-    selectedPostId.value = restoredPostId
-    activePanel.value = 'capture'
-    await captureStore.restore().catch(() => undefined)
-}
-
 onMounted(() => {
     if (startupOutreachTaskPostIds.length > 0) {
         void outreachStore.restoreTaskContext()
     }
 
-    void loadApplyQueue().then(async () => {
-        await restoreApplicationCapture()
-
-        if (startupCapturePostId === null) {
-            await restoreOutreach()
-        }
-    })
+    void loadApplyQueue().then(restoreOutreach)
 })
 </script>
 
@@ -605,9 +620,7 @@ onMounted(() => {
                 data-testid="apply-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="
-                    activePanel === 'posts' ||
-                    activePanel === 'capture' ||
-                    (activePanel === 'outreach' && !outreachExpanded)
+                    activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
                 "
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
                 :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
@@ -620,30 +633,8 @@ onMounted(() => {
                 @update-label="updateUserLabel"
                 @open-outreach="openOutreach"
                 @mark-applied="markApplied"
-                @capture-application="openApplicationCapture"
-            />
-
-            <AgentTaskPanel
-                v-if="captureTaskId !== null"
-                class="apply-panel apply-capture glass-frame"
-                data-testid="application-capture-panel"
-                :active="activePanel === 'capture'"
-                :adjacent="false"
-                :task-id="captureTaskId"
-                eyebrow="Apply"
-                title="Capture application"
-                back-label="Back to job post"
-                back-test-id="back-from-application-capture"
-                :cancelling="captureTaskState?.cancelling ?? false"
-                :running="captureRunning"
-                :issue="captureIssue"
-                :status-message="captureSaving ? 'Saving capture…' : null"
-                cancel-test-id="cancel-application-capture"
-                :retry-available="captureCanRetry"
-                retry-test-id="retry-application-capture"
-                @back="showViewer"
-                @cancel="cancelApplicationCapture"
-                @retry="retryApplicationCapture"
+                @remove-artifact="removeArtifact"
+                @upload-artifact="uploadArtifact"
             />
 
             <OutreachPanel
@@ -709,11 +700,6 @@ onMounted(() => {
         &-contact {
             flex: 2.5;
         }
-    }
-
-    &.apply-capture {
-        flex: 1.5;
-        overflow: hidden;
     }
 }
 

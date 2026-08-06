@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import {
     APPLICATION_STATUSES,
+    type ApplicationArtifactKind,
     type ApplicationStatus,
     type TrackedJobPost,
 } from '@job-search-facilitator/core'
-import { computed, shallowRef, watch } from 'vue'
+import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
-import TrackSnapshotPopUp from './TrackSnapshotPopUp.vue'
+import { applicationArtifactUrl } from '@/services/application-artifacts'
 
 const props = defineProps<{
     active: boolean
     adjacent: boolean
+    backOnDesktop: boolean
     contactError: string | null
     contactUpdatingId: string | null
     entry: TrackedJobPost
@@ -23,6 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     back: []
+    openJobDescription: []
     updateContact: [contactId: string, responded: boolean]
     updateStatus: [status: ApplicationStatus]
 }>()
@@ -46,37 +49,13 @@ const statusOptions: BaseDropdownOption[] = APPLICATION_STATUSES.map((status) =>
                 ? 'muted'
                 : 'default',
 }))
-const openSnapshot = shallowRef<'application' | 'job-post' | null>(null)
-
-watch(
-    () => props.entry.post.id,
-    () => {
-        openSnapshot.value = null
-    },
-)
+const artifactLabels: Record<ApplicationArtifactKind, string> = {
+    resume: 'Resume',
+    'cover-letter': 'Cover letter',
+    'application-page': 'Application snapshot',
+}
 
 const statusLabel = computed(() => statusLabels[props.entry.post.applicationStatus])
-const currentSnapshot = computed(() => {
-    if (openSnapshot.value === 'application' && props.entry.applicationSnapshot !== null) {
-        return {
-            kind: openSnapshot.value,
-            content: props.entry.applicationSnapshot.content,
-            sourceUrl: props.entry.applicationSnapshot.sourceUrl,
-            capturedAt: props.entry.applicationSnapshot.capturedAt,
-        } as const
-    }
-
-    if (openSnapshot.value === 'job-post' && props.entry.jobPostSnapshot !== null) {
-        return {
-            kind: openSnapshot.value,
-            content: props.entry.jobPostSnapshot.description,
-            sourceUrl: props.entry.jobPostSnapshot.sourceUrl,
-            capturedAt: props.entry.jobPostSnapshot.capturedAt,
-        } as const
-    }
-
-    return null
-})
 const formatDate = (value: string) =>
     new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(
         new Date(value),
@@ -95,9 +74,9 @@ function selectStatus(value: string) {
         class="tracked-job-panel glass-frame"
         :active="active"
         :adjacent="adjacent"
-        back-label="Back to tracked jobs"
+        :back-label="active || backOnDesktop ? 'Back to tracked jobs' : undefined"
         back-test-id="back-to-tracked-jobs"
-        back-mobile-only
+        :back-mobile-only="!backOnDesktop"
         @back="emit('back')"
     >
         <div
@@ -185,35 +164,30 @@ function selectStatus(value: string) {
                 <p v-else class="empty-copy">No activity recorded.</p>
             </section>
 
-            <div class="snapshot-actions">
+            <div class="artifact-actions">
                 <BaseButton
-                    v-if="entry.applicationSnapshot"
-                    data-testid="view-application-snapshot"
-                    preset="outline"
-                    @click="openSnapshot = 'application'"
+                    v-for="artifact in entry.applicationArtifacts"
+                    :key="artifact.kind"
+                    as="a"
+                    :data-testid="`view-${artifact.kind}-artifact`"
+                    preset="primary"
+                    :href="applicationArtifactUrl(entry.post.id, artifact.kind)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :aria-label="`Open ${artifactLabels[artifact.kind]} ${artifact.fileName} in a new tab`"
                 >
-                    View application
+                    {{ artifactLabels[artifact.kind] }} ↗
                 </BaseButton>
                 <BaseButton
                     v-if="entry.jobPostSnapshot"
-                    data-testid="view-job-post-snapshot"
+                    data-testid="view-job-description"
                     preset="outline"
-                    @click="openSnapshot = 'job-post'"
+                    @click="emit('openJobDescription')"
                 >
-                    View job post
+                    Job description
                 </BaseButton>
             </div>
         </div>
-
-        <TrackSnapshotPopUp
-            v-if="currentSnapshot"
-            :captured-at="currentSnapshot.capturedAt"
-            :content="currentSnapshot.content"
-            :kind="currentSnapshot.kind"
-            :open="true"
-            :source-url="currentSnapshot.sourceUrl"
-            @close="openSnapshot = null"
-        />
     </BasePanel>
 </template>
 
@@ -276,11 +250,12 @@ function selectStatus(value: string) {
     border-radius: $radius-md;
 }
 
-.snapshot-actions {
+.artifact-actions {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
     justify-content: flex-end;
+    margin-top: auto;
 }
 
 .contact-list,

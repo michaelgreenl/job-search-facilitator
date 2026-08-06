@@ -1,6 +1,5 @@
 export type AgentSessionOwner =
     | { kind: 'job-post-import'; url: string }
-    | { kind: 'application-capture'; postId: string }
     | { kind: 'outreach-contact'; postId: string }
     | {
           kind: 'outreach-draft'
@@ -39,14 +38,6 @@ const parseAgentSession = (value: unknown): AgentSession | null => {
     }
 
     if (session.kind === 'outreach-contact' && isNonBlankString(session.postId)) {
-        return {
-            kind: session.kind,
-            taskId: session.taskId,
-            postId: session.postId,
-        }
-    }
-
-    if (session.kind === 'application-capture' && isNonBlankString(session.postId)) {
         return {
             kind: session.kind,
             taskId: session.taskId,

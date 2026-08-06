@@ -1,6 +1,6 @@
 import type { JobUpdateCheckResult } from '@job-search-facilitator/core'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { applicationCaptureRepository } from '../../src/db/repositories/application-capture.repository.ts'
+import { applicationArtifactRepository } from '../../src/db/repositories/application-artifact.repository.ts'
 import { jobPostRepository } from '../../src/db/repositories/job-post.repository.ts'
 import { jobUpdateCheckRepository } from '../../src/db/repositories/job-update-check.repository.ts'
 import { outreachContactRepository } from '../../src/db/repositories/outreach.repository.ts'
@@ -42,41 +42,57 @@ afterAll(async () => {
     await prisma.$disconnect()
 })
 
-describe('application capture and job update repositories', () => {
-    it('replaces both saved snapshots on recapture', async () => {
+describe('application artifact and job update repositories', () => {
+    it('replaces the uploaded artifact for the same job and kind', async () => {
         const post = await createJobPost()
         const first = {
-            jobPost: {
-                description: 'First complete job description',
-                sourceUrl: post.postUrl,
-            },
-            application: {
-                content: 'First complete filled application',
-                sourceUrl: post.applicationUrl,
-            },
+            content: Buffer.from('%PDF-first'),
+            fileName: 'first-resume.pdf',
+            mediaType: 'application/pdf',
         }
         const replacement = {
-            jobPost: {
-                description: 'Replacement complete job description',
-                sourceUrl: post.postUrl,
-            },
-            application: {
-                content: 'Replacement complete filled application',
-                sourceUrl: post.applicationUrl,
-            },
+            content: Buffer.from('%PDF-replacement'),
+            fileName: 'replacement-resume.pdf',
+            mediaType: 'application/pdf',
         }
 
-        await applicationCaptureRepository.save(post.id, first)
-        await applicationCaptureRepository.save(post.id, replacement)
+        await applicationArtifactRepository.save(post.id, 'resume', first)
+        await applicationArtifactRepository.save(post.id, 'resume', replacement)
         await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
         const tracked = (await jobPostRepository.findTracked())[0]!
+        const downloaded = await applicationArtifactRepository.findFile(post.id, 'resume')
 
         expect({
-            description: tracked.jobPostSnapshot?.description,
-            applicationContent: tracked.applicationSnapshot?.content,
+            artifacts: tracked.applicationArtifacts,
+            content: downloaded?.content.toString(),
         }).toEqual({
-            description: replacement.jobPost.description,
-            applicationContent: replacement.application.content,
+            artifacts: [downloaded?.artifact],
+            content: replacement.content.toString(),
+        })
+    })
+
+    it('removes only the selected artifact from an Apply queue post', async () => {
+        const post = await createJobPost()
+        await jobPostRepository.update(post.id, { userLabel: 'P1' })
+        await applicationArtifactRepository.save(post.id, 'resume', {
+            content: Buffer.from('%PDF-resume'),
+            fileName: 'resume.pdf',
+            mediaType: 'application/pdf',
+        })
+        const coverLetter = await applicationArtifactRepository.save(post.id, 'cover-letter', {
+            content: Buffer.from('%PDF-cover-letter'),
+            fileName: 'cover-letter.pdf',
+            mediaType: 'application/pdf',
+        })
+
+        const removed = await applicationArtifactRepository.remove(post.id, 'resume')
+        const resume = await applicationArtifactRepository.findFile(post.id, 'resume')
+        const applyQueue = await jobPostRepository.findApplyQueue()
+
+        expect({ removed, resume, artifacts: applyQueue[0]?.applicationArtifacts }).toEqual({
+            removed: true,
+            resume: null,
+            artifacts: [coverLetter],
         })
     })
 

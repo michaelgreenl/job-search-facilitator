@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { applicationArtifactSchema } from './applications.ts'
 import {
     AGENT_LABELS,
     APPLICATION_STATUSES,
@@ -35,6 +36,7 @@ const httpUrlInputSchema = z
 
 export const jobPostInputSchema = z.strictObject({
     sourceKey: nonBlankInputStringSchema,
+    description: z.string().regex(/\S/),
     roleTitle: nonBlankInputStringSchema,
     company: nonBlankInputStringSchema,
     location: nonBlankInputStringSchema.nullable(),
@@ -127,6 +129,7 @@ const userAddedJobPostSchema: z.ZodType<UserAddedJobPost> = z.looseObject({
 const applyQueueItemSchema: z.ZodType<ApplyQueueItem> = z.looseObject({
     post: jobPostSchema,
     recommendationContext: jobRecommendationContextSchema.nullable(),
+    applicationArtifacts: z.array(applicationArtifactSchema),
 })
 
 const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({

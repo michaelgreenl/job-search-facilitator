@@ -23,11 +23,22 @@ describe('track view', () => {
                 sourceUrl: 'https://example.com/jobs/acme',
                 capturedAt: '2026-07-20T12:00:00.000Z',
             },
-            applicationSnapshot: {
-                content: 'Name: Applicant',
-                sourceUrl: 'https://apply.example.com/jobs/acme',
-                capturedAt: '2026-07-20T12:00:00.000Z',
-            },
+            applicationArtifacts: [
+                {
+                    kind: 'resume',
+                    fileName: 'frontend-resume.pdf',
+                    mediaType: 'application/pdf',
+                    sizeBytes: 1_024,
+                    uploadedAt: '2026-07-20T12:00:00.000Z',
+                },
+                {
+                    kind: 'application-page',
+                    fileName: 'application.webarchive',
+                    mediaType: 'application/x-webarchive',
+                    sizeBytes: 2_048,
+                    uploadedAt: '2026-07-20T12:00:00.000Z',
+                },
+            ],
         })
         const second = makeTrackedJobPost({
             post: makeJobPost({
@@ -57,12 +68,27 @@ describe('track view', () => {
                 .querySelector('[data-testid="tracked-job-detail"]')
                 ?.getAttribute('data-post-id'),
         ).toBe(first.post.id)
+        expect(firstMount.root.querySelector('[data-testid="view-resume-artifact"]')).not.toBeNull()
         expect(
-            firstMount.root.querySelector('[data-testid="view-application-snapshot"]'),
+            firstMount.root.querySelector('[data-testid="view-application-page-artifact"]'),
         ).not.toBeNull()
+        firstMount.root
+            .querySelector<HTMLButtonElement>('[data-testid="view-job-description"]')!
+            .click()
+        await vi.waitFor(() =>
+            expect(
+                firstMount.root.querySelector('[data-testid="job-description-text"]')?.textContent,
+            ).toContain('Complete job description'),
+        )
         expect(
-            firstMount.root.querySelector('[data-testid="view-job-post-snapshot"]'),
-        ).not.toBeNull()
+            firstMount.root
+                .querySelector('[data-testid="tracked-job-detail"]')
+                ?.closest('[data-active]')
+                ?.getAttribute('data-active'),
+        ).toBe('false')
+        firstMount.root
+            .querySelector<HTMLButtonElement>('[data-testid="back-from-job-description"]')!
+            .click()
         firstMount.root
             .querySelector<HTMLButtonElement>(`[data-testid="job-post-card-${second.post.id}"]`)!
             .click()

@@ -3,12 +3,13 @@ import { type ApplicationStatus, type TrackedJobPost } from '@job-search-facilit
 import { computed, onMounted, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
 import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
 import { usePostStore } from '@/stores/post'
 
-type ActivePanel = 'detail' | 'posts'
+type ActivePanel = 'description' | 'detail' | 'posts'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
 const readSelectedPostId = () => {
     try {
@@ -181,6 +182,12 @@ function selectPost(postId: string) {
     activePanel.value = 'detail'
 }
 
+function openJobDescription() {
+    if (selectedEntry.value?.jobPostSnapshot) {
+        activePanel.value = 'description'
+    }
+}
+
 async function updateApplicationStatus(status: ApplicationStatus) {
     const entry = selectedEntry.value
 
@@ -306,15 +313,26 @@ onMounted(() => {
             v-if="selectedEntry"
             class="track-panel"
             :active="activePanel === 'detail'"
-            :adjacent="activePanel === 'posts'"
+            :adjacent="activePanel === 'posts' || activePanel === 'description'"
+            :back-on-desktop="activePanel === 'description'"
             :contact-error="contactError"
             :contact-updating-id="selectedContactUpdatingId"
             :entry="selectedEntry"
             :status-error="statusError"
             :status-updating="statusUpdating"
             @back="activePanel = 'posts'"
+            @open-job-description="openJobDescription"
             @update-contact="updateContact"
             @update-status="updateApplicationStatus"
+        />
+
+        <JobDescriptionPanel
+            v-if="selectedEntry?.jobPostSnapshot"
+            class="track-panel track-description"
+            :active="activePanel === 'description'"
+            :post="selectedEntry.post"
+            :snapshot="selectedEntry.jobPostSnapshot"
+            @back="activePanel = 'detail'"
         />
     </section>
 </template>
@@ -336,6 +354,10 @@ onMounted(() => {
     @include bp-md-tablet {
         max-width: 36rem;
     }
+}
+
+.track-description {
+    flex: 1.2;
 }
 
 .track-summary {

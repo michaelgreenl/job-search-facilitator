@@ -107,6 +107,7 @@ const importOutput = {
     legitimacyNotes: null,
     post: {
         sourceKey: 'example:imported-role',
+        description: 'Complete imported job description',
         roleTitle: 'Imported Engineer',
         company: 'Imported Co',
         location: 'Remote',

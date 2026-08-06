@@ -51,6 +51,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {
         sourceKey: post.sourceKey,
+        description: 'Complete job description',
         roleTitle: post.roleTitle,
         company: post.company,
         location: post.location,

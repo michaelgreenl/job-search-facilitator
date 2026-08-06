@@ -13,11 +13,7 @@ export {
     parseUserAddedJobPosts,
     standaloneJobRecommendationInputSchema,
 } from './jobs.ts'
-export {
-    applicationCaptureResultSchema,
-    createApplicationCaptureOutputSchema,
-    parseApplicationCaptureResult,
-} from './applications.ts'
+export { applicationArtifactSchema, parseApplicationArtifact } from './applications.ts'
 export {
     createContactDiscoveryOutputSchema,
     createDraftRevisionOutputSchema,

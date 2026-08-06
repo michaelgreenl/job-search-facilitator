@@ -36,6 +36,7 @@ const missingPostId = '22222222-2222-4222-8222-222222222222'
 const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
     recommendationContext: null,
+    applicationArtifacts: [],
 }
 const trackedPost: TrackedJobPost = {
     post: {
@@ -45,7 +46,7 @@ const trackedPost: TrackedJobPost = {
     },
     contacts: [],
     jobPostSnapshot: null,
-    applicationSnapshot: null,
+    applicationArtifacts: [],
     activities: [],
 }
 const userAddedPost: UserAddedJobPost = {
@@ -70,6 +71,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {
         sourceKey: existingPost.sourceKey,
+        description: 'Complete job description',
         roleTitle: existingPost.roleTitle,
         company: existingPost.company,
         location: existingPost.location,
@@ -121,7 +123,14 @@ const createFakeRepository = () => {
 const createTestApp = (repository: JobPostRepository) => {
     const app = express()
     app.use(express.json())
-    app.use('/job-posts', createJobPostRouter(repository, { save: vi.fn(async () => true) }))
+    app.use(
+        '/job-posts',
+        createJobPostRouter(repository, {
+            save: vi.fn(async () => null),
+            findFile: vi.fn(async () => null),
+            remove: vi.fn(async () => false),
+        }),
+    )
     return app
 }
 

@@ -69,6 +69,7 @@ const input: UpsertJobSearchReportInput = {
         legitimacyNotes: result.legitimacyNotes,
         post: {
             sourceKey: result.post.sourceKey,
+            description: 'Complete job description',
             roleTitle: result.post.roleTitle,
             company: result.post.company,
             location: result.post.location,

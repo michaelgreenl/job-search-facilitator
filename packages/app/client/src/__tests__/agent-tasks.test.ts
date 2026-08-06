@@ -80,6 +80,7 @@ describe('outreach agent tasks', () => {
                 post: {
                     required: [
                         'sourceKey',
+                        'description',
                         'roleTitle',
                         'company',
                         'location',

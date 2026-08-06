@@ -1,5 +1,5 @@
 import express from 'express'
-import { applicationCaptureRepository } from '../../db/repositories/application-capture.repository.ts'
+import { applicationArtifactRepository } from '../../db/repositories/application-artifact.repository.ts'
 import { jobPostRepository } from '../../db/repositories/job-post.repository.ts'
 import { jobUpdateCheckRepository } from '../../db/repositories/job-update-check.repository.ts'
 import {
@@ -14,7 +14,7 @@ import { createSearchReportRouter } from './search-report.route.ts'
 
 export const apiRouter = express.Router()
 
-apiRouter.use('/job-posts', createJobPostRouter(jobPostRepository, applicationCaptureRepository))
+apiRouter.use('/job-posts', createJobPostRouter(jobPostRepository, applicationArtifactRepository))
 apiRouter.use(
     '/job-posts/:jobPostId/outreach-contacts',
     createOutreachContactRouter(outreachContactRepository),

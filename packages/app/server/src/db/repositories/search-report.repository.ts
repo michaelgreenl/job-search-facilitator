@@ -96,6 +96,20 @@ export const searchReportRepository: SearchReportRepository = {
                     update: listingData,
                     select: { id: true },
                 })
+                await transaction.jobPostSnapshot.upsert({
+                    where: { jobPostId: post.id },
+                    create: {
+                        jobPostId: post.id,
+                        description: result.post.description,
+                        sourceUrl: result.post.postUrl,
+                        capturedAt: new Date(),
+                    },
+                    update: {
+                        description: result.post.description,
+                        sourceUrl: result.post.postUrl,
+                        capturedAt: new Date(),
+                    },
+                })
 
                 await transaction.jobSearchResult.create({
                     data: {

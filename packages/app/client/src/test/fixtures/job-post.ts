@@ -1,4 +1,5 @@
 import type {
+    ApplicationArtifact,
     ApplyQueueItem,
     JobPost,
     JobRecommendationContext,
@@ -50,6 +51,7 @@ export function makeRecommendationContext(
 export function makeApplyQueueItem(
     postOverrides: Partial<JobPost> = {},
     recommendationOverrides?: Partial<JobRecommendationContext> | null,
+    applicationArtifacts: ApplicationArtifact[] = [],
 ): ApplyQueueItem {
     return {
         post: makeJobPost(postOverrides),
@@ -57,5 +59,6 @@ export function makeApplyQueueItem(
             recommendationOverrides === null
                 ? null
                 : makeRecommendationContext(recommendationOverrides),
+        applicationArtifacts,
     }
 }

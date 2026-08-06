@@ -302,6 +302,7 @@ describe('post store', () => {
                     reportDate: report.reportDate,
                     ...recommendation,
                 },
+                applicationArtifacts: [],
             },
         ]
         const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(applyQueueItems))
