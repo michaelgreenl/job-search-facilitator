@@ -4,10 +4,11 @@ import { createPinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import TrackView from '@/views/TrackView.vue'
 import { makeJobPost } from '@/test/fixtures/job-post'
+import { makeOutreachContact } from '@/test/fixtures/outreach'
 import { makeTrackedJobPost } from '@/test/fixtures/tracked-job-post'
 import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
-import { jsonResponse } from '@/test/support/http'
+import { jsonResponse, requestParts } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
 
 describe('track view', () => {
@@ -166,6 +167,83 @@ describe('track view', () => {
         root.querySelector<HTMLButtonElement>('[data-testid="back-to-track-outreach"]')!.click()
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-draft"]')).toBeNull(),
+        )
+    })
+
+    it('offers response tracking only after outreach is marked as messaged', async () => {
+        const tracked = makeTrackedJobPost()
+        const unmessagedContact = makeOutreachContact({
+            id: '50000000-0000-4000-8000-000000000002',
+            jobPostId: tracked.post.id,
+        })
+        tracked.contacts.push(unmessagedContact)
+        const updatedContact = {
+            ...unmessagedContact,
+            messaged: true,
+            messagedAt: '2026-08-06T21:42:00.000Z',
+            updatedAt: '2026-08-06T21:42:00.000Z',
+        }
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const request = requestParts(input, init)
+
+                return request.method === 'PATCH'
+                    ? jsonResponse(updatedContact)
+                    : jsonResponse([tracked])
+            }),
+        )
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(
+                    `[data-testid="outreach-contact-${unmessagedContact.id}-select"]`,
+                ),
+            ).not.toBeNull(),
+        )
+        expect(
+            root.querySelector(
+                `[data-testid="track-contact-response-toggle-${unmessagedContact.id}"]`,
+            ),
+        ).toBeNull()
+
+        root.querySelector<HTMLButtonElement>(
+            `[data-testid="outreach-contact-${unmessagedContact.id}-select"]`,
+        )!.click()
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="outreach-contact-messaged-toggle"]')
+                    ?.getAttribute('aria-pressed'),
+            ).toBe('false'),
+        )
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="outreach-contact-messaged-toggle"]',
+        )!.click()
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(
+                    `[data-testid="track-contact-recently-messaged-${unmessagedContact.id}"]`,
+                ),
+            ).not.toBeNull(),
+        )
+        expect(
+            root.querySelector(
+                `[data-testid="track-contact-response-toggle-${unmessagedContact.id}"]`,
+            ),
+        ).toBeNull()
+
+        root.querySelector<HTMLButtonElement>('[data-testid="back-to-track-outreach"]')!.click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(
+                    `[data-testid="track-contact-response-toggle-${unmessagedContact.id}"]`,
+                ),
+            ).not.toBeNull(),
         )
     })
 

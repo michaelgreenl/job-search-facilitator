@@ -63,4 +63,18 @@ describe('OutreachContactCard', () => {
         toggle.click()
         expect(onUpdateMessaged).not.toHaveBeenCalled()
     })
+
+    it('does not duplicate the messaged status beside its interactive control', () => {
+        const { root } = mountVue(OutreachContactCard, {
+            props: {
+                contact,
+                showMessagedControl: true,
+            },
+        })
+
+        expect(
+            root.querySelectorAll('[data-testid="outreach-contact-messaged-toggle"]'),
+        ).toHaveLength(1)
+        expect(root.querySelector('[data-testid="outreach-contact-messaged-status"]')).toBeNull()
+    })
 })

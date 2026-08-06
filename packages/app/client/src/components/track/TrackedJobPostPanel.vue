@@ -30,6 +30,7 @@ const props = defineProps<{
     outreachContactsLoading: boolean
     outreachDisabled: boolean
     outreachTasks: OutreachTaskListItem[]
+    recentlyMessagedContactId: string | null
     statusError: string | null
     statusUpdating: boolean
 }>()
@@ -138,8 +139,17 @@ function selectStatus(value: string) {
                     @show-stream="emit('showOutreachTask', $event)"
                 >
                     <template #contactActions="{ contact }">
+                        <span
+                            v-if="contact.id === recentlyMessagedContactId"
+                            class="response-status is-messaged"
+                            :data-testid="`track-contact-recently-messaged-${contact.id}`"
+                        >
+                            <span aria-hidden="true">✓</span>
+                            Messaged
+                        </span>
                         <button
-                            class="response-status-button"
+                            v-else-if="contact.messaged"
+                            class="response-status response-status-button"
                             :class="{
                                 'is-responded': contact.respondedAt !== null,
                                 'is-updating': contactUpdatingId === contact.id,
@@ -300,7 +310,7 @@ function selectStatus(value: string) {
     list-style: none;
 }
 
-.response-status-button {
+.response-status {
     display: inline-flex;
     width: fit-content;
     gap: $space-1;
@@ -310,20 +320,24 @@ function selectStatus(value: string) {
     font-family: $font-family-mono;
     font-size: 0.6875rem;
     line-height: 1.25;
-    cursor: pointer;
     background: transparent;
     border: 1px solid $color-ink-alpha-50;
     border-radius: $radius-full;
 
-    &:not(.is-responded):hover:not(:disabled) {
-        color: $color-ink;
-        border-color: $color-signal-light-alpha-50;
-    }
-
+    &.is-messaged,
     &.is-responded {
         color: lighten-color($color-green-600, 35%);
         background: $color-green-600-alpha-25;
         border-color: $color-green-600-alpha-55;
+    }
+}
+
+.response-status-button {
+    cursor: pointer;
+
+    &:not(.is-responded):hover:not(:disabled) {
+        color: $color-ink;
+        border-color: $color-signal-light-alpha-50;
     }
 
     &.is-updating {

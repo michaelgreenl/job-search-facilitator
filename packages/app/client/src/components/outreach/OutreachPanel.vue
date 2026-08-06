@@ -33,6 +33,7 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    messagedUpdated: [contact: OutreachContact]
     retry: []
     retryContacts: []
     showViewer: []
@@ -215,9 +216,15 @@ function selectContact(selectedContact: OutreachContact) {
     panelView.value = 'draft'
 }
 
-function updateMessaged(messaged: boolean) {
+async function updateMessaged(messaged: boolean) {
     if (contact.value !== null) {
-        void outreachStore.updateContactMessaged(contact.value.id, messaged).catch(() => undefined)
+        const updatedContact = await outreachStore
+            .updateContactMessaged(contact.value.id, messaged)
+            .catch(() => null)
+
+        if (updatedContact !== null) {
+            emit('messagedUpdated', updatedContact)
+        }
     }
 }
 

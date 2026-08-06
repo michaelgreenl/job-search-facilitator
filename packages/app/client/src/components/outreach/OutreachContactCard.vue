@@ -166,12 +166,16 @@ function toggleMessaged() {
                     </template>
                     <template v-else>Mark as messaged</template>
                 </button>
+                <span
+                    v-else-if="showMessagedStatus && contact.messaged"
+                    class="messaged-status"
+                    data-testid="outreach-contact-messaged-status"
+                >
+                    Messaged
+                </span>
                 <div v-if="$slots.actions" class="contact-actions">
                     <slot name="actions" :contact="contact" />
                 </div>
-                <span v-else-if="showMessagedStatus && contact.messaged" class="messaged-status">
-                    Messaged
-                </span>
             </div>
             <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
                 {{ messagedError }}

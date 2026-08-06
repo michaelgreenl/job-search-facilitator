@@ -60,6 +60,7 @@ const statusUpdatingPostId = shallowRef<string | null>(null)
 const statusError = shallowRef<string | null>(null)
 const contactUpdatingId = shallowRef<string | null>(null)
 const contactError = shallowRef<string | null>(null)
+const recentlyMessagedContactId = shallowRef<string | null>(null)
 let loadRevision = 0
 
 const selectedEntry = computed(
@@ -167,6 +168,15 @@ watch(entries, (currentEntries) => {
 
 watch(selectedPostId, storeSelectedPostId)
 
+watch([activePanel, outreachContact], ([panel, contact]) => {
+    if (
+        recentlyMessagedContactId.value !== null &&
+        (panel !== 'outreach' || contact?.id !== recentlyMessagedContactId.value)
+    ) {
+        recentlyMessagedContactId.value = null
+    }
+})
+
 watch(
     selectedEntry,
     (entry, previousEntry) => {
@@ -240,6 +250,10 @@ function selectPost(postId: string) {
 function showTrackedDetail() {
     outreachExpanded.value = false
     activePanel.value = selectedEntry.value === null ? 'posts' : 'detail'
+}
+
+function handleMessagedUpdate(contact: OutreachContact) {
+    recentlyMessagedContactId.value = contact.messaged ? contact.id : null
 }
 
 function selectOutreachContact(contact: OutreachContact) {
@@ -470,6 +484,7 @@ onMounted(() => {
             :outreach-contacts-loading="outreachContactsLoading"
             :outreach-disabled="outreachDisabled"
             :outreach-tasks="outreachTasks"
+            :recently-messaged-contact-id="recentlyMessagedContactId"
             :status-error="statusError"
             :status-updating="statusUpdating"
             @back="activePanel = 'posts'"
@@ -504,6 +519,7 @@ onMounted(() => {
             @cancel="cancelOutreach"
             @collapse="collapseOutreach"
             @expand="expandOutreach"
+            @messaged-updated="handleMessagedUpdate"
             @retry="retryOutreach"
             @show-viewer="showTrackedDetail"
         />
