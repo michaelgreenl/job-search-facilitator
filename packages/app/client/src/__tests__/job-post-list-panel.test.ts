@@ -32,6 +32,36 @@ const renderedPostIds = (root: HTMLElement) => {
 }
 
 describe('JobPostListPanel', () => {
+    it('labels every post-application status as applied', () => {
+        const posts = (['interviewing', 'rejected', 'hired'] as const).map((status, index) =>
+            makeJobPost({
+                id: `10000000-0000-4000-8000-00000000000${index + 1}`,
+                applicationStatus: status,
+            }),
+        )
+        const { root } = mountVue({
+            render: () =>
+                h(JobPostListPanel, {
+                    active: true,
+                    adjacent: false,
+                    eyebrow: 'Job posts',
+                    title: 'Posts',
+                    posts,
+                    selectedPostId: null,
+                    emptyMessage: 'No posts',
+                }),
+        })
+
+        for (const post of posts) {
+            expect(
+                root
+                    .querySelector(`[data-testid="job-post-card-${post.id}"]`)
+                    ?.querySelector('[data-testid="job-post-label"]')
+                    ?.textContent?.trim(),
+            ).toBe('applied')
+        }
+    })
+
     it('keeps an in-progress import reachable when loading saved posts fails', () => {
         const { root } = mountVue({
             render: () =>

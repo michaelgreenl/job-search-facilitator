@@ -14,7 +14,7 @@ const props = withDefaults(
     },
 )
 
-const applied = computed(() => props.applicationStatus === 'awaiting-response')
+const applied = computed(() => props.applicationStatus !== 'not-applied')
 const label = computed(() => {
     if (applied.value) {
         return 'applied'
@@ -35,6 +35,7 @@ const tone = computed(() => {
     <span
         v-if="label"
         class="user-label"
+        data-testid="job-post-label"
         :class="[{ 'user-label-compact': compact }, tone && `user-label-${tone}`]"
     >
         {{ label }}
