@@ -678,8 +678,9 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 
         &:hover:not(:disabled),
         &:focus-visible:not(:disabled) {
-            color: lighten-color($color-red-600, 25%);
-            border-color: lighten-color($color-red-600, 15%);
+            color: $color-ink-secondary;
+            background: $color-ink-alpha-16;
+            border-color: $color-ink-alpha-50;
 
             .artifact-status-check {
                 display: none;

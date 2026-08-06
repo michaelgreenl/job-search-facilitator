@@ -181,7 +181,7 @@ function selectStatus(value: string) {
                 <BaseButton
                     v-if="entry.jobPostSnapshot"
                     data-testid="view-job-description"
-                    preset="outline"
+                    preset="primary"
                     @click="emit('openJobDescription')"
                 >
                     Job description

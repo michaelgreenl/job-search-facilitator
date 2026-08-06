@@ -19,18 +19,13 @@ const emit = defineEmits<{
         class="job-description-panel glass-frame"
         :active="active"
         :adjacent="false"
-        eyebrow="Job post"
-        title="Description"
+        :eyebrow="post.company"
+        :title="post.roleTitle"
         back-label="Back to application"
         back-test-id="back-from-job-description"
         :back-mobile-only="true"
         @back="emit('back')"
     >
-        <div class="description-heading">
-            <strong>{{ post.roleTitle }}</strong>
-            <span>{{ post.company }}</span>
-        </div>
-
         <article class="description-copy" data-testid="job-description-text">
             {{ snapshot.description }}
         </article>
@@ -40,16 +35,6 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .job-description-panel {
     min-width: 0;
-}
-
-.description-heading {
-    display: grid;
-    gap: $space-1;
-
-    span {
-        color: $color-ink-muted;
-        font-size: 0.8125rem;
-    }
 }
 
 .description-copy {
