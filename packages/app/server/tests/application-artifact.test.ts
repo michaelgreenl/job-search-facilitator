@@ -100,6 +100,42 @@ describe('application artifact routes', () => {
         })
     })
 
+    it.each([
+        {
+            content: Buffer.from('<!DOCTYPE html><html><body>Application</body></html>'),
+            fileName: 'application.html',
+            format: 'Chrome-saved HTML',
+            mediaType: 'text/html; charset=utf-8',
+        },
+        {
+            content: Buffer.from('504b0304', 'hex'),
+            fileName: 'application.zip',
+            format: 'ZIP containing a complete Chrome-saved page',
+            mediaType: 'application/zip',
+        },
+    ])('accepts a $format application page', async ({ content, fileName, mediaType }) => {
+        const artifact = createArtifact('application-page', fileName, mediaType, content.byteLength)
+        const save = vi.fn(async () => artifact)
+        const repository = {
+            save,
+            findFile: vi.fn(async () => null),
+            remove: vi.fn(async () => false),
+        } satisfies ApplicationArtifactRepository
+
+        await request(createTestApp(repository))
+            .put(`/job-posts/${jobPostId}/artifacts/application-page`)
+            .set('Content-Type', mediaType)
+            .set('X-Artifact-Filename', fileName)
+            .send(content)
+            .expect(200, artifact)
+
+        expect(save).toHaveBeenCalledExactlyOnceWith(jobPostId, 'application-page', {
+            content,
+            fileName,
+            mediaType,
+        })
+    })
+
     it('serves a stored artifact with an inline filename', async () => {
         const content = Buffer.from('%PDF-1.7 fixture')
         const artifact = createArtifact('resume', 'frontend resume.pdf', 'application/pdf', 16)
@@ -122,6 +158,26 @@ describe('application artifact routes', () => {
             disposition:
                 'inline; filename="frontend resume.pdf"; filename*=UTF-8\'\'frontend%20resume.pdf',
         })
+    })
+
+    it('sandboxes a stored HTML application page', async () => {
+        const content = Buffer.from('<!DOCTYPE html><html></html>')
+        const artifact = createArtifact(
+            'application-page',
+            'application.html',
+            'text/html; charset=utf-8',
+            content.byteLength,
+        )
+        const repository = {
+            save: vi.fn(async () => null),
+            findFile: vi.fn(async () => ({ artifact, content })),
+            remove: vi.fn(async () => false),
+        } satisfies ApplicationArtifactRepository
+
+        await request(createTestApp(repository))
+            .get(`/job-posts/${jobPostId}/artifacts/application-page`)
+            .expect('Content-Security-Policy', 'sandbox')
+            .expect(200)
     })
 
     it('removes the selected artifact', async () => {

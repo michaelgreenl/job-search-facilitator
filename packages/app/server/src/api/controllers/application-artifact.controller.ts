@@ -8,6 +8,9 @@ const invalidRequest = { error: 'Invalid application artifact' }
 const jobPostNotFound = { error: 'Job post not found' }
 const artifactNotFound = { error: 'Application artifact not found' }
 const archiveExtensions = new Map([
+    ['.html', 'text/html; charset=utf-8'],
+    ['.htm', 'text/html; charset=utf-8'],
+    ['.zip', 'application/zip'],
     ['.webarchive', 'application/x-webarchive'],
     ['.mhtml', 'application/octet-stream'],
     ['.mht', 'application/octet-stream'],
@@ -115,13 +118,19 @@ export const createApplicationArtifactController = (repository: ApplicationArtif
             return
         }
 
-        response.set({
+        const headers: Record<string, string> = {
             'Cache-Control': 'private, no-store',
             'Content-Disposition': contentDisposition(file.artifact.fileName),
             'Content-Length': String(file.content.byteLength),
             'Content-Type': file.artifact.mediaType,
             'X-Content-Type-Options': 'nosniff',
-        })
+        }
+
+        if (file.artifact.mediaType.startsWith('text/html')) {
+            headers['Content-Security-Policy'] = 'sandbox'
+        }
+
+        response.set(headers)
         response.end(file.content)
     },
 

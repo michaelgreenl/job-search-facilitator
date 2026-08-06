@@ -72,7 +72,7 @@ const ARTIFACT_OPTIONS = [
     {
         kind: 'application-page',
         label: 'Application snapshot',
-        accept: '.webarchive,.mhtml,.mht,application/x-webarchive,multipart/related,message/rfc822',
+        accept: '.html,.htm,.zip,.webarchive,.mhtml,.mht,text/html,application/zip,application/x-webarchive,multipart/related,message/rfc822',
     },
 ] as const satisfies readonly {
     kind: ApplicationArtifactKind
