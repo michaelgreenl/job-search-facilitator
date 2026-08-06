@@ -3,13 +3,19 @@ import {
     APPLICATION_STATUSES,
     type ApplicationArtifactKind,
     type ApplicationStatus,
+    type OutreachContact,
     type TrackedJobPost,
 } from '@job-search-facilitator/core'
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import OutreachContactList, {
+    type OutreachContactFilter,
+} from '@/components/outreach/OutreachContactList.vue'
+import type { OutreachTaskListItem } from '@/components/outreach/OutreachContactCard.vue'
+import OutreachDiscoverButton from '@/components/outreach/OutreachDiscoverButton.vue'
 import { applicationArtifactUrl } from '@/services/application-artifacts'
 
 const props = defineProps<{
@@ -19,13 +25,22 @@ const props = defineProps<{
     contactError: string | null
     contactUpdatingId: string | null
     entry: TrackedJobPost
+    outreachContacts: OutreachContact[]
+    outreachContactsError: string | null
+    outreachContactsLoading: boolean
+    outreachDisabled: boolean
+    outreachTasks: OutreachTaskListItem[]
     statusError: string | null
     statusUpdating: boolean
 }>()
 
 const emit = defineEmits<{
     back: []
+    discoverContact: []
     openJobDescription: []
+    retryOutreachContacts: []
+    selectContact: [contact: OutreachContact]
+    showOutreachTask: [taskId: string]
     updateContact: [contactId: string, responded: boolean]
     updateStatus: [status: ApplicationStatus]
 }>()
@@ -56,6 +71,7 @@ const artifactLabels: Record<ApplicationArtifactKind, string> = {
 }
 
 const statusLabel = computed(() => statusLabels[props.entry.post.applicationStatus])
+const contactFilter = shallowRef<OutreachContactFilter>('all')
 const formatDate = (value: string) =>
     new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(
         new Date(value),
@@ -106,14 +122,27 @@ function selectStatus(value: string) {
             </div>
             <p v-if="statusError" class="error" role="alert">{{ statusError }}</p>
 
-            <section class="detail-section">
-                <span class="section-label">Contacts</span>
-                <ul v-if="entry.contacts.length" class="contact-list">
-                    <li v-for="contact in entry.contacts" :key="contact.id">
-                        <div>
-                            <strong>{{ contact.personName }}</strong>
-                            <span>{{ contact.personTitle }}</span>
-                        </div>
+            <section class="detail-section outreach-section">
+                <div class="outreach-section-heading">
+                    <span class="section-label">Outreach</span>
+                    <OutreachDiscoverButton
+                        :disabled="outreachDisabled"
+                        test-id="track-discover-contact"
+                        @click="emit('discoverContact')"
+                    />
+                </div>
+
+                <OutreachContactList
+                    v-model:filter="contactFilter"
+                    :contacts="outreachContacts"
+                    :error="outreachContactsError"
+                    :loading="outreachContactsLoading"
+                    :tasks="outreachTasks"
+                    @retry="emit('retryOutreachContacts')"
+                    @select="emit('selectContact', $event)"
+                    @show-stream="emit('showOutreachTask', $event)"
+                >
+                    <template #contactActions="{ contact }">
                         <button
                             class="response-status-button"
                             :class="{
@@ -137,9 +166,8 @@ function selectStatus(value: string) {
                             </template>
                             <template v-else>Mark as responded</template>
                         </button>
-                    </li>
-                </ul>
-                <p v-else class="empty-copy">No messaged contacts.</p>
+                    </template>
+                </OutreachContactList>
                 <p v-if="contactError" class="error" role="alert">{{ contactError }}</p>
             </section>
 
@@ -223,13 +251,11 @@ function selectStatus(value: string) {
 }
 
 .location,
-.empty-copy,
-.contact-list li > div span {
+.empty-copy {
     color: $color-ink-muted;
 }
 
-.status-row,
-.contact-list li {
+.status-row {
     display: flex;
     gap: $space-3;
     align-items: center;
@@ -237,8 +263,7 @@ function selectStatus(value: string) {
 }
 
 .status-row > div,
-.detail-section,
-.contact-list li > div {
+.detail-section {
     display: grid;
     gap: $space-1;
 }
@@ -250,6 +275,17 @@ function selectStatus(value: string) {
     border-radius: $radius-md;
 }
 
+.outreach-section {
+    gap: $space-3;
+}
+
+.outreach-section-heading {
+    display: flex;
+    gap: $space-3;
+    align-items: center;
+    justify-content: space-between;
+}
+
 .artifact-actions {
     display: flex;
     flex-wrap: wrap;
@@ -258,21 +294,12 @@ function selectStatus(value: string) {
     margin-top: auto;
 }
 
-.contact-list,
 .activity-list {
     display: grid;
     gap: $space-3;
     padding: 0;
     margin: $space-2 0 0;
     list-style: none;
-}
-
-.contact-list li {
-    align-items: start;
-}
-
-.contact-list li > div span {
-    font-size: 0.8125rem;
 }
 
 .response-status-button {

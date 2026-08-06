@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { type ApplicationStatus, type TrackedJobPost } from '@job-search-facilitator/core'
+import {
+    type ApplicationStatus,
+    type OutreachContact,
+    type TrackedJobPost,
+} from '@job-search-facilitator/core'
+import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
 import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
+import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
-type ActivePanel = 'description' | 'detail' | 'posts'
+type ActivePanel = 'description' | 'detail' | 'outreach' | 'posts'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
 const readSelectedPostId = () => {
     try {
@@ -31,9 +38,22 @@ const storeSelectedPostId = (postId: string | null) => {
 }
 
 const postStore = usePostStore()
+const outreachStore = useOutreachStore()
+const {
+    contact: outreachContact,
+    contacts: outreachContacts,
+    contactsError: outreachContactsError,
+    contactsLoading: outreachContactsLoading,
+    postId: outreachPostId,
+    taskPostIds: outreachTaskPostIds,
+    tasks: outreachTasks,
+    taskVisible: outreachTaskVisible,
+} = storeToRefs(outreachStore)
+const initialOutreachPostId = outreachTaskVisible.value ? outreachPostId.value : null
 const entries = shallowRef<TrackedJobPost[]>([])
-const selectedPostId = shallowRef<string | null>(readSelectedPostId())
-const activePanel = shallowRef<ActivePanel>('posts')
+const selectedPostId = shallowRef<string | null>(initialOutreachPostId ?? readSelectedPostId())
+const activePanel = shallowRef<ActivePanel>(initialOutreachPostId === null ? 'posts' : 'outreach')
+const outreachExpanded = shallowRef(false)
 const loading = shallowRef(true)
 const error = shallowRef<string | null>(null)
 const statusUpdatingPostId = shallowRef<string | null>(null)
@@ -51,9 +71,16 @@ const statusUpdating = computed(
         statusUpdatingPostId.value !== null && statusUpdatingPostId.value === selectedPostId.value,
 )
 const selectedContactUpdatingId = computed(() =>
-    selectedEntry.value?.contacts.some(({ id }) => id === contactUpdatingId.value)
+    outreachContacts.value.some(({ id }) => id === contactUpdatingId.value)
         ? contactUpdatingId.value
         : null,
+)
+const outreachDisabled = computed(
+    () =>
+        selectedEntry.value === null ||
+        outreachContactsLoading.value ||
+        outreachStore.isPostBusy(selectedEntry.value.post.id) ||
+        outreachContactsError.value !== null,
 )
 const activeApplications = computed(
     () =>
@@ -140,6 +167,33 @@ watch(entries, (currentEntries) => {
 
 watch(selectedPostId, storeSelectedPostId)
 
+watch(
+    selectedEntry,
+    (entry, previousEntry) => {
+        if (entry === null) {
+            return
+        }
+
+        const postChanged = previousEntry?.post.id !== entry.post.id
+
+        if (outreachPostId.value !== entry.post.id) {
+            outreachStore.openForPost(entry.post.id, null)
+        }
+
+        outreachStore.setContactsForPost(entry.post.id, entry.contacts)
+
+        if (
+            postChanged &&
+            activePanel.value === 'outreach' &&
+            !outreachTaskVisible.value &&
+            outreachContact.value === null
+        ) {
+            activePanel.value = 'detail'
+        }
+    },
+    { immediate: true },
+)
+
 async function loadTrackedPosts(showLoading = true) {
     const revision = ++loadRevision
 
@@ -179,7 +233,90 @@ function selectPost(postId: string) {
     selectedPostId.value = postId
     statusError.value = null
     contactError.value = null
+    outreachExpanded.value = false
     activePanel.value = 'detail'
+}
+
+function showTrackedDetail() {
+    outreachExpanded.value = false
+    activePanel.value = selectedEntry.value === null ? 'posts' : 'detail'
+}
+
+function selectOutreachContact(contact: OutreachContact) {
+    const entry = selectedEntry.value
+
+    if (entry === null) {
+        return
+    }
+
+    if (outreachPostId.value !== entry.post.id) {
+        outreachStore.openForPost(entry.post.id, null)
+        outreachStore.setContactsForPost(entry.post.id, entry.contacts)
+    }
+
+    outreachStore.selectContact(contact)
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+}
+
+function showOutreachTask(taskId: string) {
+    if (outreachStore.openTask(taskId)) {
+        outreachExpanded.value = false
+        activePanel.value = 'outreach'
+    }
+}
+
+async function discoverContact() {
+    const entry = selectedEntry.value
+
+    if (entry === null || outreachDisabled.value) {
+        return
+    }
+
+    if (outreachPostId.value !== entry.post.id) {
+        outreachStore.openForPost(entry.post.id, null)
+        outreachStore.setContactsForPost(entry.post.id, entry.contacts)
+    }
+
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
+    await outreachStore.startContactDiscovery(entry.post).catch(() => false)
+}
+
+async function cancelOutreach() {
+    await outreachStore.cancelActiveTask(false).catch(() => false)
+}
+
+async function retryOutreach() {
+    const entry = selectedEntry.value
+
+    if (entry === null) {
+        return
+    }
+
+    const retry =
+        outreachContactsError.value === null
+            ? outreachStore.retryTask(entry.post)
+            : outreachStore.restoreTaskContext()
+    await retry.catch(() => false)
+}
+
+async function retryOutreachContacts() {
+    const entry = selectedEntry.value
+
+    if (entry !== null) {
+        await outreachStore.fetchContacts(entry.post.id).catch(() => null)
+    }
+}
+
+function expandOutreach() {
+    outreachExpanded.value = true
+    activePanel.value = 'outreach'
+}
+
+function collapseOutreach() {
+    outreachExpanded.value = false
+    activePanel.value = 'outreach'
 }
 
 function openJobDescription() {
@@ -245,6 +382,10 @@ async function updateContact(contactId: string, responded: boolean) {
 }
 
 onMounted(() => {
+    if (outreachTaskPostIds.value.length > 0) {
+        void outreachStore.restoreTaskContext()
+    }
+
     void loadTrackedPosts()
 })
 </script>
@@ -313,15 +454,30 @@ onMounted(() => {
             v-if="selectedEntry"
             class="track-panel"
             :active="activePanel === 'detail'"
-            :adjacent="activePanel === 'posts' || activePanel === 'description'"
-            :back-on-desktop="activePanel === 'description'"
+            :adjacent="
+                activePanel === 'posts' ||
+                activePanel === 'description' ||
+                (activePanel === 'outreach' && !outreachExpanded)
+            "
+            :back-on-desktop="
+                activePanel === 'description' || (activePanel === 'outreach' && !outreachExpanded)
+            "
             :contact-error="contactError"
             :contact-updating-id="selectedContactUpdatingId"
             :entry="selectedEntry"
+            :outreach-contacts="outreachContacts"
+            :outreach-contacts-error="outreachContactsError"
+            :outreach-contacts-loading="outreachContactsLoading"
+            :outreach-disabled="outreachDisabled"
+            :outreach-tasks="outreachTasks"
             :status-error="statusError"
             :status-updating="statusUpdating"
             @back="activePanel = 'posts'"
+            @discover-contact="discoverContact"
             @open-job-description="openJobDescription"
+            @retry-outreach-contacts="retryOutreachContacts"
+            @select-contact="selectOutreachContact"
+            @show-outreach-task="showOutreachTask"
             @update-contact="updateContact"
             @update-status="updateApplicationStatus"
         />
@@ -333,6 +489,23 @@ onMounted(() => {
             :post="selectedEntry.post"
             :snapshot="selectedEntry.jobPostSnapshot"
             @back="activePanel = 'detail'"
+        />
+
+        <OutreachPanel
+            v-if="selectedEntry && (outreachTaskVisible || outreachContact)"
+            class="track-panel track-outreach glass-frame"
+            data-testid="track-outreach-panel"
+            :class="{ 'track-outreach-draft': outreachContact }"
+            :active="activePanel === 'outreach'"
+            :adjacent="false"
+            :post="selectedEntry.post"
+            :expanded="outreachExpanded"
+            contacts-external
+            @cancel="cancelOutreach"
+            @collapse="collapseOutreach"
+            @expand="expandOutreach"
+            @retry="retryOutreach"
+            @show-viewer="showTrackedDetail"
         />
     </section>
 </template>
@@ -358,6 +531,16 @@ onMounted(() => {
 
 .track-description {
     flex: 1.2;
+}
+
+.track-outreach {
+    flex: 1.5;
+    padding: $space-5;
+    overflow: hidden;
+
+    &-draft {
+        flex: 2.5;
+    }
 }
 
 .track-summary {

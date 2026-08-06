@@ -48,6 +48,10 @@ const emit = defineEmits<{
     updateMessaged: [messaged: boolean]
 }>()
 
+defineSlots<{
+    actions?: (props: { contact: OutreachContact }) => unknown
+}>()
+
 const selectionLabel = computed(() => {
     if (!props.selectable) {
         return null
@@ -174,6 +178,9 @@ function toggleMessaged() {
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
+            <div v-if="$slots.actions" class="contact-actions">
+                <slot name="actions" :contact="contact" />
+            </div>
             <div class="rationale-copy">
                 <p
                     :id="descriptionId"
@@ -312,6 +319,14 @@ function toggleMessaged() {
 
 .person-title {
     color: $color-ink-secondary;
+}
+
+.contact-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: $space-1;
 }
 
 .rationale-copy {

@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import TrackView from '@/views/TrackView.vue'
 import { makeJobPost } from '@/test/fixtures/job-post'
 import { makeTrackedJobPost } from '@/test/fixtures/tracked-job-post'
+import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
+import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
 
@@ -124,5 +126,72 @@ describe('track view', () => {
                 .querySelector('[data-testid="closed-application-count"]')
                 ?.getAttribute('data-count'),
         ).toBe('1')
+    })
+
+    it('opens saved outreach drafts beside the tracked application', async () => {
+        const tracked = makeTrackedJobPost()
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse([tracked])),
+        )
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+        const contact = tracked.contacts[0]!
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${contact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+
+        expect(root.querySelector('[data-testid="track-discover-contact"]')).not.toBeNull()
+        expect(root.querySelectorAll('[data-testid="outreach-contact-list"]')).toHaveLength(1)
+        root.querySelector<HTMLButtonElement>(
+            `[data-testid="outreach-contact-${contact.id}-select"]`,
+        )!.click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-draft"]')).not.toBeNull(),
+        )
+        expect(root.querySelectorAll('[data-testid="outreach-contact-list"]')).toHaveLength(1)
+        expect(
+            root.querySelector('[data-testid="track-outreach-panel"]')?.getAttribute('data-active'),
+        ).toBe('true')
+
+        root.querySelector<HTMLButtonElement>('[data-testid="back-to-track-outreach"]')!.click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="outreach-draft"]')).toBeNull(),
+        )
+    })
+
+    it('shows active contact discovery in the tracked outreach section', async () => {
+        const tracked = makeTrackedJobPost({ contacts: [] })
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const bridge = new AgentBridgeHarness({
+            fallback: async () => jsonResponse([tracked]),
+        })
+        vi.stubGlobal('fetch', bridge.fetch)
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="track-discover-contact"]')).not.toBeNull(),
+        )
+        root.querySelector<HTMLButtonElement>('[data-testid="track-discover-contact"]')!.click()
+
+        await vi.waitFor(() => expect(bridge.tasks.size).toBe(1))
+        const taskId = [...bridge.tasks.keys()][0]!
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-task-${taskId}"]`)?.textContent,
+            ).toContain('Discovering contact'),
+        )
+        expect(root.querySelectorAll('[data-testid="outreach-contact-list"]')).toHaveLength(1)
+        expect(
+            root.querySelector('[data-testid="track-outreach-panel"]')?.getAttribute('data-active'),
+        ).toBe('true')
     })
 })

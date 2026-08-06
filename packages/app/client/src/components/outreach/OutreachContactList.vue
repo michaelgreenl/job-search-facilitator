@@ -32,6 +32,10 @@ const emit = defineEmits<{
     retry: []
 }>()
 
+defineSlots<{
+    contactActions?: (props: { contact: OutreachContact }) => unknown
+}>()
+
 const contactFilter = defineModel<OutreachContactFilter>('filter', { default: 'all' })
 const filteredContacts = computed(() => {
     if (contactFilter.value === 'all') {
@@ -91,7 +95,11 @@ function selectContactFilter(value: string) {
                         :contact="savedContact"
                         selectable
                         @select="emit('select', savedContact)"
-                    />
+                    >
+                        <template v-if="$slots.contactActions" #actions>
+                            <slot name="contactActions" :contact="savedContact" />
+                        </template>
+                    </OutreachContactCard>
                 </li>
             </template>
         </ul>

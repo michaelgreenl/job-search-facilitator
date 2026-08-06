@@ -10,16 +10,21 @@ import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
+import OutreachDiscoverButton from './OutreachDiscoverButton.vue'
 import OutreachDraft from './OutreachDraft.vue'
 
 type PanelView = 'contacts' | 'draft' | 'stream'
 
-const props = defineProps<{
-    active: boolean
-    adjacent: boolean
-    post: JobPost | null
-    expanded: boolean
-}>()
+const props = withDefaults(
+    defineProps<{
+        active: boolean
+        adjacent: boolean
+        post: JobPost | null
+        expanded: boolean
+        contactsExternal?: boolean
+    }>(),
+    { contactsExternal: false },
+)
 
 defineOptions({ inheritAttrs: false })
 
@@ -67,10 +72,18 @@ let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => taskVisible.value && running.value)
 const backLabel = computed(() =>
-    panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
+    props.contactsExternal
+        ? 'Back to outreach'
+        : panelView.value === 'contacts'
+          ? 'Back to job post'
+          : 'Back to saved contacts',
 )
 const backTestId = computed(() =>
-    panelView.value === 'contacts' ? 'back-to-job-post' : 'back-to-saved-contacts',
+    props.contactsExternal
+        ? 'back-to-track-outreach'
+        : panelView.value === 'contacts'
+          ? 'back-to-job-post'
+          : 'back-to-saved-contacts',
 )
 const statusMessage = computed(() =>
     contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
@@ -169,9 +182,13 @@ function showContacts() {
         outreachStore.clearContact()
     }
 
-    panelView.value = 'contacts'
+    if (props.contactsExternal) {
+        emit('showViewer')
+    } else {
+        panelView.value = 'contacts'
+    }
 
-    if (props.post === null) {
+    if (props.post === null && !props.contactsExternal) {
         emit('showViewer')
     }
 
@@ -233,8 +250,8 @@ async function copyDraft() {
         :adjacent="adjacent"
         :task-id="taskId"
         eyebrow="Outreach"
-        back-label="Back to saved contacts"
-        back-test-id="back-to-saved-contacts"
+        :back-label="backLabel"
+        :back-test-id="backTestId"
         :cancelling="cancelling"
         :running="canCancel"
         :issue="issue"
@@ -275,7 +292,7 @@ async function copyDraft() {
         </template>
 
         <section class="outreach-panel" aria-label="Outreach">
-            <template v-if="panelView === 'contacts'">
+            <template v-if="panelView === 'contacts' && !contactsExternal">
                 <OutreachContactList
                     v-model:filter="contactFilter"
                     :contacts="contacts"
@@ -287,18 +304,12 @@ async function copyDraft() {
                     @show-stream="showStream"
                 />
 
-                <BaseButton
+                <OutreachDiscoverButton
                     class="discover-contact-tooltip"
-                    icon-size="md"
-                    preset="primary"
-                    tooltip="Find new"
-                    data-testid="discover-another-contact"
-                    aria-label="Discover another contact"
                     :disabled="contactsLoading || contactUpdating || contactsError !== null"
+                    test-id="discover-another-contact"
                     @click="emit('discover')"
-                >
-                    <span class="discover-contact-icon" aria-hidden="true">+</span>
-                </BaseButton>
+                />
             </template>
 
             <template v-else-if="panelView === 'draft' && contact">
@@ -335,10 +346,6 @@ async function copyDraft() {
 
 .discover-contact-tooltip {
     align-self: flex-end;
-}
-
-.discover-contact-icon {
-    font-size: 1.25rem;
 }
 
 .panel-control-desktop {

@@ -281,6 +281,15 @@ export const useOutreachStore = defineStore('outreach', () => {
         return true
     }
 
+    function setContactsForPost(post: string, savedContacts: OutreachContact[]) {
+        if (postId.value !== post) {
+            return false
+        }
+
+        contacts.value = [...savedContacts]
+        return true
+    }
+
     async function startOutreachTask(input: StartAgentTaskInput, owner: AgentSessionOwner) {
         const start = agentStore.startTask(input, owner)
         selectedTaskId.value = start.taskId
@@ -637,7 +646,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
     }
 
-    async function cancelActiveTask() {
+    async function cancelActiveTask(returnToContactList = true) {
         const session = agentSession.value
 
         if (session === null) {
@@ -650,7 +659,11 @@ export const useOutreachStore = defineStore('outreach', () => {
             return false
         }
 
-        if (selectedTaskId.value === session.taskId && postId.value === session.postId) {
+        if (
+            returnToContactList &&
+            selectedTaskId.value === session.taskId &&
+            postId.value === session.postId
+        ) {
             writeOutreachContactListReturn(session.postId)
             contactListReturnPostId.value = session.postId
         }
@@ -775,6 +788,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         isPostBusy,
         openForPost,
         openTask,
+        setContactsForPost,
         startContactDiscovery,
         restoreTaskContext,
         restoreContactList,
