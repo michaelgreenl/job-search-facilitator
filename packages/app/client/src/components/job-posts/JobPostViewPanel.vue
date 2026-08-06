@@ -629,6 +629,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 
 .artifact-status-icon {
     width: 1em;
+    font-size: 0.9375rem;
     line-height: 1;
     text-align: center;
 }
@@ -647,7 +648,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     padding: calc(#{$space-2} - 1px) $space-3;
     color: $color-ink;
     font-family: $font-family-mono;
-    font-size: 0.6875rem;
+    font-size: 0.8125rem;
     font-weight: 650;
     line-height: 1.25;
     cursor: pointer;
