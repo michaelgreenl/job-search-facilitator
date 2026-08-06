@@ -594,6 +594,39 @@ describe('outreach contact repository', () => {
         expect(contacts.map(({ id }) => id)).toEqual(expect.arrayContaining([first.id, second.id]))
         expect(contacts.find(({ id }) => id === first.id)?.messaged).toBe(true)
     })
+
+    it('removes only a contact belonging to the supplied job post', async () => {
+        const report = await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-21',
+            createReportInput(),
+        )
+        const jobPostId = report.report.results[0]!.post.id
+        const contact = await outreachContactRepository.create(jobPostId, {
+            personName: 'Ada Lovelace',
+            personTitle: 'Engineering Manager',
+            profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            relevanceRationale: 'Her visible role aligns with the position.',
+            draftMessage: 'Hi Ada, I would value your perspective on the role.',
+        })
+
+        if (contact === null) {
+            throw new Error('Could not create outreach contact')
+        }
+
+        const wrongPostRemoval = await outreachContactRepository.remove(
+            '22222222-2222-4222-8222-222222222222',
+            contact.id,
+        )
+        const removed = await outreachContactRepository.remove(jobPostId, contact.id)
+        const contacts = await outreachContactRepository.findByJobPostId(jobPostId)
+
+        expect({ wrongPostRemoval, removed, contacts }).toEqual({
+            wrongPostRemoval: false,
+            removed: true,
+            contacts: [],
+        })
+    })
 })
 
 describe('search report repository', () => {

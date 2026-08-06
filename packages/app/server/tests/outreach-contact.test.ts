@@ -47,6 +47,7 @@ const createFakeRepository = () => {
         }),
     )
     const findByJobPostId = vi.fn(async () => [existingContact])
+    const remove = vi.fn(async () => true)
     const update = vi.fn(
         async (
             _postId: string,
@@ -63,9 +64,9 @@ const createFakeRepository = () => {
                       : null,
         }),
     )
-    const repository = { create, findByJobPostId, update }
+    const repository = { create, findByJobPostId, remove, update }
 
-    return { create, findByJobPostId, repository, update }
+    return { create, findByJobPostId, remove, repository, update }
 }
 
 describe('outreach contact routes', () => {
@@ -101,6 +102,38 @@ describe('outreach contact routes', () => {
         expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
             messaged,
         })
+    })
+
+    it('removes a discovered contact', async () => {
+        const { remove, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .expect(204)
+
+        expect(remove).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id)
+    })
+
+    it('returns 404 when removing a missing outreach contact', async () => {
+        const { remove, repository } = createFakeRepository()
+        remove.mockResolvedValueOnce(false)
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .expect(404)
+    })
+
+    it.each([
+        ['an invalid job post id', 'invalid-id', existingContact.id],
+        ['an invalid contact id', jobPostId, 'invalid-id'],
+    ])('rejects removal with %s', async (_description, postId, contactId) => {
+        const { remove, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${postId}/outreach-contacts/${contactId}`)
+            .expect(400)
+
+        expect(remove).not.toHaveBeenCalled()
     })
 
     it.each([

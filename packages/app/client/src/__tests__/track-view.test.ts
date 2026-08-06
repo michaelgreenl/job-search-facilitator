@@ -170,6 +170,51 @@ describe('track view', () => {
         )
     })
 
+    it('removes a selected discovered contact and returns to tracking', async () => {
+        const tracked = makeTrackedJobPost()
+        let contacts = [...tracked.contacts]
+        const requests: ReturnType<typeof requestParts>[] = []
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const request = requestParts(input, init)
+                requests.push(request)
+
+                if (request.method === 'DELETE') {
+                    contacts = []
+                    return new Response(null, { status: 204 })
+                }
+
+                return jsonResponse([{ ...tracked, contacts }])
+            }),
+        )
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+        const contact = tracked.contacts[0]!
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${contact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+        root.querySelector<HTMLButtonElement>(
+            `[data-testid="outreach-contact-${contact.id}-select"]`,
+        )!.click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="remove-outreach-contact"]')).not.toBeNull(),
+        )
+        root.querySelector<HTMLButtonElement>('[data-testid="remove-outreach-contact"]')!.click()
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${contact.id}-select"]`),
+            ).toBeNull(),
+        )
+        expect(root.querySelector('[data-testid="outreach-draft"]')).toBeNull()
+        expect(requests.filter(({ method }) => method === 'DELETE')).toHaveLength(1)
+    })
+
     it('offers response tracking only after outreach is marked as messaged', async () => {
         const tracked = makeTrackedJobPost()
         const unmessagedContact = makeOutreachContact({

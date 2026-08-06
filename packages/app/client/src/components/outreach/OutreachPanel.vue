@@ -7,6 +7,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
+import TrashIcon from '@/components/svgs/TrashIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 
 import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
@@ -33,6 +34,7 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    contactRemoved: [contactId: string]
     messagedUpdated: [contact: OutreachContact]
     retry: []
     retryContacts: []
@@ -228,6 +230,32 @@ async function updateMessaged(messaged: boolean) {
     }
 }
 
+async function removeContact() {
+    const selectedContact = contact.value
+
+    if (selectedContact === null) {
+        return
+    }
+
+    const removed = await outreachStore.removeContact(selectedContact.id).catch(() => false)
+
+    if (!removed) {
+        return
+    }
+
+    emit('contactRemoved', selectedContact.id)
+
+    if (props.contactsExternal) {
+        emit('showViewer')
+    } else {
+        panelView.value = 'contacts'
+    }
+
+    if (props.expanded) {
+        emit('collapse')
+    }
+}
+
 async function copyDraft() {
     if (!draft.value.trim()) {
         return
@@ -285,17 +313,30 @@ async function copyDraft() {
         @back="goBack"
     >
         <template v-if="panelView === 'draft'" #controls>
-            <BaseButton
-                class="panel-control-desktop"
-                preset="icon"
-                :tooltip="resizeLabel"
-                :aria-label="resizeLabel"
-                :aria-expanded="expanded"
-                @click="toggleExpanded"
-            >
-                <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                <ExpandIcon v-else class="panel-control-icon" />
-            </BaseButton>
+            <div class="draft-panel-controls">
+                <BaseButton
+                    class="panel-control-desktop"
+                    preset="icon"
+                    :tooltip="resizeLabel"
+                    :aria-label="resizeLabel"
+                    :aria-expanded="expanded"
+                    @click="toggleExpanded"
+                >
+                    <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                    <ExpandIcon v-else class="panel-control-icon" />
+                </BaseButton>
+                <BaseButton
+                    preset="icon"
+                    tooltip="Remove contact"
+                    data-testid="remove-outreach-contact"
+                    aria-label="Remove contact"
+                    :aria-busy="contactUpdating || undefined"
+                    :disabled="contactUpdating || isActive"
+                    @click="removeContact"
+                >
+                    <TrashIcon class="panel-control-icon" />
+                </BaseButton>
+            </div>
         </template>
 
         <section class="outreach-panel" aria-label="Outreach">
@@ -361,6 +402,13 @@ async function copyDraft() {
     @include bp-md-tablet {
         display: inline-flex;
     }
+}
+
+.draft-panel-controls {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    margin-left: auto;
 }
 
 .panel-control-icon {

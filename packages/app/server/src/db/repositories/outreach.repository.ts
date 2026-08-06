@@ -37,6 +37,7 @@ const toOutreachRun = (run: PrismaOutreachRun): OutreachRun => ({
 export interface OutreachContactRepository {
     create(jobPostId: string, input: OutreachContactInput): Promise<OutreachContact | null>
     findByJobPostId(jobPostId: string): Promise<OutreachContact[]>
+    remove(jobPostId: string, contactId: string): Promise<boolean>
     update(
         jobPostId: string,
         contactId: string,
@@ -74,6 +75,14 @@ export const outreachContactRepository: OutreachContactRepository = {
         })
 
         return contacts.map(toOutreachContact)
+    },
+
+    async remove(jobPostId, contactId) {
+        const result = await prisma.outreachContact.deleteMany({
+            where: { id: contactId, jobPostId },
+        })
+
+        return result.count === 1
     },
 
     async update(jobPostId, contactId, input) {

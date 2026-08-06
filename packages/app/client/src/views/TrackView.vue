@@ -256,6 +256,11 @@ function handleMessagedUpdate(contact: OutreachContact) {
     recentlyMessagedContactId.value = contact.messaged ? contact.id : null
 }
 
+function handleContactRemoved() {
+    recentlyMessagedContactId.value = null
+    void loadTrackedPosts(false)
+}
+
 function selectOutreachContact(contact: OutreachContact) {
     const entry = selectedEntry.value
 
@@ -518,6 +523,7 @@ onMounted(() => {
             contacts-external
             @cancel="cancelOutreach"
             @collapse="collapseOutreach"
+            @contact-removed="handleContactRemoved"
             @expand="expandOutreach"
             @messaged-updated="handleMessagedUpdate"
             @retry="retryOutreach"

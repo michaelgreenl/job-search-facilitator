@@ -15,6 +15,7 @@ import { computed, shallowRef, watch } from 'vue'
 import {
     createOutreachContact,
     fetchOutreachContacts,
+    removeOutreachContact,
     updateOutreachContact,
 } from '@/services/outreach'
 import { useAgentStore, type AgentSession, type AgentSessionOwner } from './agent'
@@ -434,6 +435,49 @@ export const useOutreachStore = defineStore('outreach', () => {
         }
     }
 
+    async function removeContact(contactId: string) {
+        const activePostId = postId.value
+
+        if (activePostId === null || contactUpdating.value) {
+            return false
+        }
+
+        const updateRevision = ++contactUpdateRevision
+        contactUpdating.value = true
+        contactUpdateError.value = null
+
+        try {
+            await removeOutreachContact(activePostId, contactId)
+
+            if (postId.value !== activePostId || contactUpdateRevision !== updateRevision) {
+                return false
+            }
+
+            contacts.value = contacts.value.filter((savedContact) => savedContact.id !== contactId)
+
+            if (contact.value?.id === contactId) {
+                clearContact()
+            }
+
+            return true
+        } catch (error) {
+            if (
+                postId.value === activePostId &&
+                contactUpdateRevision === updateRevision &&
+                contact.value?.id === contactId
+            ) {
+                contactUpdateError.value =
+                    error instanceof Error ? error.message : 'Could not remove contact'
+            }
+
+            throw error
+        } finally {
+            if (postId.value === activePostId && contactUpdateRevision === updateRevision) {
+                contactUpdating.value = false
+            }
+        }
+    }
+
     async function requestDraftRevision(post: JobPost, userRequest: string) {
         const selectedContact = contact.value
         const currentDraft = draft.value
@@ -795,6 +839,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         fetchContacts,
         selectContact,
         clearContact,
+        removeContact,
         updateContactMessaged,
         requestDraftRevision,
         cancelActiveTask,

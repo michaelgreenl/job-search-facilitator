@@ -490,6 +490,22 @@ describe('outreach store', () => {
         expect(store.draft).toBe('Locally edited draft')
     })
 
+    it('removes the selected contact from the saved list', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+
+        await expect(store.removeContact(savedContact.id)).resolves.toBe(true)
+
+        expect({ contacts: store.contacts, contact: store.contact }).toEqual({
+            contacts: [],
+            contact: null,
+        })
+        expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBe('DELETE')
+    })
+
     it('does not replace saved contacts with an invalid API response', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(
             jsonResponse([{ ...savedContact, profileUrl: 'javascript:alert(1)' }]),

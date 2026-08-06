@@ -4,7 +4,7 @@ import {
     type ContactDiscoveryResult,
     type UpdateOutreachContactInput,
 } from '@job-search-facilitator/core'
-import { parseApiResponse } from '@/api'
+import { parseApiResponse, readResponseError } from '@/api'
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
 
@@ -39,4 +39,15 @@ export async function updateOutreachContact(
     })
 
     return parseApiResponse(response, parseOutreachContact, path)
+}
+
+export async function removeOutreachContact(postId: string, contactId: string) {
+    const path = `/job-posts/${encodeURIComponent(postId)}/outreach-contacts/${encodeURIComponent(contactId)}`
+    const response = await fetch(`${apiUrl}${path}`, { method: 'DELETE' })
+
+    if (!response.ok) {
+        throw new Error(
+            (await readResponseError(response)) ?? `API request failed (${response.status})`,
+        )
+    }
 }
