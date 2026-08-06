@@ -334,7 +334,7 @@ describe('job post repository', () => {
         )
     })
 
-    it('selects tracked posts by applied or messaged outreach status', async () => {
+    it('selects tracked posts by applied or messaged outreach status with all of their contacts', async () => {
         const sourceKeys = [
             'example-source:neither',
             'example-source:applied',
@@ -385,6 +385,21 @@ describe('job post repository', () => {
             throw new Error('Could not create tracking contacts')
         }
 
+        const unmessagedContactForTrackedPost = await outreachContactRepository.create(
+            bothPost.id,
+            {
+                personName: 'Unmessaged contact for tracked post',
+                personTitle: 'Staff Engineer',
+                profileUrl: `https://www.linkedin.com/in/unmessaged-${bothPost.id}`,
+                relevanceRationale: 'Their role aligns with the position.',
+                draftMessage: 'Hello, I would value your perspective on the role.',
+            },
+        )
+
+        if (unmessagedContactForTrackedPost === null) {
+            throw new Error('Could not create unmessaged contact for tracked post')
+        }
+
         await Promise.all(
             contacts.slice(0, 2).map((contact) =>
                 outreachContactRepository.update(contact!.jobPostId, contact!.id, {
@@ -393,12 +408,15 @@ describe('job post repository', () => {
             ),
         )
 
-        const trackedSourceKeys = (await jobPostRepository.findTracked())
-            .map(({ post }) => post.sourceKey)
-            .sort()
+        const trackedPosts = await jobPostRepository.findTracked()
+        const trackedSourceKeys = trackedPosts.map(({ post }) => post.sourceKey).sort()
+        const trackedBothPost = trackedPosts.find(({ post }) => post.id === bothPost.id)
 
         expect(trackedSourceKeys).toEqual(
             ['example-source:applied', 'example-source:both', 'example-source:messaged'].sort(),
+        )
+        expect(trackedBothPost?.contacts.map(({ id }) => id)).toEqual(
+            expect.arrayContaining([contacts[1]!.id, unmessagedContactForTrackedPost.id]),
         )
     })
 

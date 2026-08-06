@@ -90,8 +90,11 @@ type PrismaApplyQueuePost = Prisma.JobPostGetPayload<{
 
 const trackedJobPostInclude = {
     outreachContacts: {
-        where: { messaged: true },
-        orderBy: [{ messagedAt: 'desc' }, { id: 'asc' }],
+        orderBy: [
+            { messagedAt: { sort: 'desc', nulls: 'last' } },
+            { createdAt: 'desc' },
+            { id: 'asc' },
+        ],
     },
     snapshot: true,
     applicationArtifacts: {
