@@ -384,7 +384,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                                     <span
                                         class="artifact-status-remove"
                                         :data-testid="`${option.kind}-artifact-remove-icon`"
-                                        >×</span
+                                        >✕</span
                                     >
                                 </span>
                                 <span>
@@ -640,13 +640,16 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 .artifact-upload-button {
     display: inline-flex;
     width: fit-content;
-    gap: $space-2;
+    min-height: 2.5rem;
+    gap: $space-1;
     align-items: center;
     justify-content: center;
     padding: calc(#{$space-2} - 1px) $space-3;
     color: $color-ink;
-    font: inherit;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
     font-weight: 650;
+    line-height: 1.25;
     cursor: pointer;
     background: transparent;
     border: 1px solid $color-ink-alpha-50;
