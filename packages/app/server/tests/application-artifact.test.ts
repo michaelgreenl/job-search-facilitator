@@ -100,20 +100,10 @@ describe('application artifact routes', () => {
         })
     })
 
-    it.each([
-        {
-            content: Buffer.from('<!DOCTYPE html><html><body>Application</body></html>'),
-            fileName: 'application.html',
-            format: 'Chrome-saved HTML',
-            mediaType: 'text/html; charset=utf-8',
-        },
-        {
-            content: Buffer.from('504b0304', 'hex'),
-            fileName: 'application.zip',
-            format: 'ZIP containing a complete Chrome-saved page',
-            mediaType: 'application/zip',
-        },
-    ])('accepts a $format application page', async ({ content, fileName, mediaType }) => {
+    it('accepts a Chrome-saved HTML application page', async () => {
+        const content = Buffer.from('<!DOCTYPE html><html><body>Application</body></html>')
+        const fileName = 'application.html'
+        const mediaType = 'text/html; charset=utf-8'
         const artifact = createArtifact('application-page', fileName, mediaType, content.byteLength)
         const save = vi.fn(async () => artifact)
         const repository = {

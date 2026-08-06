@@ -10,7 +10,6 @@ const artifactNotFound = { error: 'Application artifact not found' }
 const archiveExtensions = new Map([
     ['.html', 'text/html; charset=utf-8'],
     ['.htm', 'text/html; charset=utf-8'],
-    ['.zip', 'application/zip'],
     ['.webarchive', 'application/x-webarchive'],
     ['.mhtml', 'application/octet-stream'],
     ['.mht', 'application/octet-stream'],
