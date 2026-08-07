@@ -74,6 +74,7 @@ export interface OutreachTaskItem {
     taskId: string
     kind: 'contact' | 'draft'
     active: boolean
+    permissionRequired: boolean
     status: AgentTask['status'] | 'starting' | 'restoring' | 'unavailable'
 }
 
@@ -168,6 +169,7 @@ export const useOutreachStore = defineStore('outreach', () => {
                           active:
                               agentStore.isTaskActive(session.taskId) ||
                               resultState?.saving === true,
+                          permissionRequired: state?.pendingPermission != null,
                           status,
                       }
                   }),

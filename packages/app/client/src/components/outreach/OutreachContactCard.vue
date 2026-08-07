@@ -3,6 +3,7 @@ export interface OutreachTaskListItem {
     taskId: string
     kind: 'contact' | 'draft'
     active: boolean
+    permissionRequired: boolean
     status:
         | 'starting'
         | 'restoring'
@@ -139,6 +140,14 @@ function toggleMessaged() {
             <span class="loading-contact">
                 <LoadingSpinner v-if="task.active" />
                 {{ taskMessage }}
+            </span>
+            <span
+                v-if="task.permissionRequired"
+                class="task-permission-notice"
+                :data-testid="`outreach-task-${task.taskId}-permission-needed`"
+                role="status"
+            >
+                Permission needed — open task to continue
             </span>
         </template>
 
@@ -379,5 +388,16 @@ function toggleMessaged() {
     align-items: center;
     min-height: 2rem;
     color: $color-ink-secondary;
+}
+
+.task-permission-notice {
+    width: fit-content;
+    padding: $space-1 $space-2;
+    margin-top: $space-1;
+    color: $color-amber-500;
+    font-size: 0.75rem;
+    font-weight: 650;
+    background: $color-amber-500-alpha-12;
+    border-radius: $radius-full;
 }
 </style>

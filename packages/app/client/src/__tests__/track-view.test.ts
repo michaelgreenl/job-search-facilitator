@@ -10,6 +10,7 @@ import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestParts } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
+import { useAgentStore } from '@/stores/agent'
 
 describe('track view', () => {
     it('restores the selected job and summarizes tracked work', async () => {
@@ -300,8 +301,9 @@ describe('track view', () => {
             fallback: async () => jsonResponse([tracked]),
         })
         vi.stubGlobal('fetch', bridge.fetch)
+        const pinia = createPinia()
         const { root } = mountVue(TrackView, {
-            install: (app) => app.use(createPinia()),
+            install: (app) => app.use(pinia),
         })
 
         await vi.waitFor(() =>
@@ -315,6 +317,27 @@ describe('track view', () => {
             expect(
                 root.querySelector(`[data-testid="outreach-task-${taskId}"]`)?.textContent,
             ).toContain('Discovering contact'),
+        )
+
+        const agentStore = useAgentStore(pinia)
+        const taskState = agentStore.getTaskState(taskId)!
+        agentStore.taskStates = {
+            ...agentStore.taskStates,
+            [taskId]: {
+                ...taskState,
+                pendingPermission: {
+                    id: 'permission-1',
+                    kind: 'browser-origin',
+                    message: 'Allow Chrome to access LinkedIn?',
+                    origin: 'https://www.linkedin.com',
+                },
+            },
+        }
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-task-${taskId}-permission-needed"]`),
+            ).not.toBeNull(),
         )
         expect(root.querySelectorAll('[data-testid="outreach-contact-list"]')).toHaveLength(1)
         expect(
