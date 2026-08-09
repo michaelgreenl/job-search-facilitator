@@ -8,6 +8,7 @@ import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
 import { createSearchReportRouter } from '../src/api/routes/search-report.route.ts'
 import type {
+    SearchReportNetNewUpsertResult,
     SearchReportRepository,
     SearchReportUpsertResult,
 } from '../src/db/repositories/search-report.repository.ts'
@@ -95,13 +96,24 @@ const createFakeRepository = () => {
             _reportInput: UpsertJobSearchReportInput,
         ): Promise<SearchReportUpsertResult> => ({ report: existingReport, created: true }),
     )
+    const upsertNetNewById = vi.fn(
+        async (
+            _reportId: string,
+            _date: string,
+            _reportInput: UpsertJobSearchReportInput,
+        ): Promise<SearchReportNetNewUpsertResult> => ({
+            report: existingReport,
+            created: true,
+        }),
+    )
     const repository: SearchReportRepository = {
         findMany,
         findById,
         upsertById,
+        upsertNetNewById,
     }
 
-    return { findById, findMany, repository, upsertById }
+    return { findById, findMany, repository, upsertById, upsertNetNewById }
 }
 
 const createTestApp = (repository: SearchReportRepository) => {
@@ -133,7 +145,7 @@ describe('job search report routes', () => {
     })
 
     it('forwards a valid dated snapshot and returns 201 when it is created', async () => {
-        const { repository, upsertById } = createFakeRepository()
+        const { repository, upsertById, upsertNetNewById } = createFakeRepository()
 
         await request(createTestApp(repository))
             .put(`/job-search-reports/${reportDate}/${existingReport.id}`)
@@ -141,6 +153,64 @@ describe('job search report routes', () => {
             .expect(201, existingReport)
 
         expect(upsertById).toHaveBeenCalledExactlyOnceWith(existingReport.id, reportDate, input)
+        expect(upsertNetNewById).not.toHaveBeenCalled()
+    })
+
+    it('uses guarded ingestion only for the exact requireNetNew query', async () => {
+        const { repository, upsertById, upsertNetNewById } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}?requireNetNew=true`)
+            .send(input)
+            .expect(201, existingReport)
+
+        expect(upsertNetNewById).toHaveBeenCalledExactlyOnceWith(
+            existingReport.id,
+            reportDate,
+            input,
+        )
+        expect(upsertById).not.toHaveBeenCalled()
+    })
+
+    it('returns a specific conflict when guarded ingestion finds an existing post', async () => {
+        const { repository, upsertById, upsertNetNewById } = createFakeRepository()
+        upsertNetNewById.mockResolvedValueOnce({
+            conflict: true,
+            conflictingSourceKeys: [post.sourceKey],
+        })
+
+        await request(createTestApp(repository))
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}?requireNetNew=true`)
+            .send(input)
+            .expect(409, {
+                error: 'Job search report contains posts that are not net-new',
+                conflictingSourceKeys: [post.sourceKey],
+            })
+
+        expect(upsertNetNewById).toHaveBeenCalledExactlyOnceWith(
+            existingReport.id,
+            reportDate,
+            input,
+        )
+        expect(upsertById).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['false', '?requireNetNew=false'],
+        ['empty', '?requireNetNew='],
+        ['alternate casing', '?requireNetNew=TRUE'],
+        ['repeated', '?requireNetNew=true&requireNetNew=true'],
+        ['extra', '?requireNetNew=true&unexpected=true'],
+    ])('rejects a %s net-new query without writing', async (_description, query) => {
+        const { repository, upsertById, upsertNetNewById } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .put(`/job-search-reports/${reportDate}/${existingReport.id}${query}`)
+            .send(input)
+            .expect(400, { error: 'Invalid request' })
+
+        expect(upsertById).not.toHaveBeenCalled()
+        expect(upsertNetNewById).not.toHaveBeenCalled()
     })
 
     it('accepts an empty replacement snapshot and returns 200 for an existing report', async () => {

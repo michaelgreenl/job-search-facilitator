@@ -8,4 +8,7 @@ export * from './agent.ts'
 
 export interface HealthResponse {
     status: 'healthy'
+    capabilities: {
+        jobSearchNetNewGuard: 1
+    }
 }

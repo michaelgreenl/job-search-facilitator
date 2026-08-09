@@ -28,6 +28,7 @@ import {
     toPrismaResumeType,
 } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
+import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
 
 export interface UserAddedJobPostUpsertResult {
     item: UserAddedJobPost
@@ -202,6 +203,7 @@ export const jobPostRepository: JobPostRepository = {
 
     async upsertUserAdded(input) {
         return prisma.$transaction(async (transaction) => {
+            await lockJobPostIdentities(transaction, [input.post])
             const listingData = toPrismaJobPostListingData(input.post)
             const post = await transaction.jobPost.upsert({
                 where: { sourceKey: input.post.sourceKey },

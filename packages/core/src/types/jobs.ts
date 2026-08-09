@@ -1,5 +1,7 @@
 import type { ApplicationArtifact } from './applications.ts'
 
+export const MAX_JSON_REQUEST_BYTES = 1024 * 1024
+
 export const APPLICATION_STATUSES = [
     'not-applied',
     'awaiting-response',

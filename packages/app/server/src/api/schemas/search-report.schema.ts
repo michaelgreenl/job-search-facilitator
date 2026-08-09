@@ -15,6 +15,10 @@ export const reportUpsertParamsSchema = z.strictObject({
     reportId: z.uuid(),
 })
 
+export const reportUpsertQuerySchema = z.strictObject({
+    requireNetNew: z.literal('true').optional(),
+})
+
 export { jobPostInputSchema }
 
 export const jobSearchResultInputSchema = z.strictObject({

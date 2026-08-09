@@ -35,16 +35,16 @@ const httpUrlInputSchema = z
     )
 
 export const jobPostInputSchema = z.strictObject({
-    sourceKey: nonBlankInputStringSchema,
+    sourceKey: nonBlankInputStringSchema.max(1_000),
     description: z.string().regex(/\S/),
-    roleTitle: nonBlankInputStringSchema,
-    company: nonBlankInputStringSchema,
-    location: nonBlankInputStringSchema.nullable(),
-    compensation: nonBlankInputStringSchema.nullable(),
-    techStack: nonBlankInputStringSchema,
-    postSource: nonBlankInputStringSchema,
-    postUrl: httpUrlInputSchema,
-    applicationUrl: httpUrlInputSchema,
+    roleTitle: nonBlankInputStringSchema.max(500),
+    company: nonBlankInputStringSchema.max(500),
+    location: nonBlankInputStringSchema.max(500).nullable(),
+    compensation: nonBlankInputStringSchema.max(500).nullable(),
+    techStack: nonBlankInputStringSchema.max(2_000),
+    postSource: nonBlankInputStringSchema.max(500),
+    postUrl: httpUrlInputSchema.max(4_096),
+    applicationUrl: httpUrlInputSchema.max(4_096),
     postStatus: z.enum(POST_STATUSES),
 }) satisfies z.ZodType<JobPostInput>
 
