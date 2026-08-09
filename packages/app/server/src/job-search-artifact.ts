@@ -343,7 +343,6 @@ const coverageSourceSchema = z
 const coverageSchema = z
     .strictObject({
         reliable: z.boolean(),
-        elapsedMinutes: z.number().nonnegative().max(65),
         sources: z
             .array(coverageSourceSchema)
             .length(JOB_SEARCH_COVERAGE_LANES.length)
@@ -367,11 +366,11 @@ const coverageSchema = z
             currentRun: nonNegativeCountSchema,
         }),
         rejections: z.strictObject({
-            levelOrFit: nonNegativeCountSchema,
-            centralEvidenceGaps: nonNegativeCountSchema,
+            seniorOrOutsideScope: nonNegativeCountSchema,
+            objectiveEligibility: nonNegativeCountSchema,
             fakeOrDataHarvesting: nonNegativeCountSchema,
-            compensationOrGeography: nonNegativeCountSchema,
-            applicationFriction: nonNegativeCountSchema,
+            belowFloorCompensation: nonNegativeCountSchema,
+            invalidApplicationRoute: nonNegativeCountSchema,
             inactiveOrStale: nonNegativeCountSchema,
         }),
         deferred: nonNegativeCountSchema,
@@ -1024,8 +1023,6 @@ export const renderJobSearchMarkdown = (
         '',
         '## Coverage',
         '',
-        `Elapsed time: ${coverage.elapsedMinutes} minutes`,
-        '',
         '| Source | Actual queries / filters | Access method | Results reviewed | Promoted | Stopping reason | Blocker |',
         '| --- | --- | --- | ---: | ---: | --- | --- |',
         ...coverage.sources.map(
@@ -1035,11 +1032,11 @@ export const renderJobSearchMarkdown = (
         '',
         '### Search-stage rejections',
         '',
-        `- Level or fit: ${coverage.rejections.levelOrFit}`,
-        `- Central evidence gaps: ${coverage.rejections.centralEvidenceGaps}`,
+        `- Senior or outside application-development scope: ${coverage.rejections.seniorOrOutsideScope}`,
+        `- Objective eligibility conflict: ${coverage.rejections.objectiveEligibility}`,
         `- Likely fake or data harvesting: ${coverage.rejections.fakeOrDataHarvesting}`,
-        `- Compensation or geography: ${coverage.rejections.compensationOrGeography}`,
-        `- Excessive account or policy friction: ${coverage.rejections.applicationFriction}`,
+        `- Known compensation below floor: ${coverage.rejections.belowFloorCompensation}`,
+        `- Invalid or inaccessible application route: ${coverage.rejections.invalidApplicationRoute}`,
         `- Inactive or stale: ${coverage.rejections.inactiveOrStale}`,
         '',
         '## Ranked Targets',

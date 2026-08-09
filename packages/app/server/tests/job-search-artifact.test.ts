@@ -77,7 +77,6 @@ const selection: SelectionArtifact = {
 
 const coverage: JobSearchCoverage = {
     reliable: true,
-    elapsedMinutes: 42,
     sources: [
         {
             lane: 'linkedin',
@@ -127,11 +126,11 @@ const coverage: JobSearchCoverage = {
     ],
     duplicates: { existingApplication: 3, currentRun: 2 },
     rejections: {
-        levelOrFit: 13,
-        centralEvidenceGaps: 2,
+        seniorOrOutsideScope: 13,
+        objectiveEligibility: 2,
         fakeOrDataHarvesting: 1,
-        compensationOrGeography: 1,
-        applicationFriction: 2,
+        belowFloorCompensation: 1,
+        invalidApplicationRoute: 2,
         inactiveOrStale: 2,
     },
     deferred: 0,
@@ -543,14 +542,12 @@ describe('judgment and report assembly', () => {
 
     it('reports malformed bounded coverage at exact field paths', () => {
         const malformedCoverage = structuredClone(coverage)
-        malformedCoverage.elapsedMinutes = 66
         malformedCoverage.sources[1]!.lane = 'linkedin'
         malformedCoverage.sources[0]!.promoted = malformedCoverage.sources[0]!.resultsReviewed + 1
         malformedCoverage.sources[3]!.queries = []
 
         expect(issuePaths(() => validateCoverage(malformedCoverage))).toEqual(
             expect.arrayContaining([
-                ['elapsedMinutes'],
                 ['sources', 0, 'promoted'],
                 ['sources', 1, 'lane'],
                 ['sources', 3, 'blocker'],
@@ -723,7 +720,7 @@ describe('judgment and report assembly', () => {
         const { sourceKey: secondSourceKey, ...secondRecommendation } = judgment.selections[1]!
         const twoCandidateCoverage = structuredClone(coverage)
         twoCandidateCoverage.sources[2]!.promoted = 2
-        twoCandidateCoverage.rejections.levelOrFit -= 1
+        twoCandidateCoverage.rejections.seniorOrOutsideScope -= 1
         void firstSourceKey
         void secondSourceKey
         const report = assembleFinalReport(
@@ -825,7 +822,7 @@ describe('judgment and report assembly', () => {
         const candidatesPath = join(directory, 'candidates.json')
         const driftedCoverage = structuredClone(coverage)
         driftedCoverage.sources[2]!.promoted = 2
-        driftedCoverage.rejections.levelOrFit -= 1
+        driftedCoverage.rejections.seniorOrOutsideScope -= 1
 
         try {
             await writeFile(coveragePath, JSON.stringify(driftedCoverage))
@@ -849,7 +846,7 @@ describe('judgment and report assembly', () => {
     it('allows a reliable run with zero promoted candidates', () => {
         const zeroCoverage = structuredClone(coverage)
         zeroCoverage.sources[2]!.promoted = 0
-        zeroCoverage.rejections.levelOrFit += 1
+        zeroCoverage.rejections.seniorOrOutsideScope += 1
 
         const report = assembleFinalReport(
             [],
@@ -900,10 +897,10 @@ describe('deterministic Markdown reporting', () => {
         ) => void
         const moveRejection = (
             changedCoverage: JobSearchCoverage,
-            field: Exclude<keyof JobSearchCoverage['rejections'], 'levelOrFit'>,
+            field: Exclude<keyof JobSearchCoverage['rejections'], 'seniorOrOutsideScope'>,
         ): void => {
             changedCoverage.rejections[field] += 1
-            changedCoverage.rejections.levelOrFit -= 1
+            changedCoverage.rejections.seniorOrOutsideScope -= 1
         }
         const mutations: Record<string, Mutation> = {
             summary: (changed) => void (changed.summary += ' Changed.'),
@@ -924,7 +921,6 @@ describe('deterministic Markdown reporting', () => {
             postUrl: (changed) => void (changed.results[0]!.post.postUrl += '?changed=1'),
             applicationUrl: (changed) =>
                 void (changed.results[0]!.post.applicationUrl += '?changed=1'),
-            elapsed: (_changed, changedCoverage) => void (changedCoverage.elapsedMinutes += 1),
             lane: (_changed, changedCoverage) => {
                 const direct = changedCoverage.sources[2]!
                 const longTail = changedCoverage.sources[3]!
@@ -956,24 +952,24 @@ describe('deterministic Markdown reporting', () => {
                 changedCoverage.duplicates.currentRun += 1
                 changedCoverage.duplicates.existingApplication -= 1
             },
-            levelRejection: (_changed, changedCoverage) => {
-                changedCoverage.rejections.levelOrFit += 1
-                changedCoverage.rejections.centralEvidenceGaps -= 1
+            scopeRejection: (_changed, changedCoverage) => {
+                changedCoverage.rejections.seniorOrOutsideScope += 1
+                changedCoverage.rejections.objectiveEligibility -= 1
             },
-            evidenceRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'centralEvidenceGaps'),
+            eligibilityRejection: (_changed, changedCoverage) =>
+                moveRejection(changedCoverage, 'objectiveEligibility'),
             fakeRejection: (_changed, changedCoverage) =>
                 moveRejection(changedCoverage, 'fakeOrDataHarvesting'),
-            geographyRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'compensationOrGeography'),
-            frictionRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'applicationFriction'),
+            compensationRejection: (_changed, changedCoverage) =>
+                moveRejection(changedCoverage, 'belowFloorCompensation'),
+            routeRejection: (_changed, changedCoverage) =>
+                moveRejection(changedCoverage, 'invalidApplicationRoute'),
             staleRejection: (_changed, changedCoverage) =>
                 moveRejection(changedCoverage, 'inactiveOrStale'),
             deferred: (_changed, changedCoverage) => {
                 changedCoverage.deferred += 1
                 changedCoverage.sources[2]!.promoted += 1
-                changedCoverage.rejections.levelOrFit -= 1
+                changedCoverage.rejections.seniorOrOutsideScope -= 1
             },
         }
         const baseline = renderJobSearchMarkdown(reportDate, reportId, payload, coverage)
