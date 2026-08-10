@@ -292,16 +292,28 @@ describe('search-stage candidate boundary', () => {
         ).not.toThrow()
     })
 
-    it('rejects a LinkedIn and Indeed-only candidate', () => {
+    it.each([
+        [
+            'LinkedIn and Indeed',
+            'https://www.linkedin.com/jobs/view/4450724106/',
+            'https://apply.indeed.com/indeedapply/',
+        ],
+        [
+            'Himalayas',
+            'https://himalayas.app/companies/radity/jobs/typescript-software-engineer',
+            'https://himalayas.app/signup/talent?redirect=%2Fcompanies%2Fradity%2Fjobs%2Ftypescript-software-engineer',
+        ],
+        [
+            'Wellfound',
+            'https://wellfound.com/jobs/4565953-forward-deployed-engineer',
+            'https://wellfound.com/jobs/4565953-forward-deployed-engineer',
+        ],
+    ])('rejects a %s-only candidate', (_source, postUrl, applicationUrl) => {
         expect(
             issuePaths(() =>
                 validateAcceptedCandidate({
                     ...candidate,
-                    post: {
-                        ...post,
-                        postUrl: 'https://www.linkedin.com/jobs/view/4450724106/',
-                        applicationUrl: 'https://apply.indeed.com/indeedapply/',
-                    },
+                    post: { ...post, postUrl, applicationUrl },
                 }),
             ),
         ).toEqual(

@@ -40,7 +40,18 @@ const candidateShape = {
     legitimacyNotes: boundedLegitimacyNotesSchema,
 }
 
-const discoveryOnlyHosts = ['indeed.com', 'linkedin.com']
+const discoveryOnlyHosts = [
+    'builtin.com',
+    'dice.com',
+    'himalayas.app',
+    'indeed.com',
+    'jobicy.com',
+    'linkedin.com',
+    'remoteok.com',
+    'wellfound.com',
+    'workatastartup.com',
+    'ycombinator.com',
+]
 const employerUrlFields = ['postUrl', 'applicationUrl'] as const
 const MAX_MARKUP_ENTITY_DECODE_PASSES = 4
 const tagShapedHtmlPattern = /<\/?([A-Za-z][A-Za-z0-9:-]*)(?=[\s/>])[^<>]*>/g
