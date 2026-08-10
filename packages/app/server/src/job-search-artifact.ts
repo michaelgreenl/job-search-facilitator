@@ -275,7 +275,6 @@ const selectionArtifactSchema = z.strictObject({
         }),
 })
 
-const nonNegativeCountSchema = z.number().int().nonnegative()
 const coverageTextSchema = z.string().trim().min(1).max(1_000)
 const MIN_RELIABLE_COMPLETED_LANES = 3
 const JOB_SEARCH_COVERAGE_LANES = [
@@ -293,15 +292,19 @@ const coverageAccessMethodByLane = {
 const coverageSourceSchema = z
     .strictObject({
         lane: z.enum(JOB_SEARCH_COVERAGE_LANES),
-        queries: z.array(coverageTextSchema).max(12),
+        operations: z
+            .array(
+                z.strictObject({
+                    query: coverageTextSchema,
+                    completion: z.enum(['two-pages-reviewed', 'all-results-reviewed']),
+                }),
+            )
+            .max(12),
         accessMethod: z.enum([
             'installed-chrome-plugin',
             'public-employer-ats',
             'public-long-tail',
         ]),
-        resultsReviewed: nonNegativeCountSchema,
-        promoted: nonNegativeCountSchema,
-        stoppingReason: coverageTextSchema,
         blocker: coverageTextSchema.nullable(),
     })
     .superRefine((source, context) => {
@@ -313,122 +316,57 @@ const coverageSourceSchema = z
             })
         }
 
-        if (source.promoted > source.resultsReviewed) {
+        if (source.operations.length === 0 && source.blocker === null) {
             context.addIssue({
                 code: 'custom',
-                message: 'Promoted count cannot exceed reviewed results',
-                path: ['promoted'],
-            })
-        }
-
-        if (source.queries.length === 0 && source.blocker === null) {
-            context.addIssue({
-                code: 'custom',
-                message: 'A lane without executed queries must record its blocker',
+                message: 'A lane without completed query operations must record its blocker',
                 path: ['blocker'],
             })
         }
 
         const normalizedQueries = new Set(
-            source.queries.map((query) => query.toLowerCase().replace(/\s+/g, ' ')),
+            source.operations.map(({ query }) => query.toLowerCase().replace(/\s+/g, ' ')),
         )
         if (source.blocker === null && normalizedQueries.size < 2) {
             context.addIssue({
                 code: 'custom',
-                message: 'An unblocked lane requires two non-duplicate query variants',
-                path: ['queries'],
+                message: 'An unblocked lane requires two completed, non-duplicate query variants',
+                path: ['operations'],
             })
         }
     })
-const coverageSchema = z
-    .strictObject({
-        reliable: z.boolean(),
-        sources: z
-            .array(coverageSourceSchema)
-            .length(JOB_SEARCH_COVERAGE_LANES.length)
-            .superRefine((sources, context) => {
-                const lanes = new Set<string>()
+const coverageSchema = z.strictObject({
+    sources: z
+        .array(coverageSourceSchema)
+        .length(JOB_SEARCH_COVERAGE_LANES.length)
+        .superRefine((sources, context) => {
+            const lanes = new Set<string>()
 
-                sources.forEach(({ lane }, index) => {
-                    if (lanes.has(lane)) {
-                        context.addIssue({
-                            code: 'custom',
-                            message: 'Coverage lanes must be unique',
-                            path: [index, 'lane'],
-                        })
-                    }
+            sources.forEach(({ lane }, index) => {
+                if (lanes.has(lane)) {
+                    context.addIssue({
+                        code: 'custom',
+                        message: 'Coverage lanes must be unique',
+                        path: [index, 'lane'],
+                    })
+                }
 
-                    lanes.add(lane)
-                })
-            }),
-        duplicates: z.strictObject({
-            existingApplication: nonNegativeCountSchema,
-            currentRun: nonNegativeCountSchema,
+                lanes.add(lane)
+            })
         }),
-        rejections: z.strictObject({
-            seniorOrOutsideScope: nonNegativeCountSchema,
-            objectiveEligibility: nonNegativeCountSchema,
-            fakeOrDataHarvesting: nonNegativeCountSchema,
-            belowFloorCompensation: nonNegativeCountSchema,
-            invalidApplicationRoute: nonNegativeCountSchema,
-            inactiveOrStale: nonNegativeCountSchema,
-        }),
-        deferred: nonNegativeCountSchema,
-    })
-    .superRefine((coverage, context) => {
-        const reviewedResults = coverage.sources.reduce(
-            (total, source) => total + source.resultsReviewed,
-            0,
-        )
-        const promotedResults = coverage.sources.reduce(
-            (total, source) => total + source.promoted,
-            0,
-        )
-        const accountedResults =
-            promotedResults +
-            coverage.duplicates.existingApplication +
-            coverage.duplicates.currentRun +
-            Object.values(coverage.rejections).reduce((total, count) => total + count, 0)
-
-        if (accountedResults !== reviewedResults) {
-            context.addIssue({
-                code: 'custom',
-                message: 'Reviewed results must equal promoted, duplicate, and rejected results',
-                path: ['sources'],
-            })
-        }
-
-        if (coverage.deferred > promotedResults) {
-            context.addIssue({
-                code: 'custom',
-                message: 'Deferred candidates cannot exceed promoted candidates',
-                path: ['deferred'],
-            })
-        }
-
-        if (!coverage.reliable) {
-            return
-        }
-
-        const completedSources = coverage.sources.filter(
-            (source) => source.queries.length > 0 && source.blocker === null,
-        )
-
-        if (completedSources.length < MIN_RELIABLE_COMPLETED_LANES) {
-            context.addIssue({
-                code: 'custom',
-                message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} executed, unblocked lanes`,
-                path: ['reliable'],
-            })
-        }
-    })
+    deferred: z.number().int().nonnegative(),
+})
 
 const reliableCoverageSchema = coverageSchema.superRefine((coverage, context) => {
-    if (!coverage.reliable) {
+    const completedSources = coverage.sources.filter(
+        (source) => source.blocker === null && source.operations.length >= 2,
+    )
+
+    if (completedSources.length < MIN_RELIABLE_COMPLETED_LANES) {
         context.addIssue({
             code: 'custom',
-            message: 'Coverage must be reliable before report delivery',
-            path: ['reliable'],
+            message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} unblocked lanes with two completed query operations`,
+            path: ['sources'],
         })
     }
 })
@@ -737,15 +675,14 @@ export const validateCoverageHandoff = (
 ): { candidates: StageCandidate[]; coverage: JobSearchCoverage } => {
     const candidates = validateCandidatePool(candidateValue)
     const coverage = validateCoverage(coverageValue, true)
-    const promotedCount = coverage.sources.reduce((total, source) => total + source.promoted, 0)
 
     z.unknown()
         .superRefine((_value, context) => {
-            if (promotedCount !== candidates.length + coverage.deferred) {
+            if (coverage.deferred > 0 && candidates.length !== MAX_JOB_SEARCH_CANDIDATES) {
                 context.addIssue({
                     code: 'custom',
-                    message: 'Promoted count must equal candidates plus deferred candidates',
-                    path: ['sources'],
+                    message: `Deferred candidates require a full ${MAX_JOB_SEARCH_CANDIDATES}-candidate handoff`,
+                    path: ['deferred'],
                 })
             }
         })
@@ -753,17 +690,6 @@ export const validateCoverageHandoff = (
 
     return { candidates, coverage }
 }
-
-const judgmentExclusionCount = (coverage: JobSearchCoverage, selectedCount: number): number =>
-    z
-        .number()
-        .int()
-        .nonnegative()
-        .parse(
-            coverage.sources.reduce((total, source) => total + source.promoted, 0) -
-                coverage.deferred -
-                selectedCount,
-        )
 
 export const assembleFinalReport = (
     candidateValue: unknown,
@@ -781,16 +707,16 @@ export const assembleFinalReport = (
         ({ agentLabel }) => agentLabel === 'target',
     ).length
     const quickAppCount = selectedCount - targetCount
-    const judgmentExcludedCount = judgmentExclusionCount(coverage, selectedCount)
-    const reviewedCount = coverage.sources.reduce(
-        (total, source) => total + source.resultsReviewed,
+    const judgmentExcludedCount = candidates.length - selectedCount
+    const completedOperationCount = coverage.sources.reduce(
+        (total, source) => total + source.operations.length,
         0,
     )
     const completedLaneCount = coverage.sources.filter(
-        (source) => source.queries.length > 0 && source.blocker === null,
+        (source) => source.blocker === null && source.operations.length >= 2,
     ).length
     const blockedLaneCount = coverage.sources.filter(({ blocker }) => blocker !== null).length
-    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}: ${targetCount} target, ${quickAppCount} quick-app; ${judgmentExcludedCount} excluded by judgment; ${reviewedCount} results reviewed across ${completedLaneCount} completed lanes; ${coverage.duplicates.existingApplication} existing and ${coverage.duplicates.currentRun} current-run duplicates excluded; ${coverage.deferred} deferred; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
+    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}: ${targetCount} target, ${quickAppCount} quick-app; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${coverage.deferred} deferred at the candidate limit; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
     const candidateBySourceKey = new Map(
         candidates.map((candidate) => [candidate.post.sourceKey, candidate]),
     )
@@ -1003,7 +929,6 @@ export const renderJobSearchMarkdown = (
     const coverage = validateCoverage(coverageValue, true)
     const targetCount = payload.results.filter(({ agentLabel }) => agentLabel === 'target').length
     const quickAppCount = payload.results.length - targetCount
-    const judgmentExcludedCount = judgmentExclusionCount(coverage, payload.results.length)
     const lines = [
         `# Job Search Report — ${params.reportDate}`,
         '',
@@ -1016,28 +941,16 @@ export const renderJobSearchMarkdown = (
         `- Qualified: ${payload.results.length}`,
         `- Target: ${targetCount}`,
         `- Quick-app: ${quickAppCount}`,
-        `- Judgment-stage exclusions: ${judgmentExcludedCount}`,
-        `- Existing-application duplicates excluded: ${coverage.duplicates.existingApplication}`,
-        `- Current-run duplicates excluded: ${coverage.duplicates.currentRun}`,
         `- Deferred: ${coverage.deferred}`,
         '',
         '## Coverage',
         '',
-        '| Source | Actual queries / filters | Access method | Results reviewed | Promoted | Stopping reason | Blocker |',
-        '| --- | --- | --- | ---: | ---: | --- | --- |',
+        '| Source | Completed queries / filters | Completion | Access method | Blocker |',
+        '| --- | --- | --- | --- | --- |',
         ...coverage.sources.map(
             (source) =>
-                `| ${escapeMarkdownText(source.lane)} | ${source.queries.map(escapeMarkdownText).join('<br>')} | ${escapeMarkdownText(source.accessMethod)} | ${source.resultsReviewed} | ${source.promoted} | ${escapeMarkdownText(source.stoppingReason)} | ${escapeMarkdownText(source.blocker)} |`,
+                `| ${escapeMarkdownText(source.lane)} | ${source.operations.map(({ query }) => escapeMarkdownText(query)).join('<br>')} | ${source.operations.map(({ completion }) => escapeMarkdownText(completion)).join('<br>')} | ${escapeMarkdownText(source.accessMethod)} | ${escapeMarkdownText(source.blocker)} |`,
         ),
-        '',
-        '### Search-stage rejections',
-        '',
-        `- Senior or outside application-development scope: ${coverage.rejections.seniorOrOutsideScope}`,
-        `- Objective eligibility conflict: ${coverage.rejections.objectiveEligibility}`,
-        `- Likely fake or data harvesting: ${coverage.rejections.fakeOrDataHarvesting}`,
-        `- Known compensation below floor: ${coverage.rejections.belowFloorCompensation}`,
-        `- Invalid or inaccessible application route: ${coverage.rejections.invalidApplicationRoute}`,
-        `- Inactive or stale: ${coverage.rejections.inactiveOrStale}`,
         '',
         '## Ranked Targets',
         '',

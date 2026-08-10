@@ -76,63 +76,68 @@ const selection: SelectionArtifact = {
 }
 
 const coverage: JobSearchCoverage = {
-    reliable: true,
     sources: [
         {
             lane: 'linkedin',
-            queries: [
-                'Application engineer, posted within three days',
-                'Frontend engineer, posted within three days',
+            operations: [
+                {
+                    query: 'Application engineer, posted within three days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Frontend engineer, posted within three days',
+                    completion: 'two-pages-reviewed',
+                },
             ],
             accessMethod: 'installed-chrome-plugin',
-            resultsReviewed: 4,
-            promoted: 0,
-            stoppingReason: 'Two result pages produced no candidates.',
             blocker: null,
         },
         {
             lane: 'indeed',
-            queries: [
-                'Application engineer, posted within three days',
-                'Frontend engineer, posted within three days',
+            operations: [
+                {
+                    query: 'Application engineer, posted within three days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Frontend engineer, posted within three days',
+                    completion: 'two-pages-reviewed',
+                },
             ],
             accessMethod: 'installed-chrome-plugin',
-            resultsReviewed: 3,
-            promoted: 0,
-            stoppingReason: 'Two result pages produced no candidates.',
             blocker: null,
         },
         {
             lane: 'direct-employer-ats',
-            queries: [
-                'TypeScript application engineer, posted within three days',
-                'Node application engineer, posted within three days',
+            operations: [
+                {
+                    query: 'TypeScript application engineer, posted within three days',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Node application engineer, posted within three days',
+                    completion: 'all-results-reviewed',
+                },
             ],
             accessMethod: 'public-employer-ats',
-            resultsReviewed: 18,
-            promoted: 1,
-            stoppingReason: 'Two consecutive result pages produced no additional candidates.',
             blocker: null,
         },
         {
             lane: 'rotating-long-tail',
-            queries: ['Current rotating long-tail query', 'Second rotating long-tail query'],
+            operations: [
+                {
+                    query: 'Current rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Second rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+            ],
             accessMethod: 'public-long-tail',
-            resultsReviewed: 2,
-            promoted: 0,
-            stoppingReason: 'The bounded lane was exhausted.',
             blocker: null,
         },
     ],
-    duplicates: { existingApplication: 3, currentRun: 2 },
-    rejections: {
-        seniorOrOutsideScope: 13,
-        objectiveEligibility: 2,
-        fakeOrDataHarvesting: 1,
-        belowFloorCompensation: 1,
-        invalidApplicationRoute: 2,
-        inactiveOrStale: 2,
-    },
     deferred: 0,
 }
 
@@ -543,16 +548,29 @@ describe('judgment and report assembly', () => {
     it('reports malformed bounded coverage at exact field paths', () => {
         const malformedCoverage = structuredClone(coverage)
         malformedCoverage.sources[1]!.lane = 'linkedin'
-        malformedCoverage.sources[0]!.promoted = malformedCoverage.sources[0]!.resultsReviewed + 1
-        malformedCoverage.sources[3]!.queries = []
+        malformedCoverage.sources[3]!.operations = []
 
         expect(issuePaths(() => validateCoverage(malformedCoverage))).toEqual(
             expect.arrayContaining([
-                ['sources', 0, 'promoted'],
                 ['sources', 1, 'lane'],
                 ['sources', 3, 'blocker'],
             ]),
         )
+    })
+
+    it('rejects a query operation without an objective completion marker', () => {
+        const missingCompletion = structuredClone(coverage) as {
+            sources: Array<{ operations: Array<{ completion?: string }> }>
+        }
+        delete missingCompletion.sources[0]!.operations[0]!.completion
+
+        expect(issuePaths(() => validateCoverage(missingCompletion))).toContainEqual([
+            'sources',
+            0,
+            'operations',
+            0,
+            'completion',
+        ])
     })
 
     it('rejects a public-web substitute for required Chrome coverage at its exact path', () => {
@@ -566,20 +584,14 @@ describe('judgment and report assembly', () => {
         ])
     })
 
-    it('rejects a token two-lane search claiming reliable coverage', () => {
+    it('rejects coverage with fewer than three completed lanes', () => {
         const weakCoverage = structuredClone(coverage)
-        weakCoverage.sources[0]!.resultsReviewed = 1
-        weakCoverage.sources[1]!.resultsReviewed = 1
         weakCoverage.sources.slice(2).forEach((source) => {
-            source.queries = []
-            source.resultsReviewed = 0
-            source.promoted = 0
+            source.operations = []
             source.blocker = 'Source access was blocked.'
         })
 
-        expect(issuePaths(() => validateCoverage(weakCoverage))).toEqual(
-            expect.arrayContaining([['reliable'], ['sources']]),
-        )
+        expect(issuePaths(() => validateCoverage(weakCoverage, true))).toEqual([['sources']])
     })
 
     it.each([
@@ -593,12 +605,15 @@ describe('judgment and report assembly', () => {
         ],
     ])('rejects %s when a lane is unblocked', (_description, queries) => {
         const incompleteNativeCoverage = structuredClone(coverage)
-        incompleteNativeCoverage.sources[0]!.queries = queries
+        incompleteNativeCoverage.sources[0]!.operations = queries.map((query) => ({
+            query,
+            completion: 'two-pages-reviewed',
+        }))
 
         expect(issuePaths(() => validateCoverage(incompleteNativeCoverage))).toContainEqual([
             'sources',
             0,
-            'queries',
+            'operations',
         ])
     })
 
@@ -642,9 +657,14 @@ describe('judgment and report assembly', () => {
         const directory = await mkdtemp(join(tmpdir(), 'job-search-coverage-'))
         const coveragePath = join(directory, 'coverage.json')
         const candidatesPath = join(directory, 'candidates.json')
+        const weakCoverage = structuredClone(coverage)
+        weakCoverage.sources.slice(2).forEach((source) => {
+            source.operations = []
+            source.blocker = 'Source access was blocked.'
+        })
 
         try {
-            await writeFile(coveragePath, JSON.stringify({ ...coverage, reliable: false }))
+            await writeFile(coveragePath, JSON.stringify(weakCoverage))
             await writeFile(candidatesPath, JSON.stringify([candidate]))
 
             let error: unknown
@@ -656,7 +676,7 @@ describe('judgment and report assembly', () => {
 
             expect(
                 error instanceof z.ZodError ? error.issues.map((issue) => issue.path) : [],
-            ).toEqual([['reliable']])
+            ).toEqual([['sources']])
         } finally {
             await rm(directory, { recursive: true })
         }
@@ -718,20 +738,13 @@ describe('judgment and report assembly', () => {
         }
         const { sourceKey: firstSourceKey, ...firstRecommendation } = judgment.selections[0]!
         const { sourceKey: secondSourceKey, ...secondRecommendation } = judgment.selections[1]!
-        const twoCandidateCoverage = structuredClone(coverage)
-        twoCandidateCoverage.sources[2]!.promoted = 2
-        twoCandidateCoverage.rejections.seniorOrOutsideScope -= 1
         void firstSourceKey
         void secondSourceKey
-        const report = assembleFinalReport(
-            [candidate, secondCandidate],
-            judgment,
-            twoCandidateCoverage,
-        )
+        const report = assembleFinalReport([candidate, secondCandidate], judgment, coverage)
         const oneSelectionSummary = assembleFinalReport(
             [candidate, secondCandidate],
             { ...judgment, selections: judgment.selections.slice(0, 1) },
-            twoCandidateCoverage,
+            coverage,
         ).summary
 
         expect({
@@ -785,14 +798,6 @@ describe('judgment and report assembly', () => {
         }
     })
 
-    it('rejects unreliable source coverage before producing a payload', () => {
-        expect(
-            issuePaths(() =>
-                assembleFinalReport([candidate], selection, { ...coverage, reliable: false }),
-            ),
-        ).toContainEqual(['reliable'])
-    })
-
     it('rejects candidate facts changed after judgment at the digest path', () => {
         const tamperedReview = structuredClone(review)
         tamperedReview.candidates[0]!.post.roleTitle = 'Tampered role title'
@@ -816,16 +821,14 @@ describe('judgment and report assembly', () => {
         ).toContainEqual(['reviewDigest'])
     })
 
-    it('rejects drift between promoted coverage and candidates before judgment', async () => {
+    it('rejects deferred candidates before the handoff reaches its 24-candidate limit', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'job-search-coverage-handoff-'))
         const coveragePath = join(directory, 'coverage.json')
         const candidatesPath = join(directory, 'candidates.json')
-        const driftedCoverage = structuredClone(coverage)
-        driftedCoverage.sources[2]!.promoted = 2
-        driftedCoverage.rejections.seniorOrOutsideScope -= 1
+        const prematureDeferredCoverage = { ...coverage, deferred: 1 }
 
         try {
-            await writeFile(coveragePath, JSON.stringify(driftedCoverage))
+            await writeFile(coveragePath, JSON.stringify(prematureDeferredCoverage))
             await writeFile(candidatesPath, JSON.stringify([candidate]))
 
             let error: unknown
@@ -837,24 +840,20 @@ describe('judgment and report assembly', () => {
 
             expect(
                 error instanceof z.ZodError ? error.issues.map((issue) => issue.path) : [],
-            ).toContainEqual(['sources'])
+            ).toContainEqual(['deferred'])
         } finally {
             await rm(directory, { recursive: true })
         }
     })
 
-    it('allows a reliable run with zero promoted candidates', () => {
-        const zeroCoverage = structuredClone(coverage)
-        zeroCoverage.sources[2]!.promoted = 0
-        zeroCoverage.rejections.seniorOrOutsideScope += 1
-
+    it('allows a reliable run with zero candidates', () => {
         const report = assembleFinalReport(
             [],
             {
                 reviewDigest: createReviewPacket([], emptyHistoryIdentities).reviewDigest,
                 selections: [],
             },
-            zeroCoverage,
+            coverage,
         )
 
         expect({
@@ -895,13 +894,6 @@ describe('deterministic Markdown reporting', () => {
             changedPayload: UpsertJobSearchReportInput,
             changedCoverage: JobSearchCoverage,
         ) => void
-        const moveRejection = (
-            changedCoverage: JobSearchCoverage,
-            field: Exclude<keyof JobSearchCoverage['rejections'], 'seniorOrOutsideScope'>,
-        ): void => {
-            changedCoverage.rejections[field] += 1
-            changedCoverage.rejections.seniorOrOutsideScope -= 1
-        }
         const mutations: Record<string, Mutation> = {
             summary: (changed) => void (changed.summary += ' Changed.'),
             rank: (changed) => void (changed.results[0]!.agentRank += 1),
@@ -931,46 +923,13 @@ describe('deterministic Markdown reporting', () => {
                 ]
             },
             query: (_changed, changedCoverage) =>
-                void (changedCoverage.sources[0]!.queries[0] += ' changed'),
-            reviewed: (_changed, changedCoverage) => {
-                changedCoverage.sources[0]!.resultsReviewed += 1
-                changedCoverage.sources[2]!.resultsReviewed -= 1
-            },
-            promoted: (_changed, changedCoverage) => {
-                changedCoverage.sources[0]!.promoted += 1
-                changedCoverage.sources[2]!.promoted -= 1
-            },
-            stoppingReason: (_changed, changedCoverage) =>
-                void (changedCoverage.sources[0]!.stoppingReason += ' Changed.'),
+                void (changedCoverage.sources[0]!.operations[0]!.query += ' changed'),
+            completion: (_changed, changedCoverage) =>
+                void (changedCoverage.sources[0]!.operations[0]!.completion =
+                    'all-results-reviewed'),
             blocker: (_changed, changedCoverage) =>
                 void (changedCoverage.sources[0]!.blocker = 'Changed.'),
-            existingDuplicate: (_changed, changedCoverage) => {
-                changedCoverage.duplicates.existingApplication += 1
-                changedCoverage.duplicates.currentRun -= 1
-            },
-            currentDuplicate: (_changed, changedCoverage) => {
-                changedCoverage.duplicates.currentRun += 1
-                changedCoverage.duplicates.existingApplication -= 1
-            },
-            scopeRejection: (_changed, changedCoverage) => {
-                changedCoverage.rejections.seniorOrOutsideScope += 1
-                changedCoverage.rejections.objectiveEligibility -= 1
-            },
-            eligibilityRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'objectiveEligibility'),
-            fakeRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'fakeOrDataHarvesting'),
-            compensationRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'belowFloorCompensation'),
-            routeRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'invalidApplicationRoute'),
-            staleRejection: (_changed, changedCoverage) =>
-                moveRejection(changedCoverage, 'inactiveOrStale'),
-            deferred: (_changed, changedCoverage) => {
-                changedCoverage.deferred += 1
-                changedCoverage.sources[2]!.promoted += 1
-                changedCoverage.rejections.seniorOrOutsideScope -= 1
-            },
+            deferred: (_changed, changedCoverage) => void (changedCoverage.deferred += 1),
         }
         const baseline = renderJobSearchMarkdown(reportDate, reportId, payload, coverage)
         const unchanged = Object.entries(mutations)
