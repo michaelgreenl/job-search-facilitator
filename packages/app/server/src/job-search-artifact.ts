@@ -154,6 +154,17 @@ const addCandidateIssues = (
         })
     }
 
+    if (
+        candidate.post.description !== undefined &&
+        candidate.post.description.split(/\r?\n/).filter((line) => /\S/.test(line)).length < 3
+    ) {
+        context.addIssue({
+            code: 'custom',
+            message: 'Job description must preserve source sections and list-item line breaks',
+            path: ['post', 'description'],
+        })
+    }
+
     employerUrlFields.forEach((field) => {
         if (!isPublicWebUrl(candidate.post[field]) || isDiscoveryOnlyUrl(candidate.post[field])) {
             context.addIssue({

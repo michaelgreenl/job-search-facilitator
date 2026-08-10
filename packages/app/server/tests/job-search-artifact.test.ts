@@ -41,7 +41,8 @@ import {
 
 const post: JobPostInput = {
     sourceKey: 'company:software-engineer',
-    description: 'Complete verbatim job description for the current posting.',
+    description:
+        'Complete verbatim job description for the current posting.\nResponsibilities\nBuild the current product.',
     roleTitle: 'Software Engineer',
     company: 'Example Company',
     location: 'Remote, US',
@@ -287,9 +288,23 @@ describe('search-stage candidate boundary', () => {
         expect(() =>
             validateAcceptedCandidate({
                 ...candidate,
-                post: { ...post, description },
+                post: {
+                    ...post,
+                    description: `${description}\nResponsibilities\nBuild the product.`,
+                },
             }),
         ).not.toThrow()
+    })
+
+    it('rejects a one-paragraph description summary', () => {
+        expect(
+            issuePaths(() =>
+                validateAcceptedCandidate({
+                    ...candidate,
+                    post: { ...post, description: 'Condensed description summary.'.repeat(50) },
+                }),
+            ),
+        ).toContainEqual(['post', 'description'])
     })
 
     it.each([
@@ -374,7 +389,7 @@ describe('search-stage candidate boundary', () => {
                     ...candidate,
                     post: {
                         ...post,
-                        description: 'x'.repeat(MAX_JOB_SEARCH_CANDIDATE_BYTES),
+                        description: `Role\nResponsibilities\n${'x'.repeat(MAX_JOB_SEARCH_CANDIDATE_BYTES)}`,
                     },
                 }),
             ),
@@ -438,7 +453,7 @@ describe('search-stage candidate boundary', () => {
     })
 
     it('rejects an oversized serialized pool before final judgment', () => {
-        const description = 'x'.repeat(MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES / 2)
+        const description = `Role\nResponsibilities\n${'x'.repeat(MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES / 2)}`
         const pool = [
             {
                 ...candidate,
