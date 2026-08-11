@@ -725,10 +725,6 @@ export const assembleFinalReport = (
         assertMatchingReviewDigest(reviewPacket, validateSelectionArtifact(selectionValue)),
     )
     const selectedCount = selection.selections.length
-    const targetCount = selection.selections.filter(
-        ({ agentLabel }) => agentLabel === 'target',
-    ).length
-    const quickAppCount = selectedCount - targetCount
     const judgmentExcludedCount = candidates.length - selectedCount
     const completedOperationCount = coverage.sources.reduce(
         (total, source) => total + source.operations.length,
@@ -738,7 +734,7 @@ export const assembleFinalReport = (
         (source) => source.blocker === null && source.operations.length >= 2,
     ).length
     const blockedLaneCount = coverage.sources.filter(({ blocker }) => blocker !== null).length
-    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}: ${targetCount} target, ${quickAppCount} quick-app; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${coverage.deferred} deferred at the candidate limit; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
+    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${coverage.deferred} deferred at the candidate limit; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
     const candidateBySourceKey = new Map(
         candidates.map((candidate) => [candidate.post.sourceKey, candidate]),
     )
@@ -949,8 +945,6 @@ export const renderJobSearchMarkdown = (
         'Final report',
     )
     const coverage = validateCoverage(coverageValue, true)
-    const targetCount = payload.results.filter(({ agentLabel }) => agentLabel === 'target').length
-    const quickAppCount = payload.results.length - targetCount
     const lines = [
         `# Job Search Report — ${params.reportDate}`,
         '',
@@ -961,8 +955,6 @@ export const renderJobSearchMarkdown = (
         escapeMarkdownText(payload.summary),
         '',
         `- Qualified: ${payload.results.length}`,
-        `- Target: ${targetCount}`,
-        `- Quick-app: ${quickAppCount}`,
         `- Deferred: ${coverage.deferred}`,
         '',
         '## Coverage',
