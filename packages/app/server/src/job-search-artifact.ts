@@ -20,6 +20,7 @@ const MAX_JOB_SEARCH_CANDIDATES = 24
 export const MAX_JOB_SEARCH_CANDIDATE_BYTES = 128 * 1024
 export const MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES = 240 * 1024
 export const MAX_JOB_SEARCH_REVIEW_BYTES = 256 * 1024
+export const MAX_JOB_SEARCH_JUDGMENT_BYTES = 192 * 1024
 export const MAX_JOB_SEARCH_SELECTION_BYTES = 192 * 1024
 export const MAX_JOB_SEARCH_COVERAGE_BYTES = 64 * 1024
 export const MAX_JOB_SEARCH_HISTORY_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -201,10 +202,8 @@ const addUniqueCandidateIssues = (
     })
 }
 
-const candidatePoolSchema = z
-    .array(acceptedCandidateSchema)
-    .max(MAX_JOB_SEARCH_CANDIDATES)
-    .superRefine(addUniqueCandidateIssues)
+const candidateListSchema = z.array(acceptedCandidateSchema).max(MAX_JOB_SEARCH_CANDIDATES)
+const candidatePoolSchema = candidateListSchema.superRefine(addUniqueCandidateIssues)
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
 const reviewDigestSchema = z.string().regex(/^[a-f0-9]{64}$/)
 const reviewPacketSchema = z
@@ -293,6 +292,54 @@ const selectionArtifactSchema = z.strictObject({
                 }
 
                 sourceKeys.add(selection.sourceKey)
+            })
+        }),
+})
+
+const selectedJudgmentEntrySchema = z.strictObject({
+    sourceKey: selectionEntrySchema.shape.sourceKey,
+    verdict: selectionEntrySchema.shape.agentLabel,
+    fitRationale: selectionEntrySchema.shape.fitRationale,
+    recommendedResume: selectionEntrySchema.shape.recommendedResume,
+    recommendedAction: selectionEntrySchema.shape.recommendedAction,
+})
+const rejectedJudgmentEntrySchema = z.strictObject({
+    sourceKey: selectionEntrySchema.shape.sourceKey,
+    verdict: z.literal('reject'),
+    rejectionReason: z.string().trim().min(1).max(1_500),
+})
+const judgmentEntrySchema = z.discriminatedUnion('verdict', [
+    selectedJudgmentEntrySchema,
+    rejectedJudgmentEntrySchema,
+])
+const judgmentArtifactSchema = z.strictObject({
+    reviewDigest: reviewDigestSchema,
+    decisions: z
+        .array(judgmentEntrySchema)
+        .max(MAX_JOB_SEARCH_CANDIDATES)
+        .superRefine((decisions, context) => {
+            const sourceKeys = new Set<string>()
+            let reachedRejections = false
+
+            decisions.forEach((decision, index) => {
+                if (sourceKeys.has(decision.sourceKey)) {
+                    context.addIssue({
+                        code: 'custom',
+                        message: 'Judged source keys must be unique',
+                        path: [index, 'sourceKey'],
+                    })
+                }
+
+                sourceKeys.add(decision.sourceKey)
+                if (decision.verdict === 'reject') {
+                    reachedRejections = true
+                } else if (reachedRejections) {
+                    context.addIssue({
+                        code: 'custom',
+                        message: 'Selected decisions must precede rejected decisions',
+                        path: [index, 'verdict'],
+                    })
+                }
             })
         }),
 })
@@ -400,6 +447,7 @@ const reportParamsSchema = z.strictObject({
 
 export type StageCandidate = z.infer<typeof acceptedCandidateSchema>
 type ReviewPacket = z.infer<typeof reviewPacketSchema>
+export type JudgmentArtifact = z.infer<typeof judgmentArtifactSchema>
 export type SelectionArtifact = z.infer<typeof selectionArtifactSchema>
 export type JobSearchCoverage = z.infer<typeof coverageSchema>
 type HistoryIdentityArtifact = z.infer<typeof historyIdentityArtifactSchema>
@@ -568,24 +616,36 @@ const assertKnownSelections = <T extends { post: { sourceKey: string } }>(
     return selection
 }
 
-const assertMatchingReviewDigest = (
+const assertMatchingReviewDigest = <T extends { reviewDigest: string }>(
     review: ReviewPacket,
-    selection: SelectionArtifact,
-): SelectionArtifact => {
+    artifact: T,
+): T => {
     z.unknown()
         .superRefine((_value, context) => {
-            if (selection.reviewDigest !== review.reviewDigest) {
+            if (artifact.reviewDigest !== review.reviewDigest) {
                 context.addIssue({
                     code: 'custom',
-                    message: 'Selection digest does not match the reviewed candidate artifact',
+                    message: 'Artifact digest does not match the reviewed candidate artifact',
                     path: ['reviewDigest'],
                 })
             }
         })
-        .parse(selection)
+        .parse(artifact)
 
-    return selection
+    return artifact
 }
+
+const validateJudgmentArtifact = (value: unknown): JudgmentArtifact =>
+    assertSerializedByteLimit(
+        judgmentArtifactSchema.parse(value),
+        MAX_JOB_SEARCH_JUDGMENT_BYTES,
+        'Judgment artifact',
+    )
+
+export const validateSerializedJudgmentArtifact = (contents: string): JudgmentArtifact =>
+    judgmentArtifactSchema.parse(
+        parseSerializedJson(contents, MAX_JOB_SEARCH_JUDGMENT_BYTES, 'Judgment artifact'),
+    )
 
 const validateSelectionArtifact = (value: unknown): SelectionArtifact =>
     assertSerializedByteLimit(
@@ -621,6 +681,11 @@ export const validateCandidatePool = (value: unknown): StageCandidate[] =>
 export const validateSerializedCandidatePool = (contents: string): StageCandidate[] =>
     candidatePoolSchema.parse(
         parseSerializedJson(contents, MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES, 'Candidate pool'),
+    )
+
+export const validateSerializedCandidateList = (contents: string): StageCandidate[] =>
+    candidateListSchema.parse(
+        parseSerializedJson(contents, MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES, 'Merged candidate list'),
     )
 
 const validateReviewPacket = (value: unknown): ReviewPacket =>
@@ -667,6 +732,51 @@ export const createReviewPacket = (
     })
 }
 
+export const createDeduplicatedReviewPacket = (
+    candidateValue: unknown,
+    historyIdentityValue: unknown,
+): {
+    candidates: StageCandidate[]
+    review: ReviewPacket
+    existingExcluded: number
+    duplicateExcluded: number
+} => {
+    const candidates = assertSerializedByteLimit(
+        candidateListSchema.parse(candidateValue),
+        MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
+        'Merged candidate list',
+    )
+    const historyIdentities = validateHistoryIdentityArtifact(historyIdentityValue)
+    const existingIdentityDigests = new Set(historyIdentities.identityDigests)
+    const currentIdentityTokens = new Set<string>()
+    const deduplicatedCandidates: StageCandidate[] = []
+    let existingExcluded = 0
+    let duplicateExcluded = 0
+
+    candidates.forEach((candidate) => {
+        const tokens = identityTokensForPost(candidate.post)
+
+        if (tokens.some((token) => existingIdentityDigests.has(sha256(token)))) {
+            existingExcluded += 1
+            return
+        }
+        if (tokens.some((token) => currentIdentityTokens.has(token))) {
+            duplicateExcluded += 1
+            return
+        }
+
+        deduplicatedCandidates.push(candidate)
+        tokens.forEach((token) => currentIdentityTokens.add(token))
+    })
+
+    return {
+        candidates: validateCandidatePool(deduplicatedCandidates),
+        review: createReviewPacket(deduplicatedCandidates, { identityDigests: [] }),
+        existingExcluded,
+        duplicateExcluded,
+    }
+}
+
 export const validateSelection = (
     reviewValue: unknown,
     selectionValue: unknown,
@@ -677,6 +787,59 @@ export const validateSelection = (
         validateSelectionArtifact(selectionValue),
     )
     return assertKnownSelections(reviewPacket.candidates, selection)
+}
+
+export const createSelectionFromJudgment = (
+    reviewValue: unknown,
+    judgmentValue: unknown,
+): SelectionArtifact => {
+    const reviewPacket = validateReviewPacket(reviewValue)
+    const judgment = assertMatchingReviewDigest(
+        reviewPacket,
+        validateJudgmentArtifact(judgmentValue),
+    )
+    const candidateSourceKeys = new Set(
+        reviewPacket.candidates.map((candidate) => candidate.post.sourceKey),
+    )
+
+    z.unknown()
+        .superRefine((_value, context) => {
+            judgment.decisions.forEach(({ sourceKey }, index) => {
+                if (!candidateSourceKeys.has(sourceKey)) {
+                    context.addIssue({
+                        code: 'custom',
+                        message: 'Judged source key does not exist in the candidate packet',
+                        path: ['decisions', index, 'sourceKey'],
+                    })
+                }
+            })
+
+            if (judgment.decisions.length !== reviewPacket.candidates.length) {
+                context.addIssue({
+                    code: 'custom',
+                    message: 'Judgment must account for every reviewed candidate exactly once',
+                    path: ['decisions'],
+                })
+            }
+        })
+        .parse(judgment)
+
+    return validateSelection(reviewPacket, {
+        reviewDigest: judgment.reviewDigest,
+        selections: judgment.decisions.flatMap((decision) =>
+            decision.verdict === 'reject'
+                ? []
+                : [
+                      {
+                          sourceKey: decision.sourceKey,
+                          agentLabel: decision.verdict,
+                          fitRationale: decision.fitRationale,
+                          recommendedResume: decision.recommendedResume,
+                          recommendedAction: decision.recommendedAction,
+                      },
+                  ],
+        ),
+    })
 }
 
 export const validateCoverage = (value: unknown, requireReliable = false): JobSearchCoverage =>
@@ -697,18 +860,6 @@ export const validateCoverageHandoff = (
 ): { candidates: StageCandidate[]; coverage: JobSearchCoverage } => {
     const candidates = validateCandidatePool(candidateValue)
     const coverage = validateCoverage(coverageValue, true)
-
-    z.unknown()
-        .superRefine((_value, context) => {
-            if (coverage.deferred > 0 && candidates.length !== MAX_JOB_SEARCH_CANDIDATES) {
-                context.addIssue({
-                    code: 'custom',
-                    message: `Deferred candidates require a full ${MAX_JOB_SEARCH_CANDIDATES}-candidate handoff`,
-                    path: ['deferred'],
-                })
-            }
-        })
-        .parse(coverage)
 
     return { candidates, coverage }
 }

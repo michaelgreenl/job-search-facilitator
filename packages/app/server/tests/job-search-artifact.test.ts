@@ -18,10 +18,12 @@ import {
     MAX_JOB_SEARCH_HISTORY_FEEDBACK_BYTES,
     MAX_JOB_SEARCH_HISTORY_IDENTITY_BYTES,
     MAX_JOB_SEARCH_HISTORY_RESPONSE_BYTES,
+    MAX_JOB_SEARCH_JUDGMENT_BYTES,
     MAX_JOB_SEARCH_REVIEW_BYTES,
     assembleFinalReport,
     createHistoryArtifacts,
     createReviewPacket,
+    createSelectionFromJudgment,
     renderJobSearchMarkdown,
     validateAcceptedCandidate,
     validateCandidatePool,
@@ -33,6 +35,7 @@ import {
     verifyApiResponse,
     verifyRenderedMarkdown,
     verifyStoredDescriptions,
+    type JudgmentArtifact,
     type JobSearchCoverage,
     type SelectionArtifact,
     type StageCandidate,
@@ -555,6 +558,61 @@ describe('search-stage candidate boundary', () => {
         }
     })
 
+    it('mechanically removes existing and cross-worker duplicate candidates before judgment', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'job-search-deduplicate-'))
+        const mergedPath = join(directory, 'merged.json')
+        const existingPath = join(directory, 'existing.json')
+        const candidatesPath = join(directory, 'candidates.json')
+        const reviewPath = join(directory, 'review.json')
+        const netNewCandidate: StageCandidate = {
+            ...candidate,
+            post: {
+                ...post,
+                sourceKey: 'company:net-new',
+                postUrl: 'https://example.com/jobs/net-new',
+                applicationUrl: 'https://example.com/jobs/net-new/apply',
+            },
+        }
+        const crossWorkerDuplicate: StageCandidate = {
+            ...netNewCandidate,
+            post: {
+                ...netNewCandidate.post,
+                sourceKey: 'company:alternate-key',
+                postUrl: 'https://EXAMPLE.com/jobs/net-new/?utm_source=second-worker',
+                applicationUrl: 'https://example.com/jobs/net-new/application/',
+            },
+        }
+
+        try {
+            await Promise.all([
+                writeFile(
+                    mergedPath,
+                    JSON.stringify([candidate, netNewCandidate, crossWorkerDuplicate]),
+                ),
+                writeFile(
+                    existingPath,
+                    JSON.stringify(createHistoryArtifacts([responsePost]).identities),
+                ),
+            ])
+            await runCli(['pool', mergedPath, existingPath, candidatesPath, reviewPath])
+
+            expect({
+                candidates: JSON.parse(await readFile(candidatesPath, 'utf8')) as unknown,
+                review: JSON.parse(await readFile(reviewPath, 'utf8')) as {
+                    candidates: unknown[]
+                },
+            }).toEqual({
+                candidates: [netNewCandidate],
+                review: {
+                    reviewDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+                    candidates: [netNewCandidate],
+                },
+            })
+        } finally {
+            await rm(directory, { recursive: true })
+        }
+    })
+
     it('gives judgment the complete bounded candidate facts', () => {
         expect(createReviewPacket([candidate], emptyHistoryIdentities)).toEqual({
             reviewDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -571,6 +629,104 @@ describe('search-stage candidate boundary', () => {
 
 describe('judgment and report assembly', () => {
     const review = reviewedCandidate
+
+    it('mechanically projects one exhaustive judgment into the ranked selection', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'job-search-judgment-'))
+        const reviewPath = join(directory, 'review.json')
+        const judgmentPath = join(directory, 'judgment.json')
+        const selectionPath = join(directory, 'selection.json')
+        const secondCandidate: StageCandidate = {
+            ...candidate,
+            post: {
+                ...post,
+                sourceKey: 'company:frontend-engineer',
+                roleTitle: 'Frontend Engineer',
+                postUrl: 'https://example.com/jobs/frontend-engineer',
+                applicationUrl: 'https://example.com/jobs/frontend-engineer/apply',
+            },
+        }
+        const completeReview = createReviewPacket(
+            [candidate, secondCandidate],
+            emptyHistoryIdentities,
+        )
+        const judgment: JudgmentArtifact = {
+            reviewDigest: completeReview.reviewDigest,
+            decisions: [
+                {
+                    sourceKey: secondCandidate.post.sourceKey,
+                    verdict: 'quick-app',
+                    fitRationale: 'The central frontend work transfers, with one material stretch.',
+                    recommendedResume: 'frontend',
+                    recommendedAction: 'Apply with the frontend resume and address the stretch.',
+                },
+                {
+                    sourceKey: candidate.post.sourceKey,
+                    verdict: 'reject',
+                    rejectionReason:
+                        'A defining responsibility is unsupported by documented evidence.',
+                },
+            ],
+        }
+
+        try {
+            await Promise.all([
+                writeFile(reviewPath, JSON.stringify(completeReview)),
+                writeFile(judgmentPath, JSON.stringify(judgment)),
+            ])
+            await runCli(['judgment', reviewPath, judgmentPath, selectionPath])
+
+            expect(JSON.parse(await readFile(selectionPath, 'utf8')) as unknown).toEqual({
+                reviewDigest: completeReview.reviewDigest,
+                selections: [
+                    {
+                        sourceKey: secondCandidate.post.sourceKey,
+                        agentLabel: 'quick-app',
+                        fitRationale:
+                            'The central frontend work transfers, with one material stretch.',
+                        recommendedResume: 'frontend',
+                        recommendedAction:
+                            'Apply with the frontend resume and address the stretch.',
+                    },
+                ],
+            })
+        } finally {
+            await rm(directory, { recursive: true })
+        }
+    })
+
+    it('rejects a judgment that does not account for every reviewed candidate', () => {
+        const incompleteJudgment: JudgmentArtifact = {
+            reviewDigest: review.reviewDigest,
+            decisions: [],
+        }
+
+        expect(
+            issuePaths(() => createSelectionFromJudgment(review, incompleteJudgment)),
+        ).toContainEqual(['decisions'])
+    })
+
+    it('retains the bounded judgment artifact ceiling', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'job-search-judgment-size-'))
+        const reviewPath = join(directory, 'review.json')
+        const judgmentPath = join(directory, 'judgment.json')
+        const selectionPath = join(directory, 'selection.json')
+        const file = await open(judgmentPath, 'w')
+
+        try {
+            await file.truncate(MAX_JOB_SEARCH_JUDGMENT_BYTES + 1)
+            await file.close()
+            await writeFile(reviewPath, JSON.stringify(review))
+
+            await expect(
+                runCli(['judgment', reviewPath, judgmentPath, selectionPath]),
+            ).rejects.toThrow(
+                `Judgment artifact exceeds the ${MAX_JOB_SEARCH_JUDGMENT_BYTES}-byte limit`,
+            )
+        } finally {
+            await file.close().catch(() => undefined)
+            await rm(directory, { recursive: true })
+        }
+    })
 
     it('reports malformed bounded coverage at exact field paths', () => {
         const malformedCoverage = structuredClone(coverage)
@@ -848,26 +1004,19 @@ describe('judgment and report assembly', () => {
         ).toContainEqual(['reviewDigest'])
     })
 
-    it('rejects deferred candidates before the handoff reaches its 24-candidate limit', async () => {
+    it('accepts honest deferred counts from bounded discovery slices below the global cap', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'job-search-coverage-handoff-'))
         const coveragePath = join(directory, 'coverage.json')
         const candidatesPath = join(directory, 'candidates.json')
-        const prematureDeferredCoverage = { ...coverage, deferred: 1 }
+        const boundedCoverage = { ...coverage, deferred: 1 }
 
         try {
-            await writeFile(coveragePath, JSON.stringify(prematureDeferredCoverage))
+            await writeFile(coveragePath, JSON.stringify(boundedCoverage))
             await writeFile(candidatesPath, JSON.stringify([candidate]))
 
-            let error: unknown
-            try {
-                await runCli(['coverage', coveragePath, candidatesPath])
-            } catch (caught) {
-                error = caught
-            }
-
-            expect(
-                error instanceof z.ZodError ? error.issues.map((issue) => issue.path) : [],
-            ).toContainEqual(['deferred'])
+            await expect(
+                runCli(['coverage', coveragePath, candidatesPath]),
+            ).resolves.toBeUndefined()
         } finally {
             await rm(directory, { recursive: true })
         }

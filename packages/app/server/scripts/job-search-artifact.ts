@@ -7,22 +7,27 @@ import { MAX_JSON_REQUEST_BYTES } from '@job-search-facilitator/core'
 import { z } from 'zod'
 import {
     assembleFinalReport,
+    createDeduplicatedReviewPacket,
     createHistoryArtifacts,
     createReviewPacket,
+    createSelectionFromJudgment,
     MAX_JOB_SEARCH_CANDIDATE_BYTES,
     MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
     MAX_JOB_SEARCH_COVERAGE_BYTES,
     MAX_JOB_SEARCH_HISTORY_IDENTITY_BYTES,
     MAX_JOB_SEARCH_HISTORY_RESPONSE_BYTES,
+    MAX_JOB_SEARCH_JUDGMENT_BYTES,
     MAX_JOB_SEARCH_REVIEW_BYTES,
     MAX_JOB_SEARCH_SELECTION_BYTES,
     renderJobSearchMarkdown,
     validateCoverageHandoff,
     validateSelection,
     validateSerializedCandidate,
+    validateSerializedCandidateList,
     validateSerializedCandidatePool,
     validateSerializedCoverage,
     validateSerializedHistoryIdentityArtifact,
+    validateSerializedJudgmentArtifact,
     validateSerializedReport,
     validateSerializedReviewPacket,
     validateSerializedSelectionArtifact,
@@ -141,28 +146,38 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
             })
             return
         }
-        case 'coverage':
+        case 'coverage': {
             requireArguments(command, args, 2)
-            printJson(
-                validateCoverageHandoff(
-                    validateSerializedCoverage(
-                        await readBoundedFile(
-                            args[0]!,
-                            MAX_JOB_SEARCH_COVERAGE_BYTES,
-                            'Coverage artifact',
-                        ),
-                        true,
+            const { candidates, coverage } = validateCoverageHandoff(
+                validateSerializedCoverage(
+                    await readBoundedFile(
+                        args[0]!,
+                        MAX_JOB_SEARCH_COVERAGE_BYTES,
+                        'Coverage artifact',
                     ),
-                    validateSerializedCandidatePool(
-                        await readBoundedFile(
-                            args[1]!,
-                            MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
-                            'Candidate pool',
-                        ),
+                    true,
+                ),
+                validateSerializedCandidatePool(
+                    await readBoundedFile(
+                        args[1]!,
+                        MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
+                        'Candidate pool',
                     ),
-                ).coverage,
+                ),
             )
+            printJson({
+                validated: true,
+                candidates: candidates.length,
+                completedLanes: coverage.sources
+                    .filter(({ blocker }) => blocker === null)
+                    .map(({ lane }) => lane),
+                blockedLanes: coverage.sources
+                    .filter(({ blocker }) => blocker !== null)
+                    .map(({ lane }) => lane),
+                deferred: coverage.deferred,
+            })
             return
+        }
         case 'history': {
             requireArguments(command, args, 3)
             const { postCount, identities, feedback } = createHistoryArtifacts(
@@ -185,28 +200,65 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
             })
             return
         }
-        case 'pool':
-            requireArguments(command, args, 3)
-            await writeJson(
-                args[2]!,
-                createReviewPacket(
-                    validateSerializedCandidatePool(
+        case 'pool': {
+            if (args.length === 4) {
+                const [mergedPath, identitiesPath, candidatesPath, reviewPath] = args as [
+                    string,
+                    string,
+                    string,
+                    string,
+                ]
+                const result = createDeduplicatedReviewPacket(
+                    validateSerializedCandidateList(
                         await readBoundedFile(
-                            args[0]!,
+                            mergedPath,
                             MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
-                            'Candidate pool',
+                            'Merged candidate list',
                         ),
                     ),
                     validateSerializedHistoryIdentityArtifact(
                         await readBoundedFile(
-                            args[1]!,
+                            identitiesPath,
                             MAX_JOB_SEARCH_HISTORY_IDENTITY_BYTES,
                             'History identity artifact',
                         ),
                     ),
+                )
+
+                await Promise.all([
+                    writeJson(candidatesPath, result.candidates),
+                    writeJson(reviewPath, result.review),
+                ])
+                printJson({
+                    validated: true,
+                    candidates: result.candidates.length,
+                    existingExcluded: result.existingExcluded,
+                    duplicateExcluded: result.duplicateExcluded,
+                })
+                return
+            }
+
+            requireArguments(command, args, 3)
+            const review = createReviewPacket(
+                validateSerializedCandidatePool(
+                    await readBoundedFile(
+                        args[0]!,
+                        MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES,
+                        'Candidate pool',
+                    ),
+                ),
+                validateSerializedHistoryIdentityArtifact(
+                    await readBoundedFile(
+                        args[1]!,
+                        MAX_JOB_SEARCH_HISTORY_IDENTITY_BYTES,
+                        'History identity artifact',
+                    ),
                 ),
             )
+            await writeJson(args[2]!, review)
+            printJson({ validated: true, candidates: review.candidates.length })
             return
+        }
         case 'selection':
             requireArguments(command, args, 2)
             printJson(
@@ -228,6 +280,40 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
                 ),
             )
             return
+        case 'judgment': {
+            requireArguments(command, args, 3)
+            const [reviewPath, judgmentPath, selectionPath] = args as [string, string, string]
+            const judgment = validateSerializedJudgmentArtifact(
+                await readBoundedFile(
+                    judgmentPath,
+                    MAX_JOB_SEARCH_JUDGMENT_BYTES,
+                    'Judgment artifact',
+                ),
+            )
+            const selection = createSelectionFromJudgment(
+                validateSerializedReviewPacket(
+                    await readBoundedFile(
+                        reviewPath,
+                        MAX_JOB_SEARCH_REVIEW_BYTES,
+                        'Review artifact',
+                    ),
+                ),
+                judgment,
+            )
+
+            await writeJson(selectionPath, selection)
+            printJson({
+                validated: true,
+                reviewed: judgment.decisions.length,
+                targets: selection.selections.filter(({ agentLabel }) => agentLabel === 'target')
+                    .length,
+                quickApps: selection.selections.filter(
+                    ({ agentLabel }) => agentLabel === 'quick-app',
+                ).length,
+                rejected: judgment.decisions.length - selection.selections.length,
+            })
+            return
+        }
         case 'assemble': {
             requireArguments(command, args, 4)
             const [candidatesPath, selectionPath, coveragePath, outputPath] = args as [
@@ -358,7 +444,7 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
         }
         default:
             throw new Error(
-                'Expected candidate, coverage, history, pool, selection, assemble, report, render, verify, verify-storage, or verify-markdown',
+                'Expected candidate, coverage, history, pool, judgment, selection, assemble, report, render, verify, verify-storage, or verify-markdown',
             )
     }
 }
