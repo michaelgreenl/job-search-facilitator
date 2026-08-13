@@ -1,5 +1,10 @@
 import type { RuntimeParser } from '@job-search-facilitator/core'
 
+export const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(
+    /\/$/,
+    '',
+)
+
 export const readResponseError = async (response: Response) => {
     const body: unknown = await response.json().catch(() => null)
 

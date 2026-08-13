@@ -1,20 +1,3 @@
-<script lang="ts">
-export interface OutreachTaskListItem {
-    taskId: string
-    kind: 'contact' | 'draft'
-    active: boolean
-    permissionRequired: boolean
-    status:
-        | 'starting'
-        | 'restoring'
-        | 'running'
-        | 'completed'
-        | 'failed'
-        | 'cancelled'
-        | 'unavailable'
-}
-</script>
-
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -22,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import { useDescriptionOverflow } from '@/composables/useDescriptionOverflow'
+import type { OutreachTaskItem } from '@/stores/outreach'
 
 const props = withDefaults(
     defineProps<{
@@ -32,7 +16,7 @@ const props = withDefaults(
         selectable?: boolean
         showMessagedControl?: boolean
         showMessagedStatus?: boolean
-        task?: OutreachTaskListItem
+        task?: OutreachTaskItem
     }>(),
     {
         contact: undefined,

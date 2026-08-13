@@ -2,9 +2,7 @@ import {
     parseApplicationArtifact,
     type ApplicationArtifactKind,
 } from '@job-search-facilitator/core'
-import { parseApiResponse, readResponseError } from '@/api'
-
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
+import { apiUrl, parseApiResponse, readResponseError } from '@/api'
 
 const artifactPath = (jobPostId: string, kind: ApplicationArtifactKind) =>
     `/job-posts/${encodeURIComponent(jobPostId)}/artifacts/${encodeURIComponent(kind)}`

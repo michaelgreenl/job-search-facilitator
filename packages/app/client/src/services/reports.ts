@@ -1,7 +1,5 @@
 import { parseJobSearchReport, parseJobSearchReports } from '@job-search-facilitator/core'
-import { parseApiResponse } from '@/api'
-
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
+import { apiUrl, parseApiResponse } from '@/api'
 
 export async function fetchJobSearchReports() {
     const path = '/job-search-reports'

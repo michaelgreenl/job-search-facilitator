@@ -6,17 +6,15 @@ import {
     type OutreachContact,
     type TrackedJobPost,
 } from '@job-search-facilitator/core'
-import { computed, shallowRef } from 'vue'
+import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
-import OutreachContactList, {
-    type OutreachContactFilter,
-} from '@/components/outreach/OutreachContactList.vue'
-import type { OutreachTaskListItem } from '@/components/outreach/OutreachContactCard.vue'
+import OutreachContactList from '@/components/outreach/OutreachContactList.vue'
 import OutreachDiscoverButton from '@/components/outreach/OutreachDiscoverButton.vue'
 import { applicationArtifactUrl } from '@/services/application-artifacts'
+import type { OutreachTaskItem } from '@/stores/outreach'
 
 const props = defineProps<{
     active: boolean
@@ -29,7 +27,7 @@ const props = defineProps<{
     outreachContactsError: string | null
     outreachContactsLoading: boolean
     outreachDisabled: boolean
-    outreachTasks: OutreachTaskListItem[]
+    outreachTasks: OutreachTaskItem[]
     recentlyMessagedContactId: string | null
     statusError: string | null
     statusUpdating: boolean
@@ -72,7 +70,6 @@ const artifactLabels: Record<ApplicationArtifactKind, string> = {
 }
 
 const statusLabel = computed(() => statusLabels[props.entry.post.applicationStatus])
-const contactFilter = shallowRef<OutreachContactFilter>('all')
 const formatDate = (value: string) =>
     new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(
         new Date(value),
@@ -127,7 +124,6 @@ function selectStatus(value: string) {
                 <span class="section-label">Outreach</span>
 
                 <OutreachContactList
-                    v-model:filter="contactFilter"
                     :contacts="outreachContacts"
                     :error="outreachContactsError"
                     :loading="outreachContactsLoading"

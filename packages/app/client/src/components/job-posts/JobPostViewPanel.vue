@@ -480,10 +480,6 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
-
-    &-outreach {
-        justify-content: flex-end;
-    }
 }
 
 .label-picker-dropdown {

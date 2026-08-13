@@ -20,6 +20,7 @@ import {
     removeApplicationArtifact,
     uploadApplicationArtifact,
 } from '@/services/application-artifacts'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
@@ -28,24 +29,6 @@ type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const selectedPostStorageKey = 'job-search-facilitator:apply-selected-post'
-const readSelectedPostId = () => {
-    try {
-        return globalThis.sessionStorage.getItem(selectedPostStorageKey)
-    } catch {
-        return null
-    }
-}
-const storeSelectedPostId = (postId: string | null) => {
-    try {
-        if (postId === null) {
-            globalThis.sessionStorage.removeItem(selectedPostStorageKey)
-        } else {
-            globalThis.sessionStorage.setItem(selectedPostStorageKey, postId)
-        }
-    } catch {
-        // The page remains usable when storage is unavailable.
-    }
-}
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postFilterOptions: BaseDropdownOption[] = [
@@ -79,7 +62,9 @@ const activePanel = shallowRef<ActivePanel>(
         : 'posts',
 )
 const outreachExpanded = shallowRef(false)
-const selectedPostId = shallowRef<string | null>(outreachPostId.value ?? readSelectedPostId())
+const selectedPostId = shallowRef<string | null>(
+    outreachPostId.value ?? readSessionStorage(selectedPostStorageKey),
+)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
@@ -185,7 +170,9 @@ watch(
     },
     { immediate: true },
 )
-watch(selectedPostId, storeSelectedPostId, { immediate: true })
+watch(selectedPostId, (postId) => writeSessionStorage(selectedPostStorageKey, postId), {
+    immediate: true,
+})
 
 function selectPost(postId: string) {
     const changed = postId !== selectedPostId.value

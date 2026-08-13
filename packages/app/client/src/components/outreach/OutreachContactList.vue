@@ -7,8 +7,9 @@ import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import type { OutreachTaskItem } from '@/stores/outreach'
 
-import OutreachContactCard, { type OutreachTaskListItem } from './OutreachContactCard.vue'
+import OutreachContactCard from './OutreachContactCard.vue'
 
 const contactFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -26,7 +27,7 @@ const props = withDefaults(
         loading: boolean
         showFilter?: boolean
         showMessagedStatus?: boolean
-        tasks: OutreachTaskListItem[]
+        tasks: OutreachTaskItem[]
     }>(),
     {
         showFilter: true,

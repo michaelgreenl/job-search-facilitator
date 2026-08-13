@@ -13,29 +13,12 @@ import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
 import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
 type ActivePanel = 'description' | 'detail' | 'outreach' | 'posts'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
-const readSelectedPostId = () => {
-    try {
-        return globalThis.sessionStorage.getItem(selectedPostStorageKey)
-    } catch {
-        return null
-    }
-}
-const storeSelectedPostId = (postId: string | null) => {
-    try {
-        if (postId === null) {
-            globalThis.sessionStorage.removeItem(selectedPostStorageKey)
-        } else {
-            globalThis.sessionStorage.setItem(selectedPostStorageKey, postId)
-        }
-    } catch {
-        // The page remains usable when storage is unavailable.
-    }
-}
 
 const postStore = usePostStore()
 const outreachStore = useOutreachStore()
@@ -51,7 +34,9 @@ const {
 } = storeToRefs(outreachStore)
 const initialOutreachPostId = outreachTaskVisible.value ? outreachPostId.value : null
 const entries = shallowRef<TrackedJobPost[]>([])
-const selectedPostId = shallowRef<string | null>(initialOutreachPostId ?? readSelectedPostId())
+const selectedPostId = shallowRef<string | null>(
+    initialOutreachPostId ?? readSessionStorage(selectedPostStorageKey),
+)
 const activePanel = shallowRef<ActivePanel>(initialOutreachPostId === null ? 'posts' : 'outreach')
 const outreachExpanded = shallowRef(false)
 const loading = shallowRef(true)
@@ -166,7 +151,7 @@ watch(entries, (currentEntries) => {
     }
 })
 
-watch(selectedPostId, storeSelectedPostId)
+watch(selectedPostId, (postId) => writeSessionStorage(selectedPostStorageKey, postId))
 
 watch([activePanel, outreachContact], ([panel, contact]) => {
     if (
@@ -619,11 +604,5 @@ onMounted(() => {
     font-weight: 650;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-}
-
-.error {
-    color: lighten-color($color-red-600, 20%);
-    margin: 0;
-    font-size: 0.8125rem;
 }
 </style>

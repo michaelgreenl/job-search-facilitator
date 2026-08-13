@@ -18,6 +18,7 @@ import {
     removeOutreachContact,
     updateOutreachContact,
 } from '@/services/outreach'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useAgentStore, type AgentSession, type AgentSessionOwner } from './agent'
 
 const outreachDraftStyle =
@@ -43,31 +44,6 @@ export const createDraftRevisionTask = (
         outputSchema: createDraftRevisionOutputSchema(),
     }) satisfies StartAgentTaskInput
 
-const readOutreachContactListReturn = () => {
-    try {
-        const postId = globalThis.sessionStorage.getItem(contactListReturnStorageKey)
-        return postId?.trim() ? postId : null
-    } catch {
-        return null
-    }
-}
-
-const writeOutreachContactListReturn = (postId: string) => {
-    try {
-        globalThis.sessionStorage.setItem(contactListReturnStorageKey, postId)
-    } catch {
-        // The current panel remains usable when storage is unavailable.
-    }
-}
-
-const clearOutreachContactListReturn = () => {
-    try {
-        globalThis.sessionStorage.removeItem(contactListReturnStorageKey)
-    } catch {
-        // The current panel remains usable when storage is unavailable.
-    }
-}
-
 type OutreachAgentSession = Extract<AgentSession, { kind: 'outreach-contact' | 'outreach-draft' }>
 
 export interface OutreachTaskItem {
@@ -90,7 +66,8 @@ const isOutreachSession = (session: AgentSession): session is OutreachAgentSessi
 export const useOutreachStore = defineStore('outreach', () => {
     const agentStore = useAgentStore()
     const initialSessions = agentStore.sessions.filter(isOutreachSession)
-    const returnPostId = readOutreachContactListReturn()
+    const storedReturnPostId = readSessionStorage(contactListReturnStorageKey)
+    const returnPostId = storedReturnPostId?.trim() ? storedReturnPostId : null
     const initialSession = returnPostId === null ? (initialSessions.at(-1) ?? null) : null
     const postId = shallowRef<string | null>(returnPostId ?? initialSession?.postId ?? null)
     const selectedTaskId = shallowRef<string | null>(initialSession?.taskId ?? null)
@@ -226,7 +203,7 @@ export const useOutreachStore = defineStore('outreach', () => {
 
     function clearContactListReturn() {
         contactListReturnPostId.value = null
-        clearOutreachContactListReturn()
+        writeSessionStorage(contactListReturnStorageKey, null)
     }
 
     function clearView() {
@@ -710,7 +687,7 @@ export const useOutreachStore = defineStore('outreach', () => {
             selectedTaskId.value === session.taskId &&
             postId.value === session.postId
         ) {
-            writeOutreachContactListReturn(session.postId)
+            writeSessionStorage(contactListReturnStorageKey, session.postId)
             contactListReturnPostId.value = session.postId
         }
 
