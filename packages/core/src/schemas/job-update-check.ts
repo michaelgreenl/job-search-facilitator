@@ -40,8 +40,12 @@ const updateId = z
 const updateDateTime = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/)
+    .pipe(isoDateTimeSchema)
 const updateText = z.string().regex(/\S/)
-const updateUrl = z.string().regex(/^https?:\/\/\S+$/)
+const updateUrl = z
+    .string()
+    .regex(/^https?:\/\/\S+$/)
+    .pipe(httpUrlSchema)
 const evidence = {
     jobPostId: updateId,
     externalId: updateText,
@@ -75,25 +79,6 @@ const jobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = z
                 }),
             ]),
         ),
-    })
-    .superRefine(({ updates }, context) => {
-        updates.forEach((update, index) => {
-            if (!isoDateTimeSchema.safeParse(update.occurredAt).success) {
-                context.addIssue({
-                    code: 'custom',
-                    path: ['updates', index, 'occurredAt'],
-                    message: 'Invalid update timestamp',
-                })
-            }
-
-            if (update.sourceUrl !== null && !httpUrlSchema.safeParse(update.sourceUrl).success) {
-                context.addIssue({
-                    code: 'custom',
-                    path: ['updates', index, 'sourceUrl'],
-                    message: 'Invalid source URL',
-                })
-            }
-        })
     })
     .transform((result) => ({
         ...result,
