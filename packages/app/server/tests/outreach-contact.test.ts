@@ -55,6 +55,7 @@ const createFakeRepository = () => {
             input: UpdateOutreachContactInput,
         ): Promise<OutreachContact | null> => ({
             ...existingContact,
+            draftMessage: input.draftMessage ?? existingContact.draftMessage,
             messaged: input.messaged ?? existingContact.messaged,
             respondedAt:
                 input.responded === undefined
@@ -101,6 +102,20 @@ describe('outreach contact routes', () => {
 
         expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
             messaged,
+        })
+    })
+
+    it('updates a saved outreach draft', async () => {
+        const { repository, update } = createFakeRepository()
+        const draftMessage = 'Hi Ada, could we briefly discuss the role?'
+
+        await request(createTestApp(repository))
+            .patch(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .send({ draftMessage })
+            .expect(200, { ...existingContact, draftMessage })
+
+        expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
+            draftMessage,
         })
     })
 

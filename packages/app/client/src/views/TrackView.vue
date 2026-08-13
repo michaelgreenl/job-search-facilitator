@@ -246,6 +246,19 @@ function handleContactRemoved() {
     void loadTrackedPosts(false)
 }
 
+function handleDraftSaved(contact: OutreachContact) {
+    entries.value = entries.value.map((entry) =>
+        entry.post.id === contact.jobPostId
+            ? {
+                  ...entry,
+                  contacts: entry.contacts.map((savedContact) =>
+                      savedContact.id === contact.id ? contact : savedContact,
+                  ),
+              }
+            : entry,
+    )
+}
+
 function selectOutreachContact(contact: OutreachContact) {
     const entry = selectedEntry.value
 
@@ -509,6 +522,7 @@ onMounted(() => {
             @cancel="cancelOutreach"
             @collapse="collapseOutreach"
             @contact-removed="handleContactRemoved"
+            @draft-saved="handleDraftSaved"
             @expand="expandOutreach"
             @messaged-updated="handleMessagedUpdate"
             @retry="retryOutreach"

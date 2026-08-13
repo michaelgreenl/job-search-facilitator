@@ -237,11 +237,15 @@ describe('Agent task manager', () => {
             'contact discovery',
             createContactDiscoveryOutputSchema,
             {
-                personName: 'Ada Lovelace',
-                personTitle: 'Engineering Manager',
-                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-                relevanceRationale: 'Her visible role aligns with the team.',
-                draftMessage: 'Hi Ada, could I ask about the team?',
+                outcome: 'contact',
+                contact: {
+                    personName: 'Ada Lovelace',
+                    personTitle: 'Engineering Manager',
+                    profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                    relevanceRationale: 'Her visible role aligns with the team.',
+                    draftMessage: 'Hi Ada, could I ask about the team?',
+                },
+                error: null,
             },
         ],
         [

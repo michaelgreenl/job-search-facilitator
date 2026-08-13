@@ -37,7 +37,7 @@ const contact: OutreachContact = {
     createdAt: '2026-07-20T12:00:00.000Z',
     updatedAt: '2026-07-20T12:00:00.000Z',
 }
-const discoveryTask = createContactDiscoveryTask(post)
+const discoveryTask = createContactDiscoveryTask(post, [contact])
 const draftTask = createDraftRevisionTask(
     post,
     contact,
@@ -49,13 +49,23 @@ const importTask = createJobPostImportTask('https://example.com/jobs/post-id')
 describe('outreach agent tasks', () => {
     it('defines the contact discovery capability and output contract', () => {
         expect(discoveryTask.capabilities).toEqual(['chrome'])
-        expect(discoveryTask.outputSchema.required).toEqual([
-            'personName',
-            'personTitle',
-            'profileUrl',
-            'relevanceRationale',
-            'draftMessage',
-        ])
+        expect(discoveryTask.outputSchema.required).toEqual(['outcome', 'contact', 'error'])
+        expect(discoveryTask.outputSchema.properties).toMatchObject({
+            contact: {
+                anyOf: [
+                    {
+                        required: [
+                            'personName',
+                            'personTitle',
+                            'profileUrl',
+                            'relevanceRationale',
+                            'draftMessage',
+                        ],
+                    },
+                    { type: 'null' },
+                ],
+            },
+        })
     })
 
     it('defines the draft revision capability and output contract', () => {

@@ -660,18 +660,25 @@ describe('outreach contact repository', () => {
             first.id,
             { messaged: true },
         )
+        const revisedDraftMessage = 'Hi Ada, could we briefly discuss the role?'
         const updatedFirst = await outreachContactRepository.update(jobPostId, first.id, {
+            draftMessage: revisedDraftMessage,
             messaged: true,
         })
 
         const contacts = await outreachContactRepository.findByJobPostId(jobPostId)
 
         expect(wrongPostUpdate).toBeNull()
-        expect(updatedFirst).toMatchObject({ id: first.id, jobPostId, messaged: true })
+        expect(updatedFirst).toMatchObject({
+            id: first.id,
+            jobPostId,
+            draftMessage: revisedDraftMessage,
+            messaged: true,
+        })
         expect(second).toMatchObject({ jobPostId, messaged: false })
         expect(contacts).toHaveLength(2)
         expect(contacts.map(({ id }) => id)).toEqual(expect.arrayContaining([first.id, second.id]))
-        expect(contacts.find(({ id }) => id === first.id)?.messaged).toBe(true)
+        expect(contacts.find(({ id }) => id === first.id)?.draftMessage).toBe(revisedDraftMessage)
     })
 
     it('removes only a contact belonging to the supplied job post', async () => {

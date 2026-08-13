@@ -32,6 +32,7 @@ export const outreachContactInputSchema = z.strictObject({
 
 export const updateOutreachContactInputSchema = z
     .strictObject({
+        draftMessage: nonBlankString.optional(),
         messaged: z.boolean().optional(),
         responded: z.boolean().optional(),
     })

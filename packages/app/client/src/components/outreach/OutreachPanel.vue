@@ -35,6 +35,7 @@ const emit = defineEmits<{
     discover: []
     expand: []
     contactRemoved: [contactId: string]
+    draftSaved: [contact: OutreachContact]
     messagedUpdated: [contact: OutreachContact]
     retry: []
     retryContacts: []
@@ -53,6 +54,9 @@ const {
     contactsLoading,
     drafting,
     draft,
+    draftDirty,
+    draftSaveError,
+    draftSaving,
     resultError,
     tasks,
     taskActive: isActive,
@@ -66,7 +70,13 @@ const {
     taskVisible,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
-    contact.value !== null ? 'draft' : taskVisible.value ? 'stream' : 'contacts',
+    drafting.value
+        ? 'draft'
+        : contact.value !== null
+          ? 'draft'
+          : taskVisible.value
+            ? 'stream'
+            : 'contacts',
 )
 const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
@@ -91,14 +101,16 @@ const backTestId = computed(() =>
 const statusMessage = computed(() =>
     contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
 )
-const draftIssue = computed(() => resultError.value ?? (drafting.value ? issue.value : null))
+const draftIssue = computed(
+    () => draftSaveError.value ?? resultError.value ?? (drafting.value ? issue.value : null),
+)
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
     () => props.post?.id,
     () => {
         contactFilter.value = 'all'
-        panelView.value = taskVisible.value ? 'stream' : 'contacts'
+        panelView.value = taskVisible.value ? (drafting.value ? 'draft' : 'stream') : 'contacts'
     },
 )
 
@@ -106,7 +118,7 @@ watch(
     taskId,
     (currentTaskId, previousTaskId) => {
         if (currentTaskId !== null && currentTaskId !== previousTaskId) {
-            panelView.value = 'stream'
+            panelView.value = drafting.value ? 'draft' : 'stream'
         } else if (currentTaskId === null && previousTaskId !== null) {
             panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
@@ -116,7 +128,7 @@ watch(
 
 watch(isActive, (active, wasActive) => {
     if (wasActive && !active && taskVisible.value) {
-        panelView.value = 'stream'
+        panelView.value = drafting.value ? 'draft' : 'stream'
     }
 })
 
@@ -210,7 +222,7 @@ function goBack() {
 
 function showStream(task: string) {
     outreachStore.openTask(task)
-    panelView.value = 'stream'
+    panelView.value = drafting.value ? 'draft' : 'stream'
 }
 
 function selectContact(selectedContact: OutreachContact) {
@@ -227,6 +239,14 @@ async function updateMessaged(messaged: boolean) {
         if (updatedContact !== null) {
             emit('messagedUpdated', updatedContact)
         }
+    }
+}
+
+async function saveDraft() {
+    const savedContact = await outreachStore.saveDraft().catch(() => null)
+
+    if (savedContact !== null) {
+        emit('draftSaved', savedContact)
     }
 }
 
@@ -366,8 +386,10 @@ async function copyDraft() {
                     v-model:request="draftRequest"
                     :contact="contact"
                     :assistant-reply="assistantReply"
+                    :can-save="draftDirty"
                     :running="isActive"
                     :requesting-changes="drafting && isActive"
+                    :saving="draftSaving"
                     :copy-state="copyState"
                     :expanded="expanded"
                     :issue="draftIssue"
@@ -376,6 +398,7 @@ async function copyDraft() {
                     :reconnecting="connectionState === 'reconnecting'"
                     @submit="submitDraftRequest"
                     @copy="copyDraft"
+                    @save="saveDraft"
                     @update-messaged="updateMessaged"
                 />
             </template>

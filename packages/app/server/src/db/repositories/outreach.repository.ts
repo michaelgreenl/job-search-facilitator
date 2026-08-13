@@ -100,6 +100,10 @@ export const outreachContactRepository: OutreachContactRepository = {
                 const messaged = input.responded === true ? true : input.messaged
                 const data: Prisma.OutreachContactUpdateInput = {}
 
+                if (input.draftMessage !== undefined) {
+                    data.draftMessage = input.draftMessage
+                }
+
                 if (messaged !== undefined) {
                     data.messaged = messaged
                     data.messagedAt = messaged ? (existing.messagedAt ?? now) : null

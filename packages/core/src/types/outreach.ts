@@ -62,7 +62,9 @@ export type OutreachContactInput = Pick<
     'personName' | 'personTitle' | 'profileUrl' | 'relevanceRationale' | 'draftMessage'
 >
 
-export type ContactDiscoveryResult = OutreachContactInput
+export type ContactDiscoveryResult =
+    | { outcome: 'contact'; contact: OutreachContactInput; error: null }
+    | { outcome: 'failed'; contact: null; error: string }
 
 export interface DraftRevisionResult {
     draftMessage: string
@@ -70,6 +72,7 @@ export interface DraftRevisionResult {
 }
 
 export interface UpdateOutreachContactInput {
+    draftMessage?: string
     messaged?: boolean
     responded?: boolean
 }

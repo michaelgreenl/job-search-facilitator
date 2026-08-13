@@ -1,7 +1,7 @@
 import {
     parseOutreachContact,
     parseOutreachContacts,
-    type ContactDiscoveryResult,
+    type OutreachContactInput,
     type UpdateOutreachContactInput,
 } from '@job-search-facilitator/core'
 import { apiUrl, parseApiResponse, readResponseError } from '@/api'
@@ -13,7 +13,7 @@ export async function fetchOutreachContacts(postId: string) {
     return parseApiResponse(response, parseOutreachContacts, path)
 }
 
-export async function createOutreachContact(postId: string, input: ContactDiscoveryResult) {
+export async function createOutreachContact(postId: string, input: OutreachContactInput) {
     const path = `/job-posts/${encodeURIComponent(postId)}/outreach-contacts`
     const response = await fetch(`${apiUrl}${path}`, {
         method: 'POST',

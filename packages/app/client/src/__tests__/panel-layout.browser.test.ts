@@ -57,11 +57,15 @@ const trackedPost = makeTrackedJobPost({
 })
 
 const contactDiscoveryOutput = (contact: ReturnType<typeof makeOutreachContact>) => ({
-    personName: contact.personName,
-    personTitle: contact.personTitle,
-    profileUrl: contact.profileUrl,
-    relevanceRationale: contact.relevanceRationale,
-    draftMessage: contact.draftMessage,
+    outcome: 'contact',
+    contact: {
+        personName: contact.personName,
+        personTitle: contact.personTitle,
+        profileUrl: contact.profileUrl,
+        relevanceRationale: contact.relevanceRationale,
+        draftMessage: contact.draftMessage,
+    },
+    error: null,
 })
 
 function reviewApiResponse(input: RequestInfo | URL, init?: RequestInit) {

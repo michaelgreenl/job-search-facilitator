@@ -341,6 +341,63 @@ describe('apply view', () => {
         )
     })
 
+    it('saves an edited outreach draft before reopening it', async () => {
+        const draftMessage = 'Hi Grace, could we briefly discuss the role?'
+        const updatedContact = { ...savedContact, draftMessage }
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(updatedContact))
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, `outreach-contact-${savedContact.id}-select`).click()
+
+        const draft = await vi.waitFor(() => {
+            const field = root.querySelector<HTMLTextAreaElement>('#outreach-message')
+
+            if (field === null) {
+                throw new Error('Could not find outreach message')
+            }
+
+            return field
+        })
+        draft.value = draftMessage
+        draft.dispatchEvent(new Event('input'))
+        await nextTick()
+        findTestButton(root, 'save-outreach-draft').click()
+
+        await vi.waitFor(() =>
+            expect(findTestButton(root, 'save-outreach-draft').disabled).toBe(true),
+        )
+        const saveRequest = vi
+            .mocked(fetch)
+            .mock.calls.find(
+                ([input, init]) =>
+                    requestUrl(input).endsWith(`/outreach-contacts/${savedContact.id}`) &&
+                    init?.method === 'PATCH',
+            )
+        expect(saveRequest?.[1]?.body).toBe(JSON.stringify({ draftMessage }))
+
+        findTestButton(root, 'back-to-saved-contacts').click()
+        const savedContactButton = await vi.waitFor(() =>
+            findTestButton(root, `outreach-contact-${savedContact.id}-select`),
+        )
+        savedContactButton.click()
+        await vi.waitFor(() =>
+            expect(root.querySelector<HTMLTextAreaElement>('#outreach-message')?.value).toBe(
+                draftMessage,
+            ),
+        )
+    })
+
     it('preserves navigation without exposing stale contacts across saved-contact load outcomes', async () => {
         let resolveRetry: ((response: Response) => void) | undefined
         let resolveFailedReload: ((response: Response) => void) | undefined
@@ -436,7 +493,7 @@ describe('apply view', () => {
         })
     })
 
-    it('keeps a disconnected draft task visible and cancellable', async () => {
+    it('keeps a disconnected draft task in the draft panel', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -483,23 +540,26 @@ describe('apply view', () => {
         })
         source.open()
         expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="agent-progress"]')).toBeNull()
         source.disconnect()
 
         await vi.waitFor(() =>
             expect(
-                root.querySelector('[data-testid="agent-reconnect-status"]')?.getAttribute('role'),
+                root
+                    .querySelector('[data-testid="outreach-draft-reconnect"]')
+                    ?.getAttribute('role'),
             ).toBe('status'),
         )
 
         source.open()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="agent-reconnect-status"]')).toBeNull(),
+            expect(root.querySelector('[data-testid="outreach-draft-reconnect"]')).toBeNull(),
         )
 
         source.fail()
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
-            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="agent-progress"]')).toBeNull()
         })
     })
 

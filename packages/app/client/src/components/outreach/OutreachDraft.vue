@@ -5,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
+import SaveIcon from '@/components/svgs/SaveIcon.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
@@ -14,6 +15,8 @@ defineProps<{
     running: boolean
     requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
+    canSave: boolean
+    saving: boolean
     expanded: boolean
     issue: string | null
     messagedError: string | null
@@ -24,6 +27,7 @@ defineProps<{
 const emit = defineEmits<{
     submit: []
     copy: []
+    save: []
     updateMessaged: [messaged: boolean]
 }>()
 
@@ -60,19 +64,34 @@ const copyFeedbackId = useId()
                         aria-label="Outreach message"
                         :disabled="running"
                     ></textarea>
-                    <BaseButton
-                        class="field-action copy-button"
-                        :aria-label="
-                            copyState === 'copied'
-                                ? 'Outreach message copied'
-                                : 'Copy outreach message'
-                        "
-                        :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
-                        :disabled="draft.trim().length === 0"
-                        @click="emit('copy')"
-                    >
-                        <CopyIcon class="copy-icon" />
-                    </BaseButton>
+                    <div class="draft-actions">
+                        <BaseButton
+                            class="save-button"
+                            icon-size="md"
+                            tooltip="Save changes"
+                            data-testid="save-outreach-draft"
+                            aria-label="Save changes"
+                            :aria-busy="saving || undefined"
+                            :disabled="!canSave || saving"
+                            @click="emit('save')"
+                        >
+                            <SaveIcon class="draft-action-icon" />
+                        </BaseButton>
+                        <BaseButton
+                            class="copy-button"
+                            icon-size="md"
+                            :aria-label="
+                                copyState === 'copied'
+                                    ? 'Outreach message copied'
+                                    : 'Copy outreach message'
+                            "
+                            :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
+                            :disabled="draft.trim().length === 0"
+                            @click="emit('copy')"
+                        >
+                            <CopyIcon class="draft-action-icon" />
+                        </BaseButton>
+                    </div>
                     <span
                         :id="copyFeedbackId"
                         class="copy-feedback"
@@ -232,7 +251,7 @@ const copyFeedbackId = useId()
     flex: 1;
     width: 100%;
     min-height: 8rem;
-    padding-right: 3.25rem;
+    padding-right: 5.75rem;
     padding-bottom: 3.25rem;
     resize: none;
 }
@@ -276,18 +295,19 @@ const copyFeedbackId = useId()
     color: $color-night;
 }
 
-.copy-button {
+.draft-actions {
+    position: absolute;
     right: $space-2;
     bottom: $space-2;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
+    display: flex;
+    gap: $space-1;
 }
 
-.copy-icon {
+.save-button {
+    display: inline-flex;
+}
+
+.draft-action-icon {
     width: 1rem;
     height: 1rem;
     fill: none;
