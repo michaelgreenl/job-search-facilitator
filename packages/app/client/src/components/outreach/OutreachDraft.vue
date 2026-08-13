@@ -66,8 +66,7 @@ const copyFeedbackId = useId()
                     ></textarea>
                     <div class="draft-actions">
                         <BaseButton
-                            class="save-button"
-                            icon-size="md"
+                            preset="icon"
                             tooltip="Save changes"
                             data-testid="save-outreach-draft"
                             aria-label="Save changes"
@@ -78,8 +77,8 @@ const copyFeedbackId = useId()
                             <SaveIcon class="draft-action-icon" />
                         </BaseButton>
                         <BaseButton
-                            class="copy-button"
-                            icon-size="md"
+                            preset="icon"
+                            tooltip="Copy"
                             :aria-label="
                                 copyState === 'copied'
                                     ? 'Outreach message copied'
@@ -91,19 +90,21 @@ const copyFeedbackId = useId()
                         >
                             <CopyIcon class="draft-action-icon" />
                         </BaseButton>
+                        <span
+                            :id="copyFeedbackId"
+                            class="copy-feedback"
+                            :class="{
+                                'copy-feedback-copied tooltip-surface': copyState === 'copied',
+                                'copy-feedback-error': copyState === 'failed',
+                            }"
+                            :role="copyState === 'failed' ? 'alert' : 'status'"
+                        >
+                            <template v-if="copyState === 'copied'">Copied</template>
+                            <template v-else-if="copyState === 'failed'">
+                                Could not copy draft
+                            </template>
+                        </span>
                     </div>
-                    <span
-                        :id="copyFeedbackId"
-                        class="copy-feedback"
-                        :class="{
-                            'copy-feedback-copied tooltip-surface': copyState === 'copied',
-                            'copy-feedback-error': copyState === 'failed',
-                        }"
-                        :role="copyState === 'failed' ? 'alert' : 'status'"
-                    >
-                        <template v-if="copyState === 'copied'">Copied</template>
-                        <template v-else-if="copyState === 'failed'">Could not copy draft</template>
-                    </span>
                 </div>
             </div>
 
@@ -244,6 +245,8 @@ const copyFeedbackId = useId()
 .draft-field {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: $space-1;
     min-height: 0;
 }
 
@@ -251,8 +254,6 @@ const copyFeedbackId = useId()
     flex: 1;
     width: 100%;
     min-height: 8rem;
-    padding-right: 5.75rem;
-    padding-bottom: 3.25rem;
     resize: none;
 }
 
@@ -296,20 +297,15 @@ const copyFeedbackId = useId()
 }
 
 .draft-actions {
-    position: absolute;
-    right: $space-2;
-    bottom: $space-2;
+    position: relative;
     display: flex;
     gap: $space-1;
-}
-
-.save-button {
-    display: inline-flex;
+    align-self: flex-end;
 }
 
 .draft-action-icon {
-    width: 1rem;
-    height: 1rem;
+    width: 1.25rem;
+    height: 1.25rem;
     fill: none;
     stroke: currentcolor;
     stroke-linecap: round;
@@ -319,8 +315,8 @@ const copyFeedbackId = useId()
 
 .copy-feedback {
     position: absolute;
-    bottom: 3.25rem;
-    right: -0.4rem;
+    right: 0;
+    bottom: calc(100% + #{$space-1});
     min-height: 1rem;
     color: $color-ink-muted;
     font-size: 0.8125rem;
