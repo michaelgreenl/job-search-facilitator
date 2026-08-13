@@ -303,7 +303,7 @@ export class CodexRuntime implements AgentRuntime {
                 plugin.enabled &&
                 plugin.availability === 'AVAILABLE' &&
                 plugin.source.type === 'local' &&
-                plugin.source.path !== undefined &&
+                typeof plugin.source.path === 'string' &&
                 isAbsolute(plugin.source.path)
             ) {
                 this.capabilityRoots.set(capability, plugin.source.path)

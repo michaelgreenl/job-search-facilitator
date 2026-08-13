@@ -51,6 +51,13 @@ const createFakeProcess = ({
                                 {
                                     plugins: [
                                         {
+                                            id: 'ponytail@ponytail',
+                                            installed: true,
+                                            enabled: true,
+                                            availability: 'AVAILABLE',
+                                            source: { type: 'git', path: null },
+                                        },
+                                        {
                                             id: 'chrome@openai-bundled',
                                             installed: true,
                                             enabled: true,
