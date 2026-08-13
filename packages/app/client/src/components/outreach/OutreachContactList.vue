@@ -1,15 +1,14 @@
-<script lang="ts">
-export type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
-</script>
-
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import type { OutreachTaskItem } from '@/stores/outreach'
 
 import OutreachContactCard from './OutreachContactCard.vue'
+
+type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
 
 const contactFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -19,6 +18,8 @@ const contactFilterOptions: BaseDropdownOption[] = [
 
 const isContactFilter = (value: string): value is OutreachContactFilter =>
     contactFilterOptions.some((option) => option.value === value)
+const contactFilterStorageKey = 'job-search-facilitator:outreach-contact-filter'
+const storedContactFilter = readSessionStorage(contactFilterStorageKey)
 
 const props = withDefaults(
     defineProps<{
@@ -45,7 +46,12 @@ defineSlots<{
     contactActions?: (props: { contact: OutreachContact }) => unknown
 }>()
 
-const contactFilter = defineModel<OutreachContactFilter>('filter', { default: 'all' })
+const contactFilter = shallowRef<OutreachContactFilter>(
+    storedContactFilter !== null && isContactFilter(storedContactFilter)
+        ? storedContactFilter
+        : 'all',
+)
+watch(contactFilter, (filter) => writeSessionStorage(contactFilterStorageKey, filter))
 const filteredContacts = computed(() => {
     if (contactFilter.value === 'all') {
         return props.contacts

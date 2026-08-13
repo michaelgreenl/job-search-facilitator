@@ -867,6 +867,52 @@ describe('review route selection', () => {
         })
     })
 
+    it('keeps the selected review filters after remounting', async () => {
+        const mounted = await mountReview()
+        let root = mounted.root
+        const { from } = getReportDateInputs(root)
+        setDateInput(from, '2026-07-15')
+        reportButton(root, secondReport.id).click()
+
+        const filter = await vi.waitFor(() => {
+            const button = root.querySelector<HTMLButtonElement>(
+                '[data-testid="review-post-filter-trigger"]',
+            )
+
+            if (button === null) {
+                throw new Error('Could not find job post filter')
+            }
+
+            return button
+        })
+        filter.click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="review-post-filter-option-labeled"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'review-post-filter-option-labeled').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${labeledPost.id}"]`),
+            ).not.toBeNull(),
+        )
+
+        mountedReviews.pop()?.unmount()
+        root = (await mountReview()).root
+
+        expect(getReportDateInputs(root).from.value).toBe('2026-07-15')
+        expectReportCards(root, [secondReport.id, thirdReport.id])
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${labeledPost.id}"]`),
+            ).not.toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${secondPost.id}"]`)).toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${forgonePost.id}"]`)).toBeNull()
+        })
+    })
+
     it('filters reports by an inclusive open-ended date range and clears it', async () => {
         const { root } = await mountReview()
         const { from, to } = getReportDateInputs(root)

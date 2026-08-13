@@ -29,6 +29,7 @@ type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
 
 const selectedPostStorageKey = 'job-search-facilitator:apply-selected-post'
+const postFilterStorageKey = 'job-search-facilitator:apply-post-filter'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postFilterOptions: BaseDropdownOption[] = [
@@ -50,7 +51,10 @@ const {
     taskVisible: outreachTaskVisible,
     restoreContactListPending,
 } = storeToRefs(outreachStore)
-const postFilter = shallowRef<PostFilter>('all')
+const storedPostFilter = readSessionStorage(postFilterStorageKey)
+const postFilter = shallowRef<PostFilter>(
+    storedPostFilter !== null && isPostFilter(storedPostFilter) ? storedPostFilter : 'all',
+)
 const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
 const startupOutreachPostId =
     startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
@@ -173,6 +177,7 @@ watch(
 watch(selectedPostId, (postId) => writeSessionStorage(selectedPostStorageKey, postId), {
     immediate: true,
 })
+watch(postFilter, (filter) => writeSessionStorage(postFilterStorageKey, filter))
 
 function selectPost(postId: string) {
     const changed = postId !== selectedPostId.value

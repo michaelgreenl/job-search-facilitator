@@ -10,7 +10,7 @@ import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import TrashIcon from '@/components/svgs/TrashIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 
-import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
+import OutreachContactList from './OutreachContactList.vue'
 import OutreachDiscoverButton from './OutreachDiscoverButton.vue'
 import OutreachDraft from './OutreachDraft.vue'
 
@@ -78,7 +78,6 @@ const panelView = shallowRef<PanelView>(
             ? 'stream'
             : 'contacts',
 )
-const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -109,7 +108,6 @@ const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand 
 watch(
     () => props.post?.id,
     () => {
-        contactFilter.value = 'all'
         panelView.value = taskVisible.value ? (drafting.value ? 'draft' : 'stream') : 'contacts'
     },
 )
@@ -362,7 +360,6 @@ async function copyDraft() {
         <section class="outreach-panel" aria-label="Outreach">
             <template v-if="panelView === 'contacts' && !contactsExternal">
                 <OutreachContactList
-                    v-model:filter="contactFilter"
                     :contacts="contacts"
                     :error="contactsError"
                     :loading="contactsLoading"

@@ -155,6 +155,33 @@ describe('apply view', () => {
         })
     })
 
+    it('keeps the selected application filter after remounting', async () => {
+        vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(applyQueueItems)))
+        let root = await mountApplyView()
+
+        findTestButton(root, 'apply-post-filter-trigger').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="apply-post-filter-option-P2"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'apply-post-filter-option-P2').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).toBeNull(),
+        )
+
+        mountedApps.pop()?.unmount()
+        root = await mountApplyView(createPinia(), false)
+
+        await vi.waitFor(() => {
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).toBeNull()
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${posts[1]!.id}"]`),
+            ).not.toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[2]!.id}"]`)).toBeNull()
+        })
+    })
+
     it('announces and retries a failed Apply queue load', async () => {
         let resolveInitialLoad: ((response: Response) => void) | undefined
         const initialLoad = new Promise<Response>((resolve) => {

@@ -18,6 +18,7 @@ import JobPostViewPanel, {
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useJobPostImportStore } from '@/stores/job-post-import'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
@@ -25,6 +26,8 @@ import { usePostStore } from '@/stores/post'
 type ActivePanel = 'sources' | 'posts' | 'viewer' | 'import'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 type ReviewSource = { kind: 'report'; reportId: string } | { kind: 'user-added' }
+
+const postFilterStorageKey = 'job-search-facilitator:review-post-filter'
 
 interface ReviewItem {
     post: JobPost
@@ -64,7 +67,10 @@ const {
     requestStarting: importRequestStarting,
 } = storeToRefs(importStore)
 const activePanel = shallowRef<ActivePanel>(hasImportSession.value ? 'import' : 'sources')
-const postFilter = shallowRef<PostFilter>('all')
+const storedPostFilter = readSessionStorage(postFilterStorageKey)
+const postFilter = shallowRef<PostFilter>(
+    storedPostFilter !== null && isPostFilter(storedPostFilter) ? storedPostFilter : 'all',
+)
 const selectedSource = shallowRef<ReviewSource | null>(null)
 const selectedItem = shallowRef<ReviewItem | null>(null)
 const labelUpdating = shallowRef(false)
@@ -291,6 +297,7 @@ const postListError = computed(() =>
 watch(bp.isLaptop, () => {
     restoreRouteSelection()
 })
+watch(postFilter, (filter) => writeSessionStorage(postFilterStorageKey, filter))
 
 const removeRouteListener = router.afterEach(() => {
     restoreRouteSelection()
@@ -312,7 +319,6 @@ function selectReport(reportId: string) {
     const source = { kind: 'report', reportId: report.id } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
 
     if (!bp.isLaptop.value) {
@@ -326,7 +332,6 @@ function selectUserAdded() {
     const source = { kind: 'user-added' } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
 
     if (!bp.isLaptop.value) {
@@ -350,7 +355,6 @@ function showImportPosts() {
     const source = { kind: 'user-added' } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
     activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
     pushSelectionState(source)
@@ -375,7 +379,6 @@ watch(
             post: savedItem.post,
             recommendation: savedItem,
         }
-        postFilter.value = 'all'
         labelError.value = null
         activePanel.value = 'viewer'
         pushSelectionState(source, savedItem.post.id)
