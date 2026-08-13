@@ -1533,8 +1533,84 @@ const response: JobSearchReport = {
 }
 
 describe('delivery verification', () => {
-    it('verifies API PUT and GET response-visible fields', () => {
-        expect(verifyApiResponse(reportDate, reportId, payload, response)).toEqual(response)
+    it('runs the remaining delivery commands through the CLI', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'job-search-delivery-'))
+        const reviewPath = join(directory, 'review.json')
+        const selectionPath = join(directory, 'selection.json')
+        const payloadPath = join(directory, 'payload.json')
+        const coveragePath = join(directory, 'coverage.json')
+        const responsePath = join(directory, 'response.json')
+        const markdownPath = join(directory, 'report.md')
+        const findUnique = vi.fn(async () => ({
+            results: [
+                {
+                    agentRank: 1,
+                    post: {
+                        sourceKey: post.sourceKey,
+                        snapshot: { sourceUrl: post.postUrl, description: post.description },
+                    },
+                },
+            ],
+        }))
+        const disconnect = vi.fn(async () => undefined)
+        let output = ''
+        const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+            output += String(chunk)
+            return true
+        })
+
+        vi.doMock('../src/db/prisma.ts', () => ({
+            prisma: {
+                jobSearchReport: { findUnique },
+                $disconnect: disconnect,
+            },
+        }))
+
+        try {
+            await Promise.all([
+                writeFile(reviewPath, JSON.stringify(reviewedCandidate)),
+                writeFile(selectionPath, JSON.stringify(selection)),
+                writeFile(payloadPath, JSON.stringify(payload)),
+                writeFile(coveragePath, JSON.stringify(coverage)),
+                writeFile(responsePath, JSON.stringify(response)),
+            ])
+
+            await runCli(['selection', reviewPath, selectionPath])
+            await runCli(['report', payloadPath])
+            await runCli(['render', reportDate, reportId, payloadPath, coveragePath, markdownPath])
+            await runCli(['verify', reportDate, reportId, payloadPath, responsePath])
+            await runCli(['verify-storage', reportId, payloadPath])
+            await runCli([
+                'verify-markdown',
+                reportDate,
+                reportId,
+                payloadPath,
+                coveragePath,
+                markdownPath,
+            ])
+
+            const [selectionOutput, reportOutput, ...statuses] = output.trim().split('\n')
+
+            expect({
+                selection: JSON.parse(selectionOutput!),
+                report: JSON.parse(reportOutput!),
+                statuses,
+                markdown: await readFile(markdownPath, 'utf8'),
+            }).toEqual({
+                selection,
+                report: payload,
+                statuses: ['verified', 'verified', 'verified'],
+                markdown: renderJobSearchMarkdown(reportDate, reportId, payload, coverage),
+            })
+            expect(findUnique).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ where: { id: reportId } }),
+            )
+            expect(disconnect).toHaveBeenCalledOnce()
+        } finally {
+            write.mockRestore()
+            vi.doUnmock('../src/db/prisma.ts')
+            await rm(directory, { recursive: true })
+        }
     })
 
     it('reports an API mismatch at the exact response path', () => {
@@ -1573,19 +1649,6 @@ describe('delivery verification', () => {
             retainedSchemaPath: formatted.startsWith('<root>:'),
             exposedInjectedKey: formatted.includes(injectedKey),
         }).toEqual({ retainedSchemaPath: true, exposedInjectedKey: false })
-    })
-
-    it('accepts the ordered descriptions stored for the synced report', () => {
-        const stored: StoredDescriptionResult[] = [
-            {
-                agentRank: 1,
-                sourceKey: post.sourceKey,
-                sourceUrl: post.postUrl,
-                description: post.description,
-            },
-        ]
-
-        expect(verifyStoredDescriptions(payload, stored)).toEqual(stored)
     })
 
     it('reports a stored description mismatch at the exact payload path', () => {
