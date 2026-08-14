@@ -52,6 +52,8 @@ let loadRevision = 0
 
 const isClosedApplication = ({ applicationStatus }: TrackedJobPost['post']) =>
     applicationStatus === 'rejected' || applicationStatus === 'hired'
+const isAwaitingOutreachResponse = ({ messaged, respondedAt }: OutreachContact) =>
+    messaged && respondedAt === null
 const openEntries = computed(() => entries.value.filter(({ post }) => !isClosedApplication(post)))
 const filteredEntries = computed(() => {
     if (postFilter.value === 'active') {
@@ -65,9 +67,7 @@ const filteredEntries = computed(() => {
     }
 
     if (postFilter.value === 'awaiting-replies') {
-        return openEntries.value.filter(({ contacts }) =>
-            contacts.some(({ respondedAt }) => respondedAt === null),
-        )
+        return openEntries.value.filter(({ contacts }) => contacts.some(isAwaitingOutreachResponse))
     }
 
     if (postFilter.value === 'outreach-responses') {
@@ -111,8 +111,7 @@ const closedApplications = computed(
 )
 const pendingOutreach = computed(() =>
     openEntries.value.reduce(
-        (count, { contacts }) =>
-            count + contacts.filter(({ respondedAt }) => respondedAt === null).length,
+        (count, { contacts }) => count + contacts.filter(isAwaitingOutreachResponse).length,
         0,
     ),
 )

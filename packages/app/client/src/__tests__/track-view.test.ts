@@ -130,11 +130,19 @@ describe('track view', () => {
                 makeOutreachContact({
                     id: '50000000-0000-4000-8000-000000000001',
                     jobPostId: '30000000-0000-4000-8000-000000000001',
+                    messaged: true,
+                    messagedAt: '2026-07-20T12:00:00.000Z',
                 }),
                 makeOutreachContact({
                     id: '50000000-0000-4000-8000-000000000002',
                     jobPostId: '30000000-0000-4000-8000-000000000001',
+                    messaged: true,
+                    messagedAt: '2026-07-20T12:00:00.000Z',
                     respondedAt: '2026-07-21T12:00:00.000Z',
+                }),
+                makeOutreachContact({
+                    id: '50000000-0000-4000-8000-000000000005',
+                    jobPostId: '30000000-0000-4000-8000-000000000001',
                 }),
             ],
         })
