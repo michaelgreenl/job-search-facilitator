@@ -11,6 +11,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import { APPLICATION_STATUS_LABELS } from '@/components/job-posts/job-post-labels'
 import OutreachContactList from '@/components/outreach/OutreachContactList.vue'
 import OutreachDiscoverButton from '@/components/outreach/OutreachDiscoverButton.vue'
 import { applicationArtifactUrl } from '@/services/application-artifacts'
@@ -44,16 +45,9 @@ const emit = defineEmits<{
     updateStatus: [status: ApplicationStatus]
 }>()
 
-const statusLabels: Record<ApplicationStatus, string> = {
-    'not-applied': 'Not applied',
-    'awaiting-response': 'Awaiting response',
-    interviewing: 'Interviewing',
-    rejected: 'Rejected',
-    hired: 'Job Offer',
-}
 const statusOptions: BaseDropdownOption[] = APPLICATION_STATUSES.map((status) => ({
     value: status,
-    label: statusLabels[status],
+    label: APPLICATION_STATUS_LABELS[status],
     tone:
         status === 'hired'
             ? 'success'
@@ -69,7 +63,7 @@ const artifactLabels: Record<ApplicationArtifactKind, string> = {
     'application-page': 'Application snapshot',
 }
 
-const statusLabel = computed(() => statusLabels[props.entry.post.applicationStatus])
+const statusLabel = computed(() => APPLICATION_STATUS_LABELS[props.entry.post.applicationStatus])
 const formatDate = (value: string) =>
     new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(
         new Date(value),

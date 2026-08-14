@@ -1,21 +1,27 @@
 <script setup lang="ts">
 import type { ApplicationStatus, UserLabel } from '@job-search-facilitator/core'
 import { computed } from 'vue'
-import { getUserLabelTone } from './job-post-labels'
+import { APPLICATION_STATUS_LABELS, getUserLabelTone } from './job-post-labels'
 
 const props = withDefaults(
     defineProps<{
         applicationStatus: ApplicationStatus
         userLabel: UserLabel | null
         compact?: boolean
+        showApplicationStatus?: boolean
     }>(),
     {
         compact: false,
+        showApplicationStatus: false,
     },
 )
 
 const applied = computed(() => props.applicationStatus !== 'not-applied')
 const label = computed(() => {
+    if (props.showApplicationStatus) {
+        return APPLICATION_STATUS_LABELS[props.applicationStatus]
+    }
+
     if (applied.value) {
         return 'applied'
     }
@@ -23,6 +29,13 @@ const label = computed(() => {
     return props.userLabel === 'forgo' ? 'forgone' : props.userLabel
 })
 const tone = computed(() => {
+    if (
+        props.showApplicationStatus &&
+        ['not-applied', 'rejected'].includes(props.applicationStatus)
+    ) {
+        return 'muted'
+    }
+
     if (applied.value) {
         return 'success'
     }

@@ -18,6 +18,7 @@ import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
 type ActivePanel = 'description' | 'detail' | 'outreach' | 'posts'
+type PostFilter = 'open' | 'active' | 'closed' | 'awaiting-replies' | 'outreach-responses'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
 
 const postStore = usePostStore()
@@ -34,6 +35,7 @@ const {
 } = storeToRefs(outreachStore)
 const initialOutreachPostId = outreachTaskVisible.value ? outreachPostId.value : null
 const entries = shallowRef<TrackedJobPost[]>([])
+const postFilter = shallowRef<PostFilter>('open')
 const selectedPostId = shallowRef<string | null>(
     initialOutreachPostId ?? readSessionStorage(selectedPostStorageKey),
 )
@@ -48,10 +50,38 @@ const contactError = shallowRef<string | null>(null)
 const recentlyMessagedContactId = shallowRef<string | null>(null)
 let loadRevision = 0
 
+const isClosedApplication = ({ applicationStatus }: TrackedJobPost['post']) =>
+    applicationStatus === 'rejected' || applicationStatus === 'hired'
+const openEntries = computed(() => entries.value.filter(({ post }) => !isClosedApplication(post)))
+const filteredEntries = computed(() => {
+    if (postFilter.value === 'active') {
+        return openEntries.value.filter(({ post }) =>
+            ['awaiting-response', 'interviewing'].includes(post.applicationStatus),
+        )
+    }
+
+    if (postFilter.value === 'closed') {
+        return entries.value.filter(({ post }) => isClosedApplication(post))
+    }
+
+    if (postFilter.value === 'awaiting-replies') {
+        return openEntries.value.filter(({ contacts }) =>
+            contacts.some(({ respondedAt }) => respondedAt === null),
+        )
+    }
+
+    if (postFilter.value === 'outreach-responses') {
+        return openEntries.value.filter(({ contacts }) =>
+            contacts.some(({ respondedAt }) => respondedAt !== null),
+        )
+    }
+
+    return openEntries.value
+})
 const selectedEntry = computed(
-    () => entries.value.find(({ post }) => post.id === selectedPostId.value) ?? null,
+    () => filteredEntries.value.find(({ post }) => post.id === selectedPostId.value) ?? null,
 )
-const trackedPosts = computed(() => entries.value.map(({ post }) => post))
+const trackedPosts = computed(() => filteredEntries.value.map(({ post }) => post))
 const statusUpdating = computed(
     () =>
         statusUpdatingPostId.value !== null && statusUpdatingPostId.value === selectedPostId.value,
@@ -80,24 +110,53 @@ const closedApplications = computed(
             .length,
 )
 const pendingOutreach = computed(() =>
-    entries.value.reduce(
+    openEntries.value.reduce(
         (count, { contacts }) =>
             count + contacts.filter(({ respondedAt }) => respondedAt === null).length,
         0,
     ),
 )
 const outreachResponses = computed(() =>
-    entries.value.reduce(
+    openEntries.value.reduce(
         (count, { contacts }) =>
             count + contacts.filter(({ respondedAt }) => respondedAt !== null).length,
         0,
     ),
 )
+const trackStats = computed(
+    () =>
+        [
+            {
+                filter: 'active',
+                testId: 'active-application-count',
+                label: 'Active applications',
+                count: activeApplications.value,
+            },
+            {
+                filter: 'closed',
+                testId: 'closed-application-count',
+                label: 'Closed applications',
+                count: closedApplications.value,
+            },
+            {
+                filter: 'awaiting-replies',
+                testId: 'pending-outreach-count',
+                label: 'Awaiting replies',
+                count: pendingOutreach.value,
+            },
+            {
+                filter: 'outreach-responses',
+                testId: 'outreach-response-count',
+                label: 'Outreach responses',
+                count: outreachResponses.value,
+            },
+        ] as const,
+)
 const attentionItems = computed(() => {
     const followUpDelay = 7 * 24 * 60 * 60 * 1_000
     const now = Date.now()
 
-    return entries.value
+    return openEntries.value
         .flatMap((entry) => {
             const pendingContact = entry.contacts.find(
                 ({ messagedAt, respondedAt }) =>
@@ -139,7 +198,7 @@ const attentionItems = computed(() => {
         .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt))
 })
 
-watch(entries, (currentEntries) => {
+watch(filteredEntries, (currentEntries) => {
     if (currentEntries.some(({ post }) => post.id === selectedPostId.value)) {
         return
     }
@@ -230,6 +289,10 @@ function selectPost(postId: string) {
     contactError.value = null
     outreachExpanded.value = false
     activePanel.value = 'detail'
+}
+
+function selectPostFilter(filter: Exclude<PostFilter, 'open'>) {
+    postFilter.value = postFilter.value === filter ? 'open' : filter
 }
 
 function showTrackedDetail() {
@@ -421,37 +484,34 @@ onMounted(() => {
             :selected-post-id="selectedPostId"
             :loading="loading"
             :error="error"
+            :empty-message="
+                entries.length
+                    ? postFilter === 'open'
+                        ? 'No open applications to track.'
+                        : 'No applications match this filter.'
+                    : 'No applied or contacted job posts to track.'
+            "
             loading-message="Loading tracked jobs…"
-            empty-message="No applied or contacted job posts to track."
+            show-application-status
             @select="selectPost"
             @retry="loadTrackedPosts"
         >
             <template #summary>
                 <div class="track-summary">
-                    <dl class="track-stats">
-                        <div
-                            data-testid="active-application-count"
-                            :data-count="activeApplications"
+                    <div class="track-stats">
+                        <button
+                            v-for="stat in trackStats"
+                            :key="stat.filter"
+                            :data-testid="stat.testId"
+                            :data-count="stat.count"
+                            :aria-pressed="postFilter === stat.filter"
+                            type="button"
+                            @click="selectPostFilter(stat.filter)"
                         >
-                            <dt>Active applications</dt>
-                            <dd>{{ activeApplications }}</dd>
-                        </div>
-                        <div
-                            data-testid="closed-application-count"
-                            :data-count="closedApplications"
-                        >
-                            <dt>Closed applications</dt>
-                            <dd>{{ closedApplications }}</dd>
-                        </div>
-                        <div data-testid="pending-outreach-count" :data-count="pendingOutreach">
-                            <dt>Awaiting replies</dt>
-                            <dd>{{ pendingOutreach }}</dd>
-                        </div>
-                        <div data-testid="outreach-response-count" :data-count="outreachResponses">
-                            <dt>Outreach Responses</dt>
-                            <dd>{{ outreachResponses }}</dd>
-                        </div>
-                    </dl>
+                            <span>{{ stat.label }}</span>
+                            <strong>{{ stat.count }}</strong>
+                        </button>
+                    </div>
 
                     <section v-if="attentionItems.length" class="attention">
                         <span class="section-label">Needs attention</span>
@@ -575,24 +635,34 @@ onMounted(() => {
     gap: $space-1 $space-4;
     margin: 0;
 
-    div {
+    button {
         display: flex;
+        width: 100%;
         gap: $space-2;
         align-items: baseline;
         justify-content: space-between;
         min-width: 0;
         padding: $space-1 0;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        background: transparent;
+        border: 0;
         border-bottom: 1px solid $color-ink-alpha-9;
+        cursor: pointer;
+
+        &[aria-pressed='true'] {
+            border-color: $color-signal-light;
+        }
     }
 
-    dt {
+    span {
         color: $color-ink-muted;
         font-size: 0.6875rem;
     }
 
-    dd {
+    strong {
         flex: none;
-        margin: 0;
         font-size: 0.9375rem;
         font-weight: 650;
     }

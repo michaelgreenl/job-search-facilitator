@@ -93,18 +93,8 @@ describe('track view', () => {
         firstMount.root
             .querySelector<HTMLButtonElement>('[data-testid="back-from-job-description"]')!
             .click()
-        firstMount.root
-            .querySelector<HTMLButtonElement>(`[data-testid="job-post-card-${second.post.id}"]`)!
-            .click()
-        await vi.waitFor(() =>
-            expect(
-                firstMount.root
-                    .querySelector('[data-testid="tracked-job-detail"]')
-                    ?.getAttribute('data-post-id'),
-            ).toBe(second.post.id),
-        )
         expect(sessionStorage.getItem('job-search-facilitator:track-selected-post')).toBe(
-            second.post.id,
+            first.post.id,
         )
         firstMount.unmount()
 
@@ -116,7 +106,7 @@ describe('track view', () => {
                 root
                     .querySelector('[data-testid="tracked-job-detail"]')
                     ?.getAttribute('data-post-id'),
-            ).toBe(second.post.id),
+            ).toBe(first.post.id),
         )
         expect(
             root
@@ -128,6 +118,106 @@ describe('track view', () => {
                 .querySelector('[data-testid="closed-application-count"]')
                 ?.getAttribute('data-count'),
         ).toBe('1')
+    })
+
+    it('filters cards with track stats and excludes closed outreach from counts', async () => {
+        const active = makeTrackedJobPost({
+            post: makeJobPost({
+                id: '30000000-0000-4000-8000-000000000001',
+                applicationStatus: 'interviewing',
+            }),
+            contacts: [
+                makeOutreachContact({
+                    id: '50000000-0000-4000-8000-000000000001',
+                    jobPostId: '30000000-0000-4000-8000-000000000001',
+                }),
+                makeOutreachContact({
+                    id: '50000000-0000-4000-8000-000000000002',
+                    jobPostId: '30000000-0000-4000-8000-000000000001',
+                    respondedAt: '2026-07-21T12:00:00.000Z',
+                }),
+            ],
+        })
+        const closed = makeTrackedJobPost({
+            post: makeJobPost({
+                id: '30000000-0000-4000-8000-000000000002',
+                applicationStatus: 'rejected',
+            }),
+            contacts: [
+                makeOutreachContact({
+                    id: '50000000-0000-4000-8000-000000000003',
+                    jobPostId: '30000000-0000-4000-8000-000000000002',
+                }),
+                makeOutreachContact({
+                    id: '50000000-0000-4000-8000-000000000004',
+                    jobPostId: '30000000-0000-4000-8000-000000000002',
+                    respondedAt: '2026-07-21T12:00:00.000Z',
+                }),
+            ],
+        })
+        const contacted = makeTrackedJobPost({
+            post: makeJobPost({
+                id: '30000000-0000-4000-8000-000000000003',
+                applicationStatus: 'not-applied',
+            }),
+            contacts: [],
+        })
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse([active, closed, contacted])),
+        )
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+        const card = (postId: string) =>
+            root.querySelector(`[data-testid="job-post-card-${postId}"]`)
+        const clickStat = (testId: string) =>
+            root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click()
+
+        await vi.waitFor(() => expect(card(active.post.id)).not.toBeNull())
+
+        expect(card(closed.post.id)).toBeNull()
+        expect(card(contacted.post.id)).not.toBeNull()
+        expect(card(active.post.id)?.textContent).toContain('Interviewing')
+        expect(
+            root
+                .querySelector('[data-testid="pending-outreach-count"]')
+                ?.getAttribute('data-count'),
+        ).toBe('1')
+        expect(
+            root
+                .querySelector('[data-testid="outreach-response-count"]')
+                ?.getAttribute('data-count'),
+        ).toBe('1')
+
+        clickStat('active-application-count')
+        await vi.waitFor(() => expect(card(contacted.post.id)).toBeNull())
+        expect(
+            root
+                .querySelector('[data-testid="active-application-count"]')
+                ?.getAttribute('aria-pressed'),
+        ).toBe('true')
+
+        clickStat('closed-application-count')
+        await vi.waitFor(() => expect(card(closed.post.id)).not.toBeNull())
+        expect(card(active.post.id)).toBeNull()
+        expect(card(closed.post.id)?.classList).toContain('post-card-closed')
+        expect(card(closed.post.id)?.textContent).toContain('Rejected')
+
+        clickStat('pending-outreach-count')
+        await vi.waitFor(() => expect(card(active.post.id)).not.toBeNull())
+        expect(card(closed.post.id)).toBeNull()
+
+        clickStat('outreach-response-count')
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="outreach-response-count"]')
+                    ?.getAttribute('aria-pressed'),
+            ).toBe('true'),
+        )
+        expect(card(active.post.id)).not.toBeNull()
+        expect(card(closed.post.id)).toBeNull()
     })
 
     it('opens saved outreach drafts beside the tracked application', async () => {

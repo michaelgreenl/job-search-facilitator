@@ -24,6 +24,7 @@ const props = withDefaults(
         loading?: boolean
         error?: string | null
         pending?: boolean
+        showApplicationStatus?: boolean
     }>(),
     {
         titleTag: 'h2',
@@ -33,6 +34,7 @@ const props = withDefaults(
         loading: false,
         error: null,
         pending: false,
+        showApplicationStatus: false,
     },
 )
 const orderedPosts = computed(() => [
@@ -93,7 +95,12 @@ const emit = defineEmits<{
                         as="button"
                         class="post-card"
                         :data-testid="`job-post-card-${post.id}`"
-                        :class="{ 'post-card-forgone': post.userLabel === 'forgo' }"
+                        :class="{
+                            'post-card-forgone': post.userLabel === 'forgo',
+                            'post-card-closed':
+                                showApplicationStatus &&
+                                ['rejected', 'hired'].includes(post.applicationStatus),
+                        }"
                         :aria-pressed="selectedPostId === post.id"
                         :selected="selectedPostId === post.id"
                         @click="emit('select', post.id)"
@@ -103,6 +110,7 @@ const emit = defineEmits<{
                             <JobPostLabel
                                 :application-status="post.applicationStatus"
                                 :user-label="post.userLabel"
+                                :show-application-status="showApplicationStatus"
                                 compact
                             />
                         </div>
@@ -159,7 +167,8 @@ const emit = defineEmits<{
     gap: $space-1;
     padding: $space-4;
 
-    &-forgone {
+    &-forgone,
+    &-closed {
         filter: grayscale(1);
         opacity: 0.55;
     }
