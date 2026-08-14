@@ -16,12 +16,11 @@ import { z, type RefinementCtx } from 'zod'
 import { upsertJobSearchReportInputSchema } from './api/schemas/search-report.schema.ts'
 import { identityTokensForPost } from './job-post-identity.ts'
 
-const MAX_JOB_SEARCH_CANDIDATES = 24
 export const MAX_JOB_SEARCH_CANDIDATE_BYTES = 128 * 1024
-export const MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES = 240 * 1024
-export const MAX_JOB_SEARCH_REVIEW_BYTES = 256 * 1024
-export const MAX_JOB_SEARCH_JUDGMENT_BYTES = 192 * 1024
-export const MAX_JOB_SEARCH_SELECTION_BYTES = 192 * 1024
+export const MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES = MAX_JSON_REQUEST_BYTES
+export const MAX_JOB_SEARCH_REVIEW_BYTES = MAX_JOB_SEARCH_CANDIDATE_POOL_BYTES + 1024
+export const MAX_JOB_SEARCH_JUDGMENT_BYTES = MAX_JSON_REQUEST_BYTES
+export const MAX_JOB_SEARCH_SELECTION_BYTES = MAX_JSON_REQUEST_BYTES
 export const MAX_JOB_SEARCH_COVERAGE_BYTES = 64 * 1024
 export const MAX_JOB_SEARCH_HISTORY_RESPONSE_BYTES = 8 * 1024 * 1024
 export const MAX_JOB_SEARCH_HISTORY_IDENTITY_BYTES = MAX_JOB_SEARCH_HISTORY_RESPONSE_BYTES * 2
@@ -202,7 +201,7 @@ const addUniqueCandidateIssues = (
     })
 }
 
-const candidateListSchema = z.array(acceptedCandidateSchema).max(MAX_JOB_SEARCH_CANDIDATES)
+const candidateListSchema = z.array(acceptedCandidateSchema)
 const candidatePoolSchema = candidateListSchema.superRefine(addUniqueCandidateIssues)
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
 const reviewDigestSchema = z.string().regex(/^[a-f0-9]{64}$/)
@@ -276,24 +275,21 @@ const selectionEntrySchema = z.strictObject({
 })
 const selectionArtifactSchema = z.strictObject({
     reviewDigest: reviewDigestSchema,
-    selections: z
-        .array(selectionEntrySchema)
-        .max(MAX_JOB_SEARCH_CANDIDATES)
-        .superRefine((selections, context) => {
-            const sourceKeys = new Set<string>()
+    selections: z.array(selectionEntrySchema).superRefine((selections, context) => {
+        const sourceKeys = new Set<string>()
 
-            selections.forEach((selection, index) => {
-                if (sourceKeys.has(selection.sourceKey)) {
-                    context.addIssue({
-                        code: 'custom',
-                        message: 'Selected source keys must be unique',
-                        path: [index, 'sourceKey'],
-                    })
-                }
+        selections.forEach((selection, index) => {
+            if (sourceKeys.has(selection.sourceKey)) {
+                context.addIssue({
+                    code: 'custom',
+                    message: 'Selected source keys must be unique',
+                    path: [index, 'sourceKey'],
+                })
+            }
 
-                sourceKeys.add(selection.sourceKey)
-            })
-        }),
+            sourceKeys.add(selection.sourceKey)
+        })
+    }),
 })
 
 const selectedJudgmentEntrySchema = z.strictObject({
@@ -314,40 +310,36 @@ const judgmentEntrySchema = z.discriminatedUnion('verdict', [
 ])
 const judgmentArtifactSchema = z.strictObject({
     reviewDigest: reviewDigestSchema,
-    decisions: z
-        .array(judgmentEntrySchema)
-        .max(MAX_JOB_SEARCH_CANDIDATES)
-        .superRefine((decisions, context) => {
-            const sourceKeys = new Set<string>()
-            let reachedRejections = false
+    decisions: z.array(judgmentEntrySchema).superRefine((decisions, context) => {
+        const sourceKeys = new Set<string>()
+        let reachedRejections = false
 
-            decisions.forEach((decision, index) => {
-                if (sourceKeys.has(decision.sourceKey)) {
-                    context.addIssue({
-                        code: 'custom',
-                        message: 'Judged source keys must be unique',
-                        path: [index, 'sourceKey'],
-                    })
-                }
+        decisions.forEach((decision, index) => {
+            if (sourceKeys.has(decision.sourceKey)) {
+                context.addIssue({
+                    code: 'custom',
+                    message: 'Judged source keys must be unique',
+                    path: [index, 'sourceKey'],
+                })
+            }
 
-                sourceKeys.add(decision.sourceKey)
-                if (decision.verdict === 'reject') {
-                    reachedRejections = true
-                } else if (reachedRejections) {
-                    context.addIssue({
-                        code: 'custom',
-                        message: 'Selected decisions must precede rejected decisions',
-                        path: [index, 'verdict'],
-                    })
-                }
-            })
-        }),
+            sourceKeys.add(decision.sourceKey)
+            if (decision.verdict === 'reject') {
+                reachedRejections = true
+            } else if (reachedRejections) {
+                context.addIssue({
+                    code: 'custom',
+                    message: 'Selected decisions must precede rejected decisions',
+                    path: [index, 'verdict'],
+                })
+            }
+        })
+    }),
 })
 
 const coverageTextSchema = z.string().trim().min(1).max(1_000)
 const MIN_RELIABLE_COMPLETED_LANES = 3
-const MIN_RELIABLE_OPERATIONS_PER_LANE = 4
-const MIN_USEFUL_CANDIDATE_HANDOFF = 16
+const MIN_RELIABLE_OPERATIONS_PER_LANE = 7
 const JOB_SEARCH_COVERAGE_LANES = [
     'linkedin',
     'indeed',
@@ -363,14 +355,12 @@ const coverageAccessMethodByLane = {
 const coverageSourceSchema = z
     .strictObject({
         lane: z.enum(JOB_SEARCH_COVERAGE_LANES),
-        operations: z
-            .array(
-                z.strictObject({
-                    query: coverageTextSchema,
-                    completion: z.enum(['two-pages-reviewed', 'all-results-reviewed']),
-                }),
-            )
-            .max(12),
+        operations: z.array(
+            z.strictObject({
+                query: coverageTextSchema,
+                completion: z.enum(['two-pages-reviewed', 'all-results-reviewed']),
+            }),
+        ),
         accessMethod: z.enum([
             'installed-chrome-plugin',
             'public-employer-ats',
@@ -425,7 +415,6 @@ const coverageSchema = z.strictObject({
                 lanes.add(lane)
             })
         }),
-    deferred: z.number().int().nonnegative(),
 })
 
 const reliableCoverageSchema = coverageSchema.superRefine((coverage, context) => {
@@ -864,18 +853,6 @@ export const validateCoverageHandoff = (
     const candidates = validateCandidatePool(candidateValue)
     const coverage = validateCoverage(coverageValue, true)
 
-    if (candidates.length < MIN_USEFUL_CANDIDATE_HANDOFF && coverage.deferred > 0) {
-        z.unknown()
-            .superRefine((_value, context) => {
-                context.addIssue({
-                    code: 'custom',
-                    message: `Deferred candidates must be backfilled while fewer than ${MIN_USEFUL_CANDIDATE_HANDOFF} candidates reach judgment`,
-                    path: ['deferred'],
-                })
-            })
-            .parse(coverage)
-    }
-
     return { candidates, coverage }
 }
 
@@ -900,7 +877,7 @@ export const assembleFinalReport = (
         (source) => source.blocker === null && source.operations.length >= 2,
     ).length
     const blockedLaneCount = coverage.sources.filter(({ blocker }) => blocker !== null).length
-    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${coverage.deferred} deferred at the candidate limit; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
+    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
     const candidateBySourceKey = new Map(
         candidates.map((candidate) => [candidate.post.sourceKey, candidate]),
     )
@@ -1145,7 +1122,6 @@ export const renderJobSearchMarkdown = (
         escapeMarkdownText(payload.summary),
         '',
         `- Qualified: ${payload.results.length}`,
-        `- Deferred: ${coverage.deferred}`,
         '',
         '## Coverage',
         '',

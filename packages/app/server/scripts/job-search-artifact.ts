@@ -174,7 +174,6 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
                 blockedLanes: coverage.sources
                     .filter(({ blocker }) => blocker !== null)
                     .map(({ lane }) => lane),
-                deferred: coverage.deferred,
             })
             return
         }

@@ -28,7 +28,6 @@ import {
     validateAcceptedCandidate,
     validateCandidatePool,
     validateCoverage,
-    validateCoverageHandoff,
     validateSelection,
     validateSerializedCoverage,
     validateSerializedReport,
@@ -101,6 +100,18 @@ const coverage: JobSearchCoverage = {
                     query: 'Internal tools engineer, posted within fourteen days',
                     completion: 'two-pages-reviewed',
                 },
+                {
+                    query: 'Associate frontend engineer, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Software engineer I, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Software engineer, two to three years, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
             ],
             accessMethod: 'installed-chrome-plugin',
             blocker: null,
@@ -122,6 +133,18 @@ const coverage: JobSearchCoverage = {
                 },
                 {
                     query: 'Internal tools engineer, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Associate frontend engineer, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Software engineer I, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Software engineer, two to three years, posted within fourteen days',
                     completion: 'two-pages-reviewed',
                 },
             ],
@@ -147,6 +170,18 @@ const coverage: JobSearchCoverage = {
                     query: 'Employer careers backend API engineer',
                     completion: 'all-results-reviewed',
                 },
+                {
+                    query: 'Employer careers associate software engineer',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Employer careers software engineer I',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Employer careers software engineer two to three years',
+                    completion: 'all-results-reviewed',
+                },
             ],
             accessMethod: 'public-employer-ats',
             blocker: null,
@@ -170,12 +205,23 @@ const coverage: JobSearchCoverage = {
                     query: 'Fourth rotating long-tail query',
                     completion: 'all-results-reviewed',
                 },
+                {
+                    query: 'Fifth rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Sixth rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Seventh rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
             ],
             accessMethod: 'public-long-tail',
             blocker: null,
         },
     ],
-    deferred: 0,
 }
 
 const issuePaths = (operation: () => unknown): PropertyKey[][] => {
@@ -541,7 +587,7 @@ describe('search-stage candidate boundary', () => {
         ).toContainEqual([1, 'post', 'sourceKey'])
     })
 
-    it('rejects more than 24 candidates', () => {
+    it('accepts every discovered candidate beyond the old 24-candidate cap', () => {
         const candidates = Array.from({ length: 25 }, (_, index) => ({
             ...candidate,
             post: {
@@ -552,7 +598,7 @@ describe('search-stage candidate boundary', () => {
             },
         }))
 
-        expect(issuePaths(() => validateCandidatePool(candidates))).toContainEqual([])
+        expect(validateCandidatePool(candidates)).toHaveLength(25)
     })
 
     it('rejects an existing identity before writing the review file', async () => {
@@ -1044,29 +1090,6 @@ describe('judgment and report assembly', () => {
         ).toContainEqual(['reviewDigest'])
     })
 
-    it('backfills deferred candidates until the useful judgment handoff size', () => {
-        const boundedCoverage = { ...coverage, deferred: 1 }
-        const candidates = Array.from(
-            { length: 16 },
-            (_, index): StageCandidate => ({
-                ...candidate,
-                post: {
-                    ...candidate.post,
-                    sourceKey: `company:${index}`,
-                    postUrl: `https://example.com/jobs/${index}`,
-                    applicationUrl: `https://example.com/jobs/${index}/apply`,
-                },
-            }),
-        )
-
-        expect({
-            belowTarget: issuePaths(() =>
-                validateCoverageHandoff(boundedCoverage, candidates.slice(0, 15)),
-            ),
-            atTarget: validateCoverageHandoff(boundedCoverage, candidates).candidates.length,
-        }).toEqual({ belowTarget: [['deferred']], atTarget: 16 })
-    })
-
     it('allows a reliable run with zero candidates', () => {
         const report = assembleFinalReport(
             [],
@@ -1150,7 +1173,6 @@ describe('deterministic Markdown reporting', () => {
                     'all-results-reviewed'),
             blocker: (_changed, changedCoverage) =>
                 void (changedCoverage.sources[0]!.blocker = 'Changed.'),
-            deferred: (_changed, changedCoverage) => void (changedCoverage.deferred += 1),
         }
         const baseline = renderJobSearchMarkdown(reportDate, reportId, payload, coverage)
         const unchanged = Object.entries(mutations)
