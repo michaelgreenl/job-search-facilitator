@@ -36,13 +36,14 @@ const recommendation = {
 
 function mountViewer(
     overrides: Partial<JobPost> = {},
-    options: { recommendation?: StandaloneJobRecommendation } = {},
+    options: { description?: string; recommendation?: StandaloneJobRecommendation } = {},
 ) {
     const { root } = mountVue(JobPostViewPanel, {
         props: {
             active: true,
             adjacent: false,
             post: { ...post, ...overrides },
+            description: options.description,
             recommendation: options.recommendation,
             labelUpdating: false,
             labelError: null,
@@ -113,6 +114,14 @@ describe('JobPostViewPanel', () => {
 
         expect(root.querySelector('[data-testid="post-recommendation"]')).not.toBeNull()
         expect(root.querySelector('[data-testid="post-legitimacy"]')).not.toBeNull()
+    })
+
+    it('renders the job description as the final content section', () => {
+        const root = mountViewer({}, { description: 'Complete job description' })
+        const description = root.querySelector('[data-testid="post-description"]')
+
+        expect(description).not.toBeNull()
+        expect(description?.parentElement?.lastElementChild).toBe(description)
     })
 
     it('omits empty optional recommendation sections', () => {

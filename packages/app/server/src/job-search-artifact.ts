@@ -951,7 +951,12 @@ const responseVisibleRecommendationFields = [
     'legitimacyNotes',
 ] as const
 
-const responseResultFields = [...responseVisibleRecommendationFields, 'post'] as const
+const responseResultFields = [
+    ...responseVisibleRecommendationFields,
+    'post',
+    'jobPostSnapshot',
+] as const
+const responseSnapshotFields = ['description', 'sourceUrl', 'capturedAt'] as const
 const responseReportFields = [
     'id',
     'reportDate',
@@ -1022,6 +1027,13 @@ const responseMatchesPayloadSchema = (
                 responsePostFields,
                 ['results', index, 'post'],
             )
+            if (actualResult.jobPostSnapshot !== null) {
+                rejectUnexpectedFields(
+                    actualResult.jobPostSnapshot as unknown as Record<string, unknown>,
+                    responseSnapshotFields,
+                    ['results', index, 'jobPostSnapshot'],
+                )
+            }
 
             responseVisibleRecommendationFields.forEach((field) => {
                 compare(actualResult[field], expectedResult[field], ['results', index, field])
@@ -1034,6 +1046,18 @@ const responseMatchesPayloadSchema = (
                     field,
                 ])
             })
+            compare(actualResult.jobPostSnapshot?.description, expectedResult.post.description, [
+                'results',
+                index,
+                'jobPostSnapshot',
+                'description',
+            ])
+            compare(actualResult.jobPostSnapshot?.sourceUrl, expectedResult.post.postUrl, [
+                'results',
+                index,
+                'jobPostSnapshot',
+                'sourceUrl',
+            ])
         })
     })
 

@@ -110,6 +110,7 @@ export interface JobRecommendationContext extends JobRecommendation {
 
 export interface JobSearchResult extends JobRecommendation {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
 }
 
 export interface JobSearchResultInput extends JobRecommendation {
@@ -129,12 +130,14 @@ export type CreateUserAddedJobPostInput = StandaloneJobRecommendation & {
 
 export type UserAddedJobPost = StandaloneJobRecommendation & {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
     addedAt: IsoDateTime
     updatedAt: IsoDateTime
 }
 
 export interface ApplyQueueItem {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
     recommendationContext: JobRecommendationContext | null
     applicationArtifacts: ApplicationArtifact[]
 }

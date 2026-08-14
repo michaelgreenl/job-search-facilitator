@@ -117,17 +117,20 @@ const jobRecommendationContextSchema: z.ZodType<JobRecommendationContext> = z.lo
 const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
     ...jobRecommendationShape,
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
 })
 
 const userAddedJobPostSchema: z.ZodType<UserAddedJobPost> = z.looseObject({
     ...standaloneJobRecommendationShape,
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
     addedAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
 })
 
 const applyQueueItemSchema: z.ZodType<ApplyQueueItem> = z.looseObject({
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
     recommendationContext: jobRecommendationContextSchema.nullable(),
     applicationArtifacts: z.array(applicationArtifactSchema),
 })

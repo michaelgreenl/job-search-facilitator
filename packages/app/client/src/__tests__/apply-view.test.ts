@@ -48,13 +48,23 @@ const createRecommendation = (post: JobPost, index: number): JobRecommendationCo
     })
 const applyQueueItems: ApplyQueueItem[] = posts.map((post, index) => ({
     post,
+    jobPostSnapshot: {
+        description: `Fixture job description ${index}`,
+        sourceUrl: post.postUrl,
+        capturedAt: post.updatedAt,
+    },
     recommendationContext: createRecommendation(post, index),
     applicationArtifacts: [],
 }))
 const createApplyQueueItem = (
     post: JobPost,
     recommendationContext: JobRecommendationContext | null = null,
-): ApplyQueueItem => ({ post, recommendationContext, applicationArtifacts: [] })
+): ApplyQueueItem => ({
+    post,
+    jobPostSnapshot: null,
+    recommendationContext,
+    applicationArtifacts: [],
+})
 
 const runningAgentTask = makeAgentTask({
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -235,6 +245,7 @@ describe('apply view', () => {
         expect(
             root.querySelector('[data-testid="apply-viewer-panel"]')?.getAttribute('data-active'),
         ).toBe('true')
+        expect(root.querySelector('[data-testid="post-description"]')).not.toBeNull()
         expect(postButton(root, posts[1]!.id).getAttribute('aria-pressed')).toBe('true')
 
         findTestButton(root, 'back-to-job-posts').click()

@@ -83,6 +83,7 @@ const retainedForgoneLabelByPostId = reactive(new Map<string, ApplyLabel>())
 const recommendationContextByPostId = shallowRef<
     ReadonlyMap<string, JobRecommendationContext | null>
 >(new Map())
+const descriptionByPostId = shallowRef<ReadonlyMap<string, string>>(new Map())
 const artifactsByPostId = reactive(new Map<string, ApplicationArtifact[]>())
 let viewMounted = true
 
@@ -123,6 +124,11 @@ const selectedRecommendationContext = computed(() =>
     selectedPostId.value === null
         ? null
         : (recommendationContextByPostId.value.get(selectedPostId.value) ?? null),
+)
+const selectedDescription = computed(() =>
+    selectedPostId.value === null
+        ? null
+        : (descriptionByPostId.value.get(selectedPostId.value) ?? null),
 )
 const outreachPost = computed(() =>
     outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
@@ -511,6 +517,11 @@ async function loadApplyQueue() {
         recommendationContextByPostId.value = new Map(
             items.map(({ post, recommendationContext }) => [post.id, recommendationContext]),
         )
+        descriptionByPostId.value = new Map(
+            items.flatMap(({ post, jobPostSnapshot }) =>
+                jobPostSnapshot === null ? [] : [[post.id, jobPostSnapshot.description]],
+            ),
+        )
     } catch (error) {
         listError.value = error instanceof Error ? error.message : 'Could not load Apply queue'
     } finally {
@@ -628,6 +639,7 @@ onMounted(() => {
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
                 :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                 :post="selectedPost"
+                :description="selectedDescription"
                 :recommendation="selectedRecommendationContext ?? undefined"
                 :label-updating="labelUpdating || applyQueuePostIds === null"
                 :label-error="labelError"

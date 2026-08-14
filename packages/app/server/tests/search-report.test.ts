@@ -53,6 +53,7 @@ const existingReport: JobSearchReport = {
             recommendedAction: 'Apply today',
             legitimacyNotes: null,
             post,
+            jobPostSnapshot: null,
         },
     ],
 }

@@ -3,6 +3,7 @@ import {
     type JobPost,
     type JobSearchReport,
     type StandaloneJobRecommendation,
+    type UserAddedJobPost,
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
@@ -31,8 +32,17 @@ const postFilterStorageKey = 'job-search-facilitator:review-post-filter'
 
 interface ReviewItem {
     post: JobPost
+    description: string | null
     recommendation: StandaloneJobRecommendation
 }
+
+type ReviewSourceItem = JobSearchReport['results'][number] | UserAddedJobPost
+
+const toReviewItem = (item: ReviewSourceItem): ReviewItem => ({
+    post: item.post,
+    description: item.jobPostSnapshot?.description ?? null,
+    recommendation: item,
+})
 
 const postFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -92,16 +102,10 @@ const selectedReport = computed(() => {
 })
 const selectedItems = computed<ReviewItem[]>(() => {
     if (selectedSource.value?.kind === 'user-added') {
-        return postStore.userAddedPosts.map((item) => ({
-            post: item.post,
-            recommendation: item,
-        }))
+        return postStore.userAddedPosts.map(toReviewItem)
     }
 
-    return (selectedReport.value?.results ?? []).map((result) => ({
-        post: result.post,
-        recommendation: result,
-    }))
+    return (selectedReport.value?.results ?? []).map(toReviewItem)
 })
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -227,17 +231,9 @@ function restoreRouteSelection() {
     }
 }
 
-const toReviewItems = (report: JobSearchReport): ReviewItem[] =>
-    report.results.map((result) => ({
-        post: result.post,
-        recommendation: result,
-    }))
+const toReviewItems = (report: JobSearchReport): ReviewItem[] => report.results.map(toReviewItem)
 
-const selectedItemsForUserAdded = (): ReviewItem[] =>
-    postStore.userAddedPosts.map((item) => ({
-        post: item.post,
-        recommendation: item,
-    }))
+const selectedItemsForUserAdded = (): ReviewItem[] => postStore.userAddedPosts.map(toReviewItem)
 
 const filteredItems = computed(() => {
     const items = selectedItems.value
@@ -377,6 +373,7 @@ watch(
         selectedSource.value = source
         selectedItem.value = {
             post: savedItem.post,
+            description: savedItem.jobPostSnapshot?.description ?? null,
             recommendation: savedItem,
         }
         labelError.value = null
@@ -621,6 +618,7 @@ onMounted(() => {
                 back-label="Back to job posts"
                 back-mobile-only
                 :post="selectedItem.post"
+                :description="selectedItem.description"
                 :recommendation="selectedItem.recommendation"
                 :label-updating="labelUpdating"
                 :label-error="labelError"

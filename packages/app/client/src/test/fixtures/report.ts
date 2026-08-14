@@ -26,6 +26,11 @@ export function makeJobSearchReport(
                 recommendedAction: 'Apply',
                 legitimacyNotes: null,
                 post,
+                jobPostSnapshot: {
+                    description: 'Complete job description',
+                    sourceUrl: post.postUrl,
+                    capturedAt: `${reportDate}T12:00:00.000Z`,
+                },
             },
         ],
         ...overrides,

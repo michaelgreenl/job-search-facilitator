@@ -37,6 +37,11 @@ const userAddedPost: UserAddedJobPost = {
     recommendedAction: 'Tailor the frontend resume and apply',
     legitimacyNotes: null,
     post,
+    jobPostSnapshot: {
+        description: 'Complete job description',
+        sourceUrl: post.postUrl,
+        capturedAt: '2026-07-27T12:00:00.000Z',
+    },
     addedAt: '2026-07-27T12:00:00.000Z',
     updatedAt: '2026-07-27T12:00:00.000Z',
 }

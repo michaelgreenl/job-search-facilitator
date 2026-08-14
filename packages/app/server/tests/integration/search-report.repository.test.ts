@@ -183,6 +183,9 @@ describe('job post repository', () => {
 
         expect(created.created).toBe(true)
         expect(items).toEqual([created.item])
+        expect(created.item.jobPostSnapshot?.description).toBe(
+            createUserAddedInput().post.description,
+        )
         expect(postCount).toBe(1)
         expect(userAddedCount).toBe(1)
         expect(reportCount).toBe(0)
@@ -411,6 +414,7 @@ describe('job post repository', () => {
         expect(sourceKeys).toEqual(
             expect.arrayContaining(['example-source:1', 'example-source:2', 'example-source:3']),
         )
+        expect(applyQueueItems.every(({ jobPostSnapshot }) => jobPostSnapshot !== null)).toBe(true)
     })
 
     it('selects tracked posts by applied or messaged outreach status with all of their contacts', async () => {
@@ -757,6 +761,9 @@ describe('search report repository', () => {
 
         expect(initial.created).toBe(true)
         expect(replacement.created).toBe(false)
+        expect(replacement.report.results[0]?.jobPostSnapshot?.description).toBe(
+            replacementInput.results[0]?.post.description,
+        )
         expect(replacement.report).toMatchObject({
             id: initial.report.id,
             summary: replacementInput.summary,

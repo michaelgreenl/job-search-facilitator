@@ -37,6 +37,7 @@ const props = defineProps<{
     backLabel?: string
     backMobileOnly?: boolean
     post: JobPost
+    description?: string | null
     recommendation?: StandaloneJobRecommendation
     labelUpdating: boolean
     labelError: string | null
@@ -132,6 +133,7 @@ const content = computed(() => {
 
     return {
         compensation: normalizeText(props.post.compensation),
+        description: normalizeText(props.description),
         fitRationale: normalizeText(props.recommendation?.fitRationale),
         keyLegitimacySignals: normalizeText(
             props.mode.kind === 'review' ? props.recommendation?.keyLegitimacySignals : null,
@@ -161,7 +163,9 @@ const hasLegitimacy = computed(
     () => content.value.keyLegitimacySignals !== null || content.value.legitimacyNotes !== null,
 )
 const hasAnalysis = computed(() => hasRecommendation.value || hasLegitimacy.value)
-const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
+const hasContent = computed(
+    () => hasFacts.value || hasAnalysis.value || content.value.description !== null,
+)
 
 const isUserLabel = (value: string): value is UserLabel =>
     USER_LABELS.some((label) => label === value)
@@ -345,6 +349,15 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                         </div>
                     </section>
                 </div>
+
+                <section
+                    v-if="content.description"
+                    class="content-section"
+                    data-testid="post-description"
+                >
+                    <h3 class="content-section-title">Job description</h3>
+                    <p class="content-copy">{{ content.description }}</p>
+                </section>
             </div>
 
             <div v-if="applyMode" class="viewer-footer">

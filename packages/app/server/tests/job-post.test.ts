@@ -35,6 +35,7 @@ const existingPost: JobPost = {
 const missingPostId = '22222222-2222-4222-8222-222222222222'
 const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
+    jobPostSnapshot: null,
     recommendationContext: null,
     applicationArtifacts: [],
 }
@@ -58,6 +59,7 @@ const userAddedPost: UserAddedJobPost = {
     recommendedAction: 'Apply today',
     legitimacyNotes: null,
     post: existingPost,
+    jobPostSnapshot: null,
     addedAt: '2026-07-12T10:00:00.000Z',
     updatedAt: '2026-07-12T10:00:00.000Z',
 }

@@ -1529,7 +1529,17 @@ const response: JobSearchReport = {
     createdAt: '2026-08-09T12:00:00.000Z',
     updatedAt: '2026-08-09T12:00:00.000Z',
     archivedAt: null,
-    results: [{ ...payload.results[0]!, post: responsePost }],
+    results: [
+        {
+            ...payload.results[0]!,
+            post: responsePost,
+            jobPostSnapshot: {
+                description: payload.results[0]!.post.description,
+                sourceUrl: payload.results[0]!.post.postUrl,
+                capturedAt: '2026-08-09T12:00:00.000Z',
+            },
+        },
+    ],
 }
 
 describe('delivery verification', () => {

@@ -1,7 +1,11 @@
 import type { JobSearchReport, UpsertJobSearchReportInput } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import { identityTokensForPost } from '../../job-post-identity.ts'
-import { toJobPost, toPrismaJobPostListingData } from '../mappers/job-post.mapper.ts'
+import {
+    toJobPost,
+    toJobPostSnapshot,
+    toPrismaJobPostListingData,
+} from '../mappers/job-post.mapper.ts'
 import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
 import {
     toJobRecommendation,
@@ -12,7 +16,7 @@ import { prisma } from '../prisma.ts'
 
 const reportInclude = {
     results: {
-        include: { post: true },
+        include: { post: { include: { snapshot: true } } },
         orderBy: { agentRank: 'asc' },
     },
 } satisfies Prisma.JobSearchReportInclude
@@ -32,6 +36,8 @@ const toJobSearchReport = (report: PrismaSearchReport): JobSearchReport => ({
     results: report.results.map((result) => ({
         ...toJobRecommendation(result),
         post: toJobPost(result.post),
+        jobPostSnapshot:
+            result.post.snapshot === null ? null : toJobPostSnapshot(result.post.snapshot),
     })),
 })
 

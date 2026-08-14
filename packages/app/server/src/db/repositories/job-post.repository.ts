@@ -57,6 +57,7 @@ const applyQueueWhere = {
 // Archived reports remain eligible. Recency is report date, then creation time, then ID;
 // updating an older report does not make its recommendation current.
 const applyQueueInclude = {
+    snapshot: true,
     results: {
         take: 1,
         orderBy: [
@@ -170,6 +171,7 @@ export const jobPostRepository: JobPostRepository = {
 
         return posts.map((post) => ({
             post: toJobPost(post),
+            jobPostSnapshot: post.snapshot === null ? null : toJobPostSnapshot(post.snapshot),
             recommendationContext:
                 post.results[0] === undefined ? null : toRecommendationContext(post.results[0]),
             applicationArtifacts: post.applicationArtifacts.map(toApplicationArtifact),

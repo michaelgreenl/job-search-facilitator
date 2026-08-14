@@ -82,6 +82,7 @@ const report: JobSearchReport = {
             recommendedAction: 'Apply',
             legitimacyNotes: null,
             post,
+            jobPostSnapshot: null,
         },
     ],
 }
@@ -293,10 +294,15 @@ describe('post store', () => {
 
     it('loads the Apply queue from its endpoint', async () => {
         const applyQueuePost = { ...post, userLabel: 'P1' as const }
-        const { post: _reportPost, ...recommendation } = report.results[0]!
+        const {
+            post: _reportPost,
+            jobPostSnapshot: _reportSnapshot,
+            ...recommendation
+        } = report.results[0]!
         const applyQueueItems: ApplyQueueItem[] = [
             {
                 post: applyQueuePost,
+                jobPostSnapshot: null,
                 recommendationContext: {
                     reportId: report.id,
                     reportDate: report.reportDate,

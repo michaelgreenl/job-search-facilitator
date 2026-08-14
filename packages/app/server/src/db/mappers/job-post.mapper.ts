@@ -14,7 +14,7 @@ type PrismaJobPost = Prisma.JobPostGetPayload<object>
 type PrismaJobPostSnapshot = Prisma.JobPostSnapshotGetPayload<object>
 
 export const userAddedJobPostInclude = {
-    post: true,
+    post: { include: { snapshot: true } },
 } satisfies Prisma.UserAddedJobPostInclude
 
 type PrismaUserAddedJobPost = Prisma.UserAddedJobPostGetPayload<{
@@ -92,6 +92,7 @@ export const toJobPostSnapshot = (snapshot: PrismaJobPostSnapshot): JobPostSnaps
 export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPost => ({
     ...toStandaloneJobRecommendation(item),
     post: toJobPost(item.post),
+    jobPostSnapshot: item.post.snapshot === null ? null : toJobPostSnapshot(item.post.snapshot),
     addedAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
 })

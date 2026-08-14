@@ -53,8 +53,15 @@ export function makeApplyQueueItem(
     recommendationOverrides?: Partial<JobRecommendationContext> | null,
     applicationArtifacts: ApplicationArtifact[] = [],
 ): ApplyQueueItem {
+    const post = makeJobPost(postOverrides)
+
     return {
-        post: makeJobPost(postOverrides),
+        post,
+        jobPostSnapshot: {
+            description: 'Complete job description',
+            sourceUrl: post.postUrl,
+            capturedAt: post.updatedAt,
+        },
         recommendationContext:
             recommendationOverrides === null
                 ? null

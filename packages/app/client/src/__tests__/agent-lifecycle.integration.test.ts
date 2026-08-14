@@ -66,6 +66,11 @@ const savedImportedItem = {
         id: '30000000-0000-4000-8000-000000000001',
         ...importOutput.post,
     }),
+    jobPostSnapshot: {
+        description: importOutput.post.description,
+        sourceUrl: importOutput.post.postUrl,
+        capturedAt: '2026-07-20T12:00:00.000Z',
+    },
     addedAt: '2026-07-20T12:00:00.000Z',
     updatedAt: '2026-07-20T12:00:00.000Z',
 } satisfies UserAddedJobPost
