@@ -5,7 +5,7 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
     'not-applied': 'Not applied',
     'awaiting-response': 'Awaiting response',
     interviewing: 'Interviewing',
-    rejected: 'Rejected',
+    rejected: 'Closed',
     hired: 'Job Offer',
 }
 

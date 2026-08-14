@@ -661,6 +661,11 @@ onMounted(() => {
         font-size: 0.6875rem;
     }
 
+    button:hover span,
+    button:focus-visible span {
+        color: $color-ink;
+    }
+
     strong {
         flex: none;
         font-size: 0.9375rem;

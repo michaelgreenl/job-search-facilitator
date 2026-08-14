@@ -202,7 +202,7 @@ describe('track view', () => {
         await vi.waitFor(() => expect(card(closed.post.id)).not.toBeNull())
         expect(card(active.post.id)).toBeNull()
         expect(card(closed.post.id)?.classList).toContain('post-card-closed')
-        expect(card(closed.post.id)?.textContent).toContain('Rejected')
+        expect(card(closed.post.id)?.textContent).toContain('Closed')
 
         clickStat('pending-outreach-count')
         await vi.waitFor(() => expect(card(active.post.id)).not.toBeNull())
