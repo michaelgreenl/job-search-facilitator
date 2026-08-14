@@ -28,6 +28,7 @@ import {
     validateAcceptedCandidate,
     validateCandidatePool,
     validateCoverage,
+    validateCoverageHandoff,
     validateSelection,
     validateSerializedCoverage,
     validateSerializedReport,
@@ -92,6 +93,14 @@ const coverage: JobSearchCoverage = {
                     query: 'Frontend engineer, posted within three days',
                     completion: 'two-pages-reviewed',
                 },
+                {
+                    query: 'Full-stack product engineer, posted within seven days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Internal tools engineer, posted within fourteen days',
+                    completion: 'two-pages-reviewed',
+                },
             ],
             accessMethod: 'installed-chrome-plugin',
             blocker: null,
@@ -105,6 +114,14 @@ const coverage: JobSearchCoverage = {
                 },
                 {
                     query: 'Frontend engineer, posted within three days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Full-stack product engineer, posted within seven days',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Internal tools engineer, posted within fourteen days',
                     completion: 'two-pages-reviewed',
                 },
             ],
@@ -122,6 +139,14 @@ const coverage: JobSearchCoverage = {
                     query: 'Node application engineer, posted within three days',
                     completion: 'all-results-reviewed',
                 },
+                {
+                    query: 'Employer careers frontend engineer',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Employer careers backend API engineer',
+                    completion: 'all-results-reviewed',
+                },
             ],
             accessMethod: 'public-employer-ats',
             blocker: null,
@@ -135,6 +160,14 @@ const coverage: JobSearchCoverage = {
                 },
                 {
                     query: 'Second rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Third rotating long-tail query',
+                    completion: 'all-results-reviewed',
+                },
+                {
+                    query: 'Fourth rotating long-tail query',
                     completion: 'all-results-reviewed',
                 },
             ],
@@ -786,6 +819,13 @@ describe('judgment and report assembly', () => {
                 'APPLICATION ENGINEER, POSTED WITHIN THREE DAYS',
             ],
         ],
+        [
+            'too few distinct variants',
+            [
+                'Application engineer, posted within three days',
+                'Frontend engineer, posted within three days',
+            ],
+        ],
     ])('rejects %s when a lane is unblocked', (_description, queries) => {
         const incompleteNativeCoverage = structuredClone(coverage)
         incompleteNativeCoverage.sources[0]!.operations = queries.map((query) => ({
@@ -1004,22 +1044,27 @@ describe('judgment and report assembly', () => {
         ).toContainEqual(['reviewDigest'])
     })
 
-    it('accepts honest deferred counts from bounded discovery slices below the global cap', async () => {
-        const directory = await mkdtemp(join(tmpdir(), 'job-search-coverage-handoff-'))
-        const coveragePath = join(directory, 'coverage.json')
-        const candidatesPath = join(directory, 'candidates.json')
+    it('backfills deferred candidates until the useful judgment handoff size', () => {
         const boundedCoverage = { ...coverage, deferred: 1 }
+        const candidates = Array.from(
+            { length: 16 },
+            (_, index): StageCandidate => ({
+                ...candidate,
+                post: {
+                    ...candidate.post,
+                    sourceKey: `company:${index}`,
+                    postUrl: `https://example.com/jobs/${index}`,
+                    applicationUrl: `https://example.com/jobs/${index}/apply`,
+                },
+            }),
+        )
 
-        try {
-            await writeFile(coveragePath, JSON.stringify(boundedCoverage))
-            await writeFile(candidatesPath, JSON.stringify([candidate]))
-
-            await expect(
-                runCli(['coverage', coveragePath, candidatesPath]),
-            ).resolves.toBeUndefined()
-        } finally {
-            await rm(directory, { recursive: true })
-        }
+        expect({
+            belowTarget: issuePaths(() =>
+                validateCoverageHandoff(boundedCoverage, candidates.slice(0, 15)),
+            ),
+            atTarget: validateCoverageHandoff(boundedCoverage, candidates).candidates.length,
+        }).toEqual({ belowTarget: [['deferred']], atTarget: 16 })
     })
 
     it('allows a reliable run with zero candidates', () => {

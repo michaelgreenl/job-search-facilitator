@@ -346,6 +346,8 @@ const judgmentArtifactSchema = z.strictObject({
 
 const coverageTextSchema = z.string().trim().min(1).max(1_000)
 const MIN_RELIABLE_COMPLETED_LANES = 3
+const MIN_RELIABLE_OPERATIONS_PER_LANE = 4
+const MIN_USEFUL_CANDIDATE_HANDOFF = 16
 const JOB_SEARCH_COVERAGE_LANES = [
     'linkedin',
     'indeed',
@@ -396,10 +398,10 @@ const coverageSourceSchema = z
         const normalizedQueries = new Set(
             source.operations.map(({ query }) => query.toLowerCase().replace(/\s+/g, ' ')),
         )
-        if (source.blocker === null && normalizedQueries.size < 2) {
+        if (source.blocker === null && normalizedQueries.size < MIN_RELIABLE_OPERATIONS_PER_LANE) {
             context.addIssue({
                 code: 'custom',
-                message: 'An unblocked lane requires two completed, non-duplicate query variants',
+                message: `An unblocked lane requires ${MIN_RELIABLE_OPERATIONS_PER_LANE} completed, non-duplicate query variants`,
                 path: ['operations'],
             })
         }
@@ -428,13 +430,14 @@ const coverageSchema = z.strictObject({
 
 const reliableCoverageSchema = coverageSchema.superRefine((coverage, context) => {
     const completedSources = coverage.sources.filter(
-        (source) => source.blocker === null && source.operations.length >= 2,
+        (source) =>
+            source.blocker === null && source.operations.length >= MIN_RELIABLE_OPERATIONS_PER_LANE,
     )
 
     if (completedSources.length < MIN_RELIABLE_COMPLETED_LANES) {
         context.addIssue({
             code: 'custom',
-            message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} unblocked lanes with two completed query operations`,
+            message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} unblocked lanes with ${MIN_RELIABLE_OPERATIONS_PER_LANE} completed query operations`,
             path: ['sources'],
         })
     }
@@ -860,6 +863,18 @@ export const validateCoverageHandoff = (
 ): { candidates: StageCandidate[]; coverage: JobSearchCoverage } => {
     const candidates = validateCandidatePool(candidateValue)
     const coverage = validateCoverage(coverageValue, true)
+
+    if (candidates.length < MIN_USEFUL_CANDIDATE_HANDOFF && coverage.deferred > 0) {
+        z.unknown()
+            .superRefine((_value, context) => {
+                context.addIssue({
+                    code: 'custom',
+                    message: `Deferred candidates must be backfilled while fewer than ${MIN_USEFUL_CANDIDATE_HANDOFF} candidates reach judgment`,
+                    path: ['deferred'],
+                })
+            })
+            .parse(coverage)
+    }
 
     return { candidates, coverage }
 }
