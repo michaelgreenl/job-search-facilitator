@@ -309,7 +309,11 @@ export class AgentTaskManager {
                 candidate.status === 'running',
         )
 
-        if (task === undefined || task.pendingPermission !== null) {
+        if (
+            task === undefined ||
+            task.pendingPermission !== null ||
+            !task.capabilities.includes('chrome')
+        ) {
             this.runtime.resolvePermission(permission.id, 'decline')
             return
         }

@@ -60,11 +60,11 @@ const taskMessage = computed(() => {
     }
 
     if (props.task?.status === 'running') {
-        return props.task.kind === 'draft' ? 'Revising outreach…' : 'Discovering contact…'
+        return 'Discovering contact…'
     }
 
     if (props.task?.status === 'completed') {
-        return props.task.kind === 'draft' ? 'Draft ready' : 'Saving contact…'
+        return 'Saving contact…'
     }
 
     return 'Outreach needs attention'
@@ -118,9 +118,7 @@ function toggleMessaged() {
         ></button>
 
         <template v-if="task">
-            <span class="eyebrow">
-                {{ task.kind === 'draft' ? 'Outreach draft' : 'Relevant contact' }}
-            </span>
+            <span class="eyebrow">Relevant contact</span>
             <span class="loading-contact">
                 <LoadingSpinner v-if="task.active" />
                 {{ taskMessage }}

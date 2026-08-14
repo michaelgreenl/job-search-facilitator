@@ -540,7 +540,8 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
         FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
 
         await selectPost(root, posts[0]!.id)
         findTestButton(root, 'discover-contacts').click()
@@ -577,6 +578,10 @@ describe('apply view', () => {
             return instance
         })
         source.open()
+        expect(useAgentStore(pinia).getSession(runningAgentTask.id)).toMatchObject({
+            kind: 'outreach-draft',
+            jobDescription: 'Fixture job description 0',
+        })
         expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull()
         expect(root.querySelector('[data-testid="agent-progress"]')).toBeNull()
         source.disconnect()

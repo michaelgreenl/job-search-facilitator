@@ -165,6 +165,32 @@ describe('Agent task manager', () => {
         ])
     })
 
+    it('declines browser permission for a task without Chrome access', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const started = await manager.start({ ...input, capabilities: [] })
+        const connection = manager.connect(started.id, () => {})
+
+        runtime.emit({
+            type: 'permission-required',
+            permission: {
+                id: 'unexpected-permission',
+                kind: 'browser-origin',
+                threadId: started.threadId,
+                turnId: started.turnId,
+                message: 'Allow an unexpected browser origin?',
+                origin: 'https://example.com',
+            },
+        })
+
+        expect(runtime.decisions).toEqual([
+            { permissionId: 'unexpected-permission', decision: 'decline' },
+        ])
+        expect(connection?.events.some(({ event }) => event.type === 'permission-required')).toBe(
+            false,
+        )
+    })
+
     it('delivers live events only while a listener is subscribed', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)

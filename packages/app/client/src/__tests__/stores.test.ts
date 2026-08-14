@@ -793,6 +793,7 @@ describe('outreach store', () => {
         store.contacts = [savedContact, otherContact]
         store.selectContact(savedContact)
         await store.requestDraftRevision(post, 'Make it warmer')
+        expect(store.tasks).toEqual([])
 
         store.selectContact(otherContact)
         updateTask({

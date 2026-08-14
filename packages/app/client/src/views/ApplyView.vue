@@ -664,6 +664,7 @@ onMounted(() => {
                     activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
                 "
                 :post="outreachPost"
+                :description="selectedDescription"
                 :expanded="outreachExpanded"
                 @cancel="cancelOutreach"
                 @collapse="collapseOutreach"

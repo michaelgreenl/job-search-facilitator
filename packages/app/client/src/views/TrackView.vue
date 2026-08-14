@@ -576,6 +576,7 @@ onMounted(() => {
             :active="activePanel === 'outreach'"
             :adjacent="false"
             :post="selectedEntry.post"
+            :description="selectedEntry.jobPostSnapshot?.description ?? null"
             :expanded="outreachExpanded"
             contacts-external
             @cancel="cancelOutreach"

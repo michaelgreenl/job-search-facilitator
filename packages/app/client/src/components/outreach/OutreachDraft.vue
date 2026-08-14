@@ -293,7 +293,7 @@ const copyFeedbackId = useId()
 }
 
 .send-spinner {
-    color: $color-night;
+    color: $color-white;
 }
 
 .draft-actions {

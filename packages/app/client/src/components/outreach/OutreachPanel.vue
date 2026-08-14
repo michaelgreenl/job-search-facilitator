@@ -21,10 +21,11 @@ const props = withDefaults(
         active: boolean
         adjacent: boolean
         post: JobPost | null
+        description?: string | null
         expanded: boolean
         contactsExternal?: boolean
     }>(),
-    { contactsExternal: false },
+    { contactsExternal: false, description: null },
 )
 
 defineOptions({ inheritAttrs: false })
@@ -169,7 +170,7 @@ function submitDraftRequest() {
     }
 
     void outreachStore
-        .requestDraftRevision(post, request)
+        .requestDraftRevision(post, request, props.description)
         .then((started) => {
             if (started) {
                 draftRequest.value = ''
