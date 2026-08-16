@@ -16,7 +16,6 @@ COPY packages/app/client/package.json packages/app/client/package.json
 COPY packages/app/server/package.json packages/app/server/package.json
 COPY packages/app/agent-bridge/package.json packages/app/agent-bridge/package.json
 COPY packages/core/package.json packages/core/package.json
-COPY packages/utils/package.json packages/utils/package.json
 
 RUN HUSKY=0 pnpm install --frozen-lockfile
 

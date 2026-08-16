@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { BAD_REQUEST, CREATED, NOT_FOUND } from '@job-search-facilitator/utils'
+import { BAD_REQUEST, CREATED, NOT_FOUND } from '@job-search-facilitator/core'
 import type {
     OutreachContactRepository,
     OutreachRunRepository,

@@ -13,7 +13,6 @@
     },
     "dependencies": {
         "@job-search-facilitator/core": "workspace:*",
-        "@job-search-facilitator/utils": "workspace:*",
         "@prisma/adapter-pg": "^7.8.0",
         "@prisma/client": "^7.8.0",
         "cors": "^2.8.5",

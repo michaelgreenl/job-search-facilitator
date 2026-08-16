@@ -1,5 +1,4 @@
-import { parseJobUpdateCheckResult } from '@job-search-facilitator/core'
-import { BAD_REQUEST } from '@job-search-facilitator/utils'
+import { BAD_REQUEST, parseJobUpdateCheckResult } from '@job-search-facilitator/core'
 import type { Request, Response } from 'express'
 import type { JobUpdateCheckRepository } from '../../db/repositories/job-update-check.repository.ts'
 
