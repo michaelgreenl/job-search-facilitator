@@ -1,4 +1,5 @@
 import type {
+    ApplicationArtifact,
     ApplyQueueItem,
     JobPost,
     JobRecommendationContext,
@@ -20,6 +21,7 @@ export function makeJobPost(overrides: Partial<JobPost> = {}): JobPost {
         applicationUrl: `https://apply.example.com/jobs/${id}`,
         postStatus: 'active',
         applicationStatus: 'not-applied',
+        appliedAt: null,
         userLabel: null,
         archivedAt: null,
         createdAt: '2026-07-20T12:00:00.000Z',
@@ -49,12 +51,21 @@ export function makeRecommendationContext(
 export function makeApplyQueueItem(
     postOverrides: Partial<JobPost> = {},
     recommendationOverrides?: Partial<JobRecommendationContext> | null,
+    applicationArtifacts: ApplicationArtifact[] = [],
 ): ApplyQueueItem {
+    const post = makeJobPost(postOverrides)
+
     return {
-        post: makeJobPost(postOverrides),
+        post,
+        jobPostSnapshot: {
+            description: 'Complete job description',
+            sourceUrl: post.postUrl,
+            capturedAt: post.updatedAt,
+        },
         recommendationContext:
             recommendationOverrides === null
                 ? null
                 : makeRecommendationContext(recommendationOverrides),
+        applicationArtifacts,
     }
 }

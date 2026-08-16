@@ -51,6 +51,8 @@ export interface OutreachContact {
     relevanceRationale: string
     draftMessage: string
     messaged: boolean
+    messagedAt: IsoDateTime | null
+    respondedAt: IsoDateTime | null
     createdAt: IsoDateTime
     updatedAt: IsoDateTime
 }
@@ -60,11 +62,17 @@ export type OutreachContactInput = Pick<
     'personName' | 'personTitle' | 'profileUrl' | 'relevanceRationale' | 'draftMessage'
 >
 
-export type ContactDiscoveryResult = OutreachContactInput
+export type ContactDiscoveryResult =
+    | { outcome: 'contact'; contact: OutreachContactInput; error: null }
+    | { outcome: 'failed'; contact: null; error: string }
 
 export interface DraftRevisionResult {
     draftMessage: string
     response: string
 }
 
-export type UpdateOutreachContactInput = Pick<OutreachContact, 'messaged'>
+export interface UpdateOutreachContactInput {
+    draftMessage?: string
+    messaged?: boolean
+    responded?: boolean
+}

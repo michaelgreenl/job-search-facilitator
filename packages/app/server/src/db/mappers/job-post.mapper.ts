@@ -2,6 +2,7 @@ import type {
     ApplicationStatus,
     JobPost,
     JobPostInput,
+    JobPostSnapshot,
     PostStatus,
     UserAddedJobPost,
     UserLabel,
@@ -10,9 +11,10 @@ import { Prisma } from '@job-search-facilitator/core/prisma'
 import { toStandaloneJobRecommendation } from './search-report.mapper.ts'
 
 type PrismaJobPost = Prisma.JobPostGetPayload<object>
+type PrismaJobPostSnapshot = Prisma.JobPostSnapshotGetPayload<object>
 
 export const userAddedJobPostInclude = {
-    post: true,
+    post: { include: { snapshot: true } },
 } satisfies Prisma.UserAddedJobPostInclude
 
 type PrismaUserAddedJobPost = Prisma.UserAddedJobPostGetPayload<{
@@ -74,15 +76,23 @@ export const toJobPost = (post: PrismaJobPost): JobPost => ({
     applicationUrl: post.applicationUrl,
     postStatus: postStatusToApi[post.postStatus],
     applicationStatus: applicationStatusToApi[post.applicationStatus],
+    appliedAt: post.appliedAt?.toISOString() ?? null,
     userLabel: post.userLabel === null ? null : userLabelToApi[post.userLabel],
     archivedAt: post.archivedAt?.toISOString() ?? null,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
 })
 
+export const toJobPostSnapshot = (snapshot: PrismaJobPostSnapshot): JobPostSnapshot => ({
+    description: snapshot.description,
+    sourceUrl: snapshot.sourceUrl,
+    capturedAt: snapshot.capturedAt.toISOString(),
+})
+
 export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPost => ({
     ...toStandaloneJobRecommendation(item),
     post: toJobPost(item.post),
+    jobPostSnapshot: item.post.snapshot === null ? null : toJobPostSnapshot(item.post.snapshot),
     addedAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
 })

@@ -1,14 +1,14 @@
-<script lang="ts">
-export type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
-</script>
-
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
+import type { OutreachTaskItem } from '@/stores/outreach'
 
-import OutreachContactCard, { type OutreachTaskListItem } from './OutreachContactCard.vue'
+import OutreachContactCard from './OutreachContactCard.vue'
+
+type OutreachContactFilter = 'all' | 'messaged' | 'not-messaged'
 
 const contactFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -18,13 +18,23 @@ const contactFilterOptions: BaseDropdownOption[] = [
 
 const isContactFilter = (value: string): value is OutreachContactFilter =>
     contactFilterOptions.some((option) => option.value === value)
+const contactFilterStorageKey = 'job-search-facilitator:outreach-contact-filter'
+const storedContactFilter = readSessionStorage(contactFilterStorageKey)
 
-const props = defineProps<{
-    contacts: OutreachContact[]
-    error: string | null
-    loading: boolean
-    tasks: OutreachTaskListItem[]
-}>()
+const props = withDefaults(
+    defineProps<{
+        contacts: OutreachContact[]
+        error: string | null
+        loading: boolean
+        showFilter?: boolean
+        showMessagedStatus?: boolean
+        tasks: OutreachTaskItem[]
+    }>(),
+    {
+        showFilter: true,
+        showMessagedStatus: true,
+    },
+)
 
 const emit = defineEmits<{
     select: [contact: OutreachContact]
@@ -32,7 +42,16 @@ const emit = defineEmits<{
     retry: []
 }>()
 
-const contactFilter = defineModel<OutreachContactFilter>('filter', { default: 'all' })
+defineSlots<{
+    contactActions?: (props: { contact: OutreachContact }) => unknown
+}>()
+
+const contactFilter = shallowRef<OutreachContactFilter>(
+    storedContactFilter !== null && isContactFilter(storedContactFilter)
+        ? storedContactFilter
+        : 'all',
+)
+watch(contactFilter, (filter) => writeSessionStorage(contactFilterStorageKey, filter))
 const filteredContacts = computed(() => {
     if (contactFilter.value === 'all') {
         return props.contacts
@@ -64,6 +83,7 @@ function selectContactFilter(value: string) {
                 <span class="contact-history-count">{{ filteredContacts.length }}</span>
             </div>
             <BaseDropdown
+                v-if="showFilter"
                 class="contact-filter-dropdown"
                 accessible-label="Filter saved contacts"
                 test-id="contact-filter"
@@ -90,8 +110,13 @@ function selectContactFilter(value: string) {
                     <OutreachContactCard
                         :contact="savedContact"
                         selectable
+                        :show-messaged-status="showMessagedStatus"
                         @select="emit('select', savedContact)"
-                    />
+                    >
+                        <template v-if="$slots.contactActions" #actions>
+                            <slot name="contactActions" :contact="savedContact" />
+                        </template>
+                    </OutreachContactCard>
                 </li>
             </template>
         </ul>

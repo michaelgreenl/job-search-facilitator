@@ -1,5 +1,13 @@
-import { USER_LABELS, type UserLabel } from '@job-search-facilitator/core'
+import { USER_LABELS, type ApplicationStatus, type UserLabel } from '@job-search-facilitator/core'
 import type { BaseDropdownOption, BaseDropdownTone } from '@/components/base/BaseDropdown.vue'
+
+export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+    'not-applied': 'Not applied',
+    'awaiting-response': 'Awaiting response',
+    interviewing: 'Interviewing',
+    rejected: 'Closed',
+    hired: 'Job Offer',
+}
 
 export const USER_LABEL_TONES = {
     P1: 'priority-high',

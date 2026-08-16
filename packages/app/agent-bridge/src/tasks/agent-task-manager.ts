@@ -34,6 +34,7 @@ interface StoredTask {
     outputValidator: AgentOutputValidator
     pendingPermission: AgentPermissionRequired | null
     reasoningSection: { itemId: string; summaryIndex: number } | null
+    inactivityTimeout: ReturnType<typeof setTimeout> | null
 }
 
 export interface AgentTaskConnection {
@@ -46,6 +47,9 @@ export interface AgentTaskStreamEvent {
     id: number
     event: AgentTaskEvent
 }
+
+const inactivityTimeoutMs = 10 * 60 * 1_000
+const inactivityTimeoutError = 'Agent task produced no activity for 10 minutes'
 
 const publicTask = (task: StoredTask): AgentTask => {
     const identity = {
@@ -128,6 +132,7 @@ export class AgentTaskManager {
             outputValidator,
             pendingPermission: null,
             reasoningSection: null,
+            inactivityTimeout: null,
         }
 
         this.tasks.set(id, task)
@@ -136,6 +141,7 @@ export class AgentTaskManager {
             message: 'Task started',
             createdAt: new Date().toISOString(),
         })
+        this.armInactivityTimeout(task)
 
         return publicTask(task)
     }
@@ -157,6 +163,7 @@ export class AgentTaskManager {
             return { accepted: false, task: publicTask(task) }
         }
 
+        this.clearInactivityTimeout(task)
         const cancellation = task.cancellation ?? this.interrupt(task)
         task.cancellation = cancellation
 
@@ -164,6 +171,7 @@ export class AgentTaskManager {
             await cancellation
         } catch (error) {
             if (task.status === 'running') {
+                this.armInactivityTimeout(task)
                 throw error
             }
         } finally {
@@ -239,6 +247,7 @@ export class AgentTaskManager {
                     permissionId: event.permissionId,
                     createdAt: new Date().toISOString(),
                 })
+                this.armInactivityTimeout(task)
             }
 
             return
@@ -252,6 +261,8 @@ export class AgentTaskManager {
         if (task === undefined || task.status !== 'running') {
             return
         }
+
+        this.armInactivityTimeout(task)
 
         if (event.type === 'activity') {
             const message = {
@@ -298,12 +309,17 @@ export class AgentTaskManager {
                 candidate.status === 'running',
         )
 
-        if (task === undefined || task.pendingPermission !== null) {
+        if (
+            task === undefined ||
+            task.pendingPermission !== null ||
+            !task.capabilities.includes('chrome')
+        ) {
             this.runtime.resolvePermission(permission.id, 'decline')
             return
         }
 
         task.pendingPermission = permission
+        this.clearInactivityTimeout(task)
         this.emit(task, {
             type: 'permission-required',
             permission,
@@ -355,6 +371,7 @@ export class AgentTaskManager {
         task.status = 'completed'
         task.output = output
         task.pendingPermission = null
+        this.clearInactivityTimeout(task)
         this.emit(task, { type: 'completed', output, createdAt: new Date().toISOString() })
     }
 
@@ -373,6 +390,7 @@ export class AgentTaskManager {
     private markCancelled(task: StoredTask): void {
         task.status = 'cancelled'
         task.pendingPermission = null
+        this.clearInactivityTimeout(task)
         this.emit(task, { type: 'cancelled', createdAt: new Date().toISOString() })
     }
 
@@ -380,7 +398,35 @@ export class AgentTaskManager {
         task.status = 'failed'
         task.error = error
         task.pendingPermission = null
+        this.clearInactivityTimeout(task)
         this.emit(task, { type: 'failed', error, createdAt: new Date().toISOString() })
+    }
+
+    private armInactivityTimeout(task: StoredTask): void {
+        this.clearInactivityTimeout(task)
+
+        if (task.status !== 'running' || task.pendingPermission !== null) {
+            return
+        }
+
+        task.inactivityTimeout = setTimeout(() => {
+            if (task.status !== 'running' || task.pendingPermission !== null) {
+                return
+            }
+
+            this.fail(task, inactivityTimeoutError)
+            void this.runtime.interruptTask(task.threadId, task.turnId).catch(() => undefined)
+        }, inactivityTimeoutMs)
+        task.inactivityTimeout.unref()
+    }
+
+    private clearInactivityTimeout(task: StoredTask): void {
+        if (task.inactivityTimeout === null) {
+            return
+        }
+
+        clearTimeout(task.inactivityTimeout)
+        task.inactivityTimeout = null
     }
 
     private emit(task: StoredTask, event: AgentTaskEvent): void {

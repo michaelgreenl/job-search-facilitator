@@ -14,7 +14,7 @@ const createTestRouter = () =>
         routes: [
             { path: '/', name: 'review', component: emptyView },
             { path: '/apply', name: 'apply', component: emptyView },
-            { path: '/results', name: 'results', component: emptyView },
+            { path: '/track', name: 'track', component: emptyView },
         ],
     })
 
@@ -44,7 +44,7 @@ describe('persisted Agent session startup', () => {
         }
         router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
 
-        await router.push('/results')
+        await router.push('/track')
 
         expect(router.currentRoute.value.name).toBe(routeName)
         expect(agentStore.restoreSessions).toHaveBeenCalledOnce()
@@ -70,7 +70,7 @@ describe('persisted Agent session startup', () => {
         }
         router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
 
-        await router.push('/results')
+        await router.push('/track')
 
         expect(router.currentRoute.value.name).toBe('review')
         expect(agentStore.restoreSessions).toHaveBeenCalledOnce()
@@ -90,9 +90,9 @@ describe('persisted Agent session startup', () => {
         }
         router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
 
-        await router.push('/results')
-        await router.push('/results')
+        await router.push('/track')
+        await router.push('/track')
 
-        expect(router.currentRoute.value.name).toBe('results')
+        expect(router.currentRoute.value.name).toBe('track')
     })
 })

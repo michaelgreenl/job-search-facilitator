@@ -5,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
+import SaveIcon from '@/components/svgs/SaveIcon.vue'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
@@ -14,6 +15,8 @@ defineProps<{
     running: boolean
     requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
+    canSave: boolean
+    saving: boolean
     expanded: boolean
     issue: string | null
     messagedError: string | null
@@ -24,6 +27,7 @@ defineProps<{
 const emit = defineEmits<{
     submit: []
     copy: []
+    save: []
     updateMessaged: [messaged: boolean]
 }>()
 
@@ -60,31 +64,47 @@ const copyFeedbackId = useId()
                         aria-label="Outreach message"
                         :disabled="running"
                     ></textarea>
-                    <BaseButton
-                        class="field-action copy-button"
-                        :aria-label="
-                            copyState === 'copied'
-                                ? 'Outreach message copied'
-                                : 'Copy outreach message'
-                        "
-                        :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
-                        :disabled="draft.trim().length === 0"
-                        @click="emit('copy')"
-                    >
-                        <CopyIcon class="copy-icon" />
-                    </BaseButton>
-                    <span
-                        :id="copyFeedbackId"
-                        class="copy-feedback"
-                        :class="{
-                            'copy-feedback-copied tooltip-surface': copyState === 'copied',
-                            'copy-feedback-error': copyState === 'failed',
-                        }"
-                        :role="copyState === 'failed' ? 'alert' : 'status'"
-                    >
-                        <template v-if="copyState === 'copied'">Copied</template>
-                        <template v-else-if="copyState === 'failed'">Could not copy draft</template>
-                    </span>
+                    <div class="draft-actions">
+                        <BaseButton
+                            preset="icon"
+                            tooltip="Save changes"
+                            data-testid="save-outreach-draft"
+                            aria-label="Save changes"
+                            :aria-busy="saving || undefined"
+                            :disabled="!canSave || saving"
+                            @click="emit('save')"
+                        >
+                            <SaveIcon class="draft-action-icon" />
+                        </BaseButton>
+                        <BaseButton
+                            preset="icon"
+                            tooltip="Copy"
+                            :aria-label="
+                                copyState === 'copied'
+                                    ? 'Outreach message copied'
+                                    : 'Copy outreach message'
+                            "
+                            :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
+                            :disabled="draft.trim().length === 0"
+                            @click="emit('copy')"
+                        >
+                            <CopyIcon class="draft-action-icon" />
+                        </BaseButton>
+                        <span
+                            :id="copyFeedbackId"
+                            class="copy-feedback"
+                            :class="{
+                                'copy-feedback-copied tooltip-surface': copyState === 'copied',
+                                'copy-feedback-error': copyState === 'failed',
+                            }"
+                            :role="copyState === 'failed' ? 'alert' : 'status'"
+                        >
+                            <template v-if="copyState === 'copied'">Copied</template>
+                            <template v-else-if="copyState === 'failed'">
+                                Could not copy draft
+                            </template>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -225,6 +245,8 @@ const copyFeedbackId = useId()
 .draft-field {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: $space-1;
     min-height: 0;
 }
 
@@ -232,8 +254,6 @@ const copyFeedbackId = useId()
     flex: 1;
     width: 100%;
     min-height: 8rem;
-    padding-right: 3.25rem;
-    padding-bottom: 3.25rem;
     resize: none;
 }
 
@@ -273,23 +293,19 @@ const copyFeedbackId = useId()
 }
 
 .send-spinner {
-    color: $color-night;
+    color: $color-white;
 }
 
-.copy-button {
-    right: $space-2;
-    bottom: $space-2;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
+.draft-actions {
+    position: relative;
+    display: flex;
+    gap: $space-1;
+    align-self: flex-end;
 }
 
-.copy-icon {
-    width: 1rem;
-    height: 1rem;
+.draft-action-icon {
+    width: 1.25rem;
+    height: 1.25rem;
     fill: none;
     stroke: currentcolor;
     stroke-linecap: round;
@@ -299,8 +315,8 @@ const copyFeedbackId = useId()
 
 .copy-feedback {
     position: absolute;
-    bottom: 3.25rem;
-    right: -0.4rem;
+    right: 0;
+    bottom: calc(100% + #{$space-1});
     min-height: 1rem;
     color: $color-ink-muted;
     font-size: 0.8125rem;

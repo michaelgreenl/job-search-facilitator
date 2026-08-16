@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
     USER_LABELS,
+    type ApplicationArtifact,
+    type ApplicationArtifactKind,
     type JobPost,
     type JobRecommendationContext,
     type UserLabel,
@@ -14,12 +16,20 @@ import JobPostViewPanel, {
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import { getUserLabelTone } from '@/components/job-posts/job-post-labels'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
+import {
+    removeApplicationArtifact,
+    uploadApplicationArtifact,
+} from '@/services/application-artifacts'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
 type ActivePanel = 'posts' | 'viewer' | 'outreach'
+
+const selectedPostStorageKey = 'job-search-facilitator:apply-selected-post'
+const postFilterStorageKey = 'job-search-facilitator:apply-post-filter'
 
 const applyLabels = USER_LABELS.filter((label): label is ApplyLabel => label !== 'forgo')
 const postFilterOptions: BaseDropdownOption[] = [
@@ -41,7 +51,10 @@ const {
     taskVisible: outreachTaskVisible,
     restoreContactListPending,
 } = storeToRefs(outreachStore)
-const postFilter = shallowRef<PostFilter>('all')
+const storedPostFilter = readSessionStorage(postFilterStorageKey)
+const postFilter = shallowRef<PostFilter>(
+    storedPostFilter !== null && isPostFilter(storedPostFilter) ? storedPostFilter : 'all',
+)
 const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
 const startupOutreachPostId =
     startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
@@ -53,18 +66,25 @@ const activePanel = shallowRef<ActivePanel>(
         : 'posts',
 )
 const outreachExpanded = shallowRef(false)
-const selectedPostId = shallowRef<string | null>(outreachPostId.value)
+const selectedPostId = shallowRef<string | null>(
+    outreachPostId.value ?? readSessionStorage(selectedPostStorageKey),
+)
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
 const labelUpdating = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const applicationUpdating = shallowRef(false)
 const applicationError = shallowRef<string | null>(null)
+const artifactUploading = shallowRef<ApplicationArtifactKind | null>(null)
+const artifactRemoving = shallowRef<ApplicationArtifactKind | null>(null)
+const artifactError = shallowRef<string | null>(null)
 const applyQueuePostIds = shallowRef<readonly string[] | null>(null)
 const retainedForgoneLabelByPostId = reactive(new Map<string, ApplyLabel>())
 const recommendationContextByPostId = shallowRef<
     ReadonlyMap<string, JobRecommendationContext | null>
 >(new Map())
+const descriptionByPostId = shallowRef<ReadonlyMap<string, string>>(new Map())
+const artifactsByPostId = reactive(new Map<string, ApplicationArtifact[]>())
 let viewMounted = true
 
 onBeforeUnmount(() => {
@@ -97,10 +117,18 @@ const postFilterLabel = computed(
 const selectedPost = computed(() =>
     selectedPostId.value === null ? null : postStore.findPost(selectedPostId.value),
 )
+const selectedApplicationArtifacts = computed(() =>
+    selectedPostId.value === null ? [] : (artifactsByPostId.get(selectedPostId.value) ?? []),
+)
 const selectedRecommendationContext = computed(() =>
     selectedPostId.value === null
         ? null
         : (recommendationContextByPostId.value.get(selectedPostId.value) ?? null),
+)
+const selectedDescription = computed(() =>
+    selectedPostId.value === null
+        ? null
+        : (descriptionByPostId.value.get(selectedPostId.value) ?? null),
 )
 const outreachPost = computed(() =>
     outreachPostId.value === null ? null : postStore.findPost(outreachPostId.value),
@@ -112,12 +140,20 @@ const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     kind: 'apply',
     applicationUpdating: applicationUpdating.value || applyQueuePostIds.value === null,
     applicationError: applicationError.value,
+    artifactError: artifactError.value,
+    applicationArtifacts: selectedApplicationArtifacts.value,
+    artifactRemoving: artifactRemoving.value,
+    artifactUploading: artifactUploading.value,
     outreachDisabled: outreachActionDisabled.value,
 }))
 
 watch(
     filteredPosts,
     (posts) => {
+        if (applyQueuePostIds.value === null) {
+            return
+        }
+
         if (
             posts.some(({ id }) => id === selectedPostId.value) ||
             (activePanel.value === 'outreach' && outreachPostId.value !== null)
@@ -135,6 +171,7 @@ watch(
             outreachExpanded.value = false
             labelError.value = null
             applicationError.value = null
+            artifactError.value = null
         }
 
         if (selectedPostId.value === null) {
@@ -143,6 +180,10 @@ watch(
     },
     { immediate: true },
 )
+watch(selectedPostId, (postId) => writeSessionStorage(selectedPostStorageKey, postId), {
+    immediate: true,
+})
+watch(postFilter, (filter) => writeSessionStorage(postFilterStorageKey, filter))
 
 function selectPost(postId: string) {
     const changed = postId !== selectedPostId.value
@@ -155,6 +196,7 @@ function selectPost(postId: string) {
     outreachExpanded.value = false
     labelError.value = null
     applicationError.value = null
+    artifactError.value = null
     activePanel.value = 'viewer'
 }
 
@@ -388,14 +430,77 @@ async function markApplied() {
     }
 }
 
+async function uploadArtifact(kind: ApplicationArtifactKind, file: File) {
+    const post = selectedPost.value
+
+    if (post === null || artifactUploading.value !== null || artifactRemoving.value !== null) {
+        return
+    }
+
+    const postId = post.id
+    artifactUploading.value = kind
+    artifactError.value = null
+
+    try {
+        const artifact = await uploadApplicationArtifact(postId, kind, file)
+        artifactsByPostId.set(postId, [
+            ...(artifactsByPostId.get(postId) ?? []).filter(
+                (currentArtifact) => currentArtifact.kind !== kind,
+            ),
+            artifact,
+        ])
+    } catch (error) {
+        if (selectedPostId.value === postId) {
+            artifactError.value =
+                error instanceof Error ? error.message : 'Could not upload application artifact'
+        }
+    } finally {
+        artifactUploading.value = null
+    }
+}
+
+async function removeArtifact(kind: ApplicationArtifactKind) {
+    const post = selectedPost.value
+
+    if (post === null || artifactUploading.value !== null || artifactRemoving.value !== null) {
+        return
+    }
+
+    const postId = post.id
+    artifactRemoving.value = kind
+    artifactError.value = null
+
+    try {
+        await removeApplicationArtifact(postId, kind)
+        artifactsByPostId.set(
+            postId,
+            (artifactsByPostId.get(postId) ?? []).filter(
+                (currentArtifact) => currentArtifact.kind !== kind,
+            ),
+        )
+    } catch (error) {
+        if (selectedPostId.value === postId) {
+            artifactError.value =
+                error instanceof Error ? error.message : 'Could not remove application artifact'
+        }
+    } finally {
+        artifactRemoving.value = null
+    }
+}
+
 async function loadApplyQueue() {
     listLoading.value = true
     listError.value = null
 
     try {
         const items = await postStore.fetchApplyQueue()
+        artifactsByPostId.clear()
+        for (const item of items) {
+            artifactsByPostId.set(item.post.id, [...item.applicationArtifacts])
+        }
         const queuePostIds = items.map(({ post }) => post.id)
-        const omittedTaskPostIds = startupOutreachTaskPostIds.filter(
+        const sessionPostIds = [...startupOutreachTaskPostIds]
+        const omittedTaskPostIds = [...new Set(sessionPostIds)].filter(
             (postId) => !queuePostIds.includes(postId),
         )
 
@@ -411,6 +516,11 @@ async function loadApplyQueue() {
         ]
         recommendationContextByPostId.value = new Map(
             items.map(({ post, recommendationContext }) => [post.id, recommendationContext]),
+        )
+        descriptionByPostId.value = new Map(
+            items.flatMap(({ post, jobPostSnapshot }) =>
+                jobPostSnapshot === null ? [] : [[post.id, jobPostSnapshot.description]],
+            ),
         )
     } catch (error) {
         listError.value = error instanceof Error ? error.message : 'Could not load Apply queue'
@@ -529,6 +639,7 @@ onMounted(() => {
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
                 :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
                 :post="selectedPost"
+                :description="selectedDescription"
                 :recommendation="selectedRecommendationContext ?? undefined"
                 :label-updating="labelUpdating || applyQueuePostIds === null"
                 :label-error="labelError"
@@ -537,6 +648,8 @@ onMounted(() => {
                 @update-label="updateUserLabel"
                 @open-outreach="openOutreach"
                 @mark-applied="markApplied"
+                @remove-artifact="removeArtifact"
+                @upload-artifact="uploadArtifact"
             />
 
             <OutreachPanel
@@ -551,6 +664,7 @@ onMounted(() => {
                     activePanel === 'viewer' && outreachContact !== null && !outreachExpanded
                 "
                 :post="outreachPost"
+                :description="selectedDescription"
                 :expanded="outreachExpanded"
                 @cancel="cancelOutreach"
                 @collapse="collapseOutreach"

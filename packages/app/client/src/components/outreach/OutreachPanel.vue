@@ -7,19 +7,26 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
+import TrashIcon from '@/components/svgs/TrashIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
 
-import OutreachContactList, { type OutreachContactFilter } from './OutreachContactList.vue'
+import OutreachContactList from './OutreachContactList.vue'
+import OutreachDiscoverButton from './OutreachDiscoverButton.vue'
 import OutreachDraft from './OutreachDraft.vue'
 
 type PanelView = 'contacts' | 'draft' | 'stream'
 
-const props = defineProps<{
-    active: boolean
-    adjacent: boolean
-    post: JobPost | null
-    expanded: boolean
-}>()
+const props = withDefaults(
+    defineProps<{
+        active: boolean
+        adjacent: boolean
+        post: JobPost | null
+        description?: string | null
+        expanded: boolean
+        contactsExternal?: boolean
+    }>(),
+    { contactsExternal: false, description: null },
+)
 
 defineOptions({ inheritAttrs: false })
 
@@ -28,6 +35,9 @@ const emit = defineEmits<{
     collapse: []
     discover: []
     expand: []
+    contactRemoved: [contactId: string]
+    draftSaved: [contact: OutreachContact]
+    messagedUpdated: [contact: OutreachContact]
     retry: []
     retryContacts: []
     showViewer: []
@@ -45,6 +55,9 @@ const {
     contactsLoading,
     drafting,
     draft,
+    draftDirty,
+    draftSaveError,
+    draftSaving,
     resultError,
     tasks,
     taskActive: isActive,
@@ -58,31 +71,45 @@ const {
     taskVisible,
 } = storeToRefs(outreachStore)
 const panelView = shallowRef<PanelView>(
-    contact.value !== null ? 'draft' : taskVisible.value ? 'stream' : 'contacts',
+    drafting.value
+        ? 'draft'
+        : contact.value !== null
+          ? 'draft'
+          : taskVisible.value
+            ? 'stream'
+            : 'contacts',
 )
-const contactFilter = shallowRef<OutreachContactFilter>('all')
 const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canCancel = computed(() => taskVisible.value && running.value)
 const backLabel = computed(() =>
-    panelView.value === 'contacts' ? 'Back to job post' : 'Back to saved contacts',
+    props.contactsExternal
+        ? 'Back to outreach'
+        : panelView.value === 'contacts'
+          ? 'Back to job post'
+          : 'Back to saved contacts',
 )
 const backTestId = computed(() =>
-    panelView.value === 'contacts' ? 'back-to-job-post' : 'back-to-saved-contacts',
+    props.contactsExternal
+        ? 'back-to-track-outreach'
+        : panelView.value === 'contacts'
+          ? 'back-to-job-post'
+          : 'back-to-saved-contacts',
 )
 const statusMessage = computed(() =>
     contactSaving.value ? 'Saving outreach…' : starting.value ? 'Starting Agent…' : null,
 )
-const draftIssue = computed(() => resultError.value ?? (drafting.value ? issue.value : null))
+const draftIssue = computed(
+    () => draftSaveError.value ?? resultError.value ?? (drafting.value ? issue.value : null),
+)
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
 
 watch(
     () => props.post?.id,
     () => {
-        contactFilter.value = 'all'
-        panelView.value = taskVisible.value ? 'stream' : 'contacts'
+        panelView.value = taskVisible.value ? (drafting.value ? 'draft' : 'stream') : 'contacts'
     },
 )
 
@@ -90,7 +117,7 @@ watch(
     taskId,
     (currentTaskId, previousTaskId) => {
         if (currentTaskId !== null && currentTaskId !== previousTaskId) {
-            panelView.value = 'stream'
+            panelView.value = drafting.value ? 'draft' : 'stream'
         } else if (currentTaskId === null && previousTaskId !== null) {
             panelView.value = contact.value === null ? 'contacts' : 'draft'
         }
@@ -100,7 +127,7 @@ watch(
 
 watch(isActive, (active, wasActive) => {
     if (wasActive && !active && taskVisible.value) {
-        panelView.value = 'stream'
+        panelView.value = drafting.value ? 'draft' : 'stream'
     }
 })
 
@@ -143,7 +170,7 @@ function submitDraftRequest() {
     }
 
     void outreachStore
-        .requestDraftRevision(post, request)
+        .requestDraftRevision(post, request, props.description)
         .then((started) => {
             if (started) {
                 draftRequest.value = ''
@@ -169,9 +196,13 @@ function showContacts() {
         outreachStore.clearContact()
     }
 
-    panelView.value = 'contacts'
+    if (props.contactsExternal) {
+        emit('showViewer')
+    } else {
+        panelView.value = 'contacts'
+    }
 
-    if (props.post === null) {
+    if (props.post === null && !props.contactsExternal) {
         emit('showViewer')
     }
 
@@ -190,7 +221,7 @@ function goBack() {
 
 function showStream(task: string) {
     outreachStore.openTask(task)
-    panelView.value = 'stream'
+    panelView.value = drafting.value ? 'draft' : 'stream'
 }
 
 function selectContact(selectedContact: OutreachContact) {
@@ -198,9 +229,49 @@ function selectContact(selectedContact: OutreachContact) {
     panelView.value = 'draft'
 }
 
-function updateMessaged(messaged: boolean) {
+async function updateMessaged(messaged: boolean) {
     if (contact.value !== null) {
-        void outreachStore.updateContactMessaged(contact.value.id, messaged).catch(() => undefined)
+        const updatedContact = await outreachStore
+            .updateContactMessaged(contact.value.id, messaged)
+            .catch(() => null)
+
+        if (updatedContact !== null) {
+            emit('messagedUpdated', updatedContact)
+        }
+    }
+}
+
+async function saveDraft() {
+    const savedContact = await outreachStore.saveDraft().catch(() => null)
+
+    if (savedContact !== null) {
+        emit('draftSaved', savedContact)
+    }
+}
+
+async function removeContact() {
+    const selectedContact = contact.value
+
+    if (selectedContact === null) {
+        return
+    }
+
+    const removed = await outreachStore.removeContact(selectedContact.id).catch(() => false)
+
+    if (!removed) {
+        return
+    }
+
+    emit('contactRemoved', selectedContact.id)
+
+    if (props.contactsExternal) {
+        emit('showViewer')
+    } else {
+        panelView.value = 'contacts'
+    }
+
+    if (props.expanded) {
+        emit('collapse')
     }
 }
 
@@ -233,8 +304,8 @@ async function copyDraft() {
         :adjacent="adjacent"
         :task-id="taskId"
         eyebrow="Outreach"
-        back-label="Back to saved contacts"
-        back-test-id="back-to-saved-contacts"
+        :back-label="backLabel"
+        :back-test-id="backTestId"
         :cancelling="cancelling"
         :running="canCancel"
         :issue="issue"
@@ -261,23 +332,35 @@ async function copyDraft() {
         @back="goBack"
     >
         <template v-if="panelView === 'draft'" #controls>
-            <BaseButton
-                class="panel-control-desktop"
-                preset="icon"
-                :tooltip="resizeLabel"
-                :aria-label="resizeLabel"
-                :aria-expanded="expanded"
-                @click="toggleExpanded"
-            >
-                <ShrinkIcon v-if="expanded" class="panel-control-icon" />
-                <ExpandIcon v-else class="panel-control-icon" />
-            </BaseButton>
+            <div class="draft-panel-controls">
+                <BaseButton
+                    class="panel-control-desktop"
+                    preset="icon"
+                    :tooltip="resizeLabel"
+                    :aria-label="resizeLabel"
+                    :aria-expanded="expanded"
+                    @click="toggleExpanded"
+                >
+                    <ShrinkIcon v-if="expanded" class="panel-control-icon" />
+                    <ExpandIcon v-else class="panel-control-icon" />
+                </BaseButton>
+                <BaseButton
+                    preset="icon"
+                    tooltip="Remove contact"
+                    data-testid="remove-outreach-contact"
+                    aria-label="Remove contact"
+                    :aria-busy="contactUpdating || undefined"
+                    :disabled="contactUpdating || isActive"
+                    @click="removeContact"
+                >
+                    <TrashIcon class="panel-control-icon" />
+                </BaseButton>
+            </div>
         </template>
 
         <section class="outreach-panel" aria-label="Outreach">
-            <template v-if="panelView === 'contacts'">
+            <template v-if="panelView === 'contacts' && !contactsExternal">
                 <OutreachContactList
-                    v-model:filter="contactFilter"
                     :contacts="contacts"
                     :error="contactsError"
                     :loading="contactsLoading"
@@ -287,18 +370,12 @@ async function copyDraft() {
                     @show-stream="showStream"
                 />
 
-                <BaseButton
+                <OutreachDiscoverButton
                     class="discover-contact-tooltip"
-                    icon-size="md"
-                    preset="primary"
-                    tooltip="Find new"
-                    data-testid="discover-another-contact"
-                    aria-label="Discover another contact"
                     :disabled="contactsLoading || contactUpdating || contactsError !== null"
+                    test-id="discover-another-contact"
                     @click="emit('discover')"
-                >
-                    <span class="discover-contact-icon" aria-hidden="true">+</span>
-                </BaseButton>
+                />
             </template>
 
             <template v-else-if="panelView === 'draft' && contact">
@@ -307,8 +384,10 @@ async function copyDraft() {
                     v-model:request="draftRequest"
                     :contact="contact"
                     :assistant-reply="assistantReply"
+                    :can-save="draftDirty"
                     :running="isActive"
                     :requesting-changes="drafting && isActive"
+                    :saving="draftSaving"
                     :copy-state="copyState"
                     :expanded="expanded"
                     :issue="draftIssue"
@@ -317,6 +396,7 @@ async function copyDraft() {
                     :reconnecting="connectionState === 'reconnecting'"
                     @submit="submitDraftRequest"
                     @copy="copyDraft"
+                    @save="saveDraft"
                     @update-messaged="updateMessaged"
                 />
             </template>
@@ -337,16 +417,19 @@ async function copyDraft() {
     align-self: flex-end;
 }
 
-.discover-contact-icon {
-    font-size: 1.25rem;
-}
-
 .panel-control-desktop {
     display: none;
 
     @include bp-md-tablet {
         display: inline-flex;
     }
+}
+
+.draft-panel-controls {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    margin-left: auto;
 }
 
 .panel-control-icon {

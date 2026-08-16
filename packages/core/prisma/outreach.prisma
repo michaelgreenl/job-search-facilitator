@@ -10,9 +10,9 @@ model OutreachRun {
   jobPostId             String            @db.Uuid
   requestedContactCount Int
   status                OutreachRunStatus @default(PENDING)
-  agentTaskId            String?           @db.Uuid
-  agentThreadId          String?
-  agentTurnId            String?
+  agentTaskId           String?           @db.Uuid
+  agentThreadId         String?
+  agentTurnId           String?
   error                 String?
   completedAt           DateTime?         @db.Timestamptz(3)
   createdAt             DateTime          @default(now()) @db.Timestamptz(3)
@@ -23,17 +23,21 @@ model OutreachRun {
 }
 
 model OutreachContact {
-  id                 String   @id @default(uuid()) @db.Uuid
-  jobPostId          String   @db.Uuid
-  personName         String
-  personTitle        String
-  profileUrl         String
-  relevanceRationale String
-  draftMessage       String
-  messaged           Boolean  @default(false)
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
-  jobPost            JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  id                      String            @id @default(uuid()) @db.Uuid
+  jobPostId               String            @db.Uuid
+  personName              String
+  personTitle             String
+  profileUrl              String
+  relevanceRationale      String
+  draftMessage            String
+  messaged                Boolean           @default(false)
+  messagedAt              DateTime?         @db.Timestamptz(3)
+  respondedAt             DateTime?         @db.Timestamptz(3)
+  responseStatusUpdatedAt DateTime?         @db.Timestamptz(3)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(3)
+  jobPost                 JobPost           @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  activities              JobPostActivity[]
 
   @@index([jobPostId])
 }

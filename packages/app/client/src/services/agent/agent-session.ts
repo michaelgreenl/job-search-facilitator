@@ -7,6 +7,7 @@ export type AgentSessionOwner =
           contactId: string
           draft: string
           request: string
+          jobDescription: string | null
       }
 
 export type AgentSession = AgentSessionOwner & { taskId: string }
@@ -50,7 +51,10 @@ const parseAgentSession = (value: unknown): AgentSession | null => {
         isNonBlankString(session.postId) &&
         isNonBlankString(session.contactId) &&
         typeof session.draft === 'string' &&
-        isNonBlankString(session.request)
+        isNonBlankString(session.request) &&
+        (session.jobDescription === undefined ||
+            session.jobDescription === null ||
+            typeof session.jobDescription === 'string')
     ) {
         return {
             kind: session.kind,
@@ -59,6 +63,8 @@ const parseAgentSession = (value: unknown): AgentSession | null => {
             contactId: session.contactId,
             draft: session.draft,
             request: session.request,
+            jobDescription:
+                typeof session.jobDescription === 'string' ? session.jobDescription : null,
         }
     }
 

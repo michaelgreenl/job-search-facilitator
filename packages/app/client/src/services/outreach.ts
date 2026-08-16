@@ -1,12 +1,10 @@
 import {
     parseOutreachContact,
     parseOutreachContacts,
-    type ContactDiscoveryResult,
+    type OutreachContactInput,
     type UpdateOutreachContactInput,
 } from '@job-search-facilitator/core'
-import { parseApiResponse } from '@/api'
-
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
+import { apiUrl, parseApiResponse, readResponseError } from '@/api'
 
 export async function fetchOutreachContacts(postId: string) {
     const path = `/job-posts/${encodeURIComponent(postId)}/outreach-contacts`
@@ -15,7 +13,7 @@ export async function fetchOutreachContacts(postId: string) {
     return parseApiResponse(response, parseOutreachContacts, path)
 }
 
-export async function createOutreachContact(postId: string, input: ContactDiscoveryResult) {
+export async function createOutreachContact(postId: string, input: OutreachContactInput) {
     const path = `/job-posts/${encodeURIComponent(postId)}/outreach-contacts`
     const response = await fetch(`${apiUrl}${path}`, {
         method: 'POST',
@@ -39,4 +37,15 @@ export async function updateOutreachContact(
     })
 
     return parseApiResponse(response, parseOutreachContact, path)
+}
+
+export async function removeOutreachContact(postId: string, contactId: string) {
+    const path = `/job-posts/${encodeURIComponent(postId)}/outreach-contacts/${encodeURIComponent(contactId)}`
+    const response = await fetch(`${apiUrl}${path}`, { method: 'DELETE' })
+
+    if (!response.ok) {
+        throw new Error(
+            (await readResponseError(response)) ?? `API request failed (${response.status})`,
+        )
+    }
 }

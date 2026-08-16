@@ -1,19 +1,3 @@
-<script lang="ts">
-export interface OutreachTaskListItem {
-    taskId: string
-    kind: 'contact' | 'draft'
-    active: boolean
-    status:
-        | 'starting'
-        | 'restoring'
-        | 'running'
-        | 'completed'
-        | 'failed'
-        | 'cancelled'
-        | 'unavailable'
-}
-</script>
-
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -21,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import { useDescriptionOverflow } from '@/composables/useDescriptionOverflow'
+import type { OutreachTaskItem } from '@/stores/outreach'
 
 const props = withDefaults(
     defineProps<{
@@ -30,7 +15,8 @@ const props = withDefaults(
         messagedUpdating?: boolean
         selectable?: boolean
         showMessagedControl?: boolean
-        task?: OutreachTaskListItem
+        showMessagedStatus?: boolean
+        task?: OutreachTaskItem
     }>(),
     {
         contact: undefined,
@@ -39,6 +25,7 @@ const props = withDefaults(
         messagedUpdating: false,
         selectable: false,
         showMessagedControl: false,
+        showMessagedStatus: true,
         task: undefined,
     },
 )
@@ -46,6 +33,10 @@ const props = withDefaults(
 const emit = defineEmits<{
     select: []
     updateMessaged: [messaged: boolean]
+}>()
+
+defineSlots<{
+    actions?: (props: { contact: OutreachContact }) => unknown
 }>()
 
 const selectionLabel = computed(() => {
@@ -69,11 +60,11 @@ const taskMessage = computed(() => {
     }
 
     if (props.task?.status === 'running') {
-        return props.task.kind === 'draft' ? 'Revising outreach…' : 'Discovering contact…'
+        return 'Discovering contact…'
     }
 
     if (props.task?.status === 'completed') {
-        return props.task.kind === 'draft' ? 'Draft ready' : 'Saving contact…'
+        return 'Saving contact…'
     }
 
     return 'Outreach needs attention'
@@ -127,12 +118,18 @@ function toggleMessaged() {
         ></button>
 
         <template v-if="task">
-            <span class="eyebrow">
-                {{ task.kind === 'draft' ? 'Outreach draft' : 'Relevant contact' }}
-            </span>
+            <span class="eyebrow">Relevant contact</span>
             <span class="loading-contact">
                 <LoadingSpinner v-if="task.active" />
                 {{ taskMessage }}
+            </span>
+            <span
+                v-if="task.permissionRequired"
+                class="task-permission-notice"
+                :data-testid="`outreach-task-${task.taskId}-permission-needed`"
+                role="status"
+            >
+                Permission needed — open task to continue
             </span>
         </template>
 
@@ -160,7 +157,16 @@ function toggleMessaged() {
                     </template>
                     <template v-else>Mark as messaged</template>
                 </button>
-                <span v-else-if="contact.messaged" class="messaged-status"> Messaged </span>
+                <span
+                    v-else-if="showMessagedStatus && contact.messaged"
+                    class="messaged-status"
+                    data-testid="outreach-contact-messaged-status"
+                >
+                    Messaged
+                </span>
+                <div v-if="$slots.actions" class="contact-actions">
+                    <slot name="actions" :contact="contact" />
+                </div>
             </div>
             <p v-if="showMessagedControl && messagedError" class="messaged-error" role="alert">
                 {{ messagedError }}
@@ -314,6 +320,12 @@ function toggleMessaged() {
     color: $color-ink-secondary;
 }
 
+.contact-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+}
+
 .rationale-copy {
     position: relative;
     display: flex;
@@ -358,5 +370,16 @@ function toggleMessaged() {
     align-items: center;
     min-height: 2rem;
     color: $color-ink-secondary;
+}
+
+.task-permission-notice {
+    width: fit-content;
+    padding: $space-1 $space-2;
+    margin-top: $space-1;
+    color: $color-amber-500;
+    font-size: 0.75rem;
+    font-weight: 650;
+    background: $color-amber-500-alpha-12;
+    border-radius: $radius-full;
 }
 </style>

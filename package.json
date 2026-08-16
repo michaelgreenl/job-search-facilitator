@@ -14,6 +14,7 @@
         "dev:client": "pnpm --filter client run dev",
         "dev:server": "pnpm --filter server run dev",
         "dev:agent": "pnpm --filter agent-bridge run dev",
+        "job-search:artifact": "pnpm --filter server exec node --import tsx scripts/job-search-artifact.ts",
         "dev:stack": "pnpm run dev:db:backup && docker compose -f packages/app/server/docker-compose.yml up -d --build --wait",
         "dev:db": "docker compose -f packages/app/server/docker-compose.yml up -d --wait postgres",
         "dev:db:backup": "pnpm run dev:db && node packages/app/server/scripts/backup-local-database.ts",

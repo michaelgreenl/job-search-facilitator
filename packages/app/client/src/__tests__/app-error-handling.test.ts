@@ -16,7 +16,7 @@ const mountApp = async (component: ReturnType<typeof defineComponent>) => {
         routes: [
             { path: '/', component },
             { path: '/apply', component },
-            { path: '/results', component },
+            { path: '/track', component },
         ],
     })
     await router.push('/')

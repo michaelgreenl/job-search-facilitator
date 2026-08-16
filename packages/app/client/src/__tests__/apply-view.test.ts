@@ -48,12 +48,23 @@ const createRecommendation = (post: JobPost, index: number): JobRecommendationCo
     })
 const applyQueueItems: ApplyQueueItem[] = posts.map((post, index) => ({
     post,
+    jobPostSnapshot: {
+        description: `Fixture job description ${index}`,
+        sourceUrl: post.postUrl,
+        capturedAt: post.updatedAt,
+    },
     recommendationContext: createRecommendation(post, index),
+    applicationArtifacts: [],
 }))
 const createApplyQueueItem = (
     post: JobPost,
     recommendationContext: JobRecommendationContext | null = null,
-): ApplyQueueItem => ({ post, recommendationContext })
+): ApplyQueueItem => ({
+    post,
+    jobPostSnapshot: null,
+    recommendationContext,
+    applicationArtifacts: [],
+})
 
 const runningAgentTask = makeAgentTask({
     id: 'f67f9fe5-e502-4d28-8c72-c044f1babbb3',
@@ -154,6 +165,33 @@ describe('apply view', () => {
         })
     })
 
+    it('keeps the selected application filter after remounting', async () => {
+        vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(applyQueueItems)))
+        let root = await mountApplyView()
+
+        findTestButton(root, 'apply-post-filter-trigger').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="apply-post-filter-option-P2"]'),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, 'apply-post-filter-option-P2').click()
+        await vi.waitFor(() =>
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).toBeNull(),
+        )
+
+        mountedApps.pop()?.unmount()
+        root = await mountApplyView(createPinia(), false)
+
+        await vi.waitFor(() => {
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[0]!.id}"]`)).toBeNull()
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${posts[1]!.id}"]`),
+            ).not.toBeNull()
+            expect(root.querySelector(`[data-testid="job-post-card-${posts[2]!.id}"]`)).toBeNull()
+        })
+    })
+
     it('announces and retries a failed Apply queue load', async () => {
         let resolveInitialLoad: ((response: Response) => void) | undefined
         const initialLoad = new Promise<Response>((resolve) => {
@@ -207,6 +245,7 @@ describe('apply view', () => {
         expect(
             root.querySelector('[data-testid="apply-viewer-panel"]')?.getAttribute('data-active'),
         ).toBe('true')
+        expect(root.querySelector('[data-testid="post-description"]')).not.toBeNull()
         expect(postButton(root, posts[1]!.id).getAttribute('aria-pressed')).toBe('true')
 
         findTestButton(root, 'back-to-job-posts').click()
@@ -218,6 +257,84 @@ describe('apply view', () => {
                     ?.getAttribute('data-active'),
             ).toBe('true'),
         )
+    })
+
+    it('restores the selected post when the Apply view remounts', async () => {
+        vi.mocked(fetch).mockImplementation(async () => jsonResponse(applyQueueItems))
+        const firstRoot = await mountApplyView()
+
+        await selectPost(firstRoot, posts[1]!.id)
+        expect(sessionStorage.getItem('job-search-facilitator:apply-selected-post')).toBe(
+            posts[1]!.id,
+        )
+        mountedApps.at(-1)?.unmount()
+
+        const secondRoot = await mountApplyView()
+
+        await vi.waitFor(() =>
+            expect(postButton(secondRoot, posts[1]!.id).getAttribute('aria-pressed')).toBe('true'),
+        )
+    })
+
+    it('uploads and removes a user-selected resume artifact for the selected post', async () => {
+        let uploadRequest: RequestInit | undefined
+        let removeRequest: RequestInit | undefined
+        const resume = new File(['%PDF-1.7 fixture'], 'frontend-resume.pdf', {
+            type: 'application/pdf',
+        })
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+            const url = requestUrl(input)
+
+            if (url.endsWith('/api/job-posts/apply-queue')) {
+                return jsonResponse(applyQueueItems)
+            }
+
+            if (
+                url.endsWith(`/api/job-posts/${posts[0]!.id}/artifacts/resume`) &&
+                init?.method === 'PUT'
+            ) {
+                uploadRequest = init
+                return jsonResponse({
+                    kind: 'resume',
+                    fileName: resume.name,
+                    mediaType: resume.type,
+                    sizeBytes: resume.size,
+                    uploadedAt: '2026-08-05T20:00:00.000Z',
+                })
+            }
+
+            if (
+                url.endsWith(`/api/job-posts/${posts[0]!.id}/artifacts/resume`) &&
+                init?.method === 'DELETE'
+            ) {
+                removeRequest = init
+                return new Response(null, { status: 204 })
+            }
+
+            throw new Error(`Unexpected request: ${url}`)
+        })
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        const input = root.querySelector<HTMLInputElement>('[data-testid="resume-artifact-input"]')!
+        Object.defineProperty(input, 'files', { configurable: true, value: [resume] })
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="remove-resume-artifact"]')).not.toBeNull(),
+        )
+        expect(uploadRequest?.method).toBe('PUT')
+        expect(uploadRequest?.body).toBe(resume)
+        expect(new Headers(uploadRequest?.headers).get('x-artifact-filename')).toBe(
+            encodeURIComponent(resume.name),
+        )
+
+        findTestButton(root, 'remove-resume-artifact').click()
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="resume-artifact-input"]')).not.toBeNull(),
+        )
+        expect(removeRequest?.method).toBe('DELETE')
     })
 
     it('reuses saved contacts and navigates between contact and draft panels', async () => {
@@ -259,6 +376,63 @@ describe('apply view', () => {
                     .querySelector('[data-testid="apply-viewer-panel"]')
                     ?.getAttribute('data-active'),
             ).toBe('true'),
+        )
+    })
+
+    it('saves an edited outreach draft before reopening it', async () => {
+        const draftMessage = 'Hi Grace, could we briefly discuss the role?'
+        const updatedContact = { ...savedContact, draftMessage }
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse([savedContact]))
+            .mockResolvedValueOnce(jsonResponse(updatedContact))
+        const root = await mountApplyView()
+
+        await selectPost(root, posts[0]!.id)
+        findTestButton(root, 'discover-contacts').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="outreach-contact-${savedContact.id}-select"]`),
+            ).not.toBeNull(),
+        )
+        findTestButton(root, `outreach-contact-${savedContact.id}-select`).click()
+
+        const draft = await vi.waitFor(() => {
+            const field = root.querySelector<HTMLTextAreaElement>('#outreach-message')
+
+            if (field === null) {
+                throw new Error('Could not find outreach message')
+            }
+
+            return field
+        })
+        draft.value = draftMessage
+        draft.dispatchEvent(new Event('input'))
+        await nextTick()
+        findTestButton(root, 'save-outreach-draft').click()
+
+        await vi.waitFor(() =>
+            expect(findTestButton(root, 'save-outreach-draft').disabled).toBe(true),
+        )
+        const saveRequest = vi
+            .mocked(fetch)
+            .mock.calls.find(
+                ([input, init]) =>
+                    requestUrl(input).endsWith(`/outreach-contacts/${savedContact.id}`) &&
+                    init?.method === 'PATCH',
+            )
+        expect(saveRequest?.[1]?.body).toBe(JSON.stringify({ draftMessage }))
+
+        findTestButton(root, 'back-to-saved-contacts').click()
+        const savedContactButton = await vi.waitFor(() =>
+            findTestButton(root, `outreach-contact-${savedContact.id}-select`),
+        )
+        savedContactButton.click()
+        await vi.waitFor(() =>
+            expect(root.querySelector<HTMLTextAreaElement>('#outreach-message')?.value).toBe(
+                draftMessage,
+            ),
         )
     })
 
@@ -357,7 +531,7 @@ describe('apply view', () => {
         })
     })
 
-    it('keeps a disconnected draft task visible and cancellable', async () => {
+    it('keeps a disconnected draft task in the draft panel', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -366,7 +540,8 @@ describe('apply view', () => {
             .mockResolvedValueOnce(jsonResponse(runningAgentTask, 202))
         FakeEventSource.reset()
         vi.stubGlobal('EventSource', FakeEventSource)
-        const root = await mountApplyView()
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
 
         await selectPost(root, posts[0]!.id)
         findTestButton(root, 'discover-contacts').click()
@@ -403,24 +578,31 @@ describe('apply view', () => {
             return instance
         })
         source.open()
+        expect(useAgentStore(pinia).getSession(runningAgentTask.id)).toMatchObject({
+            kind: 'outreach-draft',
+            jobDescription: 'Fixture job description 0',
+        })
         expect(root.querySelector('[data-testid="back-to-saved-contacts"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="agent-progress"]')).toBeNull()
         source.disconnect()
 
         await vi.waitFor(() =>
             expect(
-                root.querySelector('[data-testid="agent-reconnect-status"]')?.getAttribute('role'),
+                root
+                    .querySelector('[data-testid="outreach-draft-reconnect"]')
+                    ?.getAttribute('role'),
             ).toBe('status'),
         )
 
         source.open()
         await vi.waitFor(() =>
-            expect(root.querySelector('[data-testid="agent-reconnect-status"]')).toBeNull(),
+            expect(root.querySelector('[data-testid="outreach-draft-reconnect"]')).toBeNull(),
         )
 
         source.fail()
         await vi.waitFor(() => {
             expect(root.querySelector('[role="alert"]')).not.toBeNull()
-            expect(root.querySelector('[data-testid="outreach-cancel"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="agent-progress"]')).toBeNull()
         })
     })
 

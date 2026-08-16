@@ -204,6 +204,16 @@ export const jobPostSeeds: readonly JobPostSeed[] = [
     },
 ]
 
+const seededApplicationStatusAt = new Date('2026-07-01T12:00:00.000Z')
+
+const toCreateData = (post: JobPostSeed): Prisma.JobPostCreateInput => ({
+    ...post,
+    appliedAt:
+        post.applicationStatus === ApplicationStatus.NOT_APPLIED ? null : seededApplicationStatusAt,
+    applicationStatusUpdatedAt:
+        post.applicationStatus === ApplicationStatus.NOT_APPLIED ? null : seededApplicationStatusAt,
+})
+
 const toListingUpdate = (post: JobPostSeed): Prisma.JobPostUpdateInput => ({
     roleTitle: post.roleTitle,
     company: post.company,
@@ -224,7 +234,7 @@ export const seedJobPosts = async (
     for (const post of jobPostSeeds) {
         const savedPost = await transaction.jobPost.upsert({
             where: { sourceKey: post.sourceKey },
-            create: post,
+            create: toCreateData(post),
             update: toListingUpdate(post),
             select: { id: true, sourceKey: true },
         })

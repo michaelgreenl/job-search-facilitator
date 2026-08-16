@@ -2,6 +2,7 @@ import type {
     ApplyQueueItem,
     CreateUserAddedJobPostInput,
     JobPost,
+    TrackedJobPost,
     UpdateJobPostInput,
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
@@ -24,6 +25,7 @@ const existingPost: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/123',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
@@ -33,7 +35,20 @@ const existingPost: JobPost = {
 const missingPostId = '22222222-2222-4222-8222-222222222222'
 const applyQueueItem: ApplyQueueItem = {
     post: { ...existingPost, userLabel: 'P1' },
+    jobPostSnapshot: null,
     recommendationContext: null,
+    applicationArtifacts: [],
+}
+const trackedPost: TrackedJobPost = {
+    post: {
+        ...existingPost,
+        applicationStatus: 'awaiting-response',
+        appliedAt: '2026-07-12T10:00:00.000Z',
+    },
+    contacts: [],
+    jobPostSnapshot: null,
+    applicationArtifacts: [],
+    activities: [],
 }
 const userAddedPost: UserAddedJobPost = {
     agentLabel: 'target',
@@ -44,6 +59,7 @@ const userAddedPost: UserAddedJobPost = {
     recommendedAction: 'Apply today',
     legitimacyNotes: null,
     post: existingPost,
+    jobPostSnapshot: null,
     addedAt: '2026-07-12T10:00:00.000Z',
     updatedAt: '2026-07-12T10:00:00.000Z',
 }
@@ -57,6 +73,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {
         sourceKey: existingPost.sourceKey,
+        description: 'Complete job description',
         roleTitle: existingPost.roleTitle,
         company: existingPost.company,
         location: existingPost.location,
@@ -72,6 +89,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
 const createFakeRepository = () => {
     const findMany = vi.fn(async () => [existingPost])
     const findApplyQueue = vi.fn(async () => [applyQueueItem])
+    const findTracked = vi.fn(async () => [trackedPost])
     const findUserAdded = vi.fn(async () => [userAddedPost])
     const findById = vi.fn(async (_id: string): Promise<JobPost | null> => existingPost)
     const upsertUserAdded = vi.fn(async (_input: CreateUserAddedJobPostInput) => ({
@@ -85,6 +103,7 @@ const createFakeRepository = () => {
     const repository: JobPostRepository = {
         findMany,
         findApplyQueue,
+        findTracked,
         findUserAdded,
         findById,
         upsertUserAdded,
@@ -93,6 +112,7 @@ const createFakeRepository = () => {
 
     return {
         findApplyQueue,
+        findTracked,
         findById,
         findMany,
         findUserAdded,
@@ -105,7 +125,14 @@ const createFakeRepository = () => {
 const createTestApp = (repository: JobPostRepository) => {
     const app = express()
     app.use(express.json())
-    app.use('/job-posts', createJobPostRouter(repository))
+    app.use(
+        '/job-posts',
+        createJobPostRouter(repository, {
+            save: vi.fn(async () => null),
+            findFile: vi.fn(async () => null),
+            remove: vi.fn(async () => false),
+        }),
+    )
     return app
 }
 
@@ -126,6 +153,16 @@ describe('job post routes', () => {
             .expect(200, [applyQueueItem])
 
         expect(findApplyQueue).toHaveBeenCalledOnce()
+    })
+
+    it('lists tracked posts', async () => {
+        const { findTracked, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .get('/job-posts/tracked')
+            .expect(200, [trackedPost])
+
+        expect(findTracked).toHaveBeenCalledOnce()
     })
 
     it('lists posts added by the user', async () => {

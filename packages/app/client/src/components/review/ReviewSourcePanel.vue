@@ -1,9 +1,24 @@
 <script setup lang="ts">
 import type { JobSearchReport } from '@job-search-facilitator/core'
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
+
+const dateFromStorageKey = 'job-search-facilitator:review-date-from'
+const dateToStorageKey = 'job-search-facilitator:review-date-to'
+
+const readDateFilter = (key: string) => {
+    const value = readSessionStorage(key)
+
+    if (value === null || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return ''
+    }
+
+    const date = new Date(`${value}T00:00:00Z`)
+    return !Number.isNaN(date.valueOf()) && date.toISOString().startsWith(value) ? value : ''
+}
 
 const props = defineProps<{
     active: boolean
@@ -26,8 +41,11 @@ const emit = defineEmits<{
     retryUserAdded: []
 }>()
 
-const dateFrom = shallowRef('')
-const dateTo = shallowRef('')
+const dateFrom = shallowRef(readDateFilter(dateFromStorageKey))
+const dateTo = shallowRef(readDateFilter(dateToStorageKey))
+
+watch(dateFrom, (value) => writeSessionStorage(dateFromStorageKey, value || null))
+watch(dateTo, (value) => writeSessionStorage(dateToStorageKey, value || null))
 
 const dateFilterActive = computed(() => dateFrom.value !== '' || dateTo.value !== '')
 const dateRangeInvalid = computed(

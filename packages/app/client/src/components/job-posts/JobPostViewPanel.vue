@@ -1,10 +1,16 @@
 <script lang="ts">
+import type { ApplicationArtifact, ApplicationArtifactKind } from '@job-search-facilitator/core'
+
 export type JobPostViewPanelMode =
     | { kind: 'review' }
     | {
           kind: 'apply'
           applicationUpdating: boolean
           applicationError: string | null
+          artifactError: string | null
+          applicationArtifacts: readonly ApplicationArtifact[]
+          artifactRemoving: ApplicationArtifactKind | null
+          artifactUploading: ApplicationArtifactKind | null
           outreachDisabled: boolean
       }
 </script>
@@ -31,6 +37,7 @@ const props = defineProps<{
     backLabel?: string
     backMobileOnly?: boolean
     post: JobPost
+    description?: string | null
     recommendation?: StandaloneJobRecommendation
     labelUpdating: boolean
     labelError: string | null
@@ -41,6 +48,8 @@ const emit = defineEmits<{
     updateLabel: [label: UserLabel | null]
     openOutreach: []
     markApplied: []
+    removeArtifact: [kind: ApplicationArtifactKind]
+    uploadArtifact: [kind: ApplicationArtifactKind, file: File]
     back: []
 }>()
 
@@ -49,6 +58,27 @@ const RESUME_LABELS: Record<ResumeType, string> = {
     'backend-full-stack': 'Backend / full-stack',
     general: 'General',
 }
+const ARTIFACT_OPTIONS = [
+    {
+        kind: 'resume',
+        label: 'Resume',
+        accept: '.pdf,application/pdf',
+    },
+    {
+        kind: 'cover-letter',
+        label: 'Cover letter',
+        accept: '.pdf,application/pdf',
+    },
+    {
+        kind: 'application-page',
+        label: 'Application snapshot',
+        accept: '.html,.htm,.webarchive,.mhtml,.mht,text/html,application/x-webarchive,multipart/related,message/rfc822',
+    },
+] as const satisfies readonly {
+    kind: ApplicationArtifactKind
+    label: string
+    accept: string
+}[]
 
 const normalizeText = (value: string | null | undefined) => {
     const normalized = value?.trim()
@@ -56,6 +86,8 @@ const normalizeText = (value: string | null | undefined) => {
 }
 
 const applyMode = computed(() => (props.mode.kind === 'apply' ? props.mode : null))
+const artifactFor = (kind: ApplicationArtifactKind) =>
+    applyMode.value?.applicationArtifacts?.find((artifact) => artifact.kind === kind) ?? null
 const applied = computed(() => props.post.applicationStatus === 'awaiting-response')
 const toHttpUrl = (value: string) => {
     try {
@@ -101,6 +133,7 @@ const content = computed(() => {
 
     return {
         compensation: normalizeText(props.post.compensation),
+        description: normalizeText(props.description),
         fitRationale: normalizeText(props.recommendation?.fitRationale),
         keyLegitimacySignals: normalizeText(
             props.mode.kind === 'review' ? props.recommendation?.keyLegitimacySignals : null,
@@ -130,7 +163,9 @@ const hasLegitimacy = computed(
     () => content.value.keyLegitimacySignals !== null || content.value.legitimacyNotes !== null,
 )
 const hasAnalysis = computed(() => hasRecommendation.value || hasLegitimacy.value)
-const hasContent = computed(() => hasFacts.value || hasAnalysis.value)
+const hasContent = computed(
+    () => hasFacts.value || hasAnalysis.value || content.value.description !== null,
+)
 
 const isUserLabel = (value: string): value is UserLabel =>
     USER_LABELS.some((label) => label === value)
@@ -142,6 +177,21 @@ function selectLabel(value: string) {
         emit('updateLabel', null)
     } else if (isUserLabel(value)) {
         emit('updateLabel', value)
+    }
+}
+
+function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
+    const input = event.currentTarget
+
+    if (!(input instanceof HTMLInputElement)) {
+        return
+    }
+
+    const file = input.files?.[0]
+    input.value = ''
+
+    if (file !== undefined) {
+        emit('uploadArtifact', kind, file)
     }
 }
 </script>
@@ -217,7 +267,6 @@ function selectLabel(value: string) {
             <p v-if="postError" class="label-error" data-testid="job-post-error" role="alert">
                 {{ postError }}
             </p>
-
             <div v-if="hasContent" class="post-content">
                 <section v-if="hasFacts" class="content-section" data-testid="post-facts">
                     <h3 class="content-section-title">At a glance</h3>
@@ -300,9 +349,92 @@ function selectLabel(value: string) {
                         </div>
                     </section>
                 </div>
+
+                <section
+                    v-if="content.description"
+                    class="content-section"
+                    data-testid="post-description"
+                >
+                    <h3 class="content-section-title">Job description</h3>
+                    <p class="content-copy">{{ content.description }}</p>
+                </section>
             </div>
 
-            <div v-if="applyMode" class="primary-actions primary-actions-outreach">
+            <div v-if="applyMode" class="viewer-footer">
+                <section
+                    class="artifact-uploads"
+                    data-testid="application-artifact-uploads"
+                    aria-labelledby="artifact-upload-label"
+                >
+                    <div class="artifact-upload-heading">
+                        <span id="artifact-upload-label" class="footer-label">
+                            Upload application artifacts
+                        </span>
+                        <p v-if="applyMode.artifactError" class="artifact-error" role="alert">
+                            {{ applyMode.artifactError }}
+                        </p>
+                    </div>
+                    <div class="primary-actions">
+                        <template v-for="option in ARTIFACT_OPTIONS" :key="option.kind">
+                            <button
+                                v-if="artifactFor(option.kind)"
+                                class="artifact-upload-button is-uploaded"
+                                :data-testid="`remove-${option.kind}-artifact`"
+                                type="button"
+                                :aria-label="`Remove ${option.label}`"
+                                :disabled="
+                                    applyMode.artifactUploading !== null ||
+                                    applyMode.artifactRemoving !== null
+                                "
+                                @click="emit('removeArtifact', option.kind)"
+                            >
+                                <span
+                                    v-if="applyMode.artifactRemoving !== option.kind"
+                                    class="artifact-status-icon"
+                                    aria-hidden="true"
+                                >
+                                    <span
+                                        class="artifact-status-check"
+                                        :data-testid="`${option.kind}-artifact-check-icon`"
+                                        >✓</span
+                                    >
+                                    <span
+                                        class="artifact-status-remove"
+                                        :data-testid="`${option.kind}-artifact-remove-icon`"
+                                        >✕</span
+                                    >
+                                </span>
+                                <span>
+                                    {{
+                                        applyMode.artifactRemoving === option.kind
+                                            ? 'Removing…'
+                                            : option.label
+                                    }}
+                                </span>
+                            </button>
+                            <label v-else class="artifact-upload-button">
+                                <input
+                                    :data-testid="`${option.kind}-artifact-input`"
+                                    type="file"
+                                    :accept="option.accept"
+                                    :disabled="
+                                        applyMode.artifactUploading !== null ||
+                                        applyMode.artifactRemoving !== null
+                                    "
+                                    @change="selectArtifact(option.kind, $event)"
+                                />
+                                <span>
+                                    {{
+                                        applyMode.artifactUploading === option.kind
+                                            ? 'Uploading…'
+                                            : option.label
+                                    }}
+                                </span>
+                            </label>
+                        </template>
+                    </div>
+                </section>
+
                 <BaseButton
                     data-testid="discover-contacts"
                     :disabled="applyMode.outreachDisabled"
@@ -361,10 +493,6 @@ function selectLabel(value: string) {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
-
-    &-outreach {
-        justify-content: flex-end;
-    }
 }
 
 .label-picker-dropdown {
@@ -481,6 +609,123 @@ function selectLabel(value: string) {
 .recommended-action {
     color: $color-ink;
     font-weight: 600;
+}
+
+.viewer-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-3;
+    align-items: end;
+    justify-content: space-between;
+    margin-top: auto;
+}
+
+.artifact-uploads {
+    display: grid;
+    gap: $space-2;
+}
+
+.artifact-upload-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-1 $space-3;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.footer-label {
+    color: $color-ink-muted;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.artifact-status-icon {
+    width: 1em;
+    font-size: 0.9375rem;
+    line-height: 1;
+    text-align: center;
+}
+
+.artifact-status-remove {
+    display: none;
+}
+
+.artifact-upload-button {
+    display: inline-flex;
+    width: fit-content;
+    min-height: 2.5rem;
+    gap: $space-1;
+    align-items: center;
+    justify-content: center;
+    padding: calc(#{$space-2} - 1px) $space-3;
+    color: $color-ink;
+    font-family: $font-family-mono;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    line-height: 1.25;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid $color-ink-alpha-50;
+    border-radius: $radius-md;
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.6;
+    }
+
+    &:has(input:disabled) {
+        cursor: wait;
+        opacity: 0.6;
+    }
+
+    &:has(input:focus-visible) {
+        outline: 2px solid $color-signal-light;
+        outline-offset: 2px;
+    }
+
+    &:hover:has(input:not(:disabled)) {
+        border-color: $color-signal-light-alpha-50;
+    }
+
+    &.is-uploaded {
+        color: lighten-color($color-green-600, 35%);
+        background: $color-green-600-alpha-25;
+        border-color: $color-green-600-alpha-55;
+
+        &:hover:not(:disabled),
+        &:focus-visible:not(:disabled) {
+            color: $color-ink-secondary;
+            background: $color-ink-alpha-16;
+            border-color: $color-ink-alpha-50;
+
+            .artifact-status-check {
+                display: none;
+            }
+
+            .artifact-status-remove {
+                display: inline;
+            }
+        }
+    }
+
+    input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+.artifact-error {
+    margin: 0;
+    color: lighten-color($color-red-600, 25%);
+    font-size: 0.75rem;
+    text-align: right;
 }
 
 @container post-content (min-width: 40rem) {

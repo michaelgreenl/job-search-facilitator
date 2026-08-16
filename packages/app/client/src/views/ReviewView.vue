@@ -3,6 +3,7 @@ import {
     type JobPost,
     type JobSearchReport,
     type StandaloneJobRecommendation,
+    type UserAddedJobPost,
     type UserLabel,
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
@@ -18,6 +19,7 @@ import JobPostViewPanel, {
 } from '@/components/job-posts/JobPostViewPanel.vue'
 import JobPostImportPanel from '@/components/review/JobPostImportPanel.vue'
 import ReviewSourcePanel from '@/components/review/ReviewSourcePanel.vue'
+import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
 import { useJobPostImportStore } from '@/stores/job-post-import'
 import { useReportStore } from '@/stores/report'
 import { usePostStore } from '@/stores/post'
@@ -26,10 +28,21 @@ type ActivePanel = 'sources' | 'posts' | 'viewer' | 'import'
 type PostFilter = 'all' | 'labeled' | 'unreviewed' | 'forgone'
 type ReviewSource = { kind: 'report'; reportId: string } | { kind: 'user-added' }
 
+const postFilterStorageKey = 'job-search-facilitator:review-post-filter'
+
 interface ReviewItem {
     post: JobPost
+    description: string | null
     recommendation: StandaloneJobRecommendation
 }
+
+type ReviewSourceItem = JobSearchReport['results'][number] | UserAddedJobPost
+
+const toReviewItem = (item: ReviewSourceItem): ReviewItem => ({
+    post: item.post,
+    description: item.jobPostSnapshot?.description ?? null,
+    recommendation: item,
+})
 
 const postFilterOptions: BaseDropdownOption[] = [
     { value: 'all', label: 'All' },
@@ -64,7 +77,10 @@ const {
     requestStarting: importRequestStarting,
 } = storeToRefs(importStore)
 const activePanel = shallowRef<ActivePanel>(hasImportSession.value ? 'import' : 'sources')
-const postFilter = shallowRef<PostFilter>('all')
+const storedPostFilter = readSessionStorage(postFilterStorageKey)
+const postFilter = shallowRef<PostFilter>(
+    storedPostFilter !== null && isPostFilter(storedPostFilter) ? storedPostFilter : 'all',
+)
 const selectedSource = shallowRef<ReviewSource | null>(null)
 const selectedItem = shallowRef<ReviewItem | null>(null)
 const labelUpdating = shallowRef(false)
@@ -86,16 +102,10 @@ const selectedReport = computed(() => {
 })
 const selectedItems = computed<ReviewItem[]>(() => {
     if (selectedSource.value?.kind === 'user-added') {
-        return postStore.userAddedPosts.map((item) => ({
-            post: item.post,
-            recommendation: item,
-        }))
+        return postStore.userAddedPosts.map(toReviewItem)
     }
 
-    return (selectedReport.value?.results ?? []).map((result) => ({
-        post: result.post,
-        recommendation: result,
-    }))
+    return (selectedReport.value?.results ?? []).map(toReviewItem)
 })
 const getQueryId = (value: (typeof route.query)[string] | undefined) =>
     typeof value === 'string' ? value : null
@@ -221,17 +231,9 @@ function restoreRouteSelection() {
     }
 }
 
-const toReviewItems = (report: JobSearchReport): ReviewItem[] =>
-    report.results.map((result) => ({
-        post: result.post,
-        recommendation: result,
-    }))
+const toReviewItems = (report: JobSearchReport): ReviewItem[] => report.results.map(toReviewItem)
 
-const selectedItemsForUserAdded = (): ReviewItem[] =>
-    postStore.userAddedPosts.map((item) => ({
-        post: item.post,
-        recommendation: item,
-    }))
+const selectedItemsForUserAdded = (): ReviewItem[] => postStore.userAddedPosts.map(toReviewItem)
 
 const filteredItems = computed(() => {
     const items = selectedItems.value
@@ -291,6 +293,7 @@ const postListError = computed(() =>
 watch(bp.isLaptop, () => {
     restoreRouteSelection()
 })
+watch(postFilter, (filter) => writeSessionStorage(postFilterStorageKey, filter))
 
 const removeRouteListener = router.afterEach(() => {
     restoreRouteSelection()
@@ -312,7 +315,6 @@ function selectReport(reportId: string) {
     const source = { kind: 'report', reportId: report.id } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
 
     if (!bp.isLaptop.value) {
@@ -326,7 +328,6 @@ function selectUserAdded() {
     const source = { kind: 'user-added' } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
 
     if (!bp.isLaptop.value) {
@@ -350,7 +351,6 @@ function showImportPosts() {
     const source = { kind: 'user-added' } satisfies ReviewSource
     selectedSource.value = source
     selectedItem.value = null
-    postFilter.value = 'all'
     labelError.value = null
     activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
     pushSelectionState(source)
@@ -373,9 +373,9 @@ watch(
         selectedSource.value = source
         selectedItem.value = {
             post: savedItem.post,
+            description: savedItem.jobPostSnapshot?.description ?? null,
             recommendation: savedItem,
         }
-        postFilter.value = 'all'
         labelError.value = null
         activePanel.value = 'viewer'
         pushSelectionState(source, savedItem.post.id)
@@ -618,6 +618,7 @@ onMounted(() => {
                 back-label="Back to job posts"
                 back-mobile-only
                 :post="selectedItem.post"
+                :description="selectedItem.description"
                 :recommendation="selectedItem.recommendation"
                 :label-updating="labelUpdating"
                 :label-error="labelError"

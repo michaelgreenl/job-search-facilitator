@@ -33,6 +33,7 @@ const post: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/post-1',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-13T12:00:00.000Z',
@@ -48,6 +49,8 @@ const savedContact: OutreachContact = {
     relevanceRationale: 'Her title aligns with the role.',
     draftMessage: 'Initial draft',
     messaged: false,
+    messagedAt: null,
+    respondedAt: null,
     createdAt: '2026-07-21T12:00:00.000Z',
     updatedAt: '2026-07-21T12:00:00.000Z',
 }
@@ -79,6 +82,7 @@ const report: JobSearchReport = {
             recommendedAction: 'Apply',
             legitimacyNotes: null,
             post,
+            jobPostSnapshot: null,
         },
     ],
 }
@@ -290,15 +294,21 @@ describe('post store', () => {
 
     it('loads the Apply queue from its endpoint', async () => {
         const applyQueuePost = { ...post, userLabel: 'P1' as const }
-        const { post: _reportPost, ...recommendation } = report.results[0]!
+        const {
+            post: _reportPost,
+            jobPostSnapshot: _reportSnapshot,
+            ...recommendation
+        } = report.results[0]!
         const applyQueueItems: ApplyQueueItem[] = [
             {
                 post: applyQueuePost,
+                jobPostSnapshot: null,
                 recommendationContext: {
                     reportId: report.id,
                     reportDate: report.reportDate,
                     ...recommendation,
                 },
+                applicationArtifacts: [],
             },
         ]
         const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -398,11 +408,15 @@ describe('outreach store', () => {
         ...task,
         status: 'completed',
         output: {
-            personName: contact.personName,
-            personTitle: contact.personTitle,
-            profileUrl: contact.profileUrl,
-            relevanceRationale: contact.relevanceRationale,
-            draftMessage: contact.draftMessage,
+            outcome: 'contact',
+            contact: {
+                personName: contact.personName,
+                personTitle: contact.personTitle,
+                profileUrl: contact.profileUrl,
+                relevanceRationale: contact.relevanceRationale,
+                draftMessage: contact.draftMessage,
+            },
+            error: null,
         },
         error: null,
     })
@@ -484,6 +498,72 @@ describe('outreach store', () => {
         expect(store.contact).toEqual(updatedContact)
         expect(store.contacts).toEqual([updatedContact])
         expect(store.draft).toBe('Locally edited draft')
+    })
+
+    it('saves the current outreach draft', async () => {
+        const updatedContact = {
+            ...savedContact,
+            draftMessage: 'Hi Ada, could we briefly discuss the role?',
+            updatedAt: '2026-07-22T12:00:00.000Z',
+        }
+        const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(updatedContact))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+        store.draft = updatedContact.draftMessage
+
+        await expect(store.saveDraft()).resolves.toEqual(updatedContact)
+
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts/${savedContact.id}`,
+            expect.objectContaining({
+                method: 'PATCH',
+                body: JSON.stringify({ draftMessage: updatedContact.draftMessage }),
+            }),
+        )
+        expect(store.contact).toEqual(updatedContact)
+        expect(store.contacts).toEqual([updatedContact])
+        expect(store.draftDirty).toBe(false)
+    })
+
+    it('keeps newer edits made while an outreach draft is saving', async () => {
+        let resolveSave: ((response: Response) => void) | undefined
+        vi.mocked(fetch).mockImplementationOnce(
+            () =>
+                new Promise<Response>((resolve) => {
+                    resolveSave = resolve
+                }),
+        )
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+        store.draft = 'First edit'
+
+        const save = store.saveDraft()
+        store.draft = 'Newer edit'
+        resolveSave?.(jsonResponse({ ...savedContact, draftMessage: 'First edit' }))
+        await save
+
+        expect(store.draft).toBe('Newer edit')
+        expect(store.draftDirty).toBe(true)
+    })
+
+    it('removes the selected contact from the saved list', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        store.contacts = [savedContact]
+        store.selectContact(savedContact)
+
+        await expect(store.removeContact(savedContact.id)).resolves.toBe(true)
+
+        expect({ contacts: store.contacts, contact: store.contact }).toEqual({
+            contacts: [],
+            contact: null,
+        })
+        expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBe('DELETE')
     })
 
     it('does not replace saved contacts with an invalid API response', async () => {
@@ -677,6 +757,29 @@ describe('outreach store', () => {
         expect(agentStore.getSession(runningTask.id)).not.toBeNull()
     })
 
+    it('surfaces a failed discovery outcome without saving a contact', async () => {
+        stubTaskStarts([runningTask])
+        const agentStore = useAgentStore()
+        const store = useOutreachStore()
+        store.openForPost(post.id)
+        await store.startContactDiscovery(post)
+
+        updateTask({
+            ...runningTask,
+            status: 'completed',
+            output: {
+                outcome: 'failed',
+                contact: null,
+                error: 'LinkedIn employee search failed',
+            },
+        })
+
+        await vi.waitFor(() => expect(store.resultError).toBe('LinkedIn employee search failed'))
+        expect(store.taskRetryAvailable).toBe(true)
+        expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+        expect(agentStore.getSession(runningTask.id)).not.toBeNull()
+    })
+
     it('applies a completed draft only to the contact and run that are reopened', async () => {
         const otherContact: OutreachContact = {
             ...secondContact,
@@ -690,6 +793,7 @@ describe('outreach store', () => {
         store.contacts = [savedContact, otherContact]
         store.selectContact(savedContact)
         await store.requestDraftRevision(post, 'Make it warmer')
+        expect(store.tasks).toEqual([])
 
         store.selectContact(otherContact)
         updateTask({

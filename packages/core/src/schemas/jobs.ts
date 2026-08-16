@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { applicationArtifactSchema } from './applications.ts'
 import {
     AGENT_LABELS,
     APPLICATION_STATUSES,
@@ -9,6 +10,7 @@ import {
     type CreateUserAddedJobPostInput,
     type JobPost,
     type JobPostInput,
+    type JobPostSnapshot,
     type JobRecommendationContext,
     type JobSearchReport,
     type JobSearchResult,
@@ -33,15 +35,16 @@ const httpUrlInputSchema = z
     )
 
 export const jobPostInputSchema = z.strictObject({
-    sourceKey: nonBlankInputStringSchema,
-    roleTitle: nonBlankInputStringSchema,
-    company: nonBlankInputStringSchema,
-    location: nonBlankInputStringSchema.nullable(),
-    compensation: nonBlankInputStringSchema.nullable(),
-    techStack: nonBlankInputStringSchema,
-    postSource: nonBlankInputStringSchema,
-    postUrl: httpUrlInputSchema,
-    applicationUrl: httpUrlInputSchema,
+    sourceKey: nonBlankInputStringSchema.max(1_000),
+    description: z.string().regex(/\S/),
+    roleTitle: nonBlankInputStringSchema.max(500),
+    company: nonBlankInputStringSchema.max(500),
+    location: nonBlankInputStringSchema.max(500).nullable(),
+    compensation: nonBlankInputStringSchema.max(500).nullable(),
+    techStack: nonBlankInputStringSchema.max(2_000),
+    postSource: nonBlankInputStringSchema.max(500),
+    postUrl: httpUrlInputSchema.max(4_096),
+    applicationUrl: httpUrlInputSchema.max(4_096),
     postStatus: z.enum(POST_STATUSES),
 }) satisfies z.ZodType<JobPostInput>
 
@@ -60,7 +63,7 @@ export const createUserAddedJobPostInputSchema = z.strictObject({
     post: jobPostInputSchema,
 }) satisfies z.ZodType<CreateUserAddedJobPostInput>
 
-const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
+export const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     id: z.uuid(),
     sourceKey: nonBlankStringSchema,
     roleTitle: nonBlankStringSchema,
@@ -73,10 +76,17 @@ const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     applicationUrl: httpUrlSchema,
     postStatus: z.enum(POST_STATUSES),
     applicationStatus: z.enum(APPLICATION_STATUSES),
+    appliedAt: isoDateTimeSchema.nullable(),
     userLabel: z.enum(USER_LABELS).nullable(),
     archivedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
+})
+
+export const jobPostSnapshotSchema: z.ZodType<JobPostSnapshot> = z.looseObject({
+    description: nonBlankStringSchema,
+    sourceUrl: httpUrlSchema,
+    capturedAt: isoDateTimeSchema,
 })
 
 const updateJobPostResultSchema: z.ZodType<UpdateJobPostResult> = z.looseObject({
@@ -107,18 +117,22 @@ const jobRecommendationContextSchema: z.ZodType<JobRecommendationContext> = z.lo
 const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
     ...jobRecommendationShape,
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
 })
 
 const userAddedJobPostSchema: z.ZodType<UserAddedJobPost> = z.looseObject({
     ...standaloneJobRecommendationShape,
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
     addedAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
 })
 
 const applyQueueItemSchema: z.ZodType<ApplyQueueItem> = z.looseObject({
     post: jobPostSchema,
+    jobPostSnapshot: jobPostSnapshotSchema.nullable(),
     recommendationContext: jobRecommendationContextSchema.nullable(),
+    applicationArtifacts: z.array(applicationArtifactSchema),
 })
 
 const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({

@@ -63,4 +63,24 @@ describe('OutreachContactList', () => {
         await selectFilter(root, 'all')
         expectContacts(root, ['contact-1', 'contact-2'])
     })
+
+    it('keeps the selected contact filter after remounting', async () => {
+        const props = {
+            contacts: [
+                contact({ messaged: true }),
+                contact({ id: 'contact-2', personName: 'Grace Hopper' }),
+            ],
+            error: null,
+            loading: false,
+            tasks: [],
+        }
+        const first = mountVue(OutreachContactList, { props })
+
+        await selectFilter(first.root, 'not-messaged')
+        first.unmount()
+
+        const second = mountVue(OutreachContactList, { props })
+        expectContacts(second.root, ['contact-2'])
+        second.unmount()
+    })
 })

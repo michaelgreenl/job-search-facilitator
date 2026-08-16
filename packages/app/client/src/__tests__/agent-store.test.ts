@@ -64,6 +64,11 @@ const secondPermissionRequired = {
     },
     createdAt: '2026-07-18T12:00:02.000Z',
 } satisfies AgentTaskEvent
+const structuredAgentError = `Agent runtime request "turn/start" failed: ${JSON.stringify({
+    type: 'error',
+    error: { type: 'invalid_request_error', code: 'invalid_json_schema' },
+    status: 400,
+})}`
 
 describe('agent store', () => {
     beforeEach(() => {
@@ -638,6 +643,36 @@ describe('agent store', () => {
             connectionState: 'disconnected',
             sessionUnavailable: true,
             error: 'Agent /health returned invalid data',
+        })
+    })
+
+    it('does not expose a structured Agent error when task creation fails', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse({ error: structuredAgentError }, 500))
+        const store = useAgentStore()
+
+        await expect(store.startTask(taskInput, importOwner).started).rejects.toThrow(
+            'Agent request failed (500)',
+        )
+        expect(store.getTaskState(startedTask.id)?.error).toBe('Agent request failed (500)')
+    })
+
+    it('returns a safe error when task creation finds an existing failed task', async () => {
+        const failedTask: AgentTask = {
+            ...startedTask,
+            status: 'failed',
+            output: null,
+            error: structuredAgentError,
+        }
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(failedTask, 202))
+        const store = useAgentStore()
+
+        await expect(store.startTask(taskInput, importOwner).started).resolves.toMatchObject({
+            status: 'failed',
+            error: 'Agent task failed',
         })
     })
 

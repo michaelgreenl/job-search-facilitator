@@ -13,7 +13,7 @@ import {
     toAgentOutputSchema,
 } from './shared.ts'
 
-const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
+export const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     id: z.uuid(),
     jobPostId: z.uuid(),
     personName: nonBlankStringSchema,
@@ -22,6 +22,8 @@ const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     relevanceRationale: nonBlankStringSchema,
     draftMessage: nonBlankStringSchema,
     messaged: z.boolean(),
+    messagedAt: isoDateTimeSchema.nullable(),
+    respondedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
 })
@@ -30,12 +32,17 @@ const agentOutputTextSchema = z.string().regex(/\S/)
 const linkedInAgentOutputSchema = z
     .string()
     .regex(/^\s*https:\/\/(?:[^./\s]+\.)*linkedin\.com\/in\/\S+\s*$/)
-const contactDiscoveryWireSchema = z.strictObject({
+const contactDiscoveryContactWireSchema = z.strictObject({
     personName: agentOutputTextSchema,
     personTitle: agentOutputTextSchema,
     profileUrl: linkedInAgentOutputSchema,
     relevanceRationale: agentOutputTextSchema,
     draftMessage: agentOutputTextSchema,
+})
+const contactDiscoveryWireSchema = z.strictObject({
+    outcome: z.enum(['contact', 'failed']),
+    contact: contactDiscoveryContactWireSchema.nullable(),
+    error: agentOutputTextSchema.nullable(),
 })
 const draftRevisionWireSchema = z.strictObject({
     draftMessage: agentOutputTextSchema,
@@ -43,13 +50,28 @@ const draftRevisionWireSchema = z.strictObject({
 })
 
 const contactDiscoveryResultSchema: z.ZodType<ContactDiscoveryResult> =
-    contactDiscoveryWireSchema.transform((result) => ({
-        personName: result.personName.trim(),
-        personTitle: result.personTitle.trim(),
-        profileUrl: result.profileUrl.trim(),
-        relevanceRationale: result.relevanceRationale.trim(),
-        draftMessage: result.draftMessage.trim(),
-    }))
+    contactDiscoveryWireSchema.transform((result, context): ContactDiscoveryResult => {
+        if (result.outcome === 'failed' && result.contact === null && result.error !== null) {
+            return { outcome: result.outcome, contact: null, error: result.error.trim() }
+        }
+
+        if (result.outcome === 'contact' && result.contact !== null && result.error === null) {
+            return {
+                outcome: result.outcome,
+                contact: {
+                    personName: result.contact.personName.trim(),
+                    personTitle: result.contact.personTitle.trim(),
+                    profileUrl: result.contact.profileUrl.trim(),
+                    relevanceRationale: result.contact.relevanceRationale.trim(),
+                    draftMessage: result.contact.draftMessage.trim(),
+                },
+                error: null,
+            }
+        }
+
+        context.addIssue({ code: 'custom', message: 'Discovery outcome is inconsistent' })
+        return z.NEVER
+    })
 
 const draftRevisionResultSchema: z.ZodType<DraftRevisionResult> = draftRevisionWireSchema.transform(
     (result) => ({

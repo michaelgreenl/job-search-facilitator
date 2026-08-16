@@ -28,11 +28,15 @@ const importUrl = 'https://example.com/jobs/imported-role'
 const outreachPost = makeJobPost()
 const savedContact = makeOutreachContact({ jobPostId: outreachPost.id })
 const contactOutput = {
-    personName: savedContact.personName,
-    personTitle: savedContact.personTitle,
-    profileUrl: savedContact.profileUrl,
-    relevanceRationale: savedContact.relevanceRationale,
-    draftMessage: savedContact.draftMessage,
+    outcome: 'contact',
+    contact: {
+        personName: savedContact.personName,
+        personTitle: savedContact.personTitle,
+        profileUrl: savedContact.profileUrl,
+        relevanceRationale: savedContact.relevanceRationale,
+        draftMessage: savedContact.draftMessage,
+    },
+    error: null,
 } satisfies ContactDiscoveryResult
 const importOutput = {
     agentLabel: 'target',
@@ -44,6 +48,7 @@ const importOutput = {
     legitimacyNotes: null,
     post: {
         sourceKey: 'example:imported-role',
+        description: 'Complete imported job description',
         roleTitle: 'Imported Engineer',
         company: 'Imported Co',
         location: 'Remote',
@@ -61,6 +66,11 @@ const savedImportedItem = {
         id: '30000000-0000-4000-8000-000000000001',
         ...importOutput.post,
     }),
+    jobPostSnapshot: {
+        description: importOutput.post.description,
+        sourceUrl: importOutput.post.postUrl,
+        capturedAt: '2026-07-20T12:00:00.000Z',
+    },
     addedAt: '2026-07-20T12:00:00.000Z',
     updatedAt: '2026-07-20T12:00:00.000Z',
 } satisfies UserAddedJobPost
@@ -252,7 +262,7 @@ describe('Agent feature lifecycle integration', () => {
             })
 
             expect(context.writes.imports).toEqual([importOutput])
-            expect(context.writes.contacts).toEqual([contactOutput])
+            expect(context.writes.contacts).toEqual([contactOutput.contact])
             expect(context.postStore.userAddedPosts).toEqual([savedImportedItem])
             expect(context.outreachStore.contacts).toEqual([savedContact])
             expect(readStoredSessions(context.storage)).toBeNull()
@@ -300,7 +310,7 @@ describe('Agent feature lifecycle integration', () => {
         context.bridge.complete(outreachTaskId, contactOutput)
 
         await vi.waitFor(() => {
-            expect(context.writes.contacts).toEqual([contactOutput])
+            expect(context.writes.contacts).toEqual([contactOutput.contact])
             expect(refreshedAgentStore.getSession(outreachTaskId)).toBeNull()
         })
         expect(refreshedAgentStore.getSession(secondOutreachTaskId)).toEqual(secondOutreachSession)

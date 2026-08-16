@@ -21,6 +21,7 @@ const post: JobPost = {
     applicationUrl: 'https://apply.example.com/jobs/post-1',
     postStatus: 'active',
     applicationStatus: 'not-applied',
+    appliedAt: null,
     userLabel: null,
     archivedAt: null,
     createdAt: '2026-07-13T12:00:00.000Z',
@@ -36,6 +37,11 @@ const userAddedPost: UserAddedJobPost = {
     recommendedAction: 'Tailor the frontend resume and apply',
     legitimacyNotes: null,
     post,
+    jobPostSnapshot: {
+        description: 'Complete job description',
+        sourceUrl: post.postUrl,
+        capturedAt: '2026-07-27T12:00:00.000Z',
+    },
     addedAt: '2026-07-27T12:00:00.000Z',
     updatedAt: '2026-07-27T12:00:00.000Z',
 }
@@ -50,6 +56,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {
         sourceKey: post.sourceKey,
+        description: 'Complete job description',
         roleTitle: post.roleTitle,
         company: post.company,
         location: post.location,

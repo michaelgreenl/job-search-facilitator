@@ -19,7 +19,7 @@ export const pluginInstalledResponseSchema = z.object({
                     availability: z.string(),
                     source: z.object({
                         type: z.string(),
-                        path: z.string().min(1).optional(),
+                        path: z.string().min(1).nullable().optional(),
                     }),
                 }),
             ),

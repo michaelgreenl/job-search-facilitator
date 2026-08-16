@@ -19,6 +19,8 @@ const existingContact: OutreachContact = {
     relevanceRationale: 'Her visible role aligns with the position.',
     draftMessage: 'Hi Ada, I would value your perspective on the role.',
     messaged: true,
+    messagedAt: '2026-07-21T12:00:00.000Z',
+    respondedAt: null,
     createdAt: '2026-07-21T12:00:00.000Z',
     updatedAt: '2026-07-21T12:00:00.000Z',
 }
@@ -45,16 +47,27 @@ const createFakeRepository = () => {
         }),
     )
     const findByJobPostId = vi.fn(async () => [existingContact])
+    const remove = vi.fn(async () => true)
     const update = vi.fn(
         async (
             _postId: string,
             _contactId: string,
             input: UpdateOutreachContactInput,
-        ): Promise<OutreachContact | null> => ({ ...existingContact, ...input }),
+        ): Promise<OutreachContact | null> => ({
+            ...existingContact,
+            draftMessage: input.draftMessage ?? existingContact.draftMessage,
+            messaged: input.messaged ?? existingContact.messaged,
+            respondedAt:
+                input.responded === undefined
+                    ? existingContact.respondedAt
+                    : input.responded
+                      ? existingContact.updatedAt
+                      : null,
+        }),
     )
-    const repository = { create, findByJobPostId, update }
+    const repository = { create, findByJobPostId, remove, update }
 
-    return { create, findByJobPostId, repository, update }
+    return { create, findByJobPostId, remove, repository, update }
 }
 
 describe('outreach contact routes', () => {
@@ -90,6 +103,52 @@ describe('outreach contact routes', () => {
         expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
             messaged,
         })
+    })
+
+    it('updates a saved outreach draft', async () => {
+        const { repository, update } = createFakeRepository()
+        const draftMessage = 'Hi Ada, could we briefly discuss the role?'
+
+        await request(createTestApp(repository))
+            .patch(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .send({ draftMessage })
+            .expect(200, { ...existingContact, draftMessage })
+
+        expect(update).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id, {
+            draftMessage,
+        })
+    })
+
+    it('removes a discovered contact', async () => {
+        const { remove, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .expect(204)
+
+        expect(remove).toHaveBeenCalledExactlyOnceWith(jobPostId, existingContact.id)
+    })
+
+    it('returns 404 when removing a missing outreach contact', async () => {
+        const { remove, repository } = createFakeRepository()
+        remove.mockResolvedValueOnce(false)
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${jobPostId}/outreach-contacts/${existingContact.id}`)
+            .expect(404)
+    })
+
+    it.each([
+        ['an invalid job post id', 'invalid-id', existingContact.id],
+        ['an invalid contact id', jobPostId, 'invalid-id'],
+    ])('rejects removal with %s', async (_description, postId, contactId) => {
+        const { remove, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/${postId}/outreach-contacts/${contactId}`)
+            .expect(400)
+
+        expect(remove).not.toHaveBeenCalled()
     })
 
     it.each([

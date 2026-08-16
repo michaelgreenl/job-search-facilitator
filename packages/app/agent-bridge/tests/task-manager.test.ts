@@ -4,7 +4,7 @@ import {
     createUserAddedJobPostOutputSchema,
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
 import { InvalidAgentOutputSchemaError } from '../src/tasks/output-schema.ts'
 import { FakeRuntime } from './fake-runtime.ts'
@@ -26,6 +26,7 @@ const eventIdentity = {
     threadId: 'thread-id',
     turnId: 'turn-id',
 } as const
+const inactivityTimeoutMs = 10 * 60 * 1_000
 
 const userAddedJobPostOutput = {
     agentLabel: 'target',
@@ -37,6 +38,7 @@ const userAddedJobPostOutput = {
     legitimacyNotes: null,
     post: {
         sourceKey: 'example-source:123',
+        description: 'Complete example job description',
         roleTitle: 'Software Engineer',
         company: 'Example Company',
         location: 'Detroit, MI',
@@ -48,6 +50,10 @@ const userAddedJobPostOutput = {
         postStatus: 'active',
     },
 } as const
+
+afterEach(() => {
+    vi.useRealTimers()
+})
 
 describe('Agent task manager', () => {
     it('keeps concurrent task streams, results, and cancellation isolated', async () => {
@@ -159,6 +165,32 @@ describe('Agent task manager', () => {
         ])
     })
 
+    it('declines browser permission for a task without Chrome access', async () => {
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const started = await manager.start({ ...input, capabilities: [] })
+        const connection = manager.connect(started.id, () => {})
+
+        runtime.emit({
+            type: 'permission-required',
+            permission: {
+                id: 'unexpected-permission',
+                kind: 'browser-origin',
+                threadId: started.threadId,
+                turnId: started.turnId,
+                message: 'Allow an unexpected browser origin?',
+                origin: 'https://example.com',
+            },
+        })
+
+        expect(runtime.decisions).toEqual([
+            { permissionId: 'unexpected-permission', decision: 'decline' },
+        ])
+        expect(connection?.events.some(({ event }) => event.type === 'permission-required')).toBe(
+            false,
+        )
+    })
+
     it('delivers live events only while a listener is subscribed', async () => {
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
@@ -231,11 +263,15 @@ describe('Agent task manager', () => {
             'contact discovery',
             createContactDiscoveryOutputSchema,
             {
-                personName: 'Ada Lovelace',
-                personTitle: 'Engineering Manager',
-                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
-                relevanceRationale: 'Her visible role aligns with the team.',
-                draftMessage: 'Hi Ada, could I ask about the team?',
+                outcome: 'contact',
+                contact: {
+                    personName: 'Ada Lovelace',
+                    personTitle: 'Engineering Manager',
+                    profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                    relevanceRationale: 'Her visible role aligns with the team.',
+                    draftMessage: 'Hi Ada, could I ask about the team?',
+                },
+                error: null,
             },
         ],
         [
@@ -483,6 +519,77 @@ describe('Agent task manager', () => {
         expect(manager.connect(started.id, () => {})?.events.at(-1)?.event).toMatchObject({
             type: 'cancelled',
         })
+    })
+
+    it('fails and interrupts a task after the inactivity timeout', async () => {
+        vi.useFakeTimers()
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const started = await manager.start(input)
+
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs)
+
+        expect(manager.get(started.id)).toMatchObject({
+            status: 'failed',
+            output: null,
+            error: 'Agent task produced no activity for 10 minutes',
+        })
+        expect(runtime.interruptions).toEqual([
+            { threadId: started.threadId, turnId: started.turnId },
+        ])
+        expect(manager.connect(started.id, () => {})?.events.at(-1)?.event).toMatchObject({
+            type: 'failed',
+            error: 'Agent task produced no activity for 10 minutes',
+        })
+    })
+
+    it('restarts the inactivity timeout when the runtime reports activity', async () => {
+        vi.useFakeTimers()
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const started = await manager.start(input)
+
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs - 1_000)
+        runtime.emit({ type: 'activity', ...eventIdentity, activity: 'web-search' })
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs - 1_000)
+
+        expect(manager.get(started.id)?.status).toBe('running')
+
+        await vi.advanceTimersByTimeAsync(1_000)
+
+        expect(manager.get(started.id)?.status).toBe('failed')
+    })
+
+    it('pauses the inactivity timeout while permission requires user action', async () => {
+        vi.useFakeTimers()
+        const runtime = new FakeRuntime()
+        const manager = new AgentTaskManager(runtime)
+        const started = await manager.start(input)
+        const permissionId = 'permission-id'
+
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs - 1_000)
+        runtime.emit({
+            type: 'permission-required',
+            permission: {
+                id: permissionId,
+                kind: 'browser-origin',
+                ...eventIdentity,
+                message: 'Allow the browser origin?',
+                origin: 'https://example.com',
+            },
+        })
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs * 2)
+
+        expect(manager.get(started.id)?.status).toBe('running')
+
+        runtime.emit({
+            type: 'permission-resolved',
+            threadId: started.threadId,
+            permissionId,
+        })
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs)
+
+        expect(manager.get(started.id)?.status).toBe('failed')
     })
 
     it('coalesces concurrent cancellation requests', async () => {

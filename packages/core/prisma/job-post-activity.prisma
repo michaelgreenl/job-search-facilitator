@@ -1,0 +1,35 @@
+enum JobPostActivitySource {
+  MANUAL   @map("manual")
+  GMAIL    @map("gmail")
+  LINKEDIN @map("linkedin")
+}
+
+enum JobPostActivityType {
+  APPLICATION_SUBMITTED      @map("application-submitted")
+  APPLICATION_STATUS_CHANGED @map("application-status-changed")
+  APPLICATION_ACKNOWLEDGED   @map("application-acknowledged")
+  INTERVIEW_REQUESTED        @map("interview-requested")
+  REJECTION_RECEIVED         @map("rejection-received")
+  HIRING_CONFIRMED           @map("hiring-confirmed")
+  OUTREACH_SENT              @map("outreach-sent")
+  OUTREACH_RESPONSE_RECEIVED @map("outreach-response-received")
+  REVIEW_NEEDED              @map("review-needed")
+}
+
+model JobPostActivity {
+  id                String                @id @default(uuid()) @db.Uuid
+  jobPostId         String                @db.Uuid
+  outreachContactId String?               @db.Uuid
+  type              JobPostActivityType
+  source            JobPostActivitySource
+  externalId        String?
+  summary           String
+  sourceUrl         String?
+  occurredAt        DateTime              @db.Timestamptz(3)
+  jobPost           JobPost               @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  outreachContact   OutreachContact?      @relation(fields: [outreachContactId], references: [id], onDelete: SetNull)
+
+  @@unique([source, externalId])
+  @@index([jobPostId, occurredAt])
+  @@index([outreachContactId, occurredAt])
+}

@@ -50,6 +50,22 @@ export const createOutreachContactController = (repository: OutreachContactRepos
         response.json(await repository.findByJobPostId(params.data.jobPostId))
     },
 
+    removeById: async (request: Request, response: Response): Promise<void> => {
+        const params = outreachContactParamsSchema.safeParse(request.params)
+
+        if (!params.success) {
+            response.status(BAD_REQUEST).json(invalidRequest)
+            return
+        }
+
+        if (!(await repository.remove(params.data.jobPostId, params.data.contactId))) {
+            response.status(NOT_FOUND).json(outreachContactNotFound)
+            return
+        }
+
+        response.status(204).end()
+    },
+
     updateById: async (request: Request, response: Response): Promise<void> => {
         const params = outreachContactParamsSchema.safeParse(request.params)
         const input = updateOutreachContactInputSchema.safeParse(request.body)

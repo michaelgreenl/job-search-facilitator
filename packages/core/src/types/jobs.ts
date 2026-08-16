@@ -1,3 +1,7 @@
+import type { ApplicationArtifact } from './applications.ts'
+
+export const MAX_JSON_REQUEST_BYTES = 1024 * 1024
+
 export const APPLICATION_STATUSES = [
     'not-applied',
     'awaiting-response',
@@ -39,14 +43,22 @@ export interface JobPost {
     applicationUrl: string
     postStatus: PostStatus
     applicationStatus: ApplicationStatus
+    appliedAt: IsoDateTime | null
     userLabel: UserLabel | null
     archivedAt: IsoDateTime | null
     createdAt: IsoDateTime
     updatedAt: IsoDateTime
 }
 
+export interface JobPostSnapshot {
+    description: string
+    sourceUrl: string
+    capturedAt: IsoDateTime
+}
+
 export interface JobPostInput {
     sourceKey: string
+    description: string
     roleTitle: string
     company: string
     location: string | null
@@ -98,6 +110,7 @@ export interface JobRecommendationContext extends JobRecommendation {
 
 export interface JobSearchResult extends JobRecommendation {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
 }
 
 export interface JobSearchResultInput extends JobRecommendation {
@@ -117,11 +130,14 @@ export type CreateUserAddedJobPostInput = StandaloneJobRecommendation & {
 
 export type UserAddedJobPost = StandaloneJobRecommendation & {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
     addedAt: IsoDateTime
     updatedAt: IsoDateTime
 }
 
 export interface ApplyQueueItem {
     post: JobPost
+    jobPostSnapshot: JobPostSnapshot | null
     recommendationContext: JobRecommendationContext | null
+    applicationArtifacts: ApplicationArtifact[]
 }

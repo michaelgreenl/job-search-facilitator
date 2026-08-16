@@ -15,4 +15,4 @@ coverage/
 pnpm-debug.log*
 *.timestamp-*-*.mjs
 packages/core/src/generated/prisma/
-/docs/agents/*
+/docs/agents/
