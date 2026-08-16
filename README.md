@@ -107,7 +107,26 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 ## Running Locally
 
-Install Node.js 24, pnpm 11, and Docker. Agent features also need macOS, ChatGPT, and the Codex Chrome plugin.
+### Prerequisites
+
+Install these tools for the complete application:
+
+- Node.js 24
+- pnpm 11 through Corepack
+- Docker Desktop with Docker Compose
+- macOS with the [ChatGPT desktop app](https://learn.chatgpt.com/docs/app)
+- Google Chrome
+
+The web app and API can run without the Agent bridge. Job imports and contact discovery need the complete setup.
+
+### Install the application
+
+Clone the repository and enter its directory:
+
+```bash
+git clone https://github.com/michaelgreenl/job-search-facilitator.git
+cd job-search-facilitator
+```
 
 Install dependencies:
 
@@ -117,6 +136,33 @@ pnpm install
 ```
 
 Default local ports and database credentials need no `.env` files. Use each package's `.env.example` for custom values.
+
+### Configure Codex and Chrome
+
+Sign in to the ChatGPT desktop app. Open **Plugins**, then install and enable **Chrome**.
+
+Complete the extension setup in Chrome. Approve its permissions and confirm that the ChatGPT side panel loads.
+
+See OpenAI's [Chrome extension setup](https://learn.chatgpt.com/docs/chrome-extension) for current instructions and security details.
+
+The app keeps applicant facts outside Git. Copy the public examples into the ignored private directory:
+
+```bash
+mkdir -p docs/agents/job-search
+cp -n docs/examples/job-search/*.md docs/agents/job-search/
+```
+
+Edit `docs/agents/job-search/user-info.md`. Replace each `[REQUIRED]` value with verified applicant information.
+
+Use the tracked [profile example](docs/examples/job-search/user-info.md) to review the required sections.
+
+Edit `docs/agents/job-search/post-evaluation.md` when the default evaluation rules do not match your search.
+
+The repository ignores `docs/agents`. Do not copy personal information back into `docs/examples`.
+
+Keep both files at these exact paths. Job import stops when either file is unavailable.
+
+### Start the application
 
 Start PostgreSQL, deploy migrations, and add sample data:
 
@@ -133,7 +179,39 @@ pnpm run dev:agent
 
 The client uses port `5173`. The API uses port `3000`. The Agent bridge uses port `3001`.
 
-Agent tasks expect private guidance in `docs/agents/job-search`. The repository ignores this local directory.
+Open [http://localhost:5173](http://localhost:5173) after both commands start.
+
+### Verify the setup
+
+Check the API and Agent bridge in another terminal:
+
+```bash
+curl --fail http://localhost:3000/health
+curl --fail http://127.0.0.1:3001/health
+```
+
+The API response must include `"status":"healthy"`. The Agent response must also include `"chrome"` in `capabilities`.
+
+Open the Review workspace and select **Add job post**. Submit a public job-post URL to test the complete Agent flow.
+
+The task can ask for access to each website it visits. Review each website before you allow access.
+
+### Troubleshooting
+
+- If Chrome is missing, confirm that the Chrome plugin is on in ChatGPT.
+- Confirm that the ChatGPT side panel loads in the active Chrome profile.
+- Restart Chrome, ChatGPT, and `pnpm run dev:agent` after a plugin change.
+- If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
+- If an Agent cannot read the profile, start the bridge from the repository root.
+- If a port differs, copy the applicable `.env.example` file and update its values.
+
+Scheduled searches are optional. The application does not create or edit ChatGPT tasks or plugin settings.
+
+Configure [scheduled tasks](https://learn.chatgpt.com/docs/automations) and plugins in ChatGPT today.
+
+These settings do not affect normal local startup.
+
+### Development commands
 
 Build every application package:
 
