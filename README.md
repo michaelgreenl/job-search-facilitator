@@ -103,7 +103,7 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 **Workspace:**
 
 - **Package Manager:** pnpm workspaces
-- **Shared Packages:** `@job-search-facilitator/core`, `@job-search-facilitator/utils`
+- **Shared Package:** `@job-search-facilitator/core`
 
 ## Running Locally
 

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { BAD_REQUEST, CONFLICT, CREATED, NOT_FOUND, OK } from '@job-search-facilitator/utils'
+import { BAD_REQUEST, CONFLICT, CREATED, NOT_FOUND, OK } from '@job-search-facilitator/core'
 import type { SearchReportRepository } from '../../db/repositories/search-report.repository.ts'
 import {
     reportIdParamsSchema,

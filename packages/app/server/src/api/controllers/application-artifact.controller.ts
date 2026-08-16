@@ -1,5 +1,4 @@
-import type { ApplicationArtifactKind } from '@job-search-facilitator/core'
-import { BAD_REQUEST, NOT_FOUND } from '@job-search-facilitator/utils'
+import { BAD_REQUEST, NOT_FOUND, type ApplicationArtifactKind } from '@job-search-facilitator/core'
 import type { Request, Response } from 'express'
 import type { ApplicationArtifactRepository } from '../../db/repositories/application-artifact.repository.ts'
 import { applicationArtifactParamsSchema } from '../schemas/application-artifact.schema.ts'

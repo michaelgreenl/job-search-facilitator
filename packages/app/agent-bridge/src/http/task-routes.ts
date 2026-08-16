@@ -1,12 +1,12 @@
-import { AGENT_CAPABILITIES } from '@job-search-facilitator/core'
 import {
     ACCEPTED,
+    AGENT_CAPABILITIES,
     BAD_REQUEST,
     CONFLICT,
     NOT_FOUND,
     SERVER_ERROR,
     SERVICE_UNAVAILABLE,
-} from '@job-search-facilitator/utils'
+} from '@job-search-facilitator/core'
 import express from 'express'
 import { z } from 'zod'
 import type { AgentTaskManager, AgentTaskStreamEvent } from '../tasks/agent-task-manager.ts'

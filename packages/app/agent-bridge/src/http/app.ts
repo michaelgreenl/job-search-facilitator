@@ -1,4 +1,4 @@
-import { SERVICE_UNAVAILABLE } from '@job-search-facilitator/utils'
+import { SERVICE_UNAVAILABLE } from '@job-search-facilitator/core'
 import cors from 'cors'
 import express from 'express'
 import type { AgentTaskManager } from '../tasks/agent-task-manager.ts'
