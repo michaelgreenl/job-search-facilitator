@@ -9,10 +9,12 @@ const props = withDefaults(
         userLabel: UserLabel | null
         compact?: boolean
         showApplicationStatus?: boolean
+        showOutreachResponse?: boolean
     }>(),
     {
         compact: false,
         showApplicationStatus: false,
+        showOutreachResponse: false,
     },
 )
 
@@ -31,7 +33,7 @@ const label = computed(() => {
 const tone = computed(() => {
     if (
         props.showApplicationStatus &&
-        ['not-applied', 'rejected'].includes(props.applicationStatus)
+        ['not-applied', 'awaiting-response', 'rejected'].includes(props.applicationStatus)
     ) {
         return 'muted'
     }
@@ -45,17 +47,34 @@ const tone = computed(() => {
 </script>
 
 <template>
-    <span
-        v-if="label"
-        class="user-label"
-        data-testid="job-post-label"
-        :class="[{ 'user-label-compact': compact }, tone && `user-label-${tone}`]"
-    >
-        {{ label }}
+    <span v-if="label || showOutreachResponse" class="job-post-labels">
+        <span
+            v-if="label"
+            class="user-label"
+            data-testid="job-post-label"
+            :class="[{ 'user-label-compact': compact }, tone && `user-label-${tone}`]"
+        >
+            {{ label }}
+        </span>
+        <span
+            v-if="showOutreachResponse"
+            class="user-label user-label-success"
+            data-testid="outreach-response-label"
+            :class="{ 'user-label-compact': compact }"
+        >
+            Outreach response
+        </span>
     </span>
 </template>
 
 <style scoped lang="scss">
+.job-post-labels {
+    display: inline-flex;
+    flex-direction: column;
+    gap: $space-1;
+    align-items: flex-end;
+}
+
 .user-label {
     display: inline-flex;
     width: fit-content;

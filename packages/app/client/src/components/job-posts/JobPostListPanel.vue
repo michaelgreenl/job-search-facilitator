@@ -25,6 +25,7 @@ const props = withDefaults(
         error?: string | null
         pending?: boolean
         showApplicationStatus?: boolean
+        outreachResponsePostIds?: readonly string[]
     }>(),
     {
         titleTag: 'h2',
@@ -35,6 +36,7 @@ const props = withDefaults(
         error: null,
         pending: false,
         showApplicationStatus: false,
+        outreachResponsePostIds: () => [],
     },
 )
 const orderedPosts = computed(() => [
@@ -111,6 +113,7 @@ const emit = defineEmits<{
                                 :application-status="post.applicationStatus"
                                 :user-label="post.userLabel"
                                 :show-application-status="showApplicationStatus"
+                                :show-outreach-response="outreachResponsePostIds.includes(post.id)"
                                 compact
                             />
                         </div>

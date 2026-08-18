@@ -82,6 +82,11 @@ const selectedEntry = computed(
     () => filteredEntries.value.find(({ post }) => post.id === selectedPostId.value) ?? null,
 )
 const trackedPosts = computed(() => filteredEntries.value.map(({ post }) => post))
+const outreachResponsePostIds = computed(() =>
+    entries.value.flatMap(({ contacts, post }) =>
+        contacts.some(({ respondedAt }) => respondedAt !== null) ? [post.id] : [],
+    ),
+)
 const statusUpdating = computed(
     () =>
         statusUpdatingPostId.value !== null && statusUpdatingPostId.value === selectedPostId.value,
@@ -492,6 +497,7 @@ onMounted(() => {
             "
             loading-message="Loading tracked jobs…"
             show-application-status
+            :outreach-response-post-ids="outreachResponsePostIds"
             @select="selectPost"
             @retry="loadTrackedPosts"
         >
