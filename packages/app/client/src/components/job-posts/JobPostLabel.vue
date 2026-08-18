@@ -71,7 +71,7 @@ const tone = computed(() => {
 .job-post-labels {
     display: inline-flex;
     flex-direction: column;
-    gap: $space-3;
+    gap: $space-2;
     align-items: flex-end;
 }
 
