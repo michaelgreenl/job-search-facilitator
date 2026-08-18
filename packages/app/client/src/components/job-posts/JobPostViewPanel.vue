@@ -27,6 +27,7 @@ import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import TrashIcon from '@/components/svgs/TrashIcon.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
@@ -41,6 +42,8 @@ const props = defineProps<{
     recommendation?: StandaloneJobRecommendation
     labelUpdating: boolean
     labelError: string | null
+    removable?: boolean
+    removing?: boolean
     mode: JobPostViewPanelMode
 }>()
 
@@ -49,6 +52,7 @@ const emit = defineEmits<{
     openOutreach: []
     markApplied: []
     removeArtifact: [kind: ApplicationArtifactKind]
+    remove: []
     uploadArtifact: [kind: ApplicationArtifactKind, file: File]
     back: []
 }>()
@@ -206,6 +210,21 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
         :back-mobile-only="backMobileOnly"
         @back="emit('back')"
     >
+        <template v-if="removable" #controls>
+            <BaseButton
+                class="remove-post-control"
+                preset="icon"
+                tooltip="Delete job post"
+                data-testid="delete-user-added-job-post"
+                aria-label="Delete job post"
+                :aria-busy="removing || undefined"
+                :disabled="removing || labelUpdating"
+                @click="emit('remove')"
+            >
+                <TrashIcon class="panel-control-icon" />
+            </BaseButton>
+        </template>
+
         <section
             class="post-viewer"
             data-testid="job-post-viewer"
@@ -462,6 +481,20 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     font-size: 0.6875rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.remove-post-control {
+    margin-left: auto;
+}
+
+.panel-control-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 
 .post-heading {

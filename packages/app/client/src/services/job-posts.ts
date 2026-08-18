@@ -9,7 +9,7 @@ import {
     type CreateUserAddedJobPostInput,
     type UpdateJobPostInput,
 } from '@job-search-facilitator/core'
-import { apiUrl, parseApiResponse } from '@/api'
+import { apiUrl, parseApiResponse, readResponseError } from '@/api'
 
 export async function fetchJobPosts() {
     const path = '/job-posts'
@@ -48,6 +48,17 @@ export async function createUserAddedJobPost(input: CreateUserAddedJobPostInput)
     })
 
     return parseApiResponse(response, parseUserAddedJobPost, path)
+}
+
+export async function removeUserAddedJobPost(id: string) {
+    const path = `/job-posts/user-added/${encodeURIComponent(id)}`
+    const response = await fetch(`${apiUrl}${path}`, { method: 'DELETE' })
+
+    if (!response.ok) {
+        throw new Error(
+            (await readResponseError(response)) ?? `API request failed (${response.status})`,
+        )
+    }
 }
 
 export async function fetchJobPost(id: string) {

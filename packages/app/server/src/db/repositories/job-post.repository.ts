@@ -42,6 +42,7 @@ export interface JobPostRepository {
     findUserAdded(): Promise<UserAddedJobPost[]>
     findById(id: string): Promise<JobPost | null>
     upsertUserAdded(input: CreateUserAddedJobPostInput): Promise<UserAddedJobPostUpsertResult>
+    removeUserAdded(id: string): Promise<boolean>
     update(id: string, input: UpdateJobPostInput): Promise<UpdateJobPostResult | null>
 }
 
@@ -257,6 +258,14 @@ export const jobPostRepository: JobPostRepository = {
                 created: inserted.count === 1,
             }
         })
+    },
+
+    async removeUserAdded(id) {
+        const result = await prisma.jobPost.deleteMany({
+            where: { id, userAdded: { isNot: null } },
+        })
+
+        return result.count === 1
     },
 
     async update(id, input) {
