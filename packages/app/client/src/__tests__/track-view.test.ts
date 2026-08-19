@@ -150,6 +150,12 @@ describe('track view', () => {
         expect(
             firstMount.root.querySelector('[data-testid="view-application-page-artifact"]'),
         ).not.toBeNull()
+        const postLink = firstMount.root.querySelector<HTMLAnchorElement>(
+            '[data-testid="tracked-job-post-link"]',
+        )
+        expect(postLink?.href).toBe(first.post.postUrl)
+        expect(postLink?.target).toBe('_blank')
+        expect(postLink?.rel).toBe('noopener noreferrer')
         firstMount.root
             .querySelector<HTMLButtonElement>('[data-testid="view-job-description"]')!
             .click()

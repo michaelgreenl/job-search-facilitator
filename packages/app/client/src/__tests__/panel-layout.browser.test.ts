@@ -311,7 +311,16 @@ describe.each([
         const detailBack = page.getByTestId('back-to-tracked-jobs')
         await expect.element(detail).toBeVisible()
         await expectVisible(detailBack, !desktop)
-        await expect.element(page.getByTestId('view-resume-artifact')).toBeVisible()
+        const postLink = page.getByTestId('tracked-job-post-link')
+        const resumeLink = page.getByTestId('view-resume-artifact')
+        await expect.element(postLink).toBeVisible()
+        await expect.element(resumeLink).toBeVisible()
+
+        const detailRect = detail.element().getBoundingClientRect()
+        const postLinkRect = postLink.element().getBoundingClientRect()
+        const resumeLinkRect = resumeLink.element().getBoundingClientRect()
+        expect(postLinkRect.left).toBe(detailRect.left)
+        expect(postLinkRect.top).toBe(resumeLinkRect.top)
 
         await page.getByTestId('view-job-description').click()
 
@@ -323,13 +332,16 @@ describe.each([
         await expectVisible(descriptionBack, !desktop)
 
         if (desktop) {
-            const detailRect = detail.element().closest('[data-active]')!.getBoundingClientRect()
+            const detailPanelRect = detail
+                .element()
+                .closest('[data-active]')!
+                .getBoundingClientRect()
             const descriptionRect = description
                 .element()
                 .closest('[data-active]')!
                 .getBoundingClientRect()
 
-            expect(detailRect.right).toBeLessThanOrEqual(descriptionRect.left)
+            expect(detailPanelRect.right).toBeLessThanOrEqual(descriptionRect.left)
         } else {
             await descriptionBack.click()
             await expect.element(detail).toBeVisible()

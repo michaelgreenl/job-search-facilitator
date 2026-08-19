@@ -195,26 +195,39 @@ function selectStatus(value: string) {
 
             <div class="artifact-actions">
                 <BaseButton
-                    v-for="artifact in entry.applicationArtifacts"
-                    :key="artifact.kind"
                     as="a"
-                    :data-testid="`view-${artifact.kind}-artifact`"
+                    data-testid="tracked-job-post-link"
                     preset="primary"
-                    :href="applicationArtifactUrl(entry.post.id, artifact.kind)"
+                    :href="entry.post.postUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    :aria-label="`Open ${artifactLabels[artifact.kind]} ${artifact.fileName} in a new tab`"
+                    :aria-label="`Open ${entry.post.roleTitle} job post in a new tab`"
                 >
-                    {{ artifactLabels[artifact.kind] }} ↗
+                    Job post ↗
                 </BaseButton>
-                <BaseButton
-                    v-if="entry.jobPostSnapshot"
-                    data-testid="view-job-description"
-                    preset="primary"
-                    @click="emit('openJobDescription')"
-                >
-                    Job description
-                </BaseButton>
+                <div class="application-artifact-actions">
+                    <BaseButton
+                        v-for="artifact in entry.applicationArtifacts"
+                        :key="artifact.kind"
+                        as="a"
+                        :data-testid="`view-${artifact.kind}-artifact`"
+                        preset="primary"
+                        :href="applicationArtifactUrl(entry.post.id, artifact.kind)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :aria-label="`Open ${artifactLabels[artifact.kind]} ${artifact.fileName} in a new tab`"
+                    >
+                        {{ artifactLabels[artifact.kind] }} ↗
+                    </BaseButton>
+                    <BaseButton
+                        v-if="entry.jobPostSnapshot"
+                        data-testid="view-job-description"
+                        preset="primary"
+                        @click="emit('openJobDescription')"
+                    >
+                        Job description
+                    </BaseButton>
+                </div>
             </div>
         </div>
     </BasePanel>
@@ -288,8 +301,16 @@ function selectStatus(value: string) {
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
-    justify-content: flex-end;
+    align-items: flex-start;
+    justify-content: space-between;
     margin-top: auto;
+}
+
+.application-artifact-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    justify-content: flex-end;
 }
 
 .activity-list {
