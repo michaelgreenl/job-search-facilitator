@@ -687,22 +687,9 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 }
 
 .artifact-upload-button {
-    display: inline-flex;
-    width: fit-content;
-    min-height: 2.5rem;
-    gap: $space-1;
-    align-items: center;
-    justify-content: center;
-    padding: calc(#{$space-2} - 1px) $space-3;
-    color: $color-ink;
-    font-family: $font-family-mono;
-    font-size: 0.8125rem;
-    font-weight: 650;
-    line-height: 1.25;
+    @include artifact-button;
+
     cursor: pointer;
-    background: transparent;
-    border: 1px solid $color-ink-alpha-50;
-    border-radius: $radius-md;
 
     &:disabled {
         cursor: wait;

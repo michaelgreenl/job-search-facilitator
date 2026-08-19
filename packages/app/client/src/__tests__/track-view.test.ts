@@ -154,6 +154,7 @@ describe('track view', () => {
             '[data-testid="tracked-job-post-link"]',
         )
         expect(postLink?.href).toBe(first.post.postUrl)
+        expect(postLink?.classList).toContain('preset-artifact')
         expect(postLink?.target).toBe('_blank')
         expect(postLink?.rel).toBe('noopener noreferrer')
         firstMount.root

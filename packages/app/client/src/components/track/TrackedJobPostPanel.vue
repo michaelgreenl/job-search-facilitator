@@ -197,7 +197,7 @@ function selectStatus(value: string) {
                 <BaseButton
                     as="a"
                     data-testid="tracked-job-post-link"
-                    preset="primary"
+                    preset="artifact"
                     :href="entry.post.postUrl"
                     target="_blank"
                     rel="noopener noreferrer"

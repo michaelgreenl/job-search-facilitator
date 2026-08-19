@@ -1,7 +1,14 @@
 <script lang="ts">
 export type BaseButtonElement = 'a' | 'button'
 export type BaseButtonIconSize = 'sm' | 'md' | 'lg'
-export type BaseButtonPreset = 'back' | 'icon' | 'outline' | 'primary' | 'signal' | 'text'
+export type BaseButtonPreset =
+    | 'artifact'
+    | 'back'
+    | 'icon'
+    | 'outline'
+    | 'primary'
+    | 'signal'
+    | 'text'
 </script>
 
 <script setup lang="ts">
@@ -283,6 +290,17 @@ defineExpose({ focus })
     &:hover,
     &:focus-visible {
         background: $color-signal;
+    }
+}
+
+.preset-artifact {
+    @include artifact-button;
+
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+        border-color: $color-signal-light-alpha-50;
     }
 }
 
