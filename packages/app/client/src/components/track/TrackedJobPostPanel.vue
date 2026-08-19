@@ -195,15 +195,12 @@ function selectStatus(value: string) {
 
             <div class="artifact-actions">
                 <BaseButton
-                    as="a"
-                    data-testid="tracked-job-post-link"
+                    v-if="entry.jobPostSnapshot"
+                    data-testid="view-job-description"
                     preset="artifact"
-                    :href="entry.post.postUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    :aria-label="`Open ${entry.post.roleTitle} job post in a new tab`"
+                    @click="emit('openJobDescription')"
                 >
-                    Job post ↗
+                    Job description ↗
                 </BaseButton>
                 <div class="application-artifact-actions">
                     <BaseButton
@@ -218,14 +215,6 @@ function selectStatus(value: string) {
                         :aria-label="`Open ${artifactLabels[artifact.kind]} ${artifact.fileName} in a new tab`"
                     >
                         {{ artifactLabels[artifact.kind] }} ↗
-                    </BaseButton>
-                    <BaseButton
-                        v-if="entry.jobPostSnapshot"
-                        data-testid="view-job-description"
-                        preset="primary"
-                        @click="emit('openJobDescription')"
-                    >
-                        Job description
                     </BaseButton>
                 </div>
             </div>
