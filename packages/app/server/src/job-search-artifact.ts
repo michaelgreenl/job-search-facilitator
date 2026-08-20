@@ -343,12 +343,14 @@ const MIN_RELIABLE_OPERATIONS_PER_LANE = 7
 const JOB_SEARCH_COVERAGE_LANES = [
     'linkedin',
     'indeed',
+    'vuejobs',
     'direct-employer-ats',
     'rotating-long-tail',
 ] as const
 const coverageAccessMethodByLane = {
     linkedin: 'installed-chrome-plugin',
     indeed: 'installed-chrome-plugin',
+    vuejobs: 'installed-chrome-plugin',
     'direct-employer-ats': 'public-employer-ats',
     'rotating-long-tail': 'public-long-tail',
 } as const satisfies Record<(typeof JOB_SEARCH_COVERAGE_LANES)[number], string>

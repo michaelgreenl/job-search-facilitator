@@ -15,7 +15,7 @@ Complete the main [local setup](../README.md#running-locally). Confirm these res
 - The Agent bridge health check lists `chrome` in `capabilities`.
 - The Review workspace can import one public job URL.
 
-Sign in to Gmail, LinkedIn, and Indeed in the Chrome profile connected to ChatGPT. The tasks use those existing sessions.
+Sign in to Gmail, LinkedIn, Indeed, and VueJobs in the Chrome profile connected to ChatGPT. The tasks use those existing sessions.
 
 ## Create private automation files
 
@@ -100,7 +100,7 @@ The automation never submits applications or sends messages. Those actions alway
 
 - A task cannot find policy files: select the local project and verify `[PROJECT_ROOT]`.
 - A task starts in a worktree: change it to the local project. Ignored private files do not follow worktrees.
-- Gmail or LinkedIn is blocked: open the site in connected Chrome and finish sign-in.
+- Gmail, LinkedIn, Indeed, or VueJobs is blocked: open the site in connected Chrome and finish sign-in.
 - Local API access fails: allow the task to run Docker and local requests when ChatGPT asks.
 - Docker already serves port 3000: use `pnpm run dev:client` instead of `pnpm run dev`.
 - A search cannot sync: confirm `/health` includes `jobSearchNetNewGuard: 1`.

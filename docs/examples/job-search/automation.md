@@ -58,7 +58,7 @@ Correct only source extraction or schema errors. Do not invent a fact or weaken 
 
 Combine all validated candidates into one JSON array at `MERGED_CANDIDATES_PATH`. Keep discovery order.
 
-Write all four lane records to `COVERAGE_PATH`. Preserve blockers and every completed query.
+Write all five lane records to `COVERAGE_PATH`. Preserve blockers and every completed query.
 
 Remove stored identities and current-run duplicates. Create the review packet:
 

@@ -19,7 +19,7 @@ Use host permission for Docker, localhost requests, report writes, and storage v
 
 ## Browser safety
 
-Use connected Chrome for LinkedIn and Indeed. Reuse existing authenticated sessions in read-only mode.
+Use connected Chrome for LinkedIn, Indeed, and VueJobs. Reuse existing authenticated sessions in read-only mode.
 
 Use public employer and ATS pages for final evidence. A job-board page is only a discovery source.
 
@@ -35,10 +35,13 @@ Create one coverage record for each lane:
 
 1. `linkedin` with `installed-chrome-plugin`.
 2. `indeed` with `installed-chrome-plugin`.
-3. `direct-employer-ats` with `public-employer-ats`.
-4. `rotating-long-tail` with `public-long-tail`.
+3. `vuejobs` with `installed-chrome-plugin` and the existing paid VueJobs session.
+4. `direct-employer-ats` with `public-employer-ats`.
+5. `rotating-long-tail` with `public-long-tail`.
 
-Complete at least three lanes. Each completed lane needs seven distinct queries.
+Complete at least three lanes. Each completed lane needs seven distinct queries or filter combinations.
+
+On VueJobs, use its keyword, country, workplace, experience, work type, and salary filters. Treat the board as discovery only.
 
 Use queries for early-career frontend, full-stack, and backend responsibilities. Include broader responsibility searches without junior wording.
 

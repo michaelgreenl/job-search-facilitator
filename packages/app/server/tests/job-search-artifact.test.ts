@@ -152,6 +152,41 @@ const coverage: JobSearchCoverage = {
             blocker: null,
         },
         {
+            lane: 'vuejobs',
+            operations: [
+                {
+                    query: 'Junior frontend, United States',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Frontend engineer, remote or hybrid',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Full-stack engineer, United States',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Backend engineer, United States',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Software engineer I, United States',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Application engineer, remote',
+                    completion: 'two-pages-reviewed',
+                },
+                {
+                    query: 'Vue developer, any experience',
+                    completion: 'two-pages-reviewed',
+                },
+            ],
+            accessMethod: 'installed-chrome-plugin',
+            blocker: null,
+        },
+        {
             lane: 'direct-employer-ats',
             operations: [
                 {
@@ -1158,8 +1193,8 @@ describe('deterministic Markdown reporting', () => {
             applicationUrl: (changed) =>
                 void (changed.results[0]!.post.applicationUrl += '?changed=1'),
             lane: (_changed, changedCoverage) => {
-                const direct = changedCoverage.sources[2]!
-                const longTail = changedCoverage.sources[3]!
+                const direct = changedCoverage.sources[3]!
+                const longTail = changedCoverage.sources[4]!
                 ;[direct.lane, longTail.lane] = [longTail.lane, direct.lane]
                 ;[direct.accessMethod, longTail.accessMethod] = [
                     longTail.accessMethod,
