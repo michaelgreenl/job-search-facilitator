@@ -88,6 +88,7 @@ function selectStatus(value: string) {
         @back="emit('back')"
     >
         <div
+            :key="entry.post.id"
             class="tracked-job-content"
             data-testid="tracked-job-detail"
             :data-post-id="entry.post.id"

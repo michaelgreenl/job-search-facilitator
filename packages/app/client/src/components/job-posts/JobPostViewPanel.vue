@@ -286,7 +286,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
             <p v-if="postError" class="label-error" data-testid="job-post-error" role="alert">
                 {{ postError }}
             </p>
-            <div v-if="hasContent" class="post-content">
+            <div v-if="hasContent" :key="post.id" class="post-content">
                 <section v-if="hasFacts" class="content-section" data-testid="post-facts">
                     <h3 class="content-section-title">At a glance</h3>
 
