@@ -11,8 +11,8 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
-const maxReasoningStatements = 6
-const maxReasoningStatementLength = 160
+const maxReasoningStatements = 2
+const maxReasoningStatementLength = 60
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
 const connectionState = computed(() => state.value?.connectionState ?? 'idle')
@@ -85,30 +85,17 @@ const streamItems = computed(() => {
         return currentItems
     }, [])
 
-    let remainingReasoningStatements = maxReasoningStatements
-
-    return items.reduceRight<StreamItem[]>((visibleItems, item) => {
-        if (item.type === 'activity') {
-            visibleItems.unshift(item)
-            return visibleItems
-        }
-
-        if (remainingReasoningStatements === 0) {
-            return visibleItems
-        }
-
-        const statements = reasoningStatements(item.message)
-            .slice(-remainingReasoningStatements)
-            .map(limitReasoningStatement)
-
-        remainingReasoningStatements -= statements.length
-
-        if (statements.length > 0) {
-            visibleItems.unshift({ ...item, message: statements.join('\n') })
-        }
-
-        return visibleItems
-    }, [])
+    return items.map((item) =>
+        item.type === 'commentary'
+            ? {
+                  ...item,
+                  message: reasoningStatements(item.message)
+                      .slice(-maxReasoningStatements)
+                      .map(limitReasoningStatement)
+                      .join('\n'),
+              }
+            : item,
+    )
 })
 const latestActivityIndex = computed(() => {
     const items = streamItems.value

@@ -125,29 +125,36 @@ describe('agent stream', () => {
         )
     })
 
-    it('limits visible reasoning while retaining recent statements', async () => {
+    it('limits each reasoning block without removing earlier blocks', async () => {
         const { root, store, taskId } = mountAgentStream()
-        const statements = Array.from({ length: 8 }, (_, index) => `${index}`.repeat(200))
+        const block = Array.from({ length: 3 }, (_, index) => `${index}`.repeat(80))
 
         updateTaskState(store, taskId, {
-            events: statements.flatMap((textDelta) => [
-                {
+            events: [
+                ...block.map((textDelta) => ({
                     type: 'message' as const,
                     textDelta,
                     startsNewStatement: true,
                     createdAt,
-                },
+                })),
                 { type: 'activity' as const, message: 'Reading local context', createdAt },
-            ]),
+                ...block.map((textDelta) => ({
+                    type: 'message' as const,
+                    textDelta,
+                    startsNewStatement: true,
+                    createdAt,
+                })),
+            ],
         })
         await nextTick()
 
-        const visibleStatements = Array.from(
+        const visibleBlocks = Array.from(
             root.querySelectorAll('[data-testid="agent-stream-commentary"]'),
-        ).flatMap((item) => item.textContent?.split('\n') ?? [])
+        ).map((item) => item.textContent?.split('\n') ?? [])
 
-        expect(visibleStatements).toHaveLength(6)
-        expect(visibleStatements.every((statement) => statement.length <= 160)).toBe(true)
+        expect(visibleBlocks).toHaveLength(2)
+        expect(visibleBlocks.every((statements) => statements.length === 2)).toBe(true)
+        expect(visibleBlocks.flat().every((statement) => statement.length <= 60)).toBe(true)
     })
 
     it.each([
