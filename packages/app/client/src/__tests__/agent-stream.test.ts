@@ -125,6 +125,31 @@ describe('agent stream', () => {
         )
     })
 
+    it('limits visible reasoning while retaining recent statements', async () => {
+        const { root, store, taskId } = mountAgentStream()
+        const statements = Array.from({ length: 8 }, (_, index) => `${index}`.repeat(200))
+
+        updateTaskState(store, taskId, {
+            events: statements.flatMap((textDelta) => [
+                {
+                    type: 'message' as const,
+                    textDelta,
+                    startsNewStatement: true,
+                    createdAt,
+                },
+                { type: 'activity' as const, message: 'Reading local context', createdAt },
+            ]),
+        })
+        await nextTick()
+
+        const visibleStatements = Array.from(
+            root.querySelectorAll('[data-testid="agent-stream-commentary"]'),
+        ).flatMap((item) => item.textContent?.split('\n') ?? [])
+
+        expect(visibleStatements).toHaveLength(6)
+        expect(visibleStatements.every((statement) => statement.length <= 160)).toBe(true)
+    })
+
     it.each([
         { selected: taskContent.import, excludedTestId: taskContent.outreach.eventTestId },
         { selected: taskContent.outreach, excludedTestId: taskContent.import.eventTestId },

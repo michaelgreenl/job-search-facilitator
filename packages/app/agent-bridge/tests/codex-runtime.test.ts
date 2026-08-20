@@ -135,6 +135,7 @@ describe('Codex runtime', () => {
             prompt: 'Find contacts',
             outputSchema: { type: 'object' },
             capabilities: ['chrome'],
+            webSearch: false,
         })
 
         expect(runtime.health).toEqual({
@@ -168,6 +169,7 @@ describe('Codex runtime', () => {
                     },
                     approvalsReviewer: 'user',
                     sandbox: 'read-only',
+                    config: { web_search: 'disabled' },
                     selectedCapabilityRoots: [
                         {
                             id: 'chrome@openai-bundled',

@@ -11,6 +11,8 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
+const maxReasoningStatements = 6
+const maxReasoningStatementLength = 160
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
 const connectionState = computed(() => state.value?.connectionState ?? 'idle')
@@ -40,6 +42,16 @@ const stripStatementMarkers = (message: string) =>
         .split('\n')
         .map((statement) => statement.replace(/^(\s*)\*\*/, '$1').replace(/\*\*(\s*)$/, '$1'))
         .join('\n')
+
+const reasoningStatements = (message: string) =>
+    stripStatementMarkers(message)
+        .split('\n')
+        .filter((statement) => statement.trim().length > 0)
+
+const limitReasoningStatement = (statement: string) =>
+    statement.length > maxReasoningStatementLength
+        ? `${statement.slice(0, maxReasoningStatementLength - 1).trimEnd()}…`
+        : statement
 
 const streamItems = computed(() => {
     const items = events.value.reduce<StreamItem[]>((currentItems, event) => {
@@ -73,11 +85,30 @@ const streamItems = computed(() => {
         return currentItems
     }, [])
 
-    return items.map((item) =>
-        item.type === 'commentary'
-            ? { ...item, message: stripStatementMarkers(item.message) }
-            : item,
-    )
+    let remainingReasoningStatements = maxReasoningStatements
+
+    return items.reduceRight<StreamItem[]>((visibleItems, item) => {
+        if (item.type === 'activity') {
+            visibleItems.unshift(item)
+            return visibleItems
+        }
+
+        if (remainingReasoningStatements === 0) {
+            return visibleItems
+        }
+
+        const statements = reasoningStatements(item.message)
+            .slice(-remainingReasoningStatements)
+            .map(limitReasoningStatement)
+
+        remainingReasoningStatements -= statements.length
+
+        if (statements.length > 0) {
+            visibleItems.unshift({ ...item, message: statements.join('\n') })
+        }
+
+        return visibleItems
+    }, [])
 })
 const latestActivityIndex = computed(() => {
     const items = streamItems.value
