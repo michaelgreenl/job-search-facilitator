@@ -18,6 +18,7 @@ const props = withDefaults(
         backLabel?: string
         backTestId?: string
         posts: readonly JobPost[]
+        scrollKey?: string
         selectedPostId: string | null
         emptyMessage: string
         loadingMessage?: string
@@ -71,6 +72,7 @@ const emit = defineEmits<{
 
         <ul
             v-if="pending || (!loading && !error && posts.length)"
+            :key="scrollKey"
             class="card-list"
             data-testid="job-post-list"
             :class="{ 'card-list-status': pending && (loading || error) }"

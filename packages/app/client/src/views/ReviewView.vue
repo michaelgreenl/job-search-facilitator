@@ -608,6 +608,7 @@ onMounted(() => {
                 :back-label="activePanel === 'sources' ? undefined : 'Back to review sources'"
                 back-test-id="back-to-reports"
                 :posts="filteredPosts"
+                :scroll-key="selectedReport?.id ?? selectedSource?.kind"
                 :selected-post-id="selectedItem?.post.id ?? null"
                 :empty-message="postListEmptyMessage"
                 :loading="postListLoading"
