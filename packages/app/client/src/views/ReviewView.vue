@@ -318,9 +318,7 @@ function selectReport(reportId: string) {
     selectedItem.value = null
     labelError.value = null
 
-    if (!bp.isLaptop.value) {
-        activePanel.value = 'posts'
-    }
+    activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
 
     pushSelectionState(source)
 }

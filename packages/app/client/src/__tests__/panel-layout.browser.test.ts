@@ -348,6 +348,13 @@ describe('running Agent task panel layout', () => {
         await expect.element(importCancel).toBeVisible()
         await expect.element(sources).not.toBeVisible()
         await expect.element(posts).not.toBeVisible()
+
+        await page.viewport(848, 768)
+        await page.getByTestId(`report-card-${reviewReport.id}`).click()
+
+        await expect.element(sources).toBeVisible()
+        await expect.element(posts).toBeVisible()
+        await expect.element(importPanel).not.toBeVisible()
     })
 
     it('keeps outreach running while Apply navigates through neighboring panels', async () => {
