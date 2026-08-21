@@ -383,7 +383,7 @@ function allowBrowserActionsForTask() {
 
 .reasoning-traces {
     display: grid;
-    gap: $space-2;
+    gap: $space-1;
     margin: $space-1 0 $space-1 0.5rem;
     padding: $space-1 0 $space-1 calc($space-2 + 0.5rem);
     border-left: 1px solid $color-signal-alpha-24;
