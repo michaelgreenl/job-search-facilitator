@@ -315,18 +315,10 @@ function allowBrowserActionsForTask() {
     grid-template-columns: 1rem minmax(0, 1fr);
     column-gap: $space-2;
     align-items: center;
-    min-height: 2rem;
-    padding: $space-1 $space-2;
     color: inherit;
     cursor: pointer;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: $radius-sm;
     list-style: none;
-    transition:
-        color 140ms ease,
-        background-color 140ms ease,
-        border-color 140ms ease;
+    transition: color 140ms ease;
 
     &::-webkit-details-marker {
         display: none;
@@ -339,23 +331,15 @@ function allowBrowserActionsForTask() {
     &:hover,
     &:focus-visible {
         color: $color-ink;
-        background: $color-signal-alpha-9;
-        border-color: $color-signal-alpha-28;
     }
 
     &:active {
-        background: $color-signal-alpha-14;
+        color: $color-signal-light;
     }
 }
 
 .reasoning-details[open] > .reasoning-summary {
     color: $color-ink;
-    background: $color-signal-alpha-9;
-    border-color: $color-signal-alpha-28;
-
-    &:active {
-        background: $color-signal-alpha-14;
-    }
 }
 
 .reasoning-chevron {
@@ -370,7 +354,7 @@ function allowBrowserActionsForTask() {
     display: grid;
     gap: $space-2;
     margin: $space-1 0 $space-1 1rem;
-    padding: $space-1 0 $space-1 1rem;
+    padding: $space-1 0 $space-1 $space-2;
     border-left: 1px solid $color-signal-alpha-24;
 }
 
