@@ -134,6 +134,7 @@ const copyFeedbackId = useId()
                         aria-label="Request draft changes"
                         :disabled="running"
                         placeholder="Request changes"
+                        @keydown.enter.exact.prevent="emit('submit')"
                     ></textarea>
                     <BaseButton
                         class="field-action send-button"
