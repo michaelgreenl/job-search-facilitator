@@ -329,12 +329,11 @@ function allowBrowserActionsForTask() {
 }
 
 .reasoning-summary {
-    display: grid;
-    grid-template-columns: 1rem minmax(0, 1fr) 1rem;
-    column-gap: $space-2;
+    display: inline-flex;
+    gap: 0.25rem;
     align-items: center;
-    width: fit-content;
-    max-width: 100%;
+    max-width: calc(100% - 1rem - $space-2);
+    margin-left: calc(1rem + $space-2);
     color: inherit;
     list-style: none;
 
@@ -344,10 +343,6 @@ function allowBrowserActionsForTask() {
 
     &::marker {
         content: '';
-    }
-
-    > .activity-copy {
-        grid-column: 2;
     }
 
     &-collapsible {
@@ -370,11 +365,18 @@ function allowBrowserActionsForTask() {
 }
 
 .reasoning-chevron {
-    grid-column: 3;
+    opacity: 0;
     transform: rotate(-90deg);
-    transition: transform 160ms ease;
+    transition:
+        opacity 140ms ease,
+        transform 160ms ease;
+
+    .reasoning-summary-collapsible:is(:hover, :focus-visible) & {
+        opacity: 1;
+    }
 
     .reasoning-details[open] & {
+        opacity: 1;
         transform: rotate(0);
     }
 }
