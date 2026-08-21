@@ -120,14 +120,16 @@ describe('agent stream', () => {
         await nextTick()
 
         expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(1)
-        expect(root.querySelector('[data-testid="agent-stream-copy"]')?.textContent).toBe(
-            'Reviewing the role\nFinding the **right** person',
-        )
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map(
+                (trace) => trace.textContent?.trim(),
+            ),
+        ).toEqual(['Reviewing the role', 'Finding the **right** person'])
     })
 
-    it('limits each reasoning block without removing earlier blocks', async () => {
+    it('discloses six stable traces per reasoning block', async () => {
         const { root, store, taskId } = mountAgentStream()
-        const block = Array.from({ length: 3 }, (_, index) => `${index}`.repeat(80))
+        const block = Array.from({ length: 7 }, (_, index) => `${index}`.repeat(80))
 
         updateTaskState(store, taskId, {
             events: [
@@ -148,13 +150,48 @@ describe('agent stream', () => {
         })
         await nextTick()
 
-        const visibleBlocks = Array.from(
+        const reasoningBlocks = Array.from(
             root.querySelectorAll('[data-testid="agent-stream-commentary"]'),
-        ).map((item) => item.textContent?.split('\n') ?? [])
+        )
+        const retainedTraceNodes = reasoningBlocks.map((item) =>
+            Array.from(item.querySelectorAll('[data-testid="agent-reasoning-trace"]')),
+        )
+        const retainedTraces = retainedTraceNodes.map((traces) =>
+            traces.map((trace) => trace.textContent),
+        )
 
-        expect(visibleBlocks).toHaveLength(2)
-        expect(visibleBlocks.every((statements) => statements.length === 2)).toBe(true)
-        expect(visibleBlocks.flat().every((statement) => statement.length <= 60)).toBe(true)
+        expect(reasoningBlocks).toHaveLength(2)
+        expect(retainedTraces.every((statements) => statements.length === 6)).toBe(true)
+        expect(retainedTraces.flat().every((statement) => (statement?.length ?? 0) <= 60)).toBe(
+            true,
+        )
+
+        appendEvent(store, taskId, {
+            type: 'message',
+            textDelta: 'new trace',
+            startsNewStatement: true,
+            createdAt,
+        })
+        await nextTick()
+
+        const updatedTraceNodes = Array.from(
+            reasoningBlocks[1]?.querySelectorAll('[data-testid="agent-reasoning-trace"]') ?? [],
+        )
+
+        expect(updatedTraceNodes).toHaveLength(6)
+        expect(
+            updatedTraceNodes.every((trace, index) => trace === retainedTraceNodes[1]?.[index]),
+        ).toBe(true)
+
+        const firstDisclosure = reasoningBlocks[0]?.querySelector<HTMLDetailsElement>('details')
+        const firstToggle = reasoningBlocks[0]?.querySelector<HTMLElement>(
+            '[data-testid="agent-reasoning-toggle"]',
+        )
+
+        expect(firstDisclosure?.open).toBe(false)
+        expect(firstToggle?.querySelectorAll('svg')).toHaveLength(1)
+        firstToggle?.click()
+        expect(firstDisclosure?.open).toBe(true)
     })
 
     it.each([

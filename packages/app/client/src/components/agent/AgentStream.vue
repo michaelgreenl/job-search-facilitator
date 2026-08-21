@@ -11,7 +11,7 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
-const maxReasoningStatements = 2
+const maxReasoningStatements = 6
 const maxReasoningStatementLength = 60
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
@@ -28,6 +28,7 @@ type StreamIcon = 'agent' | 'globe' | 'tool'
 interface StreamItem {
     icon: StreamIcon
     message: string
+    statements: string[]
     type: 'activity' | 'commentary'
 }
 
@@ -62,6 +63,7 @@ const streamItems = computed(() => {
                     event.message === 'Using Chrome' || event.message === 'Searching the web'
                         ? 'globe'
                         : 'tool',
+                statements: [],
                 type: 'activity',
             })
         } else if (event.type === 'message') {
@@ -77,6 +79,7 @@ const streamItems = computed(() => {
                 currentItems.push({
                     icon: 'agent',
                     message: event.textDelta,
+                    statements: [],
                     type: 'commentary',
                 })
             }
@@ -89,10 +92,9 @@ const streamItems = computed(() => {
         item.type === 'commentary'
             ? {
                   ...item,
-                  message: reasoningStatements(item.message)
-                      .slice(-maxReasoningStatements)
-                      .map(limitReasoningStatement)
-                      .join('\n'),
+                  statements: reasoningStatements(item.message)
+                      .slice(0, maxReasoningStatements)
+                      .map(limitReasoningStatement),
               }
             : item,
     )
@@ -191,20 +193,40 @@ function allowBrowserActionsForTask() {
                     class="activity-item"
                     :class="{ 'activity-item-commentary': item.type === 'commentary' }"
                 >
-                    <span
-                        v-if="
-                            isActive &&
-                            visiblePendingPermission === null &&
-                            index === latestActivityIndex
-                        "
-                        data-testid="agent-progress-indicator"
-                        class="activity-progress"
-                        aria-hidden="true"
-                    ></span>
-                    <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
-                    <span data-testid="agent-stream-copy" class="activity-copy">
-                        {{ item.message }}
-                    </span>
+                    <template v-if="item.type === 'activity'">
+                        <span
+                            v-if="
+                                isActive &&
+                                visiblePendingPermission === null &&
+                                index === latestActivityIndex
+                            "
+                            data-testid="agent-progress-indicator"
+                            class="activity-progress"
+                            aria-hidden="true"
+                        ></span>
+                        <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
+                        <span data-testid="agent-stream-copy" class="activity-copy">
+                            {{ item.message }}
+                        </span>
+                    </template>
+                    <details v-else class="reasoning-details">
+                        <summary class="reasoning-summary" data-testid="agent-reasoning-toggle">
+                            <AgentIcon class="activity-icon reasoning-chevron" />
+                            <span data-testid="agent-reasoning-trace" class="activity-copy">
+                                {{ item.statements[0] }}
+                            </span>
+                        </summary>
+                        <div v-if="item.statements.length > 1" class="reasoning-traces">
+                            <span
+                                v-for="(statement, statementIndex) in item.statements.slice(1)"
+                                :key="statementIndex"
+                                data-testid="agent-reasoning-trace"
+                                class="activity-copy"
+                            >
+                                {{ statement }}
+                            </span>
+                        </div>
+                    </details>
                 </li>
             </ul>
         </div>
@@ -273,8 +295,83 @@ function allowBrowserActionsForTask() {
     align-items: center;
 
     &-commentary {
+        display: block;
         color: $color-ink-secondary;
     }
+}
+
+.activity-copy {
+    min-width: 0;
+    line-height: 1.25;
+    white-space: pre-line;
+}
+
+.reasoning-details {
+    min-width: 0;
+}
+
+.reasoning-summary {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    column-gap: $space-2;
+    align-items: center;
+    min-height: 2rem;
+    padding: $space-1 $space-2;
+    color: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $radius-sm;
+    list-style: none;
+    transition:
+        color 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease;
+
+    &::-webkit-details-marker {
+        display: none;
+    }
+
+    &::marker {
+        content: '';
+    }
+
+    &:hover,
+    &:focus-visible {
+        color: $color-ink;
+        background: $color-signal-alpha-9;
+        border-color: $color-signal-alpha-28;
+    }
+
+    &:active {
+        background: $color-signal-alpha-14;
+    }
+}
+
+.reasoning-details[open] > .reasoning-summary {
+    color: $color-ink;
+    background: $color-signal-alpha-9;
+    border-color: $color-signal-alpha-28;
+
+    &:active {
+        background: $color-signal-alpha-14;
+    }
+}
+
+.reasoning-chevron {
+    transition: transform 160ms ease;
+
+    .reasoning-details[open] & {
+        transform: rotate(90deg);
+    }
+}
+
+.reasoning-traces {
+    display: grid;
+    gap: $space-2;
+    margin: $space-1 0 $space-1 1rem;
+    padding: $space-1 0 $space-1 1rem;
+    border-left: 1px solid $color-signal-alpha-24;
 }
 
 .activity-icon {
@@ -286,12 +383,6 @@ function allowBrowserActionsForTask() {
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.2;
-}
-
-.activity-copy {
-    min-width: 0;
-    line-height: 1.25;
-    white-space: pre-line;
 }
 
 .activity-progress {
