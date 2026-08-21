@@ -333,6 +333,8 @@ function allowBrowserActionsForTask() {
     grid-template-columns: 1rem minmax(0, 1fr) 1rem;
     column-gap: $space-2;
     align-items: center;
+    width: fit-content;
+    max-width: 100%;
     color: inherit;
     list-style: none;
 
