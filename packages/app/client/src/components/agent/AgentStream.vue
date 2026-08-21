@@ -3,6 +3,7 @@ import type { AgentPermissionDecision, AgentTaskEvent } from '@job-search-facili
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
+import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import { useAgentStore } from '@/stores/agent'
@@ -93,7 +94,8 @@ const streamItems = computed(() => {
             ? {
                   ...item,
                   statements: reasoningStatements(item.message)
-                      .slice(0, maxReasoningStatements)
+                      .slice(-maxReasoningStatements)
+                      .reverse()
                       .map(limitReasoningStatement),
               }
             : item,
@@ -224,13 +226,13 @@ function allowBrowserActionsForTask() {
                                 item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
                             "
                         >
-                            <AgentIcon
-                                v-if="item.statements.length > 1"
-                                class="activity-icon reasoning-chevron"
-                            />
                             <span data-testid="agent-reasoning-trace" class="activity-copy">
                                 {{ item.statements[0] }}
                             </span>
+                            <ChevronDownIcon
+                                v-if="item.statements.length > 1"
+                                class="activity-icon reasoning-chevron"
+                            />
                         </component>
                         <div v-if="item.statements.length > 1" class="reasoning-traces">
                             <span
@@ -328,7 +330,7 @@ function allowBrowserActionsForTask() {
 
 .reasoning-summary {
     display: grid;
-    grid-template-columns: 1rem minmax(0, 1fr);
+    grid-template-columns: 1rem minmax(0, 1fr) 1rem;
     column-gap: $space-2;
     align-items: center;
     color: inherit;
@@ -366,10 +368,12 @@ function allowBrowserActionsForTask() {
 }
 
 .reasoning-chevron {
+    grid-column: 3;
+    transform: rotate(-90deg);
     transition: transform 160ms ease;
 
     .reasoning-details[open] & {
-        transform: rotate(90deg);
+        transform: rotate(0);
     }
 }
 

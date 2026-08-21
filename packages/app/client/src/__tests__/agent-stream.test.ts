@@ -124,10 +124,10 @@ describe('agent stream', () => {
             Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map(
                 (trace) => trace.textContent?.trim(),
             ),
-        ).toEqual(['Reviewing the role', 'Finding the **right** person'])
+        ).toEqual(['Finding the **right** person', 'Reviewing the role'])
     })
 
-    it('discloses six stable traces per reasoning block', async () => {
+    it('discloses the six most recent traces in descending order', async () => {
         const { root, store, taskId } = mountAgentStream()
         const block = Array.from({ length: 7 }, (_, index) => `${index}`.repeat(80))
 
@@ -162,6 +162,12 @@ describe('agent stream', () => {
 
         expect(reasoningBlocks).toHaveLength(2)
         expect(retainedTraces.every((statements) => statements.length === 6)).toBe(true)
+        expect(
+            retainedTraces.map((statements) => statements.map((statement) => statement?.charAt(0))),
+        ).toEqual([
+            ['6', '5', '4', '3', '2', '1'],
+            ['6', '5', '4', '3', '2', '1'],
+        ])
         expect(retainedTraces.flat().every((statement) => (statement?.length ?? 0) <= 60)).toBe(
             true,
         )
@@ -179,9 +185,14 @@ describe('agent stream', () => {
         )
 
         expect(updatedTraceNodes).toHaveLength(6)
-        expect(
-            updatedTraceNodes.every((trace, index) => trace === retainedTraceNodes[1]?.[index]),
-        ).toBe(true)
+        expect(updatedTraceNodes.map((trace) => trace.textContent?.charAt(0))).toEqual([
+            'n',
+            '6',
+            '5',
+            '4',
+            '3',
+            '2',
+        ])
 
         const firstDisclosure = reasoningBlocks[0]?.querySelector<HTMLDetailsElement>('details')
         const firstToggle = reasoningBlocks[0]?.querySelector<HTMLElement>(
