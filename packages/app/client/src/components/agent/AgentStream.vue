@@ -209,13 +209,29 @@ function allowBrowserActionsForTask() {
                             {{ item.message }}
                         </span>
                     </template>
-                    <details v-else class="reasoning-details">
-                        <summary class="reasoning-summary" data-testid="agent-reasoning-toggle">
-                            <AgentIcon class="activity-icon reasoning-chevron" />
+                    <component
+                        :is="item.statements.length > 1 ? 'details' : 'div'"
+                        v-else
+                        class="reasoning-details"
+                    >
+                        <component
+                            :is="item.statements.length > 1 ? 'summary' : 'div'"
+                            class="reasoning-summary"
+                            :class="{
+                                'reasoning-summary-collapsible': item.statements.length > 1,
+                            }"
+                            :data-testid="
+                                item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
+                            "
+                        >
+                            <AgentIcon
+                                v-if="item.statements.length > 1"
+                                class="activity-icon reasoning-chevron"
+                            />
                             <span data-testid="agent-reasoning-trace" class="activity-copy">
                                 {{ item.statements[0] }}
                             </span>
-                        </summary>
+                        </component>
                         <div v-if="item.statements.length > 1" class="reasoning-traces">
                             <span
                                 v-for="(statement, statementIndex) in item.statements.slice(1)"
@@ -226,7 +242,7 @@ function allowBrowserActionsForTask() {
                                 {{ statement }}
                             </span>
                         </div>
-                    </details>
+                    </component>
                 </li>
             </ul>
         </div>
@@ -316,9 +332,7 @@ function allowBrowserActionsForTask() {
     column-gap: $space-2;
     align-items: center;
     color: inherit;
-    cursor: pointer;
     list-style: none;
-    transition: color 140ms ease;
 
     &::-webkit-details-marker {
         display: none;
@@ -328,13 +342,22 @@ function allowBrowserActionsForTask() {
         content: '';
     }
 
-    &:hover,
-    &:focus-visible {
-        color: $color-ink;
+    > .activity-copy {
+        grid-column: 2;
     }
 
-    &:active {
-        color: $color-signal-light;
+    &-collapsible {
+        cursor: pointer;
+        transition: color 140ms ease;
+
+        &:hover,
+        &:focus-visible {
+            color: $color-ink;
+        }
+
+        &:active {
+            color: $color-signal-light;
+        }
     }
 }
 

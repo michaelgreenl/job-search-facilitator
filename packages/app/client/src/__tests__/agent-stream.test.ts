@@ -194,6 +194,32 @@ describe('agent stream', () => {
         expect(firstDisclosure?.open).toBe(true)
     })
 
+    it('presents a disclosure only when a reasoning block has hidden traces', async () => {
+        const { root, store, taskId } = mountAgentStream()
+
+        appendEvent(store, taskId, {
+            type: 'message',
+            textDelta: 'First trace',
+            startsNewStatement: true,
+            createdAt,
+        })
+        await nextTick()
+
+        expect(root.querySelector('[data-testid="agent-reasoning-toggle"]')).toBeNull()
+
+        appendEvent(store, taskId, {
+            type: 'message',
+            textDelta: 'Second trace',
+            startsNewStatement: true,
+            createdAt,
+        })
+        await nextTick()
+
+        const toggle = root.querySelector('[data-testid="agent-reasoning-toggle"]')
+
+        expect(toggle?.querySelectorAll('svg')).toHaveLength(1)
+    })
+
     it.each([
         { selected: taskContent.import, excludedTestId: taskContent.outreach.eventTestId },
         { selected: taskContent.outreach, excludedTestId: taskContent.import.eventTestId },
