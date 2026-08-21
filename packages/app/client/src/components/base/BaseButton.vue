@@ -47,6 +47,7 @@ const button = useTemplateRef<HTMLElement>('button')
 const tooltipSurface = useTemplateRef<HTMLElement>('tooltipSurface')
 const visible = shallowRef(false)
 const keyboardInteraction = shallowRef(true)
+const pointerDismissed = shallowRef(false)
 const placement = shallowRef<TooltipPlacement>('bottom')
 const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
 const rootAttrs = computed(() => ({
@@ -62,6 +63,7 @@ const buttonClass = computed(() => [
     'base-button',
     `preset-${props.preset}`,
     props.iconSize ? `icon-size-${props.iconSize}` : undefined,
+    { 'is-pointer-dismissed': pointerDismissed.value },
 ])
 let mounted = false
 let tooltipListenersAttached = false
@@ -126,6 +128,10 @@ function hideTooltip() {
 function handleKeyboardInput(event: KeyboardEvent) {
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
         keyboardInteraction.value = true
+
+        if (event.key === 'Tab' || isInsideTrigger(event.target)) {
+            pointerDismissed.value = false
+        }
     }
 }
 
@@ -133,7 +139,31 @@ function handlePointerInput() {
     keyboardInteraction.value = false
 }
 
+function handlePointerMove(event: PointerEvent) {
+    const trigger = button.value
+
+    if (!pointerDismissed.value || trigger === null) {
+        return
+    }
+
+    const { bottom, left, right, top } = trigger.getBoundingClientRect()
+
+    if (
+        event.clientX < left ||
+        event.clientX > right ||
+        event.clientY < top ||
+        event.clientY > bottom
+    ) {
+        pointerDismissed.value = false
+    }
+}
+
 function handleFocusIn() {
+    if (pointerDismissed.value) {
+        button.value?.blur()
+        return
+    }
+
     if (keyboardInteraction.value) {
         showTooltip()
     }
@@ -144,7 +174,7 @@ function isInsideTrigger(target: EventTarget | null) {
 }
 
 function handleMouseOver(event: MouseEvent) {
-    if (isInsideTrigger(event.target)) {
+    if (!pointerDismissed.value && isInsideTrigger(event.target)) {
         showTooltip()
     }
 }
@@ -161,6 +191,15 @@ function handleViewportChange() {
     }
 }
 
+function handleClick() {
+    hideTooltip()
+
+    if (!keyboardInteraction.value) {
+        pointerDismissed.value = true
+        button.value?.blur()
+    }
+}
+
 function attachTooltipListeners() {
     if (tooltipListenersAttached) {
         return
@@ -168,6 +207,7 @@ function attachTooltipListeners() {
 
     window.addEventListener('keydown', handleKeyboardInput, true)
     window.addEventListener('pointerdown', handlePointerInput, true)
+    window.addEventListener('pointermove', handlePointerMove, true)
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, true)
     tooltipListenersAttached = true
@@ -180,6 +220,7 @@ function detachTooltipListeners() {
 
     window.removeEventListener('keydown', handleKeyboardInput, true)
     window.removeEventListener('pointerdown', handlePointerInput, true)
+    window.removeEventListener('pointermove', handlePointerMove, true)
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange, true)
     tooltipListenersAttached = false
@@ -224,7 +265,7 @@ defineExpose({ focus })
         @focusin="handleFocusIn"
         @focusout="hideTooltip"
         @keydown.esc.stop="hideTooltip"
-        @click="hideTooltip"
+        @click="handleClick"
     >
         <component
             :is="props.as"
@@ -267,6 +308,10 @@ defineExpose({ focus })
     box-sizing: border-box;
     font: inherit;
     cursor: pointer;
+
+    &.is-pointer-dismissed {
+        pointer-events: none;
+    }
 
     &:disabled {
         cursor: not-allowed;

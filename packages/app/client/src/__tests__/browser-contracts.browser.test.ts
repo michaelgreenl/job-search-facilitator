@@ -149,7 +149,7 @@ describe('browser interaction contracts', () => {
         expect(hidFocusedElement).toBe(false)
     })
 
-    it('keeps the add-post tooltip hidden when its dialog restores trigger focus', async () => {
+    it('dismisses the add-post pointer state until the button is hovered again', async () => {
         const AddJobPostFixture = defineComponent({
             setup() {
                 const open = shallowRef(false)
@@ -189,10 +189,21 @@ describe('browser interaction contracts', () => {
                             },
                             {
                                 default: () =>
-                                    h('input', {
-                                        autofocus: true,
-                                        'aria-label': 'Job post URL',
-                                    }),
+                                    h(
+                                        'form',
+                                        {
+                                            onSubmit: (event: SubmitEvent) => {
+                                                event.preventDefault()
+                                                open.value = false
+                                            },
+                                        },
+                                        [
+                                            h('input', {
+                                                autofocus: true,
+                                                'aria-label': 'Job post URL',
+                                            }),
+                                        ],
+                                    ),
                             },
                         ),
                     ])
@@ -202,17 +213,29 @@ describe('browser interaction contracts', () => {
         const trigger = page.getByTestId('add-job-post')
         const tooltip = page.getByTestId('button-tooltip-content')
         const dialog = page.getByTestId('job-post-url-dialog')
+        const restingBackground = getComputedStyle(trigger.element()).backgroundColor
 
         await trigger.hover()
         await expect.element(tooltip).toBeVisible()
+        const hoverBackground = getComputedStyle(trigger.element()).backgroundColor
+        expect(hoverBackground).not.toBe(restingBackground)
+
         await trigger.click()
         await expect.element(dialog).toBeVisible()
         await expect.element(tooltip).not.toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
 
-        await page.getByTestId('close-job-post-url-dialog').click()
+        await page.getByLabelText('Job post URL').fill('https://example.com/job')
+        await userEvent.keyboard('{Enter}')
         await expect.element(dialog).not.toBeVisible()
-        await expect.element(trigger).toHaveFocus()
+        await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+
+        await trigger.unhover()
+        await trigger.hover()
+        await expect.element(tooltip).toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(hoverBackground)
     })
 })
 
