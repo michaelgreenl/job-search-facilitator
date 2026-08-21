@@ -128,10 +128,10 @@ function hideTooltip() {
 function handleKeyboardInput(event: KeyboardEvent) {
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
         keyboardInteraction.value = true
+    }
 
-        if (event.key === 'Tab' || isInsideTrigger(event.target)) {
-            pointerDismissed.value = false
-        }
+    if (event.key === 'Escape') {
+        hideTooltip()
     }
 }
 
