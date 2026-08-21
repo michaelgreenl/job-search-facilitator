@@ -145,6 +145,11 @@ const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     artifactRemoving: artifactRemoving.value,
     artifactUploading: artifactUploading.value,
     outreachDisabled: outreachActionDisabled.value,
+    outreachLoading:
+        activePanel.value !== 'outreach' &&
+        outreachPostId.value === selectedPostId.value &&
+        selectedPostId.value !== null &&
+        outreachStore.isTaskActiveForPost(selectedPostId.value),
 }))
 
 watch(

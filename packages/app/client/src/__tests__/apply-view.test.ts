@@ -770,7 +770,7 @@ describe('apply view', () => {
         expect(sessionStorage.getItem('job-search-facilitator:agent-session')).toBeNull()
     })
 
-    it('keeps active outreach navigable while preserving its task session', async () => {
+    it('shows active outreach in the viewer while preserving its task session', async () => {
         vi.mocked(fetch)
             .mockReset()
             .mockResolvedValueOnce(jsonResponse(applyQueueItems))
@@ -792,6 +792,7 @@ describe('apply view', () => {
         await vi.waitFor(() =>
             expect(root.querySelector('[data-testid="outreach-contact-list"]')).not.toBeNull(),
         )
+        expect(root.querySelector('[data-testid="outreach-loading-spinner"]')).toBeNull()
 
         findTestButton(root, 'back-to-job-post').click()
         await vi.waitFor(() =>
@@ -802,6 +803,8 @@ describe('apply view', () => {
             ).toBe('true'),
         )
         expect(findTestButton(root, 'back-to-job-posts')).not.toBeNull()
+        expect(findTestButton(root, 'discover-contacts').getAttribute('aria-busy')).toBe('true')
+        expect(root.querySelector('[data-testid="outreach-loading-spinner"]')).not.toBeNull()
 
         findTestButton(root, 'back-to-job-posts').click()
         await vi.waitFor(() =>

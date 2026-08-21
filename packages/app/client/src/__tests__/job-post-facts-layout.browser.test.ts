@@ -38,6 +38,7 @@ async function mountViewer(width: number) {
                 artifactRemoving: null,
                 artifactUploading: null,
                 outreachDisabled: false,
+                outreachLoading: false,
             },
         },
     })

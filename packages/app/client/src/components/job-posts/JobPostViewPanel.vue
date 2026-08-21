@@ -12,6 +12,7 @@ export type JobPostViewPanelMode =
           artifactRemoving: ApplicationArtifactKind | null
           artifactUploading: ApplicationArtifactKind | null
           outreachDisabled: boolean
+          outreachLoading: boolean
       }
 </script>
 
@@ -27,6 +28,7 @@ import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import TrashIcon from '@/components/svgs/TrashIcon.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
@@ -456,9 +458,14 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 
                 <BaseButton
                     data-testid="discover-contacts"
+                    :aria-busy="applyMode.outreachLoading || undefined"
                     :disabled="applyMode.outreachDisabled"
                     @click="emit('openOutreach')"
                 >
+                    <LoadingSpinner
+                        v-if="applyMode.outreachLoading"
+                        data-testid="outreach-loading-spinner"
+                    />
                     Outreach
                 </BaseButton>
             </div>
