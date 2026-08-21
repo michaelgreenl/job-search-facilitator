@@ -31,6 +31,7 @@ interface Props {
     iconSize?: BaseButtonIconSize
     preset?: BaseButtonPreset
     tooltip?: string
+    tooltipOpen?: boolean
     type?: 'button' | 'reset' | 'submit'
 }
 
@@ -46,10 +47,14 @@ const tooltipId = `button-tooltip-${useId()}`
 const button = useTemplateRef<HTMLElement>('button')
 const tooltipSurface = useTemplateRef<HTMLElement>('tooltipSurface')
 const visible = shallowRef(false)
+const tooltipOpenDismissed = shallowRef(false)
 const keyboardInteraction = shallowRef(true)
 const pointerDismissed = shallowRef(false)
 const placement = shallowRef<TooltipPlacement>('bottom')
 const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
+const tooltipVisible = computed(
+    () => visible.value || (props.tooltipOpen && !tooltipOpenDismissed.value),
+)
 const rootAttrs = computed(() => ({
     class: attrs.class,
     style: attrs.style,
@@ -125,13 +130,18 @@ function hideTooltip() {
     visible.value = false
 }
 
+function dismissTooltip() {
+    hideTooltip()
+    tooltipOpenDismissed.value = true
+}
+
 function handleKeyboardInput(event: KeyboardEvent) {
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
         keyboardInteraction.value = true
     }
 
     if (event.key === 'Escape') {
-        hideTooltip()
+        dismissTooltip()
     }
 }
 
@@ -186,7 +196,7 @@ function handleMouseOut(event: MouseEvent) {
 }
 
 function handleViewportChange() {
-    if (visible.value) {
+    if (tooltipVisible.value) {
         updateTooltipPosition()
     }
 }
@@ -242,11 +252,27 @@ watch(
     },
 )
 
+watch(
+    () => props.tooltipOpen,
+    (open) => {
+        tooltipOpenDismissed.value = false
+
+        if (mounted && open) {
+            updateTooltipPosition()
+        }
+    },
+    { flush: 'post' },
+)
+
 onMounted(() => {
     mounted = true
 
     if (props.tooltip) {
         attachTooltipListeners()
+    }
+
+    if (props.tooltipOpen) {
+        updateTooltipPosition()
     }
 })
 
@@ -264,7 +290,7 @@ defineExpose({ focus })
         @mouseout="handleMouseOut"
         @focusin="handleFocusIn"
         @focusout="hideTooltip"
-        @keydown.esc.stop="hideTooltip"
+        @keydown.esc.stop="dismissTooltip"
         @click="handleClick"
     >
         <component
@@ -283,7 +309,7 @@ defineExpose({ focus })
                 ref="tooltipSurface"
                 class="content tooltip-surface"
                 data-testid="button-tooltip-content"
-                :class="[`is-${placement}`, { 'is-visible': visible }]"
+                :class="[`is-${placement}`, { 'is-visible': tooltipVisible }]"
                 :style="position"
                 role="tooltip"
             >

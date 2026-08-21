@@ -27,6 +27,39 @@ afterEach(async () => {
 })
 
 describe('browser interaction contracts', () => {
+    it('shows copy confirmation after click until it clears', async () => {
+        const copied = shallowRef(false)
+        const CopyButtonFixture = defineComponent({
+            setup: () => () =>
+                h(
+                    BaseButton,
+                    {
+                        tooltip: copied.value ? 'Copied!' : 'Copy',
+                        tooltipOpen: copied.value,
+                        'aria-label': 'Copy',
+                        'data-testid': 'copy-button',
+                        onClick: () => {
+                            copied.value = true
+                        },
+                    },
+                    { default: () => 'Copy' },
+                ),
+        })
+        mountVue(CopyButtonFixture)
+        const button = page.getByTestId('copy-button')
+        const tooltip = page.getByTestId('button-tooltip-content')
+
+        await button.hover()
+        await expect.element(tooltip).toBeVisible()
+
+        await button.click()
+        await vi.waitFor(() => expect(tooltip.element().textContent).toBe('Copied!'))
+        await expect.element(tooltip).toBeVisible()
+
+        copied.value = false
+        await expect.element(tooltip).not.toBeVisible()
+    })
+
     it('keeps dropdown keyboard focus inside its menu and restores it after selection', async () => {
         const onSelect = vi.fn()
         const options: BaseDropdownOption[] = [

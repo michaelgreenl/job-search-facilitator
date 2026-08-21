@@ -33,4 +33,30 @@ describe('OutreachDraft', () => {
 
         expect(onSubmit).toHaveBeenCalledOnce()
     })
+
+    it('shows copied feedback in the copy button tooltip', () => {
+        const { root } = mountVue(OutreachDraft, {
+            props: {
+                contact: makeOutreachContact(),
+                draft: 'Current draft',
+                request: '',
+                assistantReply: null,
+                running: false,
+                requestingChanges: false,
+                copyState: 'copied',
+                canSave: false,
+                saving: false,
+                expanded: false,
+                issue: null,
+                messagedError: null,
+                messagedUpdating: false,
+                reconnecting: false,
+            },
+        })
+        const copyButton = root.querySelector('[aria-label="Outreach message copied"]')
+        const tooltip = document.getElementById(copyButton?.getAttribute('aria-describedby') ?? '')
+
+        expect(tooltip?.textContent?.trim()).toBe('Copied!')
+        expect(tooltip?.classList.contains('is-visible')).toBe(true)
+    })
 })

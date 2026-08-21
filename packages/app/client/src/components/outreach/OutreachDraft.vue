@@ -78,13 +78,14 @@ const copyFeedbackId = useId()
                         </BaseButton>
                         <BaseButton
                             preset="icon"
-                            tooltip="Copy"
+                            :tooltip="copyState === 'copied' ? 'Copied!' : 'Copy'"
+                            :tooltip-open="copyState === 'copied'"
                             :aria-label="
                                 copyState === 'copied'
                                     ? 'Outreach message copied'
                                     : 'Copy outreach message'
                             "
-                            :aria-describedby="copyState === 'copied' ? copyFeedbackId : undefined"
+                            :aria-describedby="copyState === 'failed' ? copyFeedbackId : undefined"
                             :disabled="draft.trim().length === 0"
                             @click="emit('copy')"
                         >
@@ -94,12 +95,12 @@ const copyFeedbackId = useId()
                             :id="copyFeedbackId"
                             class="copy-feedback"
                             :class="{
-                                'copy-feedback-copied tooltip-surface': copyState === 'copied',
+                                'copy-feedback-copied': copyState === 'copied',
                                 'copy-feedback-error': copyState === 'failed',
                             }"
                             :role="copyState === 'failed' ? 'alert' : 'status'"
                         >
-                            <template v-if="copyState === 'copied'">Copied</template>
+                            <template v-if="copyState === 'copied'">Copied!</template>
                             <template v-else-if="copyState === 'failed'">
                                 Could not copy draft
                             </template>
@@ -323,10 +324,14 @@ const copyFeedbackId = useId()
     font-size: 0.8125rem;
 
     &-copied {
-        z-index: 1;
+        width: 1px;
+        height: 1px;
         min-height: 0;
-        color: $color-ink;
-        pointer-events: none;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
     }
 
     &-error {

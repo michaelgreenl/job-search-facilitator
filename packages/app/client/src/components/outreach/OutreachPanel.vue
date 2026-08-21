@@ -288,7 +288,7 @@ async function copyDraft() {
         copyResetTimer = setTimeout(() => {
             copyState.value = 'idle'
             copyResetTimer = null
-        }, 2400)
+        }, 1000)
     } catch {
         copyState.value = 'failed'
     }
