@@ -462,11 +462,11 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                     :disabled="applyMode.outreachDisabled"
                     @click="emit('openOutreach')"
                 >
+                    Outreach
                     <LoadingSpinner
                         v-if="applyMode.outreachLoading"
                         data-testid="outreach-loading-spinner"
                     />
-                    Outreach
                 </BaseButton>
             </div>
         </section>
