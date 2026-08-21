@@ -335,6 +335,7 @@ function allowBrowserActionsForTask() {
     max-width: calc(100% - 1rem - $space-2);
     margin-left: calc(1rem + $space-2);
     color: inherit;
+    cursor: default;
     list-style: none;
 
     &::-webkit-details-marker {
