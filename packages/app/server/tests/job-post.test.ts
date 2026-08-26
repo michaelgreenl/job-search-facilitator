@@ -96,6 +96,7 @@ const createFakeRepository = () => {
         item: userAddedPost,
         created: true,
     }))
+    const removeUserAdded = vi.fn(async (_id: string) => true)
     const update = vi.fn(async (_id: string, input: UpdateJobPostInput) => ({
         post: { ...existingPost, ...input },
         inApplyQueue: false,
@@ -107,6 +108,7 @@ const createFakeRepository = () => {
         findUserAdded,
         findById,
         upsertUserAdded,
+        removeUserAdded,
         update,
     }
 
@@ -117,6 +119,7 @@ const createFakeRepository = () => {
         findMany,
         findUserAdded,
         repository,
+        removeUserAdded,
         update,
         upsertUserAdded,
     }
@@ -199,6 +202,16 @@ describe('job post routes', () => {
             .expect(200, userAddedPost)
 
         expect(upsertUserAdded).toHaveBeenCalledExactlyOnceWith(createUserAddedPostInput)
+    })
+
+    it('deletes a user-added job post', async () => {
+        const { removeUserAdded, repository } = createFakeRepository()
+
+        await request(createTestApp(repository))
+            .delete(`/job-posts/user-added/${existingPost.id}`)
+            .expect(204)
+
+        expect(removeUserAdded).toHaveBeenCalledExactlyOnceWith(existingPost.id)
     })
 
     it.each([

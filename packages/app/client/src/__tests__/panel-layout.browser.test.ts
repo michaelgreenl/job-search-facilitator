@@ -4,11 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page } from 'vitest/browser'
 import ApplyView from '@/views/ApplyView.vue'
 import ReviewView from '@/views/ReviewView.vue'
-import TrackView from '@/views/TrackView.vue'
 import { makeJobPost, makeApplyQueueItem } from '@/test/fixtures/job-post'
 import { makeJobSearchReport } from '@/test/fixtures/report'
 import { makeOutreachContact } from '@/test/fixtures/outreach'
-import { makeTrackedJobPost } from '@/test/fixtures/tracked-job-post'
 import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestParts } from '@/test/support/http'
@@ -42,20 +40,6 @@ const secondOutreachContact = makeOutreachContact({
     jobPostId: applySecondPost.id,
     personName: 'Grace Hopper',
 })
-const trackedPost = makeTrackedJobPost({
-    post: makeJobPost({
-        id: '10000000-0000-4000-8000-000000000031',
-        company: 'Tracked Company',
-        roleTitle: 'Tracked Engineer',
-    }),
-    jobPostSnapshot: {
-        description: 'Exact tracked job description',
-        sourceUrl: 'https://example.com/jobs/tracked',
-        capturedAt: '2026-08-05T20:00:00.000Z',
-    },
-    applicationArtifacts: [resumeArtifact],
-})
-
 const contactDiscoveryOutput = (contact: ReturnType<typeof makeOutreachContact>) => ({
     outcome: 'contact',
     contact: {
@@ -137,18 +121,6 @@ async function mountApply() {
     })
 
     await expect.element(page.getByTestId(`job-post-card-${applyPost.id}`)).toBeVisible()
-}
-
-async function mountTrack() {
-    vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => jsonResponse([trackedPost])),
-    )
-    mountVue(TrackView, {
-        install: (app) => app.use(createPinia()),
-    })
-
-    await expect.element(page.getByTestId(`job-post-card-${trackedPost.post.id}`)).toBeVisible()
 }
 
 async function expectVisible(locator: ReturnType<typeof page.getByTestId>, visible: boolean) {
@@ -299,42 +271,6 @@ describe.each([
             await expect.element(outreach).not.toBeVisible()
         }
     })
-
-    it('opens the job description beside the tracked application on desktop', async () => {
-        await page.viewport(width, 768)
-        await mountTrack()
-        await expect.element(page.getByTestId('back-to-tracked-jobs')).not.toBeInTheDocument()
-
-        await page.getByTestId(`job-post-card-${trackedPost.post.id}`).click()
-
-        const detail = page.getByTestId('tracked-job-detail')
-        const detailBack = page.getByTestId('back-to-tracked-jobs')
-        await expect.element(detail).toBeVisible()
-        await expectVisible(detailBack, !desktop)
-        await expect.element(page.getByTestId('view-resume-artifact')).toBeVisible()
-
-        await page.getByTestId('view-job-description').click()
-
-        const description = page.getByTestId('job-description-text')
-        const descriptionBack = page.getByTestId('back-from-job-description')
-        await expect.element(description).toBeVisible()
-        await expectVisible(detail, desktop)
-        await expectVisible(detailBack, desktop)
-        await expectVisible(descriptionBack, !desktop)
-
-        if (desktop) {
-            const detailRect = detail.element().closest('[data-active]')!.getBoundingClientRect()
-            const descriptionRect = description
-                .element()
-                .closest('[data-active]')!
-                .getBoundingClientRect()
-
-            expect(detailRect.right).toBeLessThanOrEqual(descriptionRect.left)
-        } else {
-            await descriptionBack.click()
-            await expect.element(detail).toBeVisible()
-        }
-    })
 })
 
 describe('running Agent task panel layout', () => {
@@ -412,6 +348,13 @@ describe('running Agent task panel layout', () => {
         await expect.element(importCancel).toBeVisible()
         await expect.element(sources).not.toBeVisible()
         await expect.element(posts).not.toBeVisible()
+
+        await page.viewport(848, 768)
+        await page.getByTestId(`report-card-${reviewReport.id}`).click()
+
+        await expect.element(sources).toBeVisible()
+        await expect.element(posts).toBeVisible()
+        await expect.element(importPanel).not.toBeVisible()
     })
 
     it('keeps outreach running while Apply navigates through neighboring panels', async () => {

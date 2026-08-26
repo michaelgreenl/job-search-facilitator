@@ -55,11 +55,18 @@ export const useReportStore = defineStore('reports', () => {
         }
     }
 
+    function removePost(postId: string) {
+        for (const report of reports.value) {
+            report.results = report.results.filter(({ post }) => post.id !== postId)
+        }
+    }
+
     return {
         reports,
         loading,
         error,
         fetchReports,
         fetchReport,
+        removePost,
     }
 })

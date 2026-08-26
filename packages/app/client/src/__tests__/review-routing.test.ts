@@ -448,6 +448,50 @@ describe('review route selection', () => {
         })
     })
 
+    it('deletes a selected user-added job post', async () => {
+        const requests: ReturnType<typeof requestParts>[] = []
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const request = requestParts(input, init)
+            requests.push(request)
+
+            if (
+                request.method === 'DELETE' &&
+                request.url.endsWith(`/job-posts/user-added/${userAddedPost.post.id}`)
+            ) {
+                return Promise.resolve(new Response(null, { status: 204 }))
+            }
+
+            return defaultReviewResponse(input, init)
+        })
+        const { root } = await mountReview()
+
+        findTestButton(root, 'user-added-source').click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${userAddedPost.post.id}"]`),
+            ).not.toBeNull(),
+        )
+        postButton(root, userAddedPost.post.id).click()
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="delete-user-added-job-post"]')).not.toBeNull(),
+        )
+        findTestButton(root, 'delete-user-added-job-post').click()
+
+        await vi.waitFor(() => {
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${userAddedPost.post.id}"]`),
+            ).toBeNull()
+            expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
+        })
+        expect(
+            requests.filter(
+                ({ method, url }) =>
+                    method === 'DELETE' &&
+                    url.endsWith(`/job-posts/user-added/${userAddedPost.post.id}`),
+            ),
+        ).toHaveLength(1)
+    })
+
     it('opens the add form and rejects a non-http URL before starting Agent', async () => {
         const { pinia, root } = await mountReview()
         const startTask = vi.spyOn(useAgentStore(pinia), 'startTask')

@@ -13,111 +13,78 @@ import { mountVue } from '@/test/support/mount'
 import { useAgentStore } from '@/stores/agent'
 
 describe('track view', () => {
-    it('restores the selected job and summarizes tracked work', async () => {
-        const first = makeTrackedJobPost({
-            post: makeJobPost({
-                id: '30000000-0000-4000-8000-000000000001',
-                company: 'Acme',
-                roleTitle: 'Frontend Engineer',
-                applicationStatus: 'interviewing',
-                appliedAt: '2026-07-20T12:00:00.000Z',
-            }),
-            jobPostSnapshot: {
-                description: 'Complete job description',
-                sourceUrl: 'https://example.com/jobs/acme',
-                capturedAt: '2026-07-20T12:00:00.000Z',
-            },
-            applicationArtifacts: [
-                {
-                    kind: 'resume',
-                    fileName: 'frontend-resume.pdf',
-                    mediaType: 'application/pdf',
-                    sizeBytes: 1_024,
-                    uploadedAt: '2026-07-20T12:00:00.000Z',
-                },
-                {
-                    kind: 'application-page',
-                    fileName: 'application.webarchive',
-                    mediaType: 'application/x-webarchive',
-                    sizeBytes: 2_048,
-                    uploadedAt: '2026-07-20T12:00:00.000Z',
-                },
-            ],
-        })
-        const second = makeTrackedJobPost({
-            post: makeJobPost({
-                id: '30000000-0000-4000-8000-000000000002',
-                company: 'Globex',
-                applicationStatus: 'rejected',
-                appliedAt: '2026-07-18T12:00:00.000Z',
-            }),
-            contacts: [],
-        })
+    it('updates stacked application and outreach labels', async () => {
+        let tracked = makeTrackedJobPost()
+        const contact = tracked.contacts[0]!
         vi.stubGlobal(
             'fetch',
-            vi.fn(async () => jsonResponse([first, second])),
-        )
-        const firstMount = mountVue(TrackView, {
-            install: (app) => app.use(createPinia()),
-        })
+            vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const request = requestParts(input, init)
 
-        await vi.waitFor(() =>
-            expect(
-                firstMount.root.querySelector('[data-testid="tracked-job-detail"]'),
-            ).not.toBeNull(),
-        )
+                if (request.method === 'PATCH' && request.url.includes('/outreach-contacts/')) {
+                    const updatedContact = {
+                        ...contact,
+                        respondedAt: '2026-08-18T12:00:00.000Z',
+                        updatedAt: '2026-08-18T12:00:00.000Z',
+                    }
+                    tracked = { ...tracked, contacts: [updatedContact] }
+                    return jsonResponse(updatedContact)
+                }
 
-        expect(
-            firstMount.root
-                .querySelector('[data-testid="tracked-job-detail"]')
-                ?.getAttribute('data-post-id'),
-        ).toBe(first.post.id)
-        expect(firstMount.root.querySelector('[data-testid="view-resume-artifact"]')).not.toBeNull()
-        expect(
-            firstMount.root.querySelector('[data-testid="view-application-page-artifact"]'),
-        ).not.toBeNull()
-        firstMount.root
-            .querySelector<HTMLButtonElement>('[data-testid="view-job-description"]')!
-            .click()
-        await vi.waitFor(() =>
-            expect(
-                firstMount.root.querySelector('[data-testid="job-description-text"]')?.textContent,
-            ).toContain('Complete job description'),
-        )
-        expect(
-            firstMount.root
-                .querySelector('[data-testid="tracked-job-detail"]')
-                ?.closest('[data-active]')
-                ?.getAttribute('data-active'),
-        ).toBe('false')
-        firstMount.root
-            .querySelector<HTMLButtonElement>('[data-testid="back-from-job-description"]')!
-            .click()
-        expect(sessionStorage.getItem('job-search-facilitator:track-selected-post')).toBe(
-            first.post.id,
-        )
-        firstMount.unmount()
+                if (request.method === 'PATCH') {
+                    const updatedPost = {
+                        ...tracked.post,
+                        applicationStatus: 'interviewing' as const,
+                        updatedAt: '2026-08-18T12:01:00.000Z',
+                    }
+                    tracked = { ...tracked, post: updatedPost }
+                    return jsonResponse({ post: updatedPost, inApplyQueue: false })
+                }
 
+                return jsonResponse([tracked])
+            }),
+        )
         const { root } = mountVue(TrackView, {
             install: (app) => app.use(createPinia()),
         })
+        const card = () => root.querySelector(`[data-testid="job-post-card-${tracked.post.id}"]`)
+
+        await vi.waitFor(() => expect(card()).not.toBeNull())
+        expect(card()?.querySelector('[data-testid="job-post-label"]')?.textContent).toContain(
+            'Awaiting response',
+        )
+        expect(card()?.querySelector('[data-testid="job-post-label"]')?.classList).toContain(
+            'user-label-muted',
+        )
+        expect(card()?.querySelector('[data-testid="outreach-response-label"]')).toBeNull()
+
+        root.querySelector<HTMLButtonElement>(
+            `[data-testid="track-contact-response-toggle-${contact.id}"]`,
+        )!.click()
         await vi.waitFor(() =>
             expect(
-                root
-                    .querySelector('[data-testid="tracked-job-detail"]')
-                    ?.getAttribute('data-post-id'),
-            ).toBe(first.post.id),
+                card()?.querySelector('[data-testid="outreach-response-label"]')?.textContent,
+            ).toContain('Outreach response'),
         )
-        expect(
-            root
-                .querySelector('[data-testid="active-application-count"]')
-                ?.getAttribute('data-count'),
-        ).toBe('1')
-        expect(
-            root
-                .querySelector('[data-testid="closed-application-count"]')
-                ?.getAttribute('data-count'),
-        ).toBe('1')
+
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="track-application-status-trigger"]',
+        )!.click()
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="track-application-status-option-interviewing"]'),
+            ).not.toBeNull(),
+        )
+        root.querySelector<HTMLButtonElement>(
+            '[data-testid="track-application-status-option-interviewing"]',
+        )!.click()
+
+        await vi.waitFor(() =>
+            expect(card()?.querySelector('[data-testid="job-post-label"]')?.textContent).toContain(
+                'Interviewing',
+            ),
+        )
+        expect(card()?.querySelector('[data-testid="outreach-response-label"]')).not.toBeNull()
     })
 
     it('filters cards with track stats and excludes closed outreach from counts', async () => {

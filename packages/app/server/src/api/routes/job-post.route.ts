@@ -20,6 +20,7 @@ export const createJobPostRouter = (
     router.get('/apply-queue', controller.listApplyQueue)
     router.get('/tracked', controller.listTracked)
     router.get('/user-added', controller.listUserAdded)
+    router.delete('/user-added/:id', controller.removeUserAdded)
     router.put(
         '/:id/artifacts/:kind',
         express.raw({ limit: MAX_APPLICATION_ARTIFACT_BYTES, type: () => true }),

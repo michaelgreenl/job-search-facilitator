@@ -2,13 +2,18 @@
 
 > A local full-stack app that turns AI-sourced job leads into a focused review, application, outreach, and tracking pipeline.
 
+[![Codex](https://custom-icon-badges.demolab.com/badge/Codex-000000?style=for-the-badge&logo=openai&logoColor=white)](https://developers.openai.com/codex/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=fff)](https://www.typescriptlang.org/docs/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D)](https://vuejs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/docs/)
 [![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)](https://www.prisma.io/)
-[![Codex](https://custom-icon-badges.demolab.com/badge/Codex-000000?style=for-the-badge&logo=openai&logoColor=white)](https://developers.openai.com/codex/)
+
+## Links
+
+- **💼 [Portfolio Link](https://michaelgreenl.net/#projects?slug=jsf&autoplay=false)**
+- **🎥 [Demo Video](https://michaelgreenl.net/#projects?slug=jsf&autoplay=true)**
 
 ## Overview
 
@@ -145,11 +150,13 @@ Complete the extension setup in Chrome. Approve its permissions and confirm that
 
 See OpenAI's [Chrome extension setup](https://learn.chatgpt.com/docs/chrome-extension) for current instructions and security details.
 
-The app keeps applicant facts outside Git. Copy the public examples into the ignored private directory:
+The app keeps applicant facts and automation policy outside Git. Copy the public templates into the ignored private directory:
 
 ```bash
-mkdir -p docs/agents/job-search
+mkdir -p docs/agents/job-search docs/agents/update-check
 cp -n docs/examples/job-search/*.md docs/agents/job-search/
+cp -n docs/examples/update-check/*.md docs/agents/update-check/
+git -C docs/agents init
 ```
 
 Edit `docs/agents/job-search/user-info.md`. Replace each `[REQUIRED]` value with verified applicant information.
@@ -161,6 +168,13 @@ Edit `docs/agents/job-search/post-evaluation.md` when the default evaluation rul
 The repository ignores `docs/agents`. Do not copy personal information back into `docs/examples`.
 
 Keep both files at these exact paths. Job import stops when either file is unavailable.
+
+Two scheduled automations complete the workflow:
+
+- Job search discovers and syncs new roles.
+- The application tracker checks Gmail and LinkedIn for application and outreach updates.
+
+Complete the [automation setup guide](docs/automation-setup.md). The guide includes both prompts and an end-to-end check.
 
 ### Start the application
 
@@ -205,11 +219,7 @@ The task can ask for access to each website it visits. Review each website befor
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
 
-Scheduled searches are optional. The application does not create or edit ChatGPT tasks or plugin settings.
-
-Configure [scheduled tasks](https://learn.chatgpt.com/docs/automations) and plugins in ChatGPT today.
-
-These settings do not affect normal local startup.
+The application does not create or edit ChatGPT tasks or plugin settings. Configure both scheduled tasks in ChatGPT when you want the automated workflow.
 
 ### Development commands
 

@@ -13,6 +13,7 @@ import {
     fetchJobPost as requestJobPost,
     fetchJobPosts as requestJobPosts,
     fetchUserAddedJobPosts,
+    removeUserAddedJobPost as requestUserAddedJobPostRemoval,
     updateJobPost as requestJobPostUpdate,
 } from '@/services/job-posts'
 
@@ -66,19 +67,27 @@ export const usePostStore = defineStore('posts', () => {
         items: UserAddedJobPost[],
         requestMutationRevision = userAddedMutationRevision,
     ) => {
-        const itemsByPostId = new Map(
-            items.map(canonicalizeUserAddedPost).map((item) => [item.post.id, item]),
+        const itemsByPostId = new Map(items.map((item) => [item.post.id, item]))
+
+        const currentItemsByPostId = new Map(
+            userAddedPosts.value.map((item) => [item.post.id, item]),
         )
 
-        for (const currentItem of userAddedPosts.value) {
-            if (
-                (userAddedMutationRevisions.get(currentItem.post.id) ?? 0) > requestMutationRevision
-            ) {
-                itemsByPostId.set(currentItem.post.id, currentItem)
+        for (const [postId, mutationRevision] of userAddedMutationRevisions) {
+            if (mutationRevision > requestMutationRevision) {
+                const currentItem = currentItemsByPostId.get(postId)
+
+                if (currentItem === undefined) {
+                    itemsByPostId.delete(postId)
+                } else {
+                    itemsByPostId.set(postId, currentItem)
+                }
             }
         }
 
-        userAddedPosts.value = sortUserAddedPosts([...itemsByPostId.values()])
+        userAddedPosts.value = sortUserAddedPosts(
+            [...itemsByPostId.values()].map(canonicalizeUserAddedPost),
+        )
 
         return userAddedPosts.value
     }
@@ -127,6 +136,22 @@ export const usePostStore = defineStore('posts', () => {
     const addUserAddedPost = (input: CreateUserAddedJobPostInput) =>
         load(() => createUserAddedJobPost(input), saveUserAddedPost)
 
+    const removeUserAddedPost = (id: string) =>
+        load(
+            async () => {
+                await requestUserAddedJobPostRemoval(id)
+                return id
+            },
+            (removedId) => {
+                userAddedMutationRevisions.set(removedId, ++userAddedMutationRevision)
+                userAddedPosts.value = userAddedPosts.value.filter(
+                    ({ post }) => post.id !== removedId,
+                )
+                posts.value = posts.value.filter(({ id: postId }) => postId !== removedId)
+                return removedId
+            },
+        )
+
     const fetchPost = (id: string) => load(() => requestJobPost(id), upsertPost)
 
     async function updatePost(id: string, input: UpdateJobPostInput) {
@@ -158,6 +183,7 @@ export const usePostStore = defineStore('posts', () => {
         fetchApplyQueue,
         fetchUserAddedPosts,
         addUserAddedPost,
+        removeUserAddedPost,
         fetchPost,
         updatePost,
         findPost,

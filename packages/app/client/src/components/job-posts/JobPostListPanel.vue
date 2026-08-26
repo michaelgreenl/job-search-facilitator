@@ -18,6 +18,7 @@ const props = withDefaults(
         backLabel?: string
         backTestId?: string
         posts: readonly JobPost[]
+        scrollKey?: string
         selectedPostId: string | null
         emptyMessage: string
         loadingMessage?: string
@@ -25,6 +26,7 @@ const props = withDefaults(
         error?: string | null
         pending?: boolean
         showApplicationStatus?: boolean
+        outreachResponsePostIds?: readonly string[]
     }>(),
     {
         titleTag: 'h2',
@@ -35,6 +37,7 @@ const props = withDefaults(
         error: null,
         pending: false,
         showApplicationStatus: false,
+        outreachResponsePostIds: () => [],
     },
 )
 const orderedPosts = computed(() => [
@@ -69,6 +72,7 @@ const emit = defineEmits<{
 
         <ul
             v-if="pending || (!loading && !error && posts.length)"
+            :key="scrollKey"
             class="card-list"
             data-testid="job-post-list"
             :class="{ 'card-list-status': pending && (loading || error) }"
@@ -93,7 +97,7 @@ const emit = defineEmits<{
                 <li v-for="post in orderedPosts" :key="post.id">
                     <BaseCard
                         as="button"
-                        class="post-card"
+                        class="post-card post-card-grid"
                         :data-testid="`job-post-card-${post.id}`"
                         :class="{
                             'post-card-forgone': post.userLabel === 'forgo',
@@ -105,23 +109,24 @@ const emit = defineEmits<{
                         :selected="selectedPostId === post.id"
                         @click="emit('select', post.id)"
                     >
-                        <div class="post-card-header">
+                        <div class="post-card-copy">
                             <span class="component-label">{{ post.company }}</span>
-                            <JobPostLabel
-                                :application-status="post.applicationStatus"
-                                :user-label="post.userLabel"
-                                :show-application-status="showApplicationStatus"
-                                compact
-                            />
+                            <strong class="post-role">{{ post.roleTitle }}</strong>
+                            <span class="post-company">{{ post.location }}</span>
+                            <span v-if="post.postSource" class="post-meta">
+                                · Source - {{ post.postSource }}
+                            </span>
+                            <span v-if="post.compensation" class="post-meta">
+                                · Compensation - {{ post.compensation }}
+                            </span>
                         </div>
-                        <strong class="post-role">{{ post.roleTitle }}</strong>
-                        <span class="post-company">{{ post.location }}</span>
-                        <span v-if="post.postSource" class="post-meta">
-                            · Source - {{ post.postSource }}
-                        </span>
-                        <span v-if="post.compensation" class="post-meta">
-                            · Compensation - {{ post.compensation }}
-                        </span>
+                        <JobPostLabel
+                            :application-status="post.applicationStatus"
+                            :user-label="post.userLabel"
+                            :show-application-status="showApplicationStatus"
+                            :show-outreach-response="outreachResponsePostIds.includes(post.id)"
+                            compact
+                        />
                     </BaseCard>
                 </li>
             </template>
@@ -174,10 +179,16 @@ const emit = defineEmits<{
     }
 }
 
-.post-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+.post-card-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: $space-4;
+    align-items: start;
+}
+
+.post-card-copy {
+    display: grid;
+    min-width: 0;
+    gap: $space-1;
 }
 
 .component-label {

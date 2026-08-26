@@ -3,6 +3,7 @@ import type { AgentPermissionDecision, AgentTaskEvent } from '@job-search-facili
 import { computed, nextTick, useTemplateRef, watch, type Component } from 'vue'
 import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
 import AgentIcon from '@/components/svgs/AgentIcon.vue'
+import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import { useAgentStore } from '@/stores/agent'
@@ -11,6 +12,8 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
+const maxReasoningStatements = 6
+const maxReasoningStatementLength = 60
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
 const connectionState = computed(() => state.value?.connectionState ?? 'idle')
@@ -26,6 +29,7 @@ type StreamIcon = 'agent' | 'globe' | 'tool'
 interface StreamItem {
     icon: StreamIcon
     message: string
+    statements: string[]
     type: 'activity' | 'commentary'
 }
 
@@ -41,6 +45,16 @@ const stripStatementMarkers = (message: string) =>
         .map((statement) => statement.replace(/^(\s*)\*\*/, '$1').replace(/\*\*(\s*)$/, '$1'))
         .join('\n')
 
+const reasoningStatements = (message: string) =>
+    stripStatementMarkers(message)
+        .split('\n')
+        .filter((statement) => statement.trim().length > 0)
+
+const limitReasoningStatement = (statement: string) =>
+    statement.length > maxReasoningStatementLength
+        ? `${statement.slice(0, maxReasoningStatementLength - 1).trimEnd()}…`
+        : statement
+
 const streamItems = computed(() => {
     const items = events.value.reduce<StreamItem[]>((currentItems, event) => {
         if (event.type === 'activity') {
@@ -50,6 +64,7 @@ const streamItems = computed(() => {
                     event.message === 'Using Chrome' || event.message === 'Searching the web'
                         ? 'globe'
                         : 'tool',
+                statements: [],
                 type: 'activity',
             })
         } else if (event.type === 'message') {
@@ -65,6 +80,7 @@ const streamItems = computed(() => {
                 currentItems.push({
                     icon: 'agent',
                     message: event.textDelta,
+                    statements: [],
                     type: 'commentary',
                 })
             }
@@ -75,7 +91,13 @@ const streamItems = computed(() => {
 
     return items.map((item) =>
         item.type === 'commentary'
-            ? { ...item, message: stripStatementMarkers(item.message) }
+            ? {
+                  ...item,
+                  statements: reasoningStatements(item.message)
+                      .slice(-maxReasoningStatements)
+                      .reverse()
+                      .map(limitReasoningStatement),
+              }
             : item,
     )
 })
@@ -173,20 +195,56 @@ function allowBrowserActionsForTask() {
                     class="activity-item"
                     :class="{ 'activity-item-commentary': item.type === 'commentary' }"
                 >
-                    <span
-                        v-if="
-                            isActive &&
-                            visiblePendingPermission === null &&
-                            index === latestActivityIndex
-                        "
-                        data-testid="agent-progress-indicator"
-                        class="activity-progress"
-                        aria-hidden="true"
-                    ></span>
-                    <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
-                    <span data-testid="agent-stream-copy" class="activity-copy">
-                        {{ item.message }}
-                    </span>
+                    <template v-if="item.type === 'activity'">
+                        <span
+                            v-if="
+                                isActive &&
+                                visiblePendingPermission === null &&
+                                index === latestActivityIndex
+                            "
+                            data-testid="agent-progress-indicator"
+                            class="activity-progress"
+                            aria-hidden="true"
+                        ></span>
+                        <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
+                        <span data-testid="agent-stream-copy" class="activity-copy">
+                            {{ item.message }}
+                        </span>
+                    </template>
+                    <component
+                        :is="item.statements.length > 1 ? 'details' : 'div'"
+                        v-else
+                        class="reasoning-details"
+                    >
+                        <component
+                            :is="item.statements.length > 1 ? 'summary' : 'div'"
+                            class="reasoning-summary"
+                            :class="{
+                                'reasoning-summary-collapsible': item.statements.length > 1,
+                            }"
+                            :data-testid="
+                                item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
+                            "
+                        >
+                            <span data-testid="agent-reasoning-trace" class="activity-copy">
+                                {{ item.statements[0] }}
+                            </span>
+                            <ChevronDownIcon
+                                v-if="item.statements.length > 1"
+                                class="activity-icon reasoning-chevron"
+                            />
+                        </component>
+                        <div v-if="item.statements.length > 1" class="reasoning-traces">
+                            <span
+                                v-for="(statement, statementIndex) in item.statements.slice(1)"
+                                :key="statementIndex"
+                                data-testid="agent-reasoning-trace"
+                                class="activity-copy"
+                            >
+                                {{ statement }}
+                            </span>
+                        </div>
+                    </component>
                 </li>
             </ul>
         </div>
@@ -255,8 +313,81 @@ function allowBrowserActionsForTask() {
     align-items: center;
 
     &-commentary {
+        display: block;
         color: $color-ink-secondary;
     }
+}
+
+.activity-copy {
+    min-width: 0;
+    line-height: 1.25;
+    white-space: pre-line;
+}
+
+.reasoning-details {
+    min-width: 0;
+}
+
+.reasoning-summary {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+    max-width: calc(100% - 1rem - $space-2);
+    margin-left: calc(1rem + $space-2);
+    color: inherit;
+    cursor: default;
+    list-style: none;
+
+    &::-webkit-details-marker {
+        display: none;
+    }
+
+    &::marker {
+        content: '';
+    }
+
+    &-collapsible {
+        cursor: pointer;
+        transition: color 140ms ease;
+
+        &:hover,
+        &:focus-visible {
+            color: $color-ink;
+        }
+
+        &:active {
+            color: $color-signal-light;
+        }
+    }
+}
+
+.reasoning-details[open] > .reasoning-summary {
+    color: $color-ink;
+}
+
+.reasoning-chevron {
+    opacity: 0;
+    transform: rotate(-90deg);
+    transition:
+        opacity 140ms ease,
+        transform 160ms ease;
+
+    .reasoning-summary-collapsible:is(:hover, :focus-visible) & {
+        opacity: 1;
+    }
+
+    .reasoning-details[open] & {
+        opacity: 1;
+        transform: rotate(0);
+    }
+}
+
+.reasoning-traces {
+    display: grid;
+    gap: $space-1;
+    margin: $space-1 0 $space-1 0.5rem;
+    padding: $space-1 0 $space-1 calc($space-2 + 0.5rem);
+    border-left: 1px solid $color-signal-alpha-24;
 }
 
 .activity-icon {
@@ -267,13 +398,7 @@ function allowBrowserActionsForTask() {
     stroke: currentcolor;
     stroke-linecap: round;
     stroke-linejoin: round;
-    stroke-width: 1.6;
-}
-
-.activity-copy {
-    min-width: 0;
-    line-height: 1.25;
-    white-space: pre-line;
+    stroke-width: 1.2;
 }
 
 .activity-progress {

@@ -40,6 +40,22 @@ export const createJobPostController = (repository: JobPostRepository) => ({
         response.status(result.created ? CREATED : OK).json(result.item)
     },
 
+    removeUserAdded: async (request: Request, response: Response): Promise<void> => {
+        const params = jobPostIdParamsSchema.safeParse(request.params)
+
+        if (!params.success) {
+            response.status(BAD_REQUEST).json(invalidRequest)
+            return
+        }
+
+        if (!(await repository.removeUserAdded(params.data.id))) {
+            response.status(NOT_FOUND).json(jobPostNotFound)
+            return
+        }
+
+        response.status(204).end()
+    },
+
     getById: async (request: Request, response: Response): Promise<void> => {
         const params = jobPostIdParamsSchema.safeParse(request.params)
 

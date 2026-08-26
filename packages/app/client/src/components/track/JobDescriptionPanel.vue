@@ -26,7 +26,7 @@ const emit = defineEmits<{
         :back-mobile-only="true"
         @back="emit('back')"
     >
-        <article class="description-copy" data-testid="job-description-text">
+        <article :key="post.id" class="description-copy" data-testid="job-description-text">
             {{ snapshot.description }}
         </article>
     </BasePanel>

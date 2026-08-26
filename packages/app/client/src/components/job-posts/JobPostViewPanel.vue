@@ -12,6 +12,7 @@ export type JobPostViewPanelMode =
           artifactRemoving: ApplicationArtifactKind | null
           artifactUploading: ApplicationArtifactKind | null
           outreachDisabled: boolean
+          outreachLoading: boolean
       }
 </script>
 
@@ -27,6 +28,8 @@ import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import TrashIcon from '@/components/svgs/TrashIcon.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
@@ -41,6 +44,8 @@ const props = defineProps<{
     recommendation?: StandaloneJobRecommendation
     labelUpdating: boolean
     labelError: string | null
+    removable?: boolean
+    removing?: boolean
     mode: JobPostViewPanelMode
 }>()
 
@@ -49,6 +54,7 @@ const emit = defineEmits<{
     openOutreach: []
     markApplied: []
     removeArtifact: [kind: ApplicationArtifactKind]
+    remove: []
     uploadArtifact: [kind: ApplicationArtifactKind, file: File]
     back: []
 }>()
@@ -206,6 +212,21 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
         :back-mobile-only="backMobileOnly"
         @back="emit('back')"
     >
+        <template v-if="removable" #controls>
+            <BaseButton
+                class="remove-post-control"
+                preset="icon"
+                tooltip="Delete job post"
+                data-testid="delete-user-added-job-post"
+                aria-label="Delete job post"
+                :aria-busy="removing || undefined"
+                :disabled="removing || labelUpdating"
+                @click="emit('remove')"
+            >
+                <TrashIcon class="panel-control-icon" />
+            </BaseButton>
+        </template>
+
         <section
             class="post-viewer"
             data-testid="job-post-viewer"
@@ -267,7 +288,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
             <p v-if="postError" class="label-error" data-testid="job-post-error" role="alert">
                 {{ postError }}
             </p>
-            <div v-if="hasContent" class="post-content">
+            <div v-if="hasContent" :key="post.id" class="post-content">
                 <section v-if="hasFacts" class="content-section" data-testid="post-facts">
                     <h3 class="content-section-title">At a glance</h3>
 
@@ -437,10 +458,15 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 
                 <BaseButton
                     data-testid="discover-contacts"
+                    :aria-busy="applyMode.outreachLoading || undefined"
                     :disabled="applyMode.outreachDisabled"
                     @click="emit('openOutreach')"
                 >
                     Outreach
+                    <LoadingSpinner
+                        v-if="applyMode.outreachLoading"
+                        data-testid="outreach-loading-spinner"
+                    />
                 </BaseButton>
             </div>
         </section>
@@ -462,6 +488,20 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     font-size: 0.6875rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.remove-post-control {
+    margin-left: auto;
+}
+
+.panel-control-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 
 .post-heading {
@@ -654,22 +694,9 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
 }
 
 .artifact-upload-button {
-    display: inline-flex;
-    width: fit-content;
-    min-height: 2.5rem;
-    gap: $space-1;
-    align-items: center;
-    justify-content: center;
-    padding: calc(#{$space-2} - 1px) $space-3;
-    color: $color-ink;
-    font-family: $font-family-mono;
-    font-size: 0.8125rem;
-    font-weight: 650;
-    line-height: 1.25;
+    @include artifact-button;
+
     cursor: pointer;
-    background: transparent;
-    border: 1px solid $color-ink-alpha-50;
-    border-radius: $radius-md;
 
     &:disabled {
         cursor: wait;

@@ -217,6 +217,7 @@ export class CodexRuntime implements AgentRuntime {
                 sandbox: 'read-only',
                 threadSource: 'job-search-facilitator',
                 selectedCapabilityRoots,
+                ...(input.webSearch === false ? { config: { web_search: 'disabled' } } : {}),
             },
             threadStartResponseSchema,
         )

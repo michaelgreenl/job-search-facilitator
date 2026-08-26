@@ -200,6 +200,39 @@ describe('user-added posts in the post store', () => {
         ])
     })
 
+    it('keeps a completed deletion when an older list request finishes afterward', async () => {
+        let resolveList: ((response: Response) => void) | undefined
+        const staleList = new Promise<Response>((resolve) => {
+            resolveList = resolve
+        })
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const method = init?.method ?? 'GET'
+            const url =
+                typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+            if (method === 'GET' && url.endsWith('/job-posts/user-added')) {
+                return staleList
+            }
+
+            if (method === 'DELETE' && url.endsWith(`/job-posts/user-added/${post.id}`)) {
+                return Promise.resolve(new Response(null, { status: 204 }))
+            }
+
+            throw new Error(`Unexpected ${method} request: ${url}`)
+        })
+        const store = usePostStore()
+        store.userAddedPosts = [userAddedPost]
+        store.upsertPost(post)
+
+        const listRequest = store.fetchUserAddedPosts()
+        await store.removeUserAddedPost(post.id)
+        resolveList?.(jsonResponse([userAddedPost]))
+        await listRequest
+
+        expect(store.userAddedPosts).toEqual([])
+        expect(store.findPost(post.id)).toBeNull()
+    })
+
     it('preserves user-added memberships when a save response is invalid', async () => {
         const { addedAt: _addedAt, ...invalidResponse } = userAddedPost
         vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(invalidResponse, 201))

@@ -84,6 +84,7 @@ const postFilter = shallowRef<PostFilter>(
 const selectedSource = shallowRef<ReviewSource | null>(null)
 const selectedItem = shallowRef<ReviewItem | null>(null)
 const labelUpdating = shallowRef(false)
+const postRemoving = shallowRef(false)
 const labelError = shallowRef<string | null>(null)
 const reportsSettled = shallowRef(false)
 const userAddedPostsSettled = shallowRef(false)
@@ -317,9 +318,7 @@ function selectReport(reportId: string) {
     selectedItem.value = null
     labelError.value = null
 
-    if (!bp.isLaptop.value) {
-        activePanel.value = 'posts'
-    }
+    activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
 
     pushSelectionState(source)
 }
@@ -440,6 +439,34 @@ async function updateUserLabel(userLabel: UserLabel | null) {
         }
     } finally {
         labelUpdating.value = false
+    }
+}
+
+async function removeUserAddedPost() {
+    const postId = selectedItem.value?.post.id
+
+    if (postId === undefined || selectedSource.value?.kind !== 'user-added' || postRemoving.value) {
+        return
+    }
+
+    postRemoving.value = true
+    labelError.value = null
+
+    try {
+        await postStore.removeUserAddedPost(postId)
+        reportStore.removePost(postId)
+
+        if (selectedItem.value?.post.id === postId) {
+            selectedItem.value = null
+            activePanel.value = 'posts'
+            pushSelectionState(selectedSource.value)
+        }
+    } catch (error) {
+        if (selectedItem.value?.post.id === postId) {
+            labelError.value = error instanceof Error ? error.message : 'Could not delete job post'
+        }
+    } finally {
+        postRemoving.value = false
     }
 }
 
@@ -581,6 +608,7 @@ onMounted(() => {
                 :back-label="activePanel === 'sources' ? undefined : 'Back to review sources'"
                 back-test-id="back-to-reports"
                 :posts="filteredPosts"
+                :scroll-key="selectedReport?.id ?? selectedSource?.kind"
                 :selected-post-id="selectedItem?.post.id ?? null"
                 :empty-message="postListEmptyMessage"
                 :loading="postListLoading"
@@ -620,10 +648,13 @@ onMounted(() => {
                 :post="selectedItem.post"
                 :description="selectedItem.description"
                 :recommendation="selectedItem.recommendation"
-                :label-updating="labelUpdating"
+                :label-updating="labelUpdating || postRemoving"
                 :label-error="labelError"
+                :removable="selectedSource?.kind === 'user-added'"
+                :removing="postRemoving"
                 :mode="reviewViewerMode"
                 @back="showPosts"
+                @remove="removeUserAddedPost"
                 @update-label="updateUserLabel"
             />
         </div>

@@ -19,6 +19,7 @@ const startAgentTaskInputSchema = z.strictObject({
         $async: z.literal(false).optional(),
     }),
     capabilities: z.array(z.enum(AGENT_CAPABILITIES)).default([]),
+    webSearch: z.boolean().optional(),
 })
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })

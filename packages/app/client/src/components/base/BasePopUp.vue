@@ -55,6 +55,25 @@ function handleNativeClose() {
         emit('close')
     }
 }
+
+function handleClick(event: MouseEvent) {
+    const element = dialog.value
+
+    if (element === null || event.target !== element) {
+        return
+    }
+
+    const { bottom, left, right, top } = element.getBoundingClientRect()
+
+    if (
+        event.clientX < left ||
+        event.clientX > right ||
+        event.clientY < top ||
+        event.clientY > bottom
+    ) {
+        emit('close')
+    }
+}
 </script>
 
 <template>
@@ -65,6 +84,7 @@ function handleNativeClose() {
         :aria-labelledby="titleId"
         @cancel.prevent="emit('close')"
         @close="handleNativeClose"
+        @click="handleClick"
     >
         <header class="pop-up-header">
             <h2 :id="titleId" class="pop-up-title">{{ heading }}</h2>

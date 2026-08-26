@@ -237,6 +237,15 @@ export const useOutreachStore = defineStore('outreach', () => {
         return outreachSessions.value.some((session) => session.postId === post)
     }
 
+    function isTaskActiveForPost(post: string) {
+        return outreachSessions.value.some(
+            (session) =>
+                session.postId === post &&
+                (agentStore.isTaskActive(session.taskId) ||
+                    resultStates.value[session.taskId]?.saving === true),
+        )
+    }
+
     function isPostBusy(post: string) {
         return postId.value === post && (contactsLoading.value || contactUpdating.value)
     }
@@ -952,6 +961,7 @@ export const useOutreachStore = defineStore('outreach', () => {
         drafting,
         taskVisible,
         hasTaskForPost,
+        isTaskActiveForPost,
         isPostBusy,
         openForPost,
         openTask,

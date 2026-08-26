@@ -30,6 +30,7 @@ export interface StartAgentTaskInput {
     prompt: string
     outputSchema: AgentOutputSchema
     capabilities: AgentCapability[]
+    webSearch?: boolean
 }
 
 export interface AgentHealthResponse {

@@ -288,7 +288,7 @@ async function copyDraft() {
         copyResetTimer = setTimeout(() => {
             copyState.value = 'idle'
             copyResetTimer = null
-        }, 2400)
+        }, 1000)
     } catch {
         copyState.value = 'failed'
     }
@@ -361,6 +361,7 @@ async function copyDraft() {
         <section class="outreach-panel" aria-label="Outreach">
             <template v-if="panelView === 'contacts' && !contactsExternal">
                 <OutreachContactList
+                    :key="post?.id"
                     :contacts="contacts"
                     :error="contactsError"
                     :loading="contactsLoading"
@@ -380,6 +381,7 @@ async function copyDraft() {
 
             <template v-else-if="panelView === 'draft' && contact">
                 <OutreachDraft
+                    :key="contact.id"
                     v-model:draft="draft"
                     v-model:request="draftRequest"
                     :contact="contact"

@@ -192,6 +192,66 @@ describe('job post repository', () => {
         expect(resultCount).toBe(0)
     })
 
+    it('deletes a user-added job and its related data', async () => {
+        await searchReportRepository.upsertById(
+            '11111111-1111-4111-8111-111111111111',
+            '2026-07-12',
+            createReportInput(),
+        )
+        const created = await jobPostRepository.upsertUserAdded(createUserAddedInput())
+        const postId = created.item.post.id
+        await Promise.all([
+            prisma.applicationArtifact.create({
+                data: {
+                    jobPostId: postId,
+                    kind: 'RESUME',
+                    fileName: 'resume.pdf',
+                    mediaType: 'application/pdf',
+                    sizeBytes: 4,
+                    content: Buffer.from('%PDF'),
+                },
+            }),
+            outreachContactRepository.create(postId, {
+                personName: 'Ada Lovelace',
+                personTitle: 'Engineering Manager',
+                profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                relevanceRationale: 'Her role aligns with the position.',
+                draftMessage: 'Hi Ada, could I ask about the team?',
+            }),
+            outreachRunRepository.create({ jobPostId: postId, requestedContactCount: 2 }),
+            jobPostRepository.update(postId, { applicationStatus: 'awaiting-response' }),
+        ])
+
+        const removed = await jobPostRepository.removeUserAdded(postId)
+        const [postCount, membershipCount, resultCount, artifactCount, contactCount, runCount] =
+            await Promise.all([
+                prisma.jobPost.count({ where: { id: postId } }),
+                prisma.userAddedJobPost.count({ where: { postId } }),
+                prisma.jobSearchResult.count({ where: { postId } }),
+                prisma.applicationArtifact.count({ where: { jobPostId: postId } }),
+                prisma.outreachContact.count({ where: { jobPostId: postId } }),
+                prisma.outreachRun.count({ where: { jobPostId: postId } }),
+            ])
+
+        expect({
+            removed,
+            postCount,
+            membershipCount,
+            resultCount,
+            artifactCount,
+            contactCount,
+            runCount,
+        }).toEqual({
+            removed: true,
+            postCount: 0,
+            membershipCount: 0,
+            resultCount: 0,
+            artifactCount: 0,
+            contactCount: 0,
+            runCount: 0,
+        })
+    })
+
     it('waits on a derived alias before writing a user-added post', async () => {
         const sourceKey = 'greenhouse:user-added-lock'
         const input = createUserAddedInput({

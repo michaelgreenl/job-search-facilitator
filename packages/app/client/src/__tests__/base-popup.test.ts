@@ -131,4 +131,20 @@ describe('BasePopUp', () => {
         expect(errorMessage).not.toBeNull()
         expect(input?.getAttribute('aria-describedby')).toBe(errorMessage?.id)
     })
+
+    it('closes when a click lands outside its bounds', async () => {
+        const { dialog, onClose } = mountPopUp()
+        vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(
+            DOMRect.fromRect({ x: 100, y: 100, width: 200, height: 200 }),
+        )
+
+        dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 150, clientY: 150 }))
+        expect(onClose).not.toHaveBeenCalled()
+
+        dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }))
+        await nextTick()
+
+        expect(onClose).toHaveBeenCalledOnce()
+        expect(dialog.open).toBe(false)
+    })
 })

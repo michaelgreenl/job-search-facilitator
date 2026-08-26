@@ -27,6 +27,39 @@ afterEach(async () => {
 })
 
 describe('browser interaction contracts', () => {
+    it('shows copy confirmation after click until it clears', async () => {
+        const copied = shallowRef(false)
+        const CopyButtonFixture = defineComponent({
+            setup: () => () =>
+                h(
+                    BaseButton,
+                    {
+                        tooltip: copied.value ? 'Copied!' : 'Copy',
+                        tooltipOpen: copied.value,
+                        'aria-label': 'Copy',
+                        'data-testid': 'copy-button',
+                        onClick: () => {
+                            copied.value = true
+                        },
+                    },
+                    { default: () => 'Copy' },
+                ),
+        })
+        mountVue(CopyButtonFixture)
+        const button = page.getByTestId('copy-button')
+        const tooltip = page.getByTestId('button-tooltip-content')
+
+        await button.hover()
+        await expect.element(tooltip).toBeVisible()
+
+        await button.click()
+        await vi.waitFor(() => expect(tooltip.element().textContent).toBe('Copied!'))
+        await expect.element(tooltip).toBeVisible()
+
+        copied.value = false
+        await expect.element(tooltip).not.toBeVisible()
+    })
+
     it('keeps dropdown keyboard focus inside its menu and restores it after selection', async () => {
         const onSelect = vi.fn()
         const options: BaseDropdownOption[] = [
@@ -149,7 +182,7 @@ describe('browser interaction contracts', () => {
         expect(hidFocusedElement).toBe(false)
     })
 
-    it('keeps the add-post tooltip hidden when its dialog restores trigger focus', async () => {
+    it('dismisses the add-post pointer state until the button is hovered again', async () => {
         const AddJobPostFixture = defineComponent({
             setup() {
                 const open = shallowRef(false)
@@ -189,10 +222,21 @@ describe('browser interaction contracts', () => {
                             },
                             {
                                 default: () =>
-                                    h('input', {
-                                        autofocus: true,
-                                        'aria-label': 'Job post URL',
-                                    }),
+                                    h(
+                                        'form',
+                                        {
+                                            onSubmit: (event: SubmitEvent) => {
+                                                event.preventDefault()
+                                                open.value = false
+                                            },
+                                        },
+                                        [
+                                            h('input', {
+                                                autofocus: true,
+                                                'aria-label': 'Job post URL',
+                                            }),
+                                        ],
+                                    ),
                             },
                         ),
                     ])
@@ -202,17 +246,46 @@ describe('browser interaction contracts', () => {
         const trigger = page.getByTestId('add-job-post')
         const tooltip = page.getByTestId('button-tooltip-content')
         const dialog = page.getByTestId('job-post-url-dialog')
+        const restingBackground = getComputedStyle(trigger.element()).backgroundColor
 
         await trigger.hover()
         await expect.element(tooltip).toBeVisible()
+        const hoverBackground = getComputedStyle(trigger.element()).backgroundColor
+        expect(hoverBackground).not.toBe(restingBackground)
+
         await trigger.click()
         await expect.element(dialog).toBeVisible()
         await expect.element(tooltip).not.toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
 
-        await page.getByTestId('close-job-post-url-dialog').click()
+        await page.getByLabelText('Job post URL').fill('https://example.com/job')
+        await userEvent.keyboard('{Enter}')
         await expect.element(dialog).not.toBeVisible()
-        await expect.element(trigger).toHaveFocus()
+        await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+
+        await trigger.unhover()
+        await trigger.hover()
+        await expect.element(tooltip).toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(hoverBackground)
+
+        await trigger.click()
+        await expect.element(dialog).toBeVisible()
+        await userEvent.keyboard('{Escape}')
+        await expect.element(dialog).not.toBeVisible()
+        await expect.element(trigger).not.toHaveFocus()
+        await expect.element(tooltip).not.toBeVisible()
+        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+
+        await trigger.unhover()
+        await trigger.hover()
+        await expect.element(tooltip).toBeVisible()
+
+        await trigger.click()
+        await expect.element(dialog).toBeVisible()
+        await userEvent.click(dialog, { position: { x: -8, y: -8 } })
+        await expect.element(dialog).not.toBeVisible()
     })
 })
 
@@ -271,7 +344,6 @@ describe('browser layout contracts', () => {
         expect(tooltipRect.left).toBeGreaterThanOrEqual(11)
         expect(tooltipRect.right).toBeLessThanOrEqual(309)
 
-        button.element().focus()
         await userEvent.keyboard('{Escape}')
         await expect.element(tooltip).not.toBeVisible()
     })

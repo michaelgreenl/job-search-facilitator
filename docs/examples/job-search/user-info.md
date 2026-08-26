@@ -79,7 +79,7 @@ Group skills by the strongest evidence available. Do not strengthen one evidence
 
 ## Resume variants
 
-The app accepts `frontend`, `backend-full-stack`, or `general`.
+Job import accepts `frontend`, `backend-full-stack`, or `general`. Scheduled reports accept the first two values.
 
 - `frontend`: [REQUIRED: when Codex should select this resume]
 - `backend-full-stack`: [REQUIRED: when Codex should select this resume]

@@ -1,7 +1,14 @@
 <script lang="ts">
 export type BaseButtonElement = 'a' | 'button'
 export type BaseButtonIconSize = 'sm' | 'md' | 'lg'
-export type BaseButtonPreset = 'back' | 'icon' | 'outline' | 'primary' | 'signal' | 'text'
+export type BaseButtonPreset =
+    | 'artifact'
+    | 'back'
+    | 'icon'
+    | 'outline'
+    | 'primary'
+    | 'signal'
+    | 'text'
 </script>
 
 <script setup lang="ts">
@@ -24,6 +31,7 @@ interface Props {
     iconSize?: BaseButtonIconSize
     preset?: BaseButtonPreset
     tooltip?: string
+    tooltipOpen?: boolean
     type?: 'button' | 'reset' | 'submit'
 }
 
@@ -39,9 +47,14 @@ const tooltipId = `button-tooltip-${useId()}`
 const button = useTemplateRef<HTMLElement>('button')
 const tooltipSurface = useTemplateRef<HTMLElement>('tooltipSurface')
 const visible = shallowRef(false)
+const tooltipOpenDismissed = shallowRef(false)
 const keyboardInteraction = shallowRef(true)
+const pointerDismissed = shallowRef(false)
 const placement = shallowRef<TooltipPlacement>('bottom')
 const position = shallowRef<CSSProperties>({ left: '0px', top: '0px' })
+const tooltipVisible = computed(
+    () => visible.value || (props.tooltipOpen && !tooltipOpenDismissed.value),
+)
 const rootAttrs = computed(() => ({
     class: attrs.class,
     style: attrs.style,
@@ -55,6 +68,7 @@ const buttonClass = computed(() => [
     'base-button',
     `preset-${props.preset}`,
     props.iconSize ? `icon-size-${props.iconSize}` : undefined,
+    { 'is-pointer-dismissed': pointerDismissed.value },
 ])
 let mounted = false
 let tooltipListenersAttached = false
@@ -116,9 +130,18 @@ function hideTooltip() {
     visible.value = false
 }
 
+function dismissTooltip() {
+    hideTooltip()
+    tooltipOpenDismissed.value = true
+}
+
 function handleKeyboardInput(event: KeyboardEvent) {
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
         keyboardInteraction.value = true
+    }
+
+    if (event.key === 'Escape') {
+        dismissTooltip()
     }
 }
 
@@ -126,7 +149,31 @@ function handlePointerInput() {
     keyboardInteraction.value = false
 }
 
+function handlePointerMove(event: PointerEvent) {
+    const trigger = button.value
+
+    if (!pointerDismissed.value || trigger === null) {
+        return
+    }
+
+    const { bottom, left, right, top } = trigger.getBoundingClientRect()
+
+    if (
+        event.clientX < left ||
+        event.clientX > right ||
+        event.clientY < top ||
+        event.clientY > bottom
+    ) {
+        pointerDismissed.value = false
+    }
+}
+
 function handleFocusIn() {
+    if (pointerDismissed.value) {
+        button.value?.blur()
+        return
+    }
+
     if (keyboardInteraction.value) {
         showTooltip()
     }
@@ -137,7 +184,7 @@ function isInsideTrigger(target: EventTarget | null) {
 }
 
 function handleMouseOver(event: MouseEvent) {
-    if (isInsideTrigger(event.target)) {
+    if (!pointerDismissed.value && isInsideTrigger(event.target)) {
         showTooltip()
     }
 }
@@ -149,8 +196,17 @@ function handleMouseOut(event: MouseEvent) {
 }
 
 function handleViewportChange() {
-    if (visible.value) {
+    if (tooltipVisible.value) {
         updateTooltipPosition()
+    }
+}
+
+function handleClick() {
+    hideTooltip()
+
+    if (!keyboardInteraction.value) {
+        pointerDismissed.value = true
+        button.value?.blur()
     }
 }
 
@@ -161,6 +217,7 @@ function attachTooltipListeners() {
 
     window.addEventListener('keydown', handleKeyboardInput, true)
     window.addEventListener('pointerdown', handlePointerInput, true)
+    window.addEventListener('pointermove', handlePointerMove, true)
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, true)
     tooltipListenersAttached = true
@@ -173,6 +230,7 @@ function detachTooltipListeners() {
 
     window.removeEventListener('keydown', handleKeyboardInput, true)
     window.removeEventListener('pointerdown', handlePointerInput, true)
+    window.removeEventListener('pointermove', handlePointerMove, true)
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange, true)
     tooltipListenersAttached = false
@@ -194,11 +252,27 @@ watch(
     },
 )
 
+watch(
+    () => props.tooltipOpen,
+    (open) => {
+        tooltipOpenDismissed.value = false
+
+        if (mounted && open) {
+            updateTooltipPosition()
+        }
+    },
+    { flush: 'post' },
+)
+
 onMounted(() => {
     mounted = true
 
     if (props.tooltip) {
         attachTooltipListeners()
+    }
+
+    if (props.tooltipOpen) {
+        updateTooltipPosition()
     }
 })
 
@@ -216,8 +290,8 @@ defineExpose({ focus })
         @mouseout="handleMouseOut"
         @focusin="handleFocusIn"
         @focusout="hideTooltip"
-        @keydown.esc.stop="hideTooltip"
-        @click="hideTooltip"
+        @keydown.esc.stop="dismissTooltip"
+        @click="handleClick"
     >
         <component
             :is="props.as"
@@ -235,7 +309,7 @@ defineExpose({ focus })
                 ref="tooltipSurface"
                 class="content tooltip-surface"
                 data-testid="button-tooltip-content"
-                :class="[`is-${placement}`, { 'is-visible': visible }]"
+                :class="[`is-${placement}`, { 'is-visible': tooltipVisible }]"
                 :style="position"
                 role="tooltip"
             >
@@ -261,6 +335,10 @@ defineExpose({ focus })
     font: inherit;
     cursor: pointer;
 
+    &.is-pointer-dismissed {
+        pointer-events: none;
+    }
+
     &:disabled {
         cursor: not-allowed;
         opacity: 0.55;
@@ -283,6 +361,17 @@ defineExpose({ focus })
     &:hover,
     &:focus-visible {
         background: $color-signal;
+    }
+}
+
+.preset-artifact {
+    @include artifact-button;
+
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+        border-color: $color-signal-light-alpha-50;
     }
 }
 
