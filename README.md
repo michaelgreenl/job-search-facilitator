@@ -2,13 +2,18 @@
 
 > A local full-stack app that turns AI-sourced job leads into a focused review, application, outreach, and tracking pipeline.
 
+[![Codex](https://custom-icon-badges.demolab.com/badge/Codex-000000?style=for-the-badge&logo=openai&logoColor=white)](https://developers.openai.com/codex/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=fff)](https://www.typescriptlang.org/docs/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D)](https://vuejs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/docs/)
 [![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)](https://www.prisma.io/)
-[![Codex](https://custom-icon-badges.demolab.com/badge/Codex-000000?style=for-the-badge&logo=openai&logoColor=white)](https://developers.openai.com/codex/)
+
+## Links
+
+- **💼 [Portfolio Link](https://michaelgreenl.net/#projects?slug=jsf&autoplay=false)**
+- **🎥 [Demo Video](https://michaelgreenl.net/#projects?slug=jsf&autoplay=true)**
 
 ## Overview
 
