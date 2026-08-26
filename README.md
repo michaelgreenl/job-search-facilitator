@@ -9,6 +9,9 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/docs/)
 [![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)](https://www.prisma.io/)
 [![Codex](https://custom-icon-badges.demolab.com/badge/Codex-000000?style=for-the-badge&logo=openai&logoColor=white)](https://developers.openai.com/codex/)
+## Links
+- **💼 [Portfolio Link](https://michaelgreenl.net/#projects?slug=jsf&autoplay=false)** 
+- **🎥 [Demo Video](https://michaelgreenl.net/#projects?slug=jsf&autoplay=true)** 
 
 ## Overview
 
