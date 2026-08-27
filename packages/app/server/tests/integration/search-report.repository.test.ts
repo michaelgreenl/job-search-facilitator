@@ -150,10 +150,19 @@ type UserAddedInputOverrides = Partial<Omit<CreateUserAddedJobPostInput, 'post'>
 const createUserAddedInput = (
     overrides: UserAddedInputOverrides = {},
 ): CreateUserAddedJobPostInput => {
-    const result = createResultInput(overrides)
-    const { agentRank: _agentRank, ...input } = result
+    const { post, ...recommendationOverrides } = overrides
 
-    return input
+    return {
+        agentLabel: 'target',
+        fitRationale: 'Strong TypeScript experience',
+        applicationFlow: 'Direct company application',
+        keyLegitimacySignals: 'Listed on the company careers page',
+        recommendedResume: 'frontend',
+        recommendedAction: 'Apply today',
+        legitimacyNotes: null,
+        ...recommendationOverrides,
+        post: createPostInput(post),
+    }
 }
 
 beforeEach(async () => {

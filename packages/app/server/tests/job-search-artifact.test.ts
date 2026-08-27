@@ -68,7 +68,7 @@ const selectedRecommendation = {
     sourceKey: post.sourceKey,
     agentLabel: 'target',
     fitRationale: 'Direct evidence covers the central UI and API responsibilities.',
-    recommendedResume: 'backend-full-stack',
+    recommendedResume: 'full-stack',
     recommendedAction: 'Apply and emphasize the directly comparable application work.',
 } as const
 
@@ -1008,6 +1008,16 @@ describe('judgment and report assembly', () => {
             {
                 reviewDigest: review.reviewDigest,
                 selections: [{ ...selectedRecommendation, recommendedResume: 'general' }],
+            },
+            ['selections', 0, 'recommendedResume'],
+        ],
+        [
+            'a combined legacy resume',
+            {
+                reviewDigest: review.reviewDigest,
+                selections: [
+                    { ...selectedRecommendation, recommendedResume: 'backend-full-stack' },
+                ],
             },
             ['selections', 0, 'recommendedResume'],
         ],

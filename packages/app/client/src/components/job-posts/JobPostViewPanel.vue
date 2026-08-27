@@ -61,7 +61,9 @@ const emit = defineEmits<{
 
 const RESUME_LABELS: Record<ResumeType, string> = {
     frontend: 'Frontend',
-    'backend-full-stack': 'Backend / full-stack',
+    backend: 'Backend',
+    'full-stack': 'Full-stack',
+    'backend-full-stack': 'Backend / full-stack (legacy)',
     general: 'General',
 }
 const ARTIFACT_OPTIONS = [

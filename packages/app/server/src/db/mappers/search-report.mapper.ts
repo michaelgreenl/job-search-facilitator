@@ -41,12 +41,16 @@ const agentLabelToPrisma = {
 
 const resumeTypeToApi = {
     FRONTEND: 'frontend',
+    BACKEND: 'backend',
+    FULL_STACK: 'full-stack',
     BACKEND_FULL_STACK: 'backend-full-stack',
     GENERAL: 'general',
 } satisfies Record<PrismaStandaloneRecommendation['recommendedResume'], ResumeType>
 
 const resumeTypeToPrisma = {
     frontend: 'FRONTEND',
+    backend: 'BACKEND',
+    'full-stack': 'FULL_STACK',
     'backend-full-stack': 'BACKEND_FULL_STACK',
     general: 'GENERAL',
 } satisfies Record<ResumeType, PrismaStandaloneRecommendation['recommendedResume']>

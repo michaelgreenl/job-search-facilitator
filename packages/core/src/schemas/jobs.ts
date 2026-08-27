@@ -3,6 +3,7 @@ import { applicationArtifactSchema } from './applications.ts'
 import {
     AGENT_LABELS,
     APPLICATION_STATUSES,
+    CURRENT_RESUME_TYPES,
     POST_STATUSES,
     RESUME_TYPES,
     USER_LABELS,
@@ -53,7 +54,7 @@ export const standaloneJobRecommendationInputSchema = z.strictObject({
     fitRationale: nonBlankInputStringSchema,
     applicationFlow: nonBlankInputStringSchema,
     keyLegitimacySignals: nonBlankInputStringSchema,
-    recommendedResume: z.enum(RESUME_TYPES),
+    recommendedResume: z.enum(CURRENT_RESUME_TYPES),
     recommendedAction: nonBlankInputStringSchema,
     legitimacyNotes: nonBlankInputStringSchema.nullable(),
 }) satisfies z.ZodType<StandaloneJobRecommendation>

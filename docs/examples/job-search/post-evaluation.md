@@ -59,6 +59,6 @@ Do not use `quick-app` to hide unsupported central work or several material gaps
 - Put visible application steps and unknowns in `applicationFlow`.
 - Put current source evidence in `keyLegitimacySignals`.
 - Put material legitimacy concerns in `legitimacyNotes`.
-- Select `frontend` or `backend-full-stack` for a scheduled report. A user-added import can also use `general`.
+- Select `frontend`, `backend`, or `full-stack` for a scheduled report. A user-added import can also use `general`.
 - Make `recommendedAction` truthful, specific, and concise.
 - Never invent experience, relationships, facts, or application results.

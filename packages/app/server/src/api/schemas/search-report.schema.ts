@@ -1,5 +1,6 @@
 import {
     jobPostInputSchema,
+    REPORT_RESUME_TYPES,
     standaloneJobRecommendationInputSchema,
 } from '@job-search-facilitator/core'
 import { z } from 'zod'
@@ -24,6 +25,7 @@ export { jobPostInputSchema }
 export const jobSearchResultInputSchema = z.strictObject({
     agentRank: z.number().int().positive(),
     ...standaloneJobRecommendationInputSchema.shape,
+    recommendedResume: z.enum(REPORT_RESUME_TYPES),
     post: jobPostInputSchema,
 })
 

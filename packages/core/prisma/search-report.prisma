@@ -5,6 +5,8 @@ enum AgentLabel {
 
 enum ResumeType {
   FRONTEND           @map("frontend")
+  BACKEND            @map("backend")
+  FULL_STACK         @map("full-stack")
   BACKEND_FULL_STACK @map("backend-full-stack")
   GENERAL            @map("general")
 }

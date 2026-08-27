@@ -51,7 +51,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     fitRationale: userAddedPost.fitRationale,
     applicationFlow: userAddedPost.applicationFlow,
     keyLegitimacySignals: userAddedPost.keyLegitimacySignals,
-    recommendedResume: userAddedPost.recommendedResume,
+    recommendedResume: 'frontend',
     recommendedAction: userAddedPost.recommendedAction,
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {

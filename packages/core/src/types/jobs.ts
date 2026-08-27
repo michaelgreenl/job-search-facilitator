@@ -16,7 +16,11 @@ export const USER_LABELS = ['P1', 'P2', 'quick-app', 'forgo'] as const
 
 export const AGENT_LABELS = ['target', 'quick-app'] as const
 
-export const RESUME_TYPES = ['frontend', 'backend-full-stack', 'general'] as const
+export const CURRENT_RESUME_TYPES = ['frontend', 'backend', 'full-stack', 'general'] as const
+
+export const REPORT_RESUME_TYPES = ['frontend', 'backend', 'full-stack'] as const
+
+export const RESUME_TYPES = [...CURRENT_RESUME_TYPES, 'backend-full-stack'] as const
 
 export type IsoDateTime = string
 
@@ -29,6 +33,10 @@ export type UserLabel = (typeof USER_LABELS)[number]
 export type AgentLabel = (typeof AGENT_LABELS)[number]
 
 export type ResumeType = (typeof RESUME_TYPES)[number]
+
+export type CurrentResumeType = (typeof CURRENT_RESUME_TYPES)[number]
+
+export type ReportResumeType = (typeof REPORT_RESUME_TYPES)[number]
 
 export interface JobPost {
     id: string
@@ -113,7 +121,8 @@ export interface JobSearchResult extends JobRecommendation {
     jobPostSnapshot: JobPostSnapshot | null
 }
 
-export interface JobSearchResultInput extends JobRecommendation {
+export interface JobSearchResultInput extends Omit<JobRecommendation, 'recommendedResume'> {
+    recommendedResume: ReportResumeType
     post: JobPostInput
 }
 
@@ -124,7 +133,8 @@ export interface UpsertJobSearchReportInput {
 
 export type StandaloneJobRecommendation = Omit<JobRecommendation, 'agentRank'>
 
-export type CreateUserAddedJobPostInput = StandaloneJobRecommendation & {
+export type CreateUserAddedJobPostInput = Omit<StandaloneJobRecommendation, 'recommendedResume'> & {
+    recommendedResume: CurrentResumeType
     post: JobPostInput
 }
 

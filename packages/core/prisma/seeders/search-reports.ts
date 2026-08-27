@@ -37,15 +37,15 @@ const evaluationFocuses = [
 
 const resumeTypes = [
     ResumeType.FRONTEND,
-    ResumeType.BACKEND_FULL_STACK,
-    ResumeType.BACKEND_FULL_STACK,
+    ResumeType.FULL_STACK,
+    ResumeType.BACKEND,
     ResumeType.FRONTEND,
     ResumeType.GENERAL,
     ResumeType.GENERAL,
-    ResumeType.BACKEND_FULL_STACK,
+    ResumeType.BACKEND,
     ResumeType.FRONTEND,
     ResumeType.FRONTEND,
-    ResumeType.BACKEND_FULL_STACK,
+    ResumeType.FULL_STACK,
     ResumeType.FRONTEND,
     ResumeType.GENERAL,
 ] as const

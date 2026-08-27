@@ -89,7 +89,7 @@ Use this shape for selected roles:
 }
 ```
 
-`verdict` can be `target` or `quick-app`. `recommendedResume` can be `frontend` or `backend-full-stack`.
+`verdict` can be `target` or `quick-app`. `recommendedResume` can be `frontend`, `backend`, or `full-stack`.
 
 Use this shape for rejected roles:
 
