@@ -8,7 +8,7 @@ import {
 } from '@job-search-facilitator/core'
 import { parseJsonResponse, readResponseError } from '@/api'
 
-const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://localhost:3001').replace(
+const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://127.0.0.1:3001').replace(
     /\/$/,
     '',
 )

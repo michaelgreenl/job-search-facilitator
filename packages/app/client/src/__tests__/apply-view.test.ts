@@ -704,7 +704,7 @@ describe('apply view', () => {
         })
         expect(FakeEventSource.instances).toHaveLength(1)
         expect(FakeEventSource.instances[0]?.url).toBe(
-            `http://localhost:3001/tasks/${importTaskId}/events`,
+            `http://127.0.0.1:3001/tasks/${importTaskId}/events`,
         )
 
         await selectPost(root, posts[0]!.id)
@@ -729,8 +729,8 @@ describe('apply view', () => {
                 runningAgentTask,
             )
             expect(FakeEventSource.instances.map(({ url }) => url)).toEqual([
-                `http://localhost:3001/tasks/${importTaskId}/events`,
-                `http://localhost:3001/tasks/${runningAgentTask.id}/events`,
+                `http://127.0.0.1:3001/tasks/${importTaskId}/events`,
+                `http://127.0.0.1:3001/tasks/${runningAgentTask.id}/events`,
             ])
         })
     })

@@ -14,7 +14,7 @@ interface AgentBridgeHarnessOptions {
     fallback?: FetchFallback
 }
 
-const agentBridgeOrigin = 'http://localhost:3001'
+const agentBridgeOrigin = 'http://127.0.0.1:3001'
 const createdAt = '2026-07-20T12:00:00.000Z'
 
 export class AgentBridgeHarness {

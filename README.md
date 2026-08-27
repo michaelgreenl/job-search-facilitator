@@ -200,7 +200,7 @@ Open [http://localhost:5173](http://localhost:5173) after both commands start.
 Check the API and Agent bridge in another terminal:
 
 ```bash
-curl --fail http://localhost:3000/health
+curl --fail http://127.0.0.1:3000/health
 curl --fail http://127.0.0.1:3001/health
 ```
 
