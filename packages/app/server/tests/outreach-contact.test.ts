@@ -16,6 +16,7 @@ const existingContact: OutreachContact = {
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    email: 'ada@example.com',
     relevanceRationale: 'Her visible role aligns with the position.',
     draftMessage: 'Hi Ada, I would value your perspective on the role.',
     messaged: true,
@@ -28,6 +29,7 @@ const contactInput: OutreachContactInput = {
     personName: existingContact.personName,
     personTitle: existingContact.personTitle,
     profileUrl: existingContact.profileUrl,
+    email: existingContact.email,
     relevanceRationale: existingContact.relevanceRationale,
     draftMessage: existingContact.draftMessage,
 }
@@ -185,6 +187,7 @@ describe('outreach contact routes', () => {
             jobPostId,
             { ...contactInput, profileUrl: 'https://example.com/ada-lovelace' },
         ],
+        ['an invalid email', jobPostId, { ...contactInput, email: 'not-an-email' }],
         ['a client-provided messaged status', jobPostId, { ...contactInput, messaged: true }],
     ])('rejects %s', async (_description, postId, input) => {
         const { create, repository } = createFakeRepository()

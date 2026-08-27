@@ -12,6 +12,7 @@ const contact: OutreachContact = makeOutreachContact({
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    email: 'ada@example.com',
     relevanceRationale:
         'Her visible engineering leadership makes her a relevant contact for this role.',
     draftMessage: 'Hi Ada, I would value your perspective on the role.',
@@ -44,6 +45,14 @@ function mountContact(overrides: Partial<OutreachContact> = {}, messagedUpdating
 }
 
 describe('OutreachContactCard', () => {
+    it('links a discovered email address', () => {
+        const { root } = mountVue(OutreachContactCard, { props: { contact } })
+
+        expect(root.querySelector<HTMLAnchorElement>('.person-email')?.href).toBe(
+            'mailto:ada@example.com',
+        )
+    })
+
     it.each([
         { current: true, next: false },
         { current: false, next: true },

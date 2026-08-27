@@ -48,6 +48,7 @@ export interface OutreachContact {
     personName: string
     personTitle: string
     profileUrl: string
+    email: string | null
     relevanceRationale: string
     draftMessage: string
     messaged: boolean
@@ -59,7 +60,7 @@ export interface OutreachContact {
 
 export type OutreachContactInput = Pick<
     OutreachContact,
-    'personName' | 'personTitle' | 'profileUrl' | 'relevanceRationale' | 'draftMessage'
+    'personName' | 'personTitle' | 'profileUrl' | 'email' | 'relevanceRationale' | 'draftMessage'
 >
 
 export type ContactDiscoveryResult =

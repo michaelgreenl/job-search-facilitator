@@ -9,6 +9,7 @@ export function makeOutreachContact(overrides: Partial<OutreachContact> = {}): O
         personName: 'Ada Lovelace',
         personTitle: 'Engineering Manager',
         profileUrl: `https://www.linkedin.com/in/${id}`,
+        email: null,
         relevanceRationale: 'Their visible role is relevant to the team.',
         draftMessage: 'Hi Ada, could I ask about the team?',
         messaged: false,

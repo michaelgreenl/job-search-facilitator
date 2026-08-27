@@ -33,10 +33,11 @@ export const createContactDiscoveryTask = (post: JobPost, contacts: OutreachCont
             location: post.location,
             postUrl: post.postUrl,
         },
-        existingContacts: contacts.map(({ personName, personTitle, profileUrl }) => ({
+        existingContacts: contacts.map(({ personName, personTitle, profileUrl, email }) => ({
             personName,
             personTitle,
             profileUrl,
+            email,
         })),
     }
 
@@ -52,7 +53,9 @@ This is a read-only task. Review the job post for useful team or role context. F
 
 Prefer a likely hiring manager or team lead in the same function. Use an aligned recruiter or talent partner when no relevant team lead is visible. Choose one person whose visible role makes the connection relevant. Do not choose only the first result.
 
-For a contact outcome, return the person's exact visible name, title, LinkedIn profile URL, and a concise evidence-based rationale. Write a concise, truthful LinkedIn DM. The DM must make a short request to discuss the role. Base every claim on applicant context or visible evidence. Do not claim the person is involved in hiring unless the page says so. ${outreachDraftStyle}
+After choosing the person, look for their publicly listed work email. Search beyond LinkedIn when needed, including the company site and other public pages that identify the person. Return the email only when visible evidence links that exact address to the exact person. Do not guess, infer an address pattern, use private data, or fail the contact outcome when no verified email is available. Set email to null when it is not discoverable.
+
+For a contact outcome, return the person's exact visible name, title, LinkedIn profile URL, verified email or null, and a concise evidence-based rationale. Write a concise, truthful LinkedIn DM. The DM must make a short request to discuss the role. Base every claim on applicant context or visible evidence. Do not claim the person is involved in hiring unless the page says so. ${outreachDraftStyle}
 
 If a tool error prevents completion, evidence is insufficient, or no suitable person is available, return a failed outcome immediately. Set contact to null and explain the specific failure in error. For a contact outcome, set error to null. Always return one structured outcome unless login, CAPTCHA, or another user action blocks the task. In that case, wait for the user action or task timeout.
 

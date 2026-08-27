@@ -19,6 +19,7 @@ export const outreachContactSchema: z.ZodType<OutreachContact> = z.looseObject({
     personName: nonBlankStringSchema,
     personTitle: nonBlankStringSchema,
     profileUrl: linkedInProfileUrlSchema,
+    email: z.email().nullable(),
     relevanceRationale: nonBlankStringSchema,
     draftMessage: nonBlankStringSchema,
     messaged: z.boolean(),
@@ -32,10 +33,16 @@ const agentOutputTextSchema = z.string().regex(/\S/)
 const linkedInAgentOutputSchema = z
     .string()
     .regex(/^\s*https:\/\/(?:[^./\s]+\.)*linkedin\.com\/in\/\S+\s*$/)
+const emailAgentOutputSchema = z
+    .string()
+    .regex(
+        /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/,
+    )
 const contactDiscoveryContactWireSchema = z.strictObject({
     personName: agentOutputTextSchema,
     personTitle: agentOutputTextSchema,
     profileUrl: linkedInAgentOutputSchema,
+    email: emailAgentOutputSchema.nullable(),
     relevanceRationale: agentOutputTextSchema,
     draftMessage: agentOutputTextSchema,
 })
@@ -62,6 +69,7 @@ const contactDiscoveryResultSchema: z.ZodType<ContactDiscoveryResult> =
                     personName: result.contact.personName.trim(),
                     personTitle: result.contact.personTitle.trim(),
                     profileUrl: result.contact.profileUrl.trim(),
+                    email: result.contact.email,
                     relevanceRationale: result.contact.relevanceRationale.trim(),
                     draftMessage: result.contact.draftMessage.trim(),
                 },

@@ -28,6 +28,7 @@ model OutreachContact {
   personName              String
   personTitle             String
   profileUrl              String
+  email                   String?
   relevanceRationale      String
   draftMessage            String
   messaged                Boolean           @default(false)

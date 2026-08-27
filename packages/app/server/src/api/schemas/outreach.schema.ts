@@ -26,6 +26,7 @@ export const outreachContactInputSchema = z.strictObject({
     personName: nonBlankString,
     personTitle: nonBlankString,
     profileUrl: linkedInProfileUrl,
+    email: z.email().nullable(),
     relevanceRationale: nonBlankString,
     draftMessage: nonBlankString,
 })

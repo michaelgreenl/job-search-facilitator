@@ -46,6 +46,7 @@ const contactDiscoveryOutput = (contact: ReturnType<typeof makeOutreachContact>)
         personName: contact.personName,
         personTitle: contact.personTitle,
         profileUrl: contact.profileUrl,
+        email: contact.email,
         relevanceRationale: contact.relevanceRationale,
         draftMessage: contact.draftMessage,
     },

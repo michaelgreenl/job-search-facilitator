@@ -9,6 +9,7 @@ export const toOutreachContact = (contact: PrismaOutreachContact): OutreachConta
     personName: contact.personName,
     personTitle: contact.personTitle,
     profileUrl: contact.profileUrl,
+    email: contact.email,
     relevanceRationale: contact.relevanceRationale,
     draftMessage: contact.draftMessage,
     messaged: contact.messaged,
