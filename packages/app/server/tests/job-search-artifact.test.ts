@@ -1004,20 +1004,18 @@ describe('judgment and report assembly', () => {
             ['selections', 0, 'sourceKey'],
         ],
         [
-            'a legacy resume without a current artifact',
+            'a blank resume name',
             {
                 reviewDigest: review.reviewDigest,
-                selections: [{ ...selectedRecommendation, recommendedResume: 'general' }],
+                selections: [{ ...selectedRecommendation, recommendedResume: ' ' }],
             },
             ['selections', 0, 'recommendedResume'],
         ],
         [
-            'a combined legacy resume',
+            'an oversized resume name',
             {
                 reviewDigest: review.reviewDigest,
-                selections: [
-                    { ...selectedRecommendation, recommendedResume: 'backend-full-stack' },
-                ],
+                selections: [{ ...selectedRecommendation, recommendedResume: 'x'.repeat(201) }],
             },
             ['selections', 0, 'recommendedResume'],
         ],

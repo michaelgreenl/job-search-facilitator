@@ -22,11 +22,7 @@ import {
     userAddedJobPostInclude,
 } from '../mappers/job-post.mapper.ts'
 import { toOutreachContact } from '../mappers/outreach.mapper.ts'
-import {
-    toJobRecommendation,
-    toPrismaAgentLabel,
-    toPrismaResumeType,
-} from '../mappers/search-report.mapper.ts'
+import { toJobRecommendation, toPrismaAgentLabel } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
 import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
 
@@ -236,7 +232,7 @@ export const jobPostRepository: JobPostRepository = {
                 fitRationale: input.fitRationale,
                 applicationFlow: input.applicationFlow,
                 keyLegitimacySignals: input.keyLegitimacySignals,
-                recommendedResume: toPrismaResumeType(input.recommendedResume),
+                recommendedResume: input.recommendedResume,
                 recommendedAction: input.recommendedAction,
                 legitimacyNotes: input.legitimacyNotes,
             }

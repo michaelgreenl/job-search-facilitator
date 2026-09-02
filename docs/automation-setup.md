@@ -32,7 +32,7 @@ These commands are safe to repeat. `cp -n` preserves an existing private file.
 
 The parent repository ignores `docs/agents`. The nested repository keeps private policy changes reviewable on your computer.
 
-Edit `docs/agents/job-search/user-info.md`. Replace every `[REQUIRED]` value with verified applicant facts.
+Open **Settings** in the application. Save verified applicant facts and upload base resume versions.
 
 Review `docs/agents/job-search/post-evaluation.md` and `strategy.md`. Change limits and search priorities for your needs.
 

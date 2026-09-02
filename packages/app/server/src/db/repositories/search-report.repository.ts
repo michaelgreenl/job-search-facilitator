@@ -7,11 +7,7 @@ import {
     toPrismaJobPostListingData,
 } from '../mappers/job-post.mapper.ts'
 import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
-import {
-    toJobRecommendation,
-    toPrismaAgentLabel,
-    toPrismaResumeType,
-} from '../mappers/search-report.mapper.ts'
+import { toJobRecommendation, toPrismaAgentLabel } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
 
 const reportInclude = {
@@ -181,7 +177,7 @@ const persistReport = async (
                 fitRationale: result.fitRationale,
                 applicationFlow: result.applicationFlow,
                 keyLegitimacySignals: result.keyLegitimacySignals,
-                recommendedResume: toPrismaResumeType(result.recommendedResume),
+                recommendedResume: result.recommendedResume,
                 recommendedAction: result.recommendedAction,
                 legitimacyNotes: result.legitimacyNotes,
             },

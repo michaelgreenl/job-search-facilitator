@@ -1,4 +1,4 @@
-import { AgentLabel, ResumeType, type Prisma } from '../../src/generated/prisma/client.ts'
+import { AgentLabel, type Prisma } from '../../src/generated/prisma/client.ts'
 import { jobPostSeeds } from '../seeders/job-posts.ts'
 
 interface SearchResultSeed {
@@ -8,7 +8,7 @@ interface SearchResultSeed {
     fitRationale: string
     applicationFlow: string
     keyLegitimacySignals: string
-    recommendedResume: ResumeType
+    recommendedResume: string
     recommendedAction: string
     legitimacyNotes: string | null
 }
@@ -36,18 +36,18 @@ const evaluationFocuses = [
 ] as const
 
 const resumeTypes = [
-    ResumeType.FRONTEND,
-    ResumeType.FULL_STACK,
-    ResumeType.BACKEND,
-    ResumeType.FRONTEND,
-    ResumeType.GENERAL,
-    ResumeType.GENERAL,
-    ResumeType.BACKEND,
-    ResumeType.FRONTEND,
-    ResumeType.FRONTEND,
-    ResumeType.FULL_STACK,
-    ResumeType.FRONTEND,
-    ResumeType.GENERAL,
+    'Frontend',
+    'Full-stack',
+    'Backend',
+    'Frontend',
+    'General',
+    'General',
+    'Backend',
+    'Frontend',
+    'Frontend',
+    'Full-stack',
+    'Frontend',
+    'General',
 ] as const
 
 const buildResults = (postIndexes: readonly number[], reportVersion: 1 | 2): SearchResultSeed[] =>
@@ -80,7 +80,7 @@ const buildResults = (postIndexes: readonly number[], reportVersion: 1 | 2): Sea
                     : 'External job-board application.',
             keyLegitimacySignals: 'Named company, specific role, and public application URL.',
             recommendedResume:
-                reportVersion === 2 && postIndex % 5 === 0 ? ResumeType.GENERAL : recommendedResume,
+                reportVersion === 2 && postIndex % 5 === 0 ? 'General' : recommendedResume,
             recommendedAction: quickApplication
                 ? 'Use the concise application path.'
                 : reportVersion === 1

@@ -30,3 +30,10 @@ export {
     parseSavedJobUpdates,
 } from './job-update-check.ts'
 export { parseTrackedJobPosts } from './tracked-job-post.ts'
+export {
+    baseResumeVersionSchema,
+    parseBaseResumeVersion,
+    parseJobSearchSettings,
+    resumeVersionNameSchema,
+    updateJobSearchSettingsInputSchema,
+} from './settings.ts'

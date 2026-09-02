@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, shallowRef, useTemplateRef } from 'vue'
 import { RouterLink } from 'vue-router'
-import { navigationRoutes } from '@/router'
+import SettingsIcon from '@/components/svgs/SettingsIcon.vue'
+import { navigationRoutes, settingsRoute } from '@/router'
 
 const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => ({
     label: meta.title,
@@ -71,6 +72,16 @@ function handleFocusOut(event: FocusEvent) {
                 <span class="brand-mark" aria-hidden="true">JF</span>
             </RouterLink>
 
+            <RouterLink
+                class="settings-link"
+                :to="settingsRoute.path"
+                data-testid="nav-link-settings"
+                aria-label="Settings"
+                @click="closeNavigation()"
+            >
+                <SettingsIcon />
+            </RouterLink>
+
             <nav id="primary-navigation" class="nav-links" aria-label="Primary">
                 <RouterLink
                     v-for="item in navigationItems"
@@ -110,12 +121,17 @@ $nav-surface-height: 4.25rem;
 .nav-surface {
     display: flex;
     order: 1;
-    gap: calc($space-4 + 0.25rem);
+    gap: $space-3;
     align-items: center;
     min-height: $nav-surface-height;
-    padding: $space-3 calc($space-4 + 0.25rem) $space-3 $space-3;
+    padding: $space-3;
     border-top: 0;
     border-radius: 0 0 $radius-lg $radius-lg;
+
+    @include bp-sm-phone {
+        gap: calc($space-4 + 0.25rem);
+        padding-right: calc($space-4 + 0.25rem);
+    }
 }
 
 .nav-handle {
@@ -187,6 +203,36 @@ $nav-surface-height: 4.25rem;
     display: flex;
     gap: calc($space-4 + 0.25rem);
     align-items: center;
+}
+
+.settings-link {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-right: $space-3;
+    color: $color-ink-muted;
+    border-radius: $radius-md;
+    place-items: center;
+
+    svg {
+        width: 1.125rem;
+        fill: none;
+        stroke: currentcolor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.5;
+    }
+
+    &:hover,
+    &:focus-visible,
+    &.router-link-exact-active {
+        color: $color-signal-light;
+        background: $color-signal-alpha-12;
+    }
+
+    @include bp-sm-phone {
+        margin-right: $space-5;
+    }
 }
 
 .link {

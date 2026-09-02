@@ -20,7 +20,6 @@ export type JobPostViewPanelMode =
 import {
     USER_LABELS,
     type JobPost,
-    type ResumeType,
     type StandaloneJobRecommendation,
     type UserLabel,
 } from '@job-search-facilitator/core'
@@ -59,13 +58,6 @@ const emit = defineEmits<{
     back: []
 }>()
 
-const RESUME_LABELS: Record<ResumeType, string> = {
-    frontend: 'Frontend',
-    backend: 'Backend',
-    'full-stack': 'Full-stack',
-    'backend-full-stack': 'Backend / full-stack (legacy)',
-    general: 'General',
-}
 const ARTIFACT_OPTIONS = [
     {
         kind: 'resume',
@@ -151,9 +143,7 @@ const content = computed(() => {
         ),
         postSource: normalizeText(props.post.postSource),
         recommendedAction: normalizeText(props.recommendation?.recommendedAction),
-        recommendedResume: props.recommendation
-            ? RESUME_LABELS[props.recommendation.recommendedResume]
-            : null,
+        recommendedResume: normalizeText(props.recommendation?.recommendedResume),
         techStack: techStack?.toLowerCase() === 'not recorded' ? null : techStack,
     }
 })

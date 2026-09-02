@@ -77,14 +77,10 @@ Group skills by the strongest evidence available. Do not strengthen one evidence
 - Assessment limits: [REQUIRED]
 - Other application limits: [REQUIRED or None]
 
-## Resume variants
+## Resume guidance
 
-Job import accepts `frontend`, `backend`, `full-stack`, or `general`. Scheduled reports accept the first three values.
-
-- `frontend`: [REQUIRED: when Codex should select this resume]
-- `backend`: [REQUIRED: when Codex should select this resume]
-- `full-stack`: [REQUIRED: when Codex should select this resume]
-- `general`: [REQUIRED: when Codex should select this resume]
+Describe which role responsibilities match each resume. Upload named versions in application settings.
+The application adds the exact available names and local file paths below this profile.
 
 ## Result rules
 
