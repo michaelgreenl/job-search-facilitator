@@ -36,7 +36,7 @@ const linkedInAgentOutputSchema = z
 const emailAgentOutputSchema = z
     .string()
     .regex(
-        /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/,
+        /^[A-Za-z0-9_+'-]+(?:\.[A-Za-z0-9_+'-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/,
     )
 const contactDiscoveryContactWireSchema = z.strictObject({
     personName: agentOutputTextSchema,

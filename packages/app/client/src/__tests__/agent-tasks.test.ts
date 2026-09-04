@@ -68,6 +68,7 @@ describe('outreach agent tasks', () => {
                 ],
             },
         })
+        expect(JSON.stringify(discoveryTask.outputSchema)).not.toMatch(/\(\?(?:[=!]|<[=!])/)
     })
 
     it('defines the draft revision capability and output contract', () => {
