@@ -45,3 +45,4 @@ services:
 
 volumes:
     postgres_data:
+        name: ${POSTGRES_VOLUME_NAME:-job-search-facilitator_postgres_data}
