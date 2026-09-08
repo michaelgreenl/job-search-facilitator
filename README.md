@@ -159,9 +159,8 @@ cp -n docs/examples/update-check/*.md docs/agents/update-check/
 git -C docs/agents init
 ```
 
-Edit `docs/agents/job-search/user-info.md`. Replace each `[REQUIRED]` value with verified applicant information.
-
-Use the tracked [profile example](docs/examples/job-search/user-info.md) to review the required sections.
+Open **Settings** in the application. Save the applicant profile and upload named base resume versions.
+Each save updates `docs/agents/job-search/user-info.md` for local agents.
 
 Edit `docs/agents/job-search/post-evaluation.md` when the default evaluation rules do not match your search.
 
@@ -216,7 +215,7 @@ The task can ask for access to each website it visits. Review each website befor
 - Confirm that the ChatGPT side panel loads in the active Chrome profile.
 - Restart Chrome, ChatGPT, and `pnpm run dev:agent` after a plugin change.
 - If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
-- If an Agent cannot read the profile, start the bridge from the repository root.
+- If an Agent cannot read the profile, save Settings and start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
 
 The application does not create or edit ChatGPT tasks or plugin settings. Configure both scheduled tasks in ChatGPT when you want the automated workflow.

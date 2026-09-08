@@ -25,8 +25,11 @@ services:
             PORT: 3000
             CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
             DATABASE_URL: postgresql://${POSTGRES_USER:-job_search}:${POSTGRES_PASSWORD:-local_dev_password}@postgres:5432/${POSTGRES_DB:-job_search_facilitator}
+            AGENT_CONTEXT_DIRECTORY: /app/docs/agents/job-search
         ports:
             - '127.0.0.1:${PORT:-3000}:3000'
+        volumes:
+            - ../../../docs/agents:/app/docs/agents
         depends_on:
             postgres:
                 condition: service_healthy

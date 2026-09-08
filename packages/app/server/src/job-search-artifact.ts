@@ -270,7 +270,7 @@ const selectionEntrySchema = z.strictObject({
     sourceKey: jobPostInputSchema.shape.sourceKey,
     agentLabel: standaloneJobRecommendationInputSchema.shape.agentLabel,
     fitRationale: standaloneJobRecommendationInputSchema.shape.fitRationale.max(2_500),
-    recommendedResume: z.enum(['frontend', 'backend', 'full-stack']),
+    recommendedResume: standaloneJobRecommendationInputSchema.shape.recommendedResume,
     recommendedAction: standaloneJobRecommendationInputSchema.shape.recommendedAction.max(1_500),
 })
 const selectionArtifactSchema = z.strictObject({

@@ -11,9 +11,12 @@ import { createJobPostRouter } from './job-post.route.ts'
 import { createJobUpdateCheckRouter } from './job-update-check.route.ts'
 import { createOutreachContactRouter, createOutreachRunRouter } from './outreach.route.ts'
 import { createSearchReportRouter } from './search-report.route.ts'
+import { createSettingsRouter } from './settings.route.ts'
+import { settingsRepository } from '../../settings/file-settings.repository.ts'
 
 export const apiRouter = express.Router()
 
+apiRouter.use('/settings', createSettingsRouter(settingsRepository))
 apiRouter.use('/job-posts', createJobPostRouter(jobPostRepository, applicationArtifactRepository))
 apiRouter.use(
     '/job-posts/:jobPostId/outreach-contacts',

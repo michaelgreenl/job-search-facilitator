@@ -84,12 +84,12 @@ Use this shape for selected roles:
     "sourceKey": "candidate sourceKey",
     "verdict": "target",
     "fitRationale": "specific evidence and material gaps",
-    "recommendedResume": "frontend",
+    "recommendedResume": "exact current resume version name",
     "recommendedAction": "truthful application guidance"
 }
 ```
 
-`verdict` can be `target` or `quick-app`. `recommendedResume` can be `frontend`, `backend`, or `full-stack`.
+`verdict` can be `target` or `quick-app`. `recommendedResume` must match a resume version in `user-info.md`.
 
 Use this shape for rejected roles:
 

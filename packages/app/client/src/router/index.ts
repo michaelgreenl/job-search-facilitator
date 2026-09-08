@@ -26,6 +26,13 @@ export const navigationRoutes = {
     },
 }
 
+export const settingsRoute = {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('@/views/SettingsView.vue'),
+    meta: { title: 'Settings' },
+}
+
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
@@ -35,6 +42,7 @@ export const router = createRouter({
             component: route.component,
             meta: route.meta,
         })),
+        settingsRoute,
         { path: '/review', redirect: { name: 'review' } },
         { path: '/:pathMatch(.*)*', redirect: { name: 'review' } },
     ],
