@@ -23,7 +23,7 @@ Review combines dated search reports and user-added roles. It shows fit evidence
 
 Apply turns labeled roles into a working queue. It stores application files, status changes, and outreach contacts.
 
-Track summarizes active applications, closed outcomes, pending replies, and follow-up dates.
+Track summarizes active applications, closed outcomes, and pending replies.
 
 An Express API stores workflow data in PostgreSQL through Prisma. Shared Zod schemas validate data across each workspace package.
 
@@ -51,7 +51,6 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 - **Pipeline filters:** View open, active, closed, awaiting-reply, and responded roles.
 - **Activity timeline:** Combine application changes and outreach events for each role.
-- **Follow-up list:** Surface due application and outreach follow-ups.
 - **Responsive panels:** Adapt list, detail, description, and outreach panels across screen sizes.
 
 ### Server Side

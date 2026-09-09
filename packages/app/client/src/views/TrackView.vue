@@ -6,7 +6,6 @@ import {
 } from '@job-search-facilitator/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
@@ -156,52 +155,6 @@ const trackStats = computed(
             },
         ] as const,
 )
-const attentionItems = computed(() => {
-    const followUpDelay = 7 * 24 * 60 * 60 * 1_000
-    const now = Date.now()
-
-    return openEntries.value
-        .flatMap((entry) => {
-            const pendingContact = entry.contacts.find(
-                ({ messagedAt, respondedAt }) =>
-                    respondedAt === null &&
-                    messagedAt !== null &&
-                    now - Date.parse(messagedAt) >= followUpDelay,
-            )
-
-            if (pendingContact !== undefined && pendingContact.messagedAt !== null) {
-                return [
-                    {
-                        postId: entry.post.id,
-                        title: `Follow up with ${pendingContact.personName}`,
-                        dueAt: new Date(
-                            Date.parse(pendingContact.messagedAt) + followUpDelay,
-                        ).toISOString(),
-                    },
-                ]
-            }
-
-            if (
-                entry.post.applicationStatus === 'awaiting-response' &&
-                entry.post.appliedAt !== null &&
-                now - Date.parse(entry.post.appliedAt) >= followUpDelay
-            ) {
-                return [
-                    {
-                        postId: entry.post.id,
-                        title: `Follow up with ${entry.post.company}`,
-                        dueAt: new Date(
-                            Date.parse(entry.post.appliedAt) + followUpDelay,
-                        ).toISOString(),
-                    },
-                ]
-            }
-
-            return []
-        })
-        .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt))
-})
-
 watch(filteredEntries, (currentEntries) => {
     if (currentEntries.some(({ post }) => post.id === selectedPostId.value)) {
         return
@@ -502,32 +455,19 @@ onMounted(() => {
             @retry="loadTrackedPosts"
         >
             <template #summary>
-                <div class="track-summary">
-                    <div class="track-stats">
-                        <button
-                            v-for="stat in trackStats"
-                            :key="stat.filter"
-                            :data-testid="stat.testId"
-                            :data-count="stat.count"
-                            :aria-pressed="postFilter === stat.filter"
-                            type="button"
-                            @click="selectPostFilter(stat.filter)"
-                        >
-                            <span>{{ stat.label }}</span>
-                            <strong>{{ stat.count }}</strong>
-                        </button>
-                    </div>
-
-                    <section v-if="attentionItems.length" class="attention">
-                        <span class="section-label">Needs attention</span>
-                        <ul>
-                            <li v-for="item in attentionItems" :key="item.postId">
-                                <BaseButton preset="text" @click="selectPost(item.postId)">
-                                    {{ item.title }}
-                                </BaseButton>
-                            </li>
-                        </ul>
-                    </section>
+                <div class="track-stats">
+                    <button
+                        v-for="stat in trackStats"
+                        :key="stat.filter"
+                        :data-testid="stat.testId"
+                        :data-count="stat.count"
+                        :aria-pressed="postFilter === stat.filter"
+                        type="button"
+                        @click="selectPostFilter(stat.filter)"
+                    >
+                        <span>{{ stat.label }}</span>
+                        <strong>{{ stat.count }}</strong>
+                    </button>
                 </div>
             </template>
         </JobPostListPanel>
@@ -630,11 +570,6 @@ onMounted(() => {
     }
 }
 
-.track-summary {
-    display: grid;
-    gap: $space-3;
-}
-
 .track-stats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -677,27 +612,5 @@ onMounted(() => {
         font-size: 0.9375rem;
         font-weight: 650;
     }
-}
-
-.attention {
-    display: grid;
-    gap: $space-1;
-
-    ul {
-        display: grid;
-        gap: $space-1;
-        padding: 0;
-        margin: 0;
-        list-style: none;
-    }
-}
-
-.section-label {
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
 }
 </style>
