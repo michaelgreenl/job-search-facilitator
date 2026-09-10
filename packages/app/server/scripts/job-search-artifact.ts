@@ -20,6 +20,7 @@ import {
     MAX_JOB_SEARCH_REVIEW_BYTES,
     MAX_JOB_SEARCH_SELECTION_BYTES,
     renderJobSearchMarkdown,
+    summarizeCoverage,
     validateCoverageHandoff,
     validateSelection,
     validateSerializedCandidate,
@@ -168,12 +169,7 @@ export const runCli = async ([command, ...args]: string[]): Promise<void> => {
             printJson({
                 validated: true,
                 candidates: candidates.length,
-                completedLanes: coverage.sources
-                    .filter(({ blocker }) => blocker === null)
-                    .map(({ lane }) => lane),
-                blockedLanes: coverage.sources
-                    .filter(({ blocker }) => blocker !== null)
-                    .map(({ lane }) => lane),
+                ...summarizeCoverage(coverage),
             })
             return
         }

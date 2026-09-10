@@ -115,6 +115,7 @@ const coverage: JobSearchCoverage = {
             ],
             accessMethod: 'installed-chrome-plugin',
             blocker: null,
+            incompleteReason: null,
         },
         {
             lane: 'indeed',
@@ -150,6 +151,7 @@ const coverage: JobSearchCoverage = {
             ],
             accessMethod: 'installed-chrome-plugin',
             blocker: null,
+            incompleteReason: null,
         },
         {
             lane: 'vuejobs',
@@ -185,6 +187,7 @@ const coverage: JobSearchCoverage = {
             ],
             accessMethod: 'installed-chrome-plugin',
             blocker: null,
+            incompleteReason: null,
         },
         {
             lane: 'direct-employer-ats',
@@ -220,6 +223,7 @@ const coverage: JobSearchCoverage = {
             ],
             accessMethod: 'public-employer-ats',
             blocker: null,
+            incompleteReason: null,
         },
         {
             lane: 'rotating-long-tail',
@@ -255,6 +259,7 @@ const coverage: JobSearchCoverage = {
             ],
             accessMethod: 'public-long-tail',
             blocker: null,
+            incompleteReason: null,
         },
     ],
 }
@@ -850,7 +855,7 @@ describe('judgment and report assembly', () => {
         expect(issuePaths(() => validateCoverage(malformedCoverage))).toEqual(
             expect.arrayContaining([
                 ['sources', 1, 'lane'],
-                ['sources', 3, 'blocker'],
+                ['sources', 3, 'incompleteReason'],
             ]),
         )
     })
@@ -885,10 +890,98 @@ describe('judgment and report assembly', () => {
         const weakCoverage = structuredClone(coverage)
         weakCoverage.sources.slice(2).forEach((source) => {
             source.operations = []
-            source.blocker = 'Source access was blocked.'
+            source.incompleteReason = 'Required queries were not finished.'
         })
 
         expect(issuePaths(() => validateCoverage(weakCoverage, true))).toEqual([['sources']])
+    })
+
+    it('requires source-wide blocker evidence and preserves completed coverage through the CLI', async () => {
+        const falseBlockedCoverage = {
+            sources: coverage.sources.map((source) => ({
+                ...source,
+                blocker:
+                    'An individual application-route inspection was denied; searches remained accessible.',
+            })),
+        }
+        expect(
+            issuePaths(() => validateSerializedCoverage(JSON.stringify(falseBlockedCoverage))),
+        ).toEqual(coverage.sources.map((_, index) => ['sources', index, 'blocker']))
+
+        const accessFailure = {
+            scope: 'source-wide' as const,
+            source: 'Indeed native search',
+            failedOperation: 'Run the next required query',
+            observation: 'The site displays a CAPTCHA instead of search results.',
+            verification:
+                'The existing session cannot access search controls or result pages. The challenge was not attempted.',
+        }
+        const mixedCoverage = structuredClone(coverage)
+        mixedCoverage.sources[0]!.operations = []
+        mixedCoverage.sources[0]!.incompleteReason =
+            'Search was interrupted before required queries finished.'
+        mixedCoverage.sources[1]!.operations = mixedCoverage.sources[1]!.operations.slice(0, 1)
+        mixedCoverage.sources[1]!.blocker = accessFailure
+        mixedCoverage.sources[4]!.blocker = {
+            ...accessFailure,
+            source: 'All assigned long-tail sources',
+        }
+        expect(validateCoverage(mixedCoverage, true)).toEqual(mixedCoverage)
+        for (const [field, value] of [
+            ['scope', 'posting'],
+            ['verification', ''],
+        ] as const) {
+            const unsupportedFailure = {
+                sources: mixedCoverage.sources.map((source, index) =>
+                    index === 1
+                        ? { ...source, blocker: { ...accessFailure, [field]: value } }
+                        : source,
+                ),
+            }
+            expect(issuePaths(() => validateCoverage(unsupportedFailure))).toContainEqual([
+                'sources',
+                1,
+                'blocker',
+                field,
+            ])
+        }
+
+        const directory = await mkdtemp(join(tmpdir(), 'job-search-blocker-'))
+        const coveragePath = join(directory, 'coverage.json')
+        const candidatesPath = join(directory, 'candidates.json')
+        let output = ''
+        const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+            output += String(chunk)
+            return true
+        })
+        try {
+            await writeFile(coveragePath, JSON.stringify(mixedCoverage))
+            await writeFile(candidatesPath, '[]')
+            await runCli(['coverage', coveragePath, candidatesPath])
+            expect(JSON.parse(output)).toEqual({
+                validated: true,
+                candidates: 0,
+                completedLanes: ['vuejobs', 'direct-employer-ats', 'rotating-long-tail'],
+                blockedLanes: ['indeed', 'rotating-long-tail'],
+                incompleteLanes: ['linkedin'],
+            })
+            const emptyReview = createReviewPacket([], { identityDigests: [] })
+            expect(
+                assembleFinalReport(
+                    [],
+                    {
+                        reviewDigest: emptyReview.reviewDigest,
+                        selections: [],
+                    },
+                    mixedCoverage,
+                ).summary,
+            ).toContain(
+                '22 query operations completed across 3 lanes; 2 blocked source lanes; 1 incomplete source lane.',
+            )
+        } finally {
+            write.mockRestore()
+            await rm(directory, { recursive: true })
+        }
     })
 
     it.each([
@@ -917,7 +1010,7 @@ describe('judgment and report assembly', () => {
         expect(issuePaths(() => validateCoverage(incompleteNativeCoverage))).toContainEqual([
             'sources',
             0,
-            'operations',
+            'incompleteReason',
         ])
     })
 
@@ -964,7 +1057,7 @@ describe('judgment and report assembly', () => {
         const weakCoverage = structuredClone(coverage)
         weakCoverage.sources.slice(2).forEach((source) => {
             source.operations = []
-            source.blocker = 'Source access was blocked.'
+            source.incompleteReason = 'Required queries were not finished.'
         })
 
         try {
@@ -1217,7 +1310,17 @@ describe('deterministic Markdown reporting', () => {
                 void (changedCoverage.sources[0]!.operations[0]!.completion =
                     'all-results-reviewed'),
             blocker: (_changed, changedCoverage) =>
-                void (changedCoverage.sources[0]!.blocker = 'Changed.'),
+                void (changedCoverage.sources[0]!.blocker = {
+                    scope: 'source-wide',
+                    source: 'LinkedIn native search',
+                    failedOperation: 'Run an additional query',
+                    observation: 'The site displays a CAPTCHA.',
+                    verification:
+                        'Search controls and result pages are inaccessible in the existing session.',
+                }),
+            incompleteReason: (_changed, changedCoverage) =>
+                void (changedCoverage.sources[0]!.incompleteReason =
+                    'Additional searches were interrupted.'),
         }
         const baseline = renderJobSearchMarkdown(reportDate, reportId, payload, coverage)
         const unchanged = Object.entries(mutations)
