@@ -443,6 +443,7 @@ export class CodexRuntime implements AgentRuntime {
             if (
                 notification.item.phase !== undefined &&
                 notification.item.phase !== null &&
+                notification.item.phase !== 'commentary' &&
                 notification.item.phase !== 'final_answer'
             ) {
                 return
@@ -454,7 +455,7 @@ export class CodexRuntime implements AgentRuntime {
             }
 
             this.queueEvent({
-                type: 'final-message',
+                type: notification.item.phase === 'commentary' ? 'commentary' : 'final-message',
                 threadId: notification.threadId,
                 turnId: notification.turnId,
                 text: notification.item.text,

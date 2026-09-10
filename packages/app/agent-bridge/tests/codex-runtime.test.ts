@@ -4,7 +4,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { AgentRuntimeEvent } from '../src/runtime/agent-runtime.ts'
 import { CodexRuntime } from '../src/runtime/codex/codex-runtime.ts'
-import { AgentTaskManager } from '../src/tasks/agent-task-manager.ts'
+import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
 
 const createFakeProcess = ({
     completeTaskImmediately = false,
@@ -402,6 +402,76 @@ describe('Codex runtime', () => {
         expect(runtime.health.status).toBe('healthy')
 
         runtime.close()
+    })
+
+    it('streams outreach commentary before the final structured result', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        const events: AgentTaskStreamEvent[] = []
+
+        await runtime.start()
+        const task = await manager.start({
+            prompt: 'Find contacts',
+            outputSchema: { type: 'object' },
+            capabilities: ['chrome'],
+        })
+        const identity = { threadId: task.threadId, turnId: task.turnId }
+        manager.connect(task.id, (event) => events.push(event))
+
+        try {
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        id: 'commentary',
+                        type: 'agentMessage',
+                        phase: 'commentary',
+                        text: 'Checking the hiring team',
+                    },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            const commentary = expect.objectContaining({
+                type: 'message',
+                textDelta: 'Checking the hiring team',
+                startsNewStatement: true,
+            })
+            expect(events.map(({ event }) => event)).toEqual([commentary])
+
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        id: 'final',
+                        type: 'agentMessage',
+                        phase: 'final_answer',
+                        text: '{"contacts":[]}',
+                    },
+                },
+            })
+            fake.respond({
+                method: 'turn/completed',
+                params: {
+                    threadId: task.threadId,
+                    turn: { id: task.turnId, status: 'completed' },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            expect(events.map(({ event }) => event)).toEqual([
+                commentary,
+                expect.objectContaining({ type: 'completed', output: { contacts: [] } }),
+            ])
+        } finally {
+            await manager.cancel(task.id)
+            runtime.close()
+        }
     })
 
     it('rejects an invalid task response and becomes unavailable', async () => {
