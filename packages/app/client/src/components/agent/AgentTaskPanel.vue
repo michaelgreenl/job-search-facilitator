@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import { useAgentStore } from '@/stores/agent'
 import AgentStream from './AgentStream.vue'
 
 interface Props {
@@ -32,6 +34,14 @@ const props = withDefaults(defineProps<Props>(), {
     retryAvailable: false,
     retryTestId: undefined,
 })
+
+const agentStore = useAgentStore()
+watch(
+    () => props.active,
+    (active, wasActive) => {
+        if (wasActive && !active) agentStore.dismissFailedTasks()
+    },
+)
 
 const emit = defineEmits<{
     back: []

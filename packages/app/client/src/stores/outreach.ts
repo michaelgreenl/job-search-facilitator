@@ -293,6 +293,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     }
 
     function openForPost(post: string, taskId?: string | null) {
+        agentStore.dismissFailedTasks()
         if (postId.value !== post) {
             clearView()
         }
@@ -937,6 +938,7 @@ export const useOutreachStore = defineStore('outreach', () => {
     }
 
     function reset() {
+        agentStore.dismissFailedTasks()
         clearContactListReturn()
         selectedTaskId.value = null
         postId.value = null
@@ -946,6 +948,9 @@ export const useOutreachStore = defineStore('outreach', () => {
     watch(
         [outreachSessions, () => agentStore.taskStates] as const,
         ([sessions, taskStates]) => {
+            if (!sessions.some(({ taskId }) => taskId === selectedTaskId.value)) {
+                selectedTaskId.value = null
+            }
             for (const session of sessions) {
                 applyAgentTask(session, taskStates[session.taskId]?.task ?? null)
             }

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page } from 'vitest/browser'
 import ApplyView from '@/views/ApplyView.vue'
 import ReviewView from '@/views/ReviewView.vue'
+import { useAgentStore } from '@/stores/agent'
+import { useOutreachStore } from '@/stores/outreach'
 import { makeJobPost, makeApplyQueueItem } from '@/test/fixtures/job-post'
 import { makeJobSearchReport } from '@/test/fixtures/report'
 import { makeOutreachContact } from '@/test/fixtures/outreach'
@@ -116,9 +118,9 @@ async function mountReview() {
     await expect.element(page.getByTestId(`report-card-${reviewReport.id}`)).toBeVisible()
 }
 
-async function mountApply() {
+async function mountApply(pinia = createPinia()) {
     mountVue(ApplyView, {
-        install: (app) => app.use(createPinia()),
+        install: (app) => app.use(pinia),
     })
 
     await expect.element(page.getByTestId(`job-post-card-${applyPost.id}`)).toBeVisible()
@@ -275,6 +277,49 @@ describe.each([
 })
 
 describe('running Agent task panel layout', () => {
+    it('keeps Apply on its remembered role when another outreach role has no selected task', async () => {
+        const pinia = createPinia()
+        const bridge = new AgentBridgeHarness({ fallback: applyApiResponse })
+        vi.stubGlobal('fetch', bridge.fetch)
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const agents = useAgentStore(pinia)
+        const outreach = useOutreachStore(pinia)
+        await agents.startTask(
+            { prompt: 'Find a contact', capabilities: [], outputSchema: { type: 'object' } },
+            { kind: 'outreach-contact', postId: applySecondPost.id },
+        ).started
+        outreach.openForPost(applySecondPost.id, null)
+        sessionStorage.setItem('job-search-facilitator:apply-selected-post', applyPost.id)
+
+        await mountApply(pinia)
+
+        await expect
+            .element(page.getByTestId(`job-post-card-${applyPost.id}`))
+            .toHaveAttribute('aria-pressed', 'true')
+        await expect.element(page.getByTestId('apply-outreach-panel')).not.toBeVisible()
+    })
+
+    it('discards a failed import when returning to Review', async () => {
+        FakeEventSource.reset()
+        vi.stubGlobal('EventSource', FakeEventSource)
+        const bridge = new AgentBridgeHarness({ fallback: reviewApiResponse })
+        vi.stubGlobal('fetch', bridge.fetch)
+        await mountReview()
+        await page.getByTestId('add-job-post').click()
+        await page.getByTestId('job-post-url').fill('https://example.com/jobs/frontend-engineer')
+        await page.getByTestId('start-job-post-import').click()
+        await vi.waitFor(() => expect(bridge.tasks.size).toBe(1))
+        const taskId = [...bridge.tasks.keys()][0]!
+        await expect.element(page.getByTestId('cancel-job-post-import')).toBeVisible()
+        bridge.fail(taskId, 'Could not read the job post')
+        await expect.element(page.getByTestId('retry-job-post-import')).toBeVisible()
+
+        await page.getByTestId('back-from-job-post-import').click()
+
+        await vi.waitFor(() => expect(useAgentStore().getSession(taskId)).toBeNull())
+        await expect.element(page.getByTestId('review-import-panel')).not.toBeVisible()
+    })
+
     it('keeps an import navigable while the mounted Review layout crosses the panel breakpoint', async () => {
         await page.viewport(390, 768)
         FakeEventSource.reset()
@@ -419,6 +464,47 @@ describe('running Agent task panel layout', () => {
         await expect.element(viewerBack).toBeVisible()
         await expect.element(viewer).toBeVisible()
     })
+
+    it.each(['back', 'another role'] as const)(
+        'discards failed outreach after leaving through %s',
+        async (navigation) => {
+            await page.viewport(848, 768)
+            FakeEventSource.reset()
+            vi.stubGlobal('EventSource', FakeEventSource)
+            const bridge = new AgentBridgeHarness({
+                fallback: (input, init) => applyApiResponse(input, init, []),
+            })
+            vi.stubGlobal('fetch', bridge.fetch)
+            await mountApply()
+            await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+            await page.getByTestId('discover-contacts').click()
+            await vi.waitFor(() => expect(bridge.tasks.size).toBe(1))
+            const taskId = [...bridge.tasks.keys()][0]!
+            await expect.element(page.getByTestId('outreach-cancel')).toBeVisible()
+            bridge.complete(taskId, {
+                outcome: 'failed',
+                contact: null,
+                error: 'Email lookup blocked',
+            })
+            await expect.element(page.getByTestId('outreach-retry')).toBeVisible()
+
+            if (navigation === 'back') {
+                await page.getByTestId('back-to-saved-contacts').click()
+                await expect
+                    .element(page.getByTestId(`outreach-task-${taskId}-select`))
+                    .not.toBeInTheDocument()
+            }
+            await page.getByTestId('back-to-job-posts').click()
+            await page.getByTestId(`job-post-card-${applySecondPost.id}`).click()
+            expect(useAgentStore().getSession(taskId)).toBeNull()
+            await page.getByTestId(`job-post-card-${applyPost.id}`).click()
+            await page.getByTestId('discover-contacts').click()
+
+            await vi.waitFor(() => expect(bridge.tasks.size).toBe(2))
+            await expect.element(page.getByTestId('outreach-cancel')).toBeVisible()
+            await expect.element(page.getByTestId('outreach-retry')).not.toBeInTheDocument()
+        },
+    )
 
     it('starts and reopens multiple outreach tasks for the same post', async () => {
         await page.viewport(848, 768)
