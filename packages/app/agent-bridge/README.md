@@ -14,6 +14,31 @@ pnpm dev:agent
 
 The bridge listens on `127.0.0.1:3001` by default. See `.env.example` for its optional configuration. `CODEX_BIN` only needs to be set when the ChatGPT app is not installed in its standard macOS location.
 
+## Agent context
+
+Application tasks use `.local/agent-codex` as a separate `CODEX_HOME`. Set `AGENT_CODEX_HOME` to use another private directory.
+
+Startup copies the current sign-in and model metadata. It copies only model settings and the browser runtime service configuration. It registers only the installed Chrome skill. Personal instructions, skills, plugins, hooks, and past conversations are excluded. Project instruction files are disabled. Each task checks the runtime's instruction sources before it starts.
+
+Browser tasks receive Chrome's required instructions. Draft requests receive no skill catalog or browser tools. Codex's built-in instructions still apply.
+
+Draft requests can resume an existing task with `threadId`. Each contact keeps its conversation, editor text, and unsent request in browser session storage. Proposed drafts require explicit acceptance. Failed task state is excluded from refresh restoration. A retry after malformed output starts a clean runtime conversation with the successful exchanges supplied as context.
+
+The bridge requests Chrome's native tab cleanup after browser turns and cancellation. Cleanup targets that task's browser session. Existing user tabs remain open. A runtime crash can prevent cleanup.
+
+## Scheduled job search
+
+Run the application policy in an isolated runtime:
+
+```sh
+pnpm run job-search:run --check
+pnpm run job-search:run
+```
+
+The runner reads `docs/agents/job-search/automation.md` and uses `.local/job-search-codex`. The check verifies instruction isolation and browser availability without starting a search. Set `JOB_SEARCH_CODEX_HOME` to change that directory. `JOB_SEARCH_MODEL` and `JOB_SEARCH_REASONING_EFFORT` preserve schedule-specific model settings.
+
+The scheduled desktop task must launch this command and report its result. Its own desktop instructions still apply to the launcher. They do not enter the isolated coordinator or workers. The runner uses automatic approval review. Requests that need interactive approval stop the run and report the required action.
+
 ## Local API
 
 - `GET /health` reports current Agent runtime readiness and its discovered capabilities.

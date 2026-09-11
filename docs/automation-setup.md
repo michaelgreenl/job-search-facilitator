@@ -57,7 +57,9 @@ Do not add a remote to this nested repository. It can contain personal informati
 
 Open the project folder in the ChatGPT desktop app. Use the local project, not an isolated worktree.
 
-Paste `docs/agents/job-search/automation.md` into a new chat. Run it once and review its result.
+Run `pnpm run job-search:run --check` from the project root. Then run `pnpm run job-search:run` and review its result.
+
+The job-search runner uses a separate Codex home. It excludes personal `AGENTS.md` files and skills. It reads the current private workflow from `docs/agents/job-search/automation.md`.
 
 Confirm that the run creates a Markdown report. Confirm that the same report appears in Review.
 
@@ -73,10 +75,12 @@ Confirm that Track shows the saved status or response. A run with no active work
 
 Create standalone scheduled tasks in the ChatGPT desktop app. Select this local project for each task.
 
-Use the full contents of each `automation.md` file as its saved prompt:
+Configure the saved prompts:
 
-1. Schedule `job-search/automation.md` for the search days and time you want.
-2. Schedule `update-check/automation.md` after the job-search task or at another regular time.
+1. For job search, instruct the task to run `pnpm run job-search:run` from the project root outside the sandbox. It must wait for completion and report the command's result. It must not read policy or applicant files, browse, or repeat the workflow itself. Use the Node 24 launcher required by your local setup. Set `JOB_SEARCH_MODEL` and `JOB_SEARCH_REASONING_EFFORT` on the command when the schedule uses different model settings.
+2. For update check, use the full contents of `update-check/automation.md`. Schedule it after job search or at another regular time.
+
+The desktop launcher still receives desktop instructions. The job-search coordinator and workers run in the isolated home. The update-check setup above still uses the desktop context.
 
 Keep the computer on and the ChatGPT desktop app open when a task needs local files. Review the first few runs before you trust the schedule.
 
