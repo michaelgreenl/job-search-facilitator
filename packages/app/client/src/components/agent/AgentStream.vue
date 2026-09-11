@@ -12,7 +12,6 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
-const maxReasoningStatements = 6
 const maxReasoningStatementLength = 60
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
@@ -30,6 +29,8 @@ interface StreamItem {
     icon: StreamIcon
     message: string
     statements: string[]
+    preview: string
+    expandable: boolean
     type: 'activity' | 'commentary'
 }
 
@@ -44,11 +45,6 @@ const stripStatementMarkers = (message: string) =>
         .split('\n')
         .map((statement) => statement.replace(/^(\s*)\*\*/, '$1').replace(/\*\*(\s*)$/, '$1'))
         .join('\n')
-
-const reasoningStatements = (message: string) =>
-    stripStatementMarkers(message)
-        .split('\n')
-        .filter((statement) => statement.trim().length > 0)
 
 const limitReasoningStatement = (statement: string) =>
     statement.length > maxReasoningStatementLength
@@ -65,22 +61,26 @@ const streamItems = computed(() => {
                         ? 'globe'
                         : 'tool',
                 statements: [],
+                preview: '',
+                expandable: false,
                 type: 'activity',
             })
         } else if (event.type === 'message') {
             const lastItem = currentItems.at(-1)
 
             if (lastItem?.type === 'commentary') {
-                if (event.startsNewStatement && lastItem.message) {
-                    lastItem.message += '\n'
+                if (event.startsNewStatement) {
+                    lastItem.statements.push(event.textDelta)
+                } else {
+                    lastItem.statements[lastItem.statements.length - 1] += event.textDelta
                 }
-
-                lastItem.message += event.textDelta
             } else if (event.textDelta) {
                 currentItems.push({
                     icon: 'agent',
                     message: event.textDelta,
-                    statements: [],
+                    statements: [event.textDelta],
+                    preview: '',
+                    expandable: false,
                     type: 'commentary',
                 })
             }
@@ -89,17 +89,22 @@ const streamItems = computed(() => {
         return currentItems
     }, [])
 
-    return items.map((item) =>
-        item.type === 'commentary'
-            ? {
-                  ...item,
-                  statements: reasoningStatements(item.message)
-                      .slice(-maxReasoningStatements)
-                      .reverse()
-                      .map(limitReasoningStatement),
-              }
-            : item,
-    )
+    return items.map((item) => {
+        if (item.type === 'activity') return item
+
+        const statements = item.statements
+            .map((statement) => stripStatementMarkers(statement).trim())
+            .filter(Boolean)
+            .reverse()
+        const preview = limitReasoningStatement(statements[0]?.split('\n')[0] ?? '')
+
+        return {
+            ...item,
+            statements,
+            preview,
+            expandable: statements.length > 1 || (statements[0] ?? '') !== preview,
+        }
+    })
 })
 const latestActivityIndex = computed(() => {
     const items = streamItems.value
@@ -212,31 +217,29 @@ function allowBrowserActionsForTask() {
                         </span>
                     </template>
                     <component
-                        :is="item.statements.length > 1 ? 'details' : 'div'"
+                        :is="item.expandable ? 'details' : 'div'"
                         v-else
                         class="reasoning-details"
                     >
                         <component
-                            :is="item.statements.length > 1 ? 'summary' : 'div'"
+                            :is="item.expandable ? 'summary' : 'div'"
                             class="reasoning-summary"
                             :class="{
-                                'reasoning-summary-collapsible': item.statements.length > 1,
+                                'reasoning-summary-collapsible': item.expandable,
                             }"
-                            :data-testid="
-                                item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
-                            "
+                            :data-testid="item.expandable ? 'agent-reasoning-toggle' : undefined"
                         >
-                            <span data-testid="agent-reasoning-trace" class="activity-copy">
-                                {{ item.statements[0] }}
+                            <span data-testid="agent-reasoning-preview" class="activity-copy">
+                                {{ item.preview }}
                             </span>
                             <ChevronDownIcon
-                                v-if="item.statements.length > 1"
+                                v-if="item.expandable"
                                 class="activity-icon reasoning-chevron"
                             />
                         </component>
-                        <div v-if="item.statements.length > 1" class="reasoning-traces">
+                        <div v-if="item.expandable" class="reasoning-traces">
                             <span
-                                v-for="(statement, statementIndex) in item.statements.slice(1)"
+                                v-for="(statement, statementIndex) in item.statements"
                                 :key="statementIndex"
                                 data-testid="agent-reasoning-trace"
                                 class="activity-copy"
@@ -322,6 +325,7 @@ function allowBrowserActionsForTask() {
     min-width: 0;
     line-height: 1.25;
     white-space: pre-line;
+    overflow-wrap: anywhere;
 }
 
 .reasoning-details {
@@ -366,7 +370,7 @@ function allowBrowserActionsForTask() {
 }
 
 .reasoning-chevron {
-    opacity: 0;
+    opacity: 0.65;
     transform: rotate(-90deg);
     transition:
         opacity 140ms ease,

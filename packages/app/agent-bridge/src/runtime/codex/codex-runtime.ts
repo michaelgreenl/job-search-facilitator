@@ -246,9 +246,11 @@ export class CodexRuntime implements AgentRuntime {
                 sandbox: 'read-only',
                 threadSource: 'job-search-facilitator',
                 selectedCapabilityRoots,
-                developerInstructions: input.capabilities.includes('chrome')
-                    ? 'Use only the supplied task instructions and requested tools. Browser tabs created for this task are temporary. Close every tab you created before returning either success or failure, even after a tool error. Never mark research or error tabs as deliverables or handoffs. Never close existing user tabs or tabs owned by another task. Use only the installed Chrome tool; do not use another browser-control method if it fails.'
-                    : 'Follow the supplied task instructions. Return the final result as one JSON object matching the output schema, without surrounding Markdown.',
+                developerInstructions:
+                    (input.capabilities.includes('chrome')
+                        ? 'Use only the supplied task instructions and requested tools. Browser tabs created for this task are temporary. Close every tab you created before returning either success or failure, even after a tool error. Never mark research or error tabs as deliverables or handoffs. Never close existing user tabs or tabs owned by another task. Use only the installed Chrome tool; do not use another browser-control method if it fails.'
+                        : 'Follow the supplied task instructions. Return the final result as one JSON object matching the output schema, without surrounding Markdown.') +
+                    ' Before each group of tool calls, send one brief commentary sentence describing the immediate action. Use at most 10 words. Keep explanations and reasoning out of these progress updates. Return the final result separately using the output schema.',
                 config: {
                     ...(input.webSearch === false ? { web_search: 'disabled' } : {}),
                     ...(this.isolated

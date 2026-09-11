@@ -127,7 +127,7 @@ describe('agent stream', () => {
         ).toEqual(['Finding the **right** person', 'Reviewing the role'])
     })
 
-    it('discloses the six most recent traces in descending order', async () => {
+    it('retains complete statements across activity blocks and incoming updates', async () => {
         const { root, store, taskId } = mountAgentStream()
         const block = Array.from({ length: 7 }, (_, index) => `${index}`.repeat(80))
 
@@ -156,21 +156,9 @@ describe('agent stream', () => {
         const retainedTraceNodes = reasoningBlocks.map((item) =>
             Array.from(item.querySelectorAll('[data-testid="agent-reasoning-trace"]')),
         )
-        const retainedTraces = retainedTraceNodes.map((traces) =>
-            traces.map((trace) => trace.textContent),
-        )
-
-        expect(reasoningBlocks).toHaveLength(2)
-        expect(retainedTraces.every((statements) => statements.length === 6)).toBe(true)
         expect(
-            retainedTraces.map((statements) => statements.map((statement) => statement?.charAt(0))),
-        ).toEqual([
-            ['6', '5', '4', '3', '2', '1'],
-            ['6', '5', '4', '3', '2', '1'],
-        ])
-        expect(retainedTraces.flat().every((statement) => (statement?.length ?? 0) <= 60)).toBe(
-            true,
-        )
+            retainedTraceNodes.map((traces) => traces.map((trace) => trace.textContent)),
+        ).toEqual([[...block].reverse(), [...block].reverse()])
 
         appendEvent(store, taskId, {
             type: 'message',
@@ -184,14 +172,9 @@ describe('agent stream', () => {
             reasoningBlocks[1]?.querySelectorAll('[data-testid="agent-reasoning-trace"]') ?? [],
         )
 
-        expect(updatedTraceNodes).toHaveLength(6)
-        expect(updatedTraceNodes.map((trace) => trace.textContent?.charAt(0))).toEqual([
-            'n',
-            '6',
-            '5',
-            '4',
-            '3',
-            '2',
+        expect(updatedTraceNodes.map((trace) => trace.textContent)).toEqual([
+            'new trace',
+            ...[...block].reverse(),
         ])
 
         const firstDisclosure = reasoningBlocks[0]?.querySelector<HTMLDetailsElement>('details')
@@ -203,6 +186,30 @@ describe('agent stream', () => {
         expect(firstToggle?.querySelectorAll('svg')).toHaveLength(1)
         firstToggle?.click()
         expect(firstDisclosure?.open).toBe(true)
+    })
+
+    it('preserves paragraphs within a fragmented summary instead of reversing their lines', async () => {
+        const { root, store, taskId } = mountAgentStream()
+        const paragraphs = ['Reviewing the role', 'Checking the requirements', 'Finding a contact']
+
+        for (const [index, textDelta] of paragraphs.join('\n\n').split('').entries()) {
+            appendEvent(store, taskId, {
+                type: 'message',
+                textDelta,
+                startsNewStatement: index === 0,
+                createdAt,
+            })
+        }
+        await nextTick()
+
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map(
+                (trace) => trace.textContent,
+            ),
+        ).toEqual([paragraphs.join('\n\n')])
+        expect(root.querySelector('[data-testid="agent-reasoning-preview"]')?.textContent).toBe(
+            paragraphs[0],
+        )
     })
 
     it('presents a disclosure only when a reasoning block has hidden traces', async () => {
