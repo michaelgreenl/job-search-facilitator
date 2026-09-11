@@ -21,7 +21,7 @@ interface PendingRequest {
 export type SpawnAppServerProcess = (
     command: string,
     args: string[],
-    options: { cwd: string; stdio: ['pipe', 'pipe', 'pipe'] },
+    options: { cwd: string; stdio: ['pipe', 'pipe', 'pipe']; env?: NodeJS.ProcessEnv },
 ) => ChildProcessWithoutNullStreams
 
 export interface AppServerConnectionHandlers {
@@ -32,6 +32,7 @@ export interface AppServerConnectionHandlers {
 }
 
 export interface AppServerConnectionOptions {
+    environment?: NodeJS.ProcessEnv
     spawnProcess?: SpawnAppServerProcess
     requestTimeoutMs?: number
     exitDrainTimeoutMs?: number
@@ -45,6 +46,7 @@ export class AppServerConnection {
     private requestId = 0
     private readonly pendingRequests = new Map<RpcId, PendingRequest>()
     private readonly spawnProcess: SpawnAppServerProcess
+    private readonly environment: NodeJS.ProcessEnv | undefined
     private readonly requestTimeoutMs: number
     private readonly exitDrainTimeoutMs: number
     private readonly diagnosticSink: (message: string) => void
@@ -59,6 +61,7 @@ export class AppServerConnection {
         private readonly cwd: string,
         private readonly handlers: AppServerConnectionHandlers,
         {
+            environment,
             spawnProcess = spawn,
             requestTimeoutMs = 15_000,
             exitDrainTimeoutMs = 1_000,
@@ -79,6 +82,7 @@ export class AppServerConnection {
         }
 
         this.spawnProcess = spawnProcess
+        this.environment = environment
         this.requestTimeoutMs = requestTimeoutMs
         this.exitDrainTimeoutMs = exitDrainTimeoutMs
         this.diagnosticSink = diagnosticSink
@@ -105,6 +109,7 @@ export class AppServerConnection {
         const child = this.spawnProcess(this.binary, ['app-server', '--stdio'], {
             cwd: this.cwd,
             stdio: ['pipe', 'pipe', 'pipe'],
+            env: this.environment,
         })
 
         this.process = child

@@ -9,9 +9,11 @@ import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-
 const createFakeProcess = ({
     completeTaskImmediately = false,
     ignoredMethods = [],
+    instructionSources = [],
 }: {
     completeTaskImmediately?: boolean
     ignoredMethods?: string[]
+    instructionSources?: string[]
 } = {}) => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
@@ -69,8 +71,14 @@ const createFakeProcess = ({
                             ],
                         },
                     })
-                } else if (request.method === 'thread/start') {
-                    respond({ id: request.id, result: { thread: { id: 'thread-id' } } })
+                } else if (
+                    request.method === 'thread/start' ||
+                    request.method === 'thread/resume'
+                ) {
+                    respond({
+                        id: request.id,
+                        result: { thread: { id: 'thread-id' }, instructionSources },
+                    })
                 } else if (request.method === 'turn/start') {
                     const messages: Array<Record<string, unknown>> = [
                         { id: request.id, result: { turn: { id: 'turn-id' } } },
@@ -105,7 +113,10 @@ const createFakeProcess = ({
                     stdout.write(
                         `${messages.map((message) => JSON.stringify(message)).join('\n')}\n`,
                     )
-                } else if (request.method === 'turn/interrupt') {
+                } else if (
+                    request.method === 'turn/interrupt' ||
+                    request.method === 'mcpServer/tool/call'
+                ) {
                     respond({ id: request.id, result: {} })
                 }
             }
@@ -705,4 +716,109 @@ describe('Codex runtime', () => {
             error: 'Agent runtime request "initialize" timed out after 10ms',
         })
     })
+})
+
+it('resumes the requested draft thread without creating a new conversation', async () => {
+    const fake = createFakeProcess()
+    const runtime = new CodexRuntime('codex', '/workspace', { spawnProcess: () => fake.process })
+    await runtime.start()
+    await runtime.startTask('followup', {
+        threadId: 'thread-id',
+        prompt: 'Use my earlier feedback',
+        capabilities: [],
+        outputSchema: { type: 'object' },
+    })
+    expect(fake.requests.find(({ method }) => method === 'thread/resume')).toMatchObject({
+        params: { threadId: 'thread-id' },
+    })
+    expect(fake.requests.some(({ method }) => method === 'thread/start')).toBe(false)
+    runtime.close()
+})
+
+it('rejects inherited instruction files before an isolated agent runs', async () => {
+    const fake = createFakeProcess({ instructionSources: ['/personal/AGENTS.md'] })
+    const runtime = new CodexRuntime('codex', '/workspace', {
+        environment: { CODEX_HOME: '/isolated' },
+        spawnProcess: () => fake.process,
+    })
+    await runtime.start()
+    await expect(
+        runtime.startTask('task', {
+            prompt: 'Draft a reply',
+            capabilities: [],
+            outputSchema: { type: 'object' },
+        }),
+    ).rejects.toThrow('unexpected instruction files')
+    expect(fake.requests.some(({ method }) => method === 'turn/start')).toBe(false)
+    runtime.close()
+})
+
+it.each(['malformed-output', 'failed-turn'] as const)(
+    'closes only the browser session owned by a %s task',
+    async (failure) => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        await runtime.start()
+        const task = await manager.start({
+            prompt: 'Find the job',
+            capabilities: ['chrome'],
+            outputSchema: { type: 'object' },
+        })
+        fake.respond({
+            method: 'item/completed',
+            params: {
+                threadId: task.threadId,
+                turnId: task.turnId,
+                item: { type: 'agentMessage', phase: 'final_answer', text: 'not valid JSON' },
+            },
+        })
+        fake.respond({
+            method: 'turn/completed',
+            params: {
+                threadId: task.threadId,
+                turn: {
+                    id: task.turnId,
+                    status: failure === 'failed-turn' ? 'failed' : 'completed',
+                },
+            },
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(manager.get(task.id)?.status).toBe('failed')
+        expect(fake.requests.filter(({ method }) => method === 'mcpServer/tool/call')).toEqual([
+            expect.objectContaining({
+                params: {
+                    threadId: task.threadId,
+                    server: 'node_repl',
+                    tool: 'turn_ended',
+                    arguments: {
+                        hook_event_name: 'Stop',
+                        session_id: task.threadId,
+                        turn_id: task.turnId,
+                    },
+                },
+            }),
+        ])
+        runtime.close()
+    },
+)
+
+it('interrupts and cleans up an active browser task before shutdown', async () => {
+    const fake = createFakeProcess()
+    const runtime = new CodexRuntime('codex', '/workspace', { spawnProcess: () => fake.process })
+    await runtime.start()
+    await runtime.startTask('task', {
+        prompt: 'Read the job',
+        capabilities: ['chrome'],
+        outputSchema: { type: 'object' },
+    })
+    await runtime.shutdown()
+    expect(
+        fake.requests
+            .filter(({ method }) => method === 'turn/interrupt' || method === 'mcpServer/tool/call')
+            .map(({ method }) => method),
+    ).toEqual(['turn/interrupt', 'mcpServer/tool/call'])
+    expect(runtime.health.status).toBe('unavailable')
 })

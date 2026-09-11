@@ -13,6 +13,7 @@ import type { AgentTaskManager, AgentTaskStreamEvent } from '../tasks/agent-task
 import { InvalidAgentOutputSchemaError } from '../tasks/output-schema.ts'
 
 const startAgentTaskInputSchema = z.strictObject({
+    threadId: z.uuid().optional(),
     prompt: z.string().trim().min(1),
     outputSchema: z.looseObject({
         type: z.literal('object'),

@@ -16,6 +16,7 @@
         "cors": "^2.8.5",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
+        "smol-toml": "^1.8.0",
         "zod": "4.4.3"
     },
     "devDependencies": {
