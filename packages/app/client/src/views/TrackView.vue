@@ -518,7 +518,6 @@ onMounted(() => {
             v-if="selectedEntry && (outreachTaskVisible || outreachContact)"
             class="track-panel track-outreach glass-frame"
             data-testid="track-outreach-panel"
-            :class="{ 'track-outreach-draft': outreachContact }"
             :active="activePanel === 'outreach'"
             :adjacent="false"
             :post="selectedEntry.post"
@@ -561,13 +560,8 @@ onMounted(() => {
 }
 
 .track-outreach {
-    flex: 1.5;
     padding: $space-5;
     overflow: hidden;
-
-    &-draft {
-        flex: 2.5;
-    }
 }
 
 .track-stats {
