@@ -229,17 +229,27 @@ function allowBrowserActionsForTask() {
                             }"
                             :data-testid="item.expandable ? 'agent-reasoning-toggle' : undefined"
                         >
-                            <span data-testid="agent-reasoning-preview" class="activity-copy">
+                            <span
+                                data-testid="agent-reasoning-preview"
+                                class="activity-copy reasoning-preview"
+                            >
                                 {{ item.preview }}
+                            </span>
+                            <span
+                                v-if="item.expandable"
+                                data-testid="agent-reasoning-latest"
+                                class="activity-copy reasoning-latest"
+                            >
+                                {{ item.statements[0] }}
                             </span>
                             <ChevronDownIcon
                                 v-if="item.expandable"
                                 class="activity-icon reasoning-chevron"
                             />
                         </component>
-                        <div v-if="item.expandable" class="reasoning-traces">
+                        <div v-if="item.statements.length > 1" class="reasoning-traces">
                             <span
-                                v-for="(statement, statementIndex) in item.statements"
+                                v-for="(statement, statementIndex) in item.statements.slice(1)"
                                 :key="statementIndex"
                                 data-testid="agent-reasoning-trace"
                                 class="activity-copy"
@@ -365,8 +375,20 @@ function allowBrowserActionsForTask() {
     }
 }
 
+.reasoning-latest {
+    display: none;
+}
+
 .reasoning-details[open] > .reasoning-summary {
     color: $color-ink;
+
+    .reasoning-preview {
+        display: none;
+    }
+
+    .reasoning-latest {
+        display: block;
+    }
 }
 
 .reasoning-chevron {

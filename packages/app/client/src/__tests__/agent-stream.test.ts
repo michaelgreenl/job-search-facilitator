@@ -121,9 +121,11 @@ describe('agent stream', () => {
 
         expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(1)
         expect(
-            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map(
-                (trace) => trace.textContent?.trim(),
-            ),
+            Array.from(
+                root.querySelectorAll(
+                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
+                ),
+            ).map((trace) => trace.textContent?.trim()),
         ).toEqual(['Finding the **right** person', 'Reviewing the role'])
     })
 
@@ -154,7 +156,11 @@ describe('agent stream', () => {
             root.querySelectorAll('[data-testid="agent-stream-commentary"]'),
         )
         const retainedTraceNodes = reasoningBlocks.map((item) =>
-            Array.from(item.querySelectorAll('[data-testid="agent-reasoning-trace"]')),
+            Array.from(
+                item.querySelectorAll(
+                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
+                ),
+            ),
         )
         expect(
             retainedTraceNodes.map((traces) => traces.map((trace) => trace.textContent)),
@@ -169,7 +175,9 @@ describe('agent stream', () => {
         await nextTick()
 
         const updatedTraceNodes = Array.from(
-            reasoningBlocks[1]?.querySelectorAll('[data-testid="agent-reasoning-trace"]') ?? [],
+            reasoningBlocks[1]?.querySelectorAll(
+                '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
+            ) ?? [],
         )
 
         expect(updatedTraceNodes.map((trace) => trace.textContent)).toEqual([
@@ -203,9 +211,11 @@ describe('agent stream', () => {
         await nextTick()
 
         expect(
-            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map(
-                (trace) => trace.textContent,
-            ),
+            Array.from(
+                root.querySelectorAll(
+                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
+                ),
+            ).map((trace) => trace.textContent),
         ).toEqual([paragraphs.join('\n\n')])
         expect(root.querySelector('[data-testid="agent-reasoning-preview"]')?.textContent).toBe(
             paragraphs[0],
