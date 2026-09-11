@@ -107,6 +107,11 @@ export const useAgentStore = defineStore('agent', () => {
         writeAgentSessions(sessions.value.filter(({ taskId }) => !nonRestorableTaskIds.has(taskId)))
     }
 
+    function forgetOnRefresh(taskId: string) {
+        nonRestorableTaskIds.add(taskId)
+        persistSessions()
+    }
+
     function getSession(taskId: string) {
         return sessions.value.find((session) => session.taskId === taskId) ?? null
     }
@@ -189,9 +194,8 @@ export const useAgentStore = defineStore('agent', () => {
         })
         closeConnection(task.id, 'closed')
 
-        if (task.status === 'cancelled') {
-            nonRestorableTaskIds.add(task.id)
-            persistSessions()
+        if (task.status === 'cancelled' || task.status === 'failed') {
+            forgetOnRefresh(task.id)
         }
 
         return task
@@ -364,6 +368,17 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
     function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner): AgentTaskStart {
+        if (owner.kind === 'outreach-draft') {
+            for (const session of sessions.value) {
+                if (session.kind !== 'outreach-draft' || session.contactId !== owner.contactId) {
+                    continue
+                }
+                if (isTaskActive(session.taskId)) {
+                    throw new Error('A draft request is already active for this contact')
+                }
+                dismissSession(session.taskId)
+            }
+        }
         if (owner.kind === 'job-post-import') {
             const currentSession = sessions.value.find(
                 (session) => session.kind === 'job-post-import',
@@ -620,6 +635,7 @@ export const useAgentStore = defineStore('agent', () => {
         restoreTask,
         restoreSessions,
         dismissSession,
+        forgetOnRefresh,
         resolvePermission,
         allowBrowserActionsForTask,
         cancelTask,

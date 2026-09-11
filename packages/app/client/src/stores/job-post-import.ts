@@ -102,6 +102,7 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
             if (currentRevision === revision && session.value?.taskId === taskId) {
                 issue.value = 'Agent did not return a valid job post. Try again.'
                 retryMode.value = 'task'
+                agentStore.forgetOnRefresh(taskId)
             }
             return
         }
