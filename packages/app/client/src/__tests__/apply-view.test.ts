@@ -1052,6 +1052,45 @@ describe('apply view', () => {
         expect(FakeEventSource.instances).toHaveLength(0)
     })
 
+    it('allows changing a label after marking a post applied', async () => {
+        const appliedPost = {
+            ...posts[0]!,
+            applicationStatus: 'awaiting-response' as const,
+            updatedAt: '2026-07-16T12:00:01.000Z',
+        }
+        vi.mocked(fetch)
+            .mockReset()
+            .mockResolvedValueOnce(jsonResponse(applyQueueItems))
+            .mockResolvedValueOnce(jsonResponse({ post: appliedPost, inApplyQueue: false }))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    post: {
+                        ...appliedPost,
+                        userLabel: 'P2',
+                        updatedAt: '2026-07-16T12:00:02.000Z',
+                    },
+                    inApplyQueue: false,
+                }),
+            )
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
+        const postStore = usePostStore(pinia)
+
+        await selectPost(root, appliedPost.id)
+        await chooseJobPostAction(root, 'applied')
+        await vi.waitFor(() =>
+            expect(postStore.findPost(appliedPost.id)?.applicationStatus).toBe('awaiting-response'),
+        )
+
+        await chooseJobPostAction(root, 'P2')
+
+        await vi.waitFor(() => expect(postStore.findPost(appliedPost.id)?.userLabel).toBe('P2'))
+        expect(fetch).toHaveBeenLastCalledWith(
+            expect.stringContaining(`/api/job-posts/${appliedPost.id}`),
+            expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ userLabel: 'P2' }) }),
+        )
+    })
+
     it('keeps applied and forgone posts in the filtered queue for the current visit', async () => {
         const forgoSourcePost = {
             ...posts[1]!,
@@ -1086,7 +1125,8 @@ describe('apply view', () => {
                 }),
             )
             .mockReturnValueOnce(forgoResponse)
-        const root = await mountApplyView()
+        const pinia = createPinia()
+        const root = await mountApplyView(pinia)
 
         findTestButton(root, 'apply-post-filter-trigger').click()
         await vi.waitFor(() =>
@@ -1100,7 +1140,9 @@ describe('apply view', () => {
         await chooseJobPostAction(root, 'applied')
 
         await vi.waitFor(() =>
-            expect(findTestButton(root, 'job-label-trigger').disabled).toBe(true),
+            expect(usePostStore(pinia).findPost(appliedPost.id)?.applicationStatus).toBe(
+                'awaiting-response',
+            ),
         )
         findTestButton(root, 'back-to-job-posts').click()
 

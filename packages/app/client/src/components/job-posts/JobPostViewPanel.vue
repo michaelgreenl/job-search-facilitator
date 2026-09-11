@@ -280,9 +280,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                     test-id="job-label"
                     :label="labelPrompt"
                     :options="labelOptions"
-                    :disabled="
-                        labelUpdating || (applyMode?.applicationUpdating ?? false) || applied
-                    "
+                    :disabled="labelUpdating || (applyMode?.applicationUpdating ?? false)"
                     @select="selectLabel"
                 />
             </div>
