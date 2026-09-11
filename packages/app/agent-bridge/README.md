@@ -22,7 +22,7 @@ Startup copies the current sign-in and model metadata. It copies only model sett
 
 Browser tasks receive Chrome's required instructions. Draft requests receive no skill catalog or browser tools. Codex's built-in instructions still apply.
 
-Draft requests can resume an existing task with `threadId`. Each contact keeps its conversation, editor text, and unsent request in browser session storage. Proposed drafts require explicit acceptance. Failed task state is excluded from refresh restoration. A retry after malformed output starts a clean runtime conversation with the successful exchanges supplied as context.
+Failed task state is excluded from refresh restoration. A retry after malformed output starts a new task with the original request context.
 
 The bridge requests Chrome's native tab cleanup after browser turns and cancellation. Cleanup targets that task's browser session. Existing user tabs remain open. A runtime crash can prevent cleanup.
 

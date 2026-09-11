@@ -1,22 +1,17 @@
 <script setup lang="ts">
 import type { OutreachContact } from '@job-search-facilitator/core'
-import { computed, useId, useTemplateRef } from 'vue'
+import { computed, useId } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ArrowUpIcon from '@/components/svgs/ArrowUpIcon.vue'
 import CopyIcon from '@/components/svgs/CopyIcon.vue'
 import SaveIcon from '@/components/svgs/SaveIcon.vue'
-import { useStickyBottomScroll } from '@/composables/useStickyBottomScroll'
-import type { DraftExchange } from '@/services/outreach-conversation'
 
 import OutreachContactCard from './OutreachContactCard.vue'
 
-const props = defineProps<{
+defineProps<{
     contact: OutreachContact
-    exchanges: DraftExchange[]
-    pendingRequest?: string | null
-    retryAvailable?: boolean
-    cancelling?: boolean
+    assistantReply: string | null
     running: boolean
     requestingChanges: boolean
     copyState: 'idle' | 'copied' | 'failed'
@@ -34,26 +29,12 @@ const emit = defineEmits<{
     copy: []
     save: []
     updateMessaged: [messaged: boolean]
-    useDraft: [taskId: string]
-    newConversation: []
-    retry: []
-    cancel: []
 }>()
 
 const draft = defineModel<string>('draft', { required: true })
 const request = defineModel<string>('request', { required: true })
 const canSubmit = computed(() => request.value.trim().length > 0)
 const copyFeedbackId = useId()
-const conversationLog = useTemplateRef<HTMLElement>('conversationLog')
-const { handleScroll } = useStickyBottomScroll(conversationLog, () => [
-    props.exchanges,
-    props.pendingRequest,
-    props.running,
-])
-
-function submit() {
-    if (!props.running && canSubmit.value) emit('submit')
-}
 </script>
 
 <template>
@@ -75,14 +56,13 @@ function submit() {
 
         <div class="draft-workspace">
             <div class="draft-content">
-                <label class="eyebrow" for="outreach-message">Current draft</label>
                 <div class="draft-field">
                     <textarea
                         id="outreach-message"
                         v-model="draft"
                         class="text-field draft-textarea"
                         aria-label="Outreach message"
-                        data-testid="outreach-message"
+                        :disabled="running"
                     ></textarea>
                     <div class="draft-actions">
                         <BaseButton
@@ -129,119 +109,47 @@ function submit() {
                 </div>
             </div>
 
-            <div class="conversation-pane">
-                <div class="conversation-heading">
-                    <span class="eyebrow">Conversation</span>
-                    <BaseButton
-                        preset="text"
-                        data-testid="outreach-new-conversation"
-                        :disabled="running || (exchanges.length === 0 && !pendingRequest && !issue)"
-                        @click="emit('newConversation')"
-                        >New conversation</BaseButton
-                    >
-                </div>
-                <div
-                    ref="conversationLog"
-                    class="conversation-log"
-                    data-testid="outreach-conversation"
-                    role="log"
-                    aria-label="Draft conversation"
-                    aria-live="polite"
-                    tabindex="0"
-                    @scroll="handleScroll"
-                >
-                    <p v-if="exchanges.length === 0 && !pendingRequest" class="conversation-empty">
-                        Shape this message together. Ask a question, request a change, or paste
-                        their reply to draft a response.
-                    </p>
-                    <article
-                        v-for="exchange in exchanges"
-                        :key="exchange.taskId"
-                        class="conversation-exchange"
-                    >
-                        <p class="conversation-request">
-                            <span class="message-author">You</span>{{ exchange.request }}
-                        </p>
-                        <div class="conversation-response">
-                            <span class="message-author">Agent</span>
-                            <p>{{ exchange.response }}</p>
-                            <div v-if="exchange.draft" class="proposed-draft">
-                                <span class="eyebrow">Proposed draft</span>
-                                <p>{{ exchange.draft }}</p>
-                                <BaseButton
-                                    preset="outline"
-                                    :data-testid="`use-outreach-draft-${exchange.taskId}`"
-                                    :disabled="exchange.draft === draft"
-                                    @click="emit('useDraft', exchange.taskId)"
-                                    >{{
-                                        exchange.draft === draft ? 'In editor' : 'Use this draft'
-                                    }}</BaseButton
-                                >
-                            </div>
-                        </div>
-                    </article>
-                    <p v-if="pendingRequest" class="conversation-request">
-                        <span class="message-author">You</span>{{ pendingRequest }}
-                    </p>
-                    <p v-if="running && !reconnecting" class="draft-reconnect" role="status">
-                        Working on your request…
-                    </p>
-                </div>
-                <p
-                    v-if="reconnecting"
-                    class="draft-reconnect"
-                    data-testid="outreach-draft-reconnect"
-                    role="status"
-                >
-                    Reconnecting to Agent…
-                </p>
-                <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
-                    {{ issue }}
-                </p>
-                <div v-if="retryAvailable || running" class="conversation-actions">
-                    <BaseButton
-                        v-if="retryAvailable"
-                        preset="outline"
-                        data-testid="outreach-draft-retry"
-                        @click="emit('retry')"
-                        >Retry request</BaseButton
-                    >
-                    <BaseButton
-                        v-if="running"
-                        preset="text"
-                        data-testid="outreach-draft-stop"
-                        :disabled="cancelling"
-                        @click="emit('cancel')"
-                        >{{ cancelling ? 'Stopping…' : 'Stop' }}</BaseButton
-                    >
-                </div>
+            <p v-if="assistantReply" class="assistant-reply" aria-live="polite">
+                {{ assistantReply }}
+            </p>
+            <p
+                v-if="reconnecting"
+                class="draft-reconnect"
+                data-testid="outreach-draft-reconnect"
+                role="status"
+            >
+                Reconnecting to Agent…
+            </p>
+            <p v-if="issue" class="draft-issue" data-testid="outreach-draft-issue" role="alert">
+                {{ issue }}
+            </p>
 
-                <form class="draft-request" @submit.prevent="submit">
-                    <div class="request-field">
-                        <textarea
-                            id="draft-request"
-                            v-model="request"
-                            class="text-field request-input"
-                            data-testid="outreach-draft-request"
-                            rows="2"
-                            aria-label="Message the draft assistant"
-                            placeholder="Ask, revise, or paste a reply…"
-                            @keydown.enter.exact.prevent="submit"
-                        ></textarea>
-                        <BaseButton
-                            class="field-action send-button"
-                            type="submit"
-                            data-testid="outreach-draft-submit"
-                            aria-label="Send request"
-                            :aria-busy="requestingChanges || undefined"
-                            :disabled="running || !canSubmit"
-                        >
-                            <LoadingSpinner v-if="requestingChanges" class="send-spinner" />
-                            <ArrowUpIcon v-else class="send-icon" />
-                        </BaseButton>
-                    </div>
-                </form>
-            </div>
+            <form class="draft-request" @submit.prevent="emit('submit')">
+                <div class="request-field">
+                    <textarea
+                        id="draft-request"
+                        v-model="request"
+                        class="text-field request-input"
+                        data-testid="outreach-draft-request"
+                        rows="1"
+                        aria-label="Request draft changes"
+                        :disabled="running"
+                        placeholder="Request changes"
+                        @keydown.enter.exact.prevent="emit('submit')"
+                    ></textarea>
+                    <BaseButton
+                        class="field-action send-button"
+                        type="submit"
+                        data-testid="outreach-draft-submit"
+                        aria-label="Send request"
+                        :aria-busy="requestingChanges || undefined"
+                        :disabled="running || !canSubmit"
+                    >
+                        <LoadingSpinner v-if="requestingChanges" class="send-spinner" />
+                        <ArrowUpIcon v-else class="send-icon" />
+                    </BaseButton>
+                </div>
+            </form>
         </div>
     </section>
 </template>
@@ -253,12 +161,11 @@ function submit() {
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
-    overflow: auto;
 
     &.is-expanded {
         @include bp-md-tablet {
             display: grid;
-            grid-template-columns: minmax(12rem, 0.65fr) minmax(0, 2fr);
+            grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.8fr);
             align-items: stretch;
         }
     }
@@ -278,15 +185,16 @@ function submit() {
     flex-direction: column;
     gap: $space-3;
     min-height: 0;
-    min-width: 0;
 }
 
+.assistant-reply,
 .draft-reconnect,
 .draft-issue {
     margin: 0;
     font-size: 0.875rem;
 }
 
+.assistant-reply,
 .draft-reconnect {
     color: $color-ink-secondary;
 }
@@ -330,7 +238,7 @@ function submit() {
 
 .draft-content {
     display: flex;
-    flex: 0 0 auto;
+    flex: 1;
     flex-direction: column;
     gap: $space-2;
     min-height: 0;
@@ -347,81 +255,8 @@ function submit() {
 .draft-textarea {
     flex: 1;
     width: 100%;
-    min-height: 6rem;
-    height: 22vh;
-    max-height: 18rem;
+    min-height: 8rem;
     resize: none;
-}
-
-.conversation-pane {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: $space-3;
-    min-height: 12rem;
-}
-
-.conversation-heading,
-.conversation-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $space-2;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.conversation-log {
-    flex: 1;
-    min-height: 5rem;
-    padding: $space-1;
-    overflow: auto;
-    overscroll-behavior: contain;
-    font-size: 0.875rem;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-    border-radius: $radius-md;
-
-    p {
-        margin: 0;
-        white-space: pre-wrap;
-    }
-}
-
-.conversation-empty {
-    color: $color-ink-muted;
-}
-
-.conversation-exchange {
-    margin-bottom: $space-4;
-}
-
-.message-author {
-    display: block;
-    margin-bottom: $space-1;
-    color: $color-ink-muted;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.conversation-request {
-    padding: $space-3;
-    background: $color-ink-alpha-6;
-    border-radius: $radius-md;
-}
-
-.conversation-response {
-    padding: $space-3 $space-1 0;
-}
-
-.proposed-draft {
-    display: flex;
-    flex-direction: column;
-    gap: $space-3;
-    align-items: flex-start;
-    margin-top: $space-3;
-    padding: $space-3;
-    border: 1px solid $color-ink-alpha-16;
-    border-radius: $radius-md;
 }
 
 .field-action {

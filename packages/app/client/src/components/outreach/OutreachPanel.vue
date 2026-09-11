@@ -45,9 +45,7 @@ const emit = defineEmits<{
 
 const outreachStore = useOutreachStore()
 const {
-    draftExchanges,
-    draftRequest,
-    pendingDraftRequest,
+    assistantReply,
     contact,
     contactSaving,
     contactUpdateError,
@@ -81,6 +79,7 @@ const panelView = shallowRef<PanelView>(
             ? 'stream'
             : 'contacts',
 )
+const draftRequest = shallowRef('')
 const copyState = shallowRef<'idle' | 'copied' | 'failed'>('idle')
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -159,7 +158,6 @@ onBeforeUnmount(resetCopyState)
 function submitDraftRequest() {
     const post = props.post
     const request = draftRequest.value.trim()
-    const contactId = contact.value?.id
 
     if (
         post === null ||
@@ -174,12 +172,7 @@ function submitDraftRequest() {
     void outreachStore
         .requestDraftRevision(post, request, props.description)
         .then((started) => {
-            if (
-                started &&
-                issue.value === null &&
-                contact.value?.id === contactId &&
-                draftRequest.value.trim() === request
-            ) {
+            if (started) {
                 draftRequest.value = ''
             }
         })
@@ -392,10 +385,7 @@ async function copyDraft() {
                     v-model:draft="draft"
                     v-model:request="draftRequest"
                     :contact="contact"
-                    :exchanges="draftExchanges"
-                    :pending-request="pendingDraftRequest"
-                    :retry-available="retryAvailable"
-                    :cancelling="cancelling"
+                    :assistant-reply="assistantReply"
                     :can-save="draftDirty"
                     :running="isActive"
                     :requesting-changes="drafting && isActive"
@@ -410,10 +400,6 @@ async function copyDraft() {
                     @copy="copyDraft"
                     @save="saveDraft"
                     @update-messaged="updateMessaged"
-                    @use-draft="outreachStore.useProposedDraft"
-                    @new-conversation="outreachStore.startNewConversation"
-                    @retry="emit('retry')"
-                    @cancel="outreachStore.cancelActiveTask(false).catch(() => undefined)"
                 />
             </template>
         </section>

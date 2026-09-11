@@ -1,9 +1,4 @@
-import type {
-    AgentTask,
-    AgentTaskEvent,
-    JsonObject,
-    StartAgentTaskInput,
-} from '@job-search-facilitator/core'
+import type { AgentTask, AgentTaskEvent, JsonObject } from '@job-search-facilitator/core'
 import { vi } from 'vitest'
 import { FakeEventSource } from './fake-event-source'
 import { jsonResponse, requestParts } from './http'
@@ -25,7 +20,6 @@ const createdAt = '2026-07-20T12:00:00.000Z'
 export class AgentBridgeHarness {
     readonly requests: Array<{ method: string; url: string }> = []
     readonly tasks = new Map<string, AgentTask>()
-    readonly startInputs = new Map<string, StartAgentTaskInput>()
     readonly fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
         this.handleRequest(input, init),
     )
@@ -124,12 +118,10 @@ export class AgentBridgeHarness {
                     throw new Error(`Agent task "${taskId}" requires a JSON request body`)
                 }
 
-                const taskInput = JSON.parse(init.body) as StartAgentTaskInput
-                this.startInputs.set(taskId, taskInput)
                 const task: AgentTask = {
                     id: taskId,
                     status: 'running',
-                    threadId: taskInput.threadId ?? `thread-${taskId}`,
+                    threadId: `thread-${taskId}`,
                     turnId: `turn-${taskId}`,
                     output: null,
                     error: null,

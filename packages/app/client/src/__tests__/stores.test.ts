@@ -782,7 +782,7 @@ describe('outreach store', () => {
         expect(agentStore.getSession(runningTask.id)).not.toBeNull()
     })
 
-    it('keeps a background draft proposal with its contact without changing another editor', async () => {
+    it('applies a completed draft only to the contact and run that are reopened', async () => {
         const otherContact: OutreachContact = {
             ...secondContact,
             jobPostId: post.id,
@@ -808,11 +808,12 @@ describe('outreach store', () => {
         })
         await vi.waitFor(() => expect(store.contact).toEqual(otherContact))
         expect(store.draft).toBe(otherContact.draftMessage)
+        expect(agentStore.getSession(runningTask.id)).not.toBeNull()
+
+        store.openTask(runningTask.id)
+
         await vi.waitFor(() => expect(agentStore.getSession(runningTask.id)).toBeNull())
-        store.selectContact(savedContact)
         expect(store.contact).toEqual(savedContact)
-        expect(store.draft).toBe(savedContact.draftMessage)
-        store.useProposedDraft(runningTask.id)
         expect(store.draft).toBe('A warmer draft')
     })
 
