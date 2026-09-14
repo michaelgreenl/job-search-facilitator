@@ -32,6 +32,7 @@ export interface StartAgentTaskInput {
     outputSchema: AgentOutputSchema
     capabilities: AgentCapability[]
     webSearch?: boolean
+    resumeContext?: boolean
 }
 
 export interface AgentHealthResponse {

@@ -26,6 +26,9 @@ Create a private temporary directory for all JSON artifacts. Set `REPORT_PATH` t
 
 Perform every startup check in `navigation.md`. Stop and report an exact failure when a check does not pass.
 
+Run `pnpm run job-search:resumes`. Read its complete output before discovery. Pass that context to each discovery and judgment agent.
+Stop if the command fails. It reads the newest PDF for each named resume, not earlier uploads.
+
 Fetch history without printing its body:
 
 ```bash
@@ -73,7 +76,7 @@ Stop if either command fails. Do not edit valid evidence to make a check pass.
 
 ## Judgment
 
-Evaluate every candidate in `REVIEW_PATH` once. Use only the current profile, evaluation policy, strategy, and review packet.
+Evaluate every candidate in `REVIEW_PATH` once. Use the current profile, uploaded resume context, evaluation policy, strategy, and review packet.
 
 Write `JUDGMENT_PATH` with the unchanged `reviewDigest`. Put selected decisions first in rank order.
 
@@ -91,7 +94,8 @@ Use this shape for selected roles:
 }
 ```
 
-`verdict` can be `target` or `quick-app`. `recommendedResume` can be `frontend`, `backend`, or `full-stack`.
+`verdict` can be `target` or `quick-app`. Set `recommendedResume` to an exact name from the uploaded resume context.
+When no resumes are uploaded, keep the existing choices: `frontend`, `backend`, or `full-stack`.
 
 Use this shape for rejected roles:
 

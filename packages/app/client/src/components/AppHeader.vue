@@ -62,15 +62,6 @@ function handleFocusOut(event: FocusEvent) {
         </button>
 
         <div class="nav-surface glass-frame" :inert="!showNav">
-            <RouterLink
-                class="brand"
-                to="/"
-                aria-label="Job Search Facilitator home"
-                @click="closeNavigation()"
-            >
-                <span class="brand-mark" aria-hidden="true">JF</span>
-            </RouterLink>
-
             <nav id="primary-navigation" class="nav-links" aria-label="Primary">
                 <RouterLink
                     v-for="item in navigationItems"
@@ -83,6 +74,30 @@ function handleFocusOut(event: FocusEvent) {
                     {{ item.label }}
                 </RouterLink>
             </nav>
+
+            <RouterLink
+                class="settings-link link"
+                to="/settings"
+                aria-label="Settings"
+                title="Settings"
+                data-testid="nav-link-settings"
+                @click="closeNavigation()"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="m9 3-.6 2.4-2.1 1.2L4 6l-2 3.5 1.8 1.7v2.5L2 15.5 4 19l2.3-.6 2.1 1.2L9 22h4l.6-2.4 2.1-1.2 2.3.6 2-3.5-1.8-1.8v-2.5L20 9.5 18 6l-2.3.6-2.1-1.2L13 3Z"
+                    />
+                    <circle cx="11" cy="12.5" r="3" />
+                </svg>
+            </RouterLink>
         </div>
     </header>
 </template>
@@ -113,7 +128,7 @@ $nav-surface-height: 4.25rem;
     gap: calc($space-4 + 0.25rem);
     align-items: center;
     min-height: $nav-surface-height;
-    padding: $space-3 calc($space-4 + 0.25rem) $space-3 $space-3;
+    padding: $space-3 calc($space-4 + 0.25rem);
     border-top: 0;
     border-radius: 0 0 $radius-lg $radius-lg;
 }
@@ -155,38 +170,29 @@ $nav-surface-height: 4.25rem;
     }
 }
 
-.brand {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
-    text-decoration: none;
-}
-
-.brand-mark {
-    display: grid;
-    width: 2.5rem;
-    height: 2.5rem;
-    flex: 0 0 auto;
-    color: $color-signal-light;
-    font-family: $font-family-mono;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    place-items: center;
-    background: $color-signal-alpha-12;
-    border: 1px solid $color-signal-alpha-34;
-    border-radius: $radius-md;
-    box-shadow: inset 0 1px 0 $color-white-alpha-14;
-
-    @media (forced-colors: active) {
-        border: 1px solid ButtonText;
-    }
-}
-
 .nav-links {
     display: flex;
     gap: calc($space-4 + 0.25rem);
     align-items: center;
+}
+
+.settings-link {
+    display: grid;
+    flex: 0 0 2rem;
+    min-height: 2.5rem;
+    margin-left: $space-3;
+    place-items: center;
+}
+
+@media (width <= 420px) {
+    .nav-surface,
+    .nav-links {
+        gap: $space-3;
+    }
+
+    .settings-link {
+        margin-left: $space-1;
+    }
 }
 
 .link {

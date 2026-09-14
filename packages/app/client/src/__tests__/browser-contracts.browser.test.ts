@@ -110,6 +110,7 @@ describe('browser interaction contracts', () => {
                 { path: '/', component: EmptyRoute },
                 { path: '/apply', component: EmptyRoute },
                 { path: '/track', component: EmptyRoute },
+                { path: '/settings', component: EmptyRoute },
             ],
         })
         await router.push('/')
@@ -145,6 +146,7 @@ describe('browser interaction contracts', () => {
                 { path: '/', component: EmptyRoute },
                 { path: '/apply', component: EmptyRoute },
                 { path: '/track', component: EmptyRoute },
+                { path: '/settings', component: EmptyRoute },
             ],
         })
         await router.push('/')

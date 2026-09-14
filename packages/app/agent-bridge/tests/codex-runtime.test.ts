@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as resumeContext from '../src/resume-context.ts'
 import type { AgentRuntimeEvent } from '../src/runtime/agent-runtime.ts'
 import { CodexRuntime } from '../src/runtime/codex/codex-runtime.ts'
 import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
@@ -135,6 +136,45 @@ const createFakeProcess = ({
 }
 
 describe('Codex runtime', () => {
+    it('passes loaded resume evidence to an import task and blocks evaluation when loading fails', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const load = vi
+            .spyOn(resumeContext, 'loadResumeContext')
+            .mockResolvedValue('Synthetic current PDF evidence')
+        const input = {
+            prompt: 'Evaluate the supplied role',
+            outputSchema: { type: 'object' as const },
+            capabilities: [],
+            resumeContext: true,
+        }
+        try {
+            await runtime.start()
+            await runtime.startTask('resume-import', input)
+            expect(fake.requests).toContainEqual(
+                expect.objectContaining({
+                    method: 'thread/start',
+                    params: expect.objectContaining({
+                        developerInstructions: expect.stringContaining(
+                            'Synthetic current PDF evidence',
+                        ),
+                    }),
+                }),
+            )
+            fake.requests.length = 0
+            load.mockRejectedValueOnce(new Error('Unreadable resume'))
+            await expect(runtime.startTask('failed-import', input)).rejects.toThrow(
+                'Unreadable resume',
+            )
+            expect(fake.requests.filter(({ method }) => method === 'turn/start')).toEqual([])
+        } finally {
+            load.mockRestore()
+            runtime.close()
+        }
+    })
+
     it('discovers Chrome and starts a structured read-only task', async () => {
         const fake = createFakeProcess()
         const runtime = new CodexRuntime('codex', '/workspace', {

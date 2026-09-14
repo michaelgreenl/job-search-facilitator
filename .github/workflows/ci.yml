@@ -59,6 +59,9 @@ jobs:
             - name: Install browser test runtime
               run: pnpm --filter client exec playwright install --with-deps chromium
 
+            - name: Install PDF text reader
+              run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
             - name: Run checks
               run: pnpm run check
 

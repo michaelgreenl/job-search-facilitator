@@ -55,6 +55,28 @@ Do not add a remote to this nested repository. It can contain personal informati
 
 ## Test each prompt manually
 
+### Resume library
+
+Open Settings with the gear icon. Add a named master resume as a PDF. Use **Upload new PDF** to update that resume.
+The newest upload becomes current. **View previous uploads** opens timestamped history with open and download links.
+The app stores all PDFs in PostgreSQL. Database backups include upload history. These files remain separate from application-specific documents.
+
+Install Poppler on the machine that runs the Agent bridge and scheduled search (`brew install poppler` on macOS).
+The reader requires `pdftotext` on `PATH`. Use unlocked PDFs with selectable text; scanned images need text recognition before upload.
+
+After the API starts, run `pnpm run job-search:resumes` to check extraction without running a search.
+This command prints private resume text. Do not publish its output.
+Use `JOB_SEARCH_API_URL` when the API does not use `http://127.0.0.1:3000/api`.
+
+The scheduled runner reads this context after startup checks. User-added imports receive the same extracted PDF context automatically.
+The current library replaces fixed resume categories. Agents recommend a starting resume without giving tailoring suggestions or requiring perfect wording.
+An empty library keeps the existing choices. Extraction or library errors stop evaluation instead of silently omitting uploaded context.
+
+Deploy the API migration, Agent bridge, and client together. The runner still supports an older API during rollout.
+The feature does not edit saved schedules or private policy files. Existing schedules must call `pnpm run job-search:run` as described below.
+
+### Manual run
+
 Open the project folder in the ChatGPT desktop app. Use the local project, not an isolated worktree.
 
 Run `pnpm run job-search:run --check` from the project root. Then run `pnpm run job-search:run` and review its result.

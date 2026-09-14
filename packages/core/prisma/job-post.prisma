@@ -62,7 +62,7 @@ model UserAddedJobPost {
   fitRationale         String
   applicationFlow      String
   keyLegitimacySignals String
-  recommendedResume    ResumeType
+  recommendedResume    String
   recommendedAction    String
   legitimacyNotes      String?
   createdAt            DateTime   @default(now()) @db.Timestamptz(3)

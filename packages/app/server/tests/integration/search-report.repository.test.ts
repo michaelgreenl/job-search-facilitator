@@ -166,6 +166,7 @@ const createUserAddedInput = (
 }
 
 beforeEach(async () => {
+    await prisma.resume.deleteMany()
     await prisma.outreachContact.deleteMany()
     await prisma.outreachRun.deleteMany()
     await prisma.userAddedJobPost.deleteMany()

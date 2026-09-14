@@ -3,14 +3,6 @@ enum AgentLabel {
   QUICK_APP @map("quick-app")
 }
 
-enum ResumeType {
-  FRONTEND           @map("frontend")
-  BACKEND            @map("backend")
-  FULL_STACK         @map("full-stack")
-  BACKEND_FULL_STACK @map("backend-full-stack")
-  GENERAL            @map("general")
-}
-
 model JobSearchReport {
   id         String            @id @default(uuid()) @db.Uuid
   reportDate DateTime          @db.Date
@@ -29,7 +21,7 @@ model JobSearchResult {
   fitRationale         String
   applicationFlow      String
   keyLegitimacySignals String
-  recommendedResume    ResumeType
+  recommendedResume    String
   recommendedAction    String
   legitimacyNotes      String?
   report               JobSearchReport @relation(fields: [reportId], references: [id], onDelete: Cascade)

@@ -20,8 +20,6 @@ export const CURRENT_RESUME_TYPES = ['frontend', 'backend', 'full-stack', 'gener
 
 export const REPORT_RESUME_TYPES = ['frontend', 'backend', 'full-stack'] as const
 
-export const RESUME_TYPES = [...CURRENT_RESUME_TYPES, 'backend-full-stack'] as const
-
 export type IsoDateTime = string
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
@@ -31,12 +29,6 @@ export type PostStatus = (typeof POST_STATUSES)[number]
 export type UserLabel = (typeof USER_LABELS)[number]
 
 export type AgentLabel = (typeof AGENT_LABELS)[number]
-
-export type ResumeType = (typeof RESUME_TYPES)[number]
-
-export type CurrentResumeType = (typeof CURRENT_RESUME_TYPES)[number]
-
-export type ReportResumeType = (typeof REPORT_RESUME_TYPES)[number]
 
 export interface JobPost {
     id: string
@@ -106,7 +98,7 @@ export interface JobRecommendation {
     fitRationale: string
     applicationFlow: string
     keyLegitimacySignals: string
-    recommendedResume: ResumeType
+    recommendedResume: string
     recommendedAction: string
     legitimacyNotes: string | null
 }
@@ -121,8 +113,7 @@ export interface JobSearchResult extends JobRecommendation {
     jobPostSnapshot: JobPostSnapshot | null
 }
 
-export interface JobSearchResultInput extends Omit<JobRecommendation, 'recommendedResume'> {
-    recommendedResume: ReportResumeType
+export interface JobSearchResultInput extends JobRecommendation {
     post: JobPostInput
 }
 
@@ -133,8 +124,7 @@ export interface UpsertJobSearchReportInput {
 
 export type StandaloneJobRecommendation = Omit<JobRecommendation, 'agentRank'>
 
-export type CreateUserAddedJobPostInput = Omit<StandaloneJobRecommendation, 'recommendedResume'> & {
-    recommendedResume: CurrentResumeType
+export type CreateUserAddedJobPostInput = StandaloneJobRecommendation & {
     post: JobPostInput
 }
 

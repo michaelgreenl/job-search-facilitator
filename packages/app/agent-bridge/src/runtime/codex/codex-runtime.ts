@@ -8,6 +8,7 @@ import type {
     StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { z } from 'zod'
+import { loadResumeContext } from '../../resume-context.ts'
 import type {
     AgentRuntime,
     AgentRuntimeEvent,
@@ -215,6 +216,7 @@ export class CodexRuntime implements AgentRuntime {
 
     async startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.assertReady()
+        const resumeContext = input.resumeContext ? await loadResumeContext() : ''
         if (input.threadId !== undefined) await this.browserCleanups.get(input.threadId)
         const selectedCapabilityRoots = input.capabilities.map((capability) => {
             const path = this.capabilityRoots.get(capability)
@@ -247,6 +249,7 @@ export class CodexRuntime implements AgentRuntime {
                 threadSource: 'job-search-facilitator',
                 selectedCapabilityRoots,
                 developerInstructions: [
+                    resumeContext,
                     input.capabilities.includes('chrome')
                         ? 'Use only the supplied task instructions and requested tools. Browser tabs created for this task are temporary. Close every tab you created before returning either success or failure, even after a tool error. Never mark research or error tabs as deliverables or handoffs. Never close existing user tabs or tabs owned by another task. Use only the installed Chrome tool; do not use another browser-control method if it fails.'
                         : 'Follow the supplied task instructions. Return the final result as one JSON object matching the output schema, without surrounding Markdown.',

@@ -29,6 +29,12 @@ export const navigationRoutes = {
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
+        {
+            path: '/settings',
+            name: 'settings',
+            component: () => import('@/views/SettingsView.vue'),
+            meta: { title: 'Resumes' },
+        },
         ...Object.entries(navigationRoutes).map(([name, route]) => ({
             path: route.path,
             name,

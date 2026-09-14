@@ -21,6 +21,7 @@ const startAgentTaskInputSchema = z.strictObject({
     }),
     capabilities: z.array(z.enum(AGENT_CAPABILITIES)).default([]),
     webSearch: z.boolean().optional(),
+    resumeContext: z.boolean().optional(),
 })
 
 const taskIdParamsSchema = z.strictObject({ id: z.uuid() })

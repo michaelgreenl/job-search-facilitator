@@ -3,9 +3,7 @@ import { applicationArtifactSchema } from './applications.ts'
 import {
     AGENT_LABELS,
     APPLICATION_STATUSES,
-    CURRENT_RESUME_TYPES,
     POST_STATUSES,
-    RESUME_TYPES,
     USER_LABELS,
     type ApplyQueueItem,
     type CreateUserAddedJobPostInput,
@@ -20,6 +18,7 @@ import {
     type UserAddedJobPost,
 } from '../types/jobs.ts'
 import type { AgentOutputSchema } from '../types/agent.ts'
+import { resumeNameSchema } from './resumes.ts'
 import {
     createParser,
     httpUrlSchema,
@@ -54,7 +53,7 @@ export const standaloneJobRecommendationInputSchema = z.strictObject({
     fitRationale: nonBlankInputStringSchema,
     applicationFlow: nonBlankInputStringSchema,
     keyLegitimacySignals: nonBlankInputStringSchema,
-    recommendedResume: z.enum(CURRENT_RESUME_TYPES),
+    recommendedResume: resumeNameSchema,
     recommendedAction: nonBlankInputStringSchema,
     legitimacyNotes: nonBlankInputStringSchema.nullable(),
 }) satisfies z.ZodType<StandaloneJobRecommendation>
@@ -100,7 +99,7 @@ const standaloneJobRecommendationShape = {
     fitRationale: nonBlankStringSchema,
     applicationFlow: nonBlankStringSchema,
     keyLegitimacySignals: nonBlankStringSchema,
-    recommendedResume: z.enum(RESUME_TYPES),
+    recommendedResume: resumeNameSchema,
     recommendedAction: nonBlankStringSchema,
     legitimacyNotes: nonBlankStringSchema.nullable(),
 }

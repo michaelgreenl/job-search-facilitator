@@ -79,6 +79,7 @@ describe('outreach agent tasks', () => {
     it('defines the job-post import capability and nested output contract', () => {
         expect(importTask.capabilities).toEqual(['chrome'])
         expect(importTask.webSearch).toBe(false)
+        expect(importTask.resumeContext).toBe(true)
         expect(importTask.outputSchema).toMatchObject({
             required: [
                 'agentLabel',
