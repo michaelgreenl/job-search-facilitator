@@ -666,7 +666,7 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     flex: 1;
-    max-height: calc(100dvh - $app-header-height - ($space-3 * 2));
+    max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
     min-height: 0;
 }
 

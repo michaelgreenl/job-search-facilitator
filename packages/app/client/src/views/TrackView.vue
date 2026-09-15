@@ -541,7 +541,7 @@ onMounted(() => {
     display: flex;
     flex: 1;
     gap: $space-4;
-    max-height: calc(100dvh - $app-header-height - ($space-3 * 2));
+    max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
     min-height: 0;
 }
 

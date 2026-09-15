@@ -70,7 +70,7 @@ function reloadDocument() {
     flex-direction: column;
     gap: $space-4;
     min-height: 100dvh;
-    padding: calc($app-header-height + $space-3) $space-3 $space-3;
+    padding: calc($app-header-height + ($space-3 * 2)) $space-3 $space-3;
 }
 
 .error-recovery {

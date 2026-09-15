@@ -27,13 +27,13 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
 <style scoped lang="scss">
 .app-header {
     position: fixed;
-    inset: 0 0 auto;
+    inset: $space-3 $space-3 auto;
     z-index: 10;
     display: flex;
     align-items: center;
     height: $app-header-height;
-    padding-inline: calc($space-4 + 0.25rem);
-    border-width: 0 0 1px;
+    padding-inline: $space-5;
+    border-radius: $radius-lg;
 }
 
 .nav-links {
