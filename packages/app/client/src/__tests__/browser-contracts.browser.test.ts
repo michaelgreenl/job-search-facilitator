@@ -103,7 +103,7 @@ describe('browser interaction contracts', () => {
     })
 
     it.each([320, 1024])(
-        'keeps full-width navigation accessible and fixed at %ipx',
+        'keeps navigation aligned with page content and fixed at %ipx',
         async (width) => {
             await page.viewport(width, 768)
             const TallRoute = defineComponent({
@@ -127,19 +127,22 @@ describe('browser interaction contracts', () => {
             mountVue(App, { install: (app) => app.use(router) })
             const header = page.getByTestId('app-header')
             const bounds = header.element().getBoundingClientRect()
-            expect(bounds.left).toBe(0)
-            expect(bounds.right).toBe(document.documentElement.clientWidth)
-            expect(bounds.top).toBe(0)
-            expect(
-                page.getByTestId('route-content').element().getBoundingClientRect().top,
-            ).toBeGreaterThanOrEqual(bounds.bottom)
+            const contentBounds = page
+                .getByTestId('route-content')
+                .element()
+                .getBoundingClientRect()
+            expect(bounds.left).toBe(contentBounds.left)
+            expect(bounds.right).toBe(contentBounds.right)
+            expect(bounds.top).toBeGreaterThan(0)
+            expect(bounds.top).toBe(bounds.left)
+            expect(contentBounds.top - bounds.bottom).toBe(bounds.top)
 
             for (const link of page.getByRole('link').all()) {
                 const rect = link.element().getBoundingClientRect()
                 expect(
-                    rect.left >= 0 &&
+                    rect.left >= bounds.left &&
                         rect.right <= bounds.right &&
-                        rect.top >= 0 &&
+                        rect.top >= bounds.top &&
                         rect.bottom <= bounds.bottom,
                 ).toBe(true)
             }
@@ -156,7 +159,7 @@ describe('browser interaction contracts', () => {
             try {
                 window.scrollTo(0, 200)
                 await vi.waitFor(() => expect(window.scrollY).toBe(200))
-                expect(header.element().getBoundingClientRect().top).toBe(0)
+                expect(header.element().getBoundingClientRect().top).toBe(bounds.top)
                 await page.getByTestId('nav-link-track').click()
                 await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/track'))
                 await userEvent.keyboard('{Tab}')
