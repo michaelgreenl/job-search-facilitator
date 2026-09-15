@@ -70,11 +70,7 @@ function reloadDocument() {
     flex-direction: column;
     gap: $space-4;
     min-height: 100dvh;
-    padding: $space-3;
-
-    @include bp-max('sm') {
-        padding: $space-3;
-    }
+    padding: calc($app-header-height + $space-3) $space-3 $space-3;
 }
 
 .error-recovery {

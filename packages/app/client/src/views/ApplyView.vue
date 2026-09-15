@@ -685,7 +685,7 @@ onMounted(() => {
 .apply-layout {
     display: flex;
     flex: 1;
-    max-height: calc(100dvh - ($space-3 * 2));
+    max-height: calc(100dvh - $app-header-height - ($space-3 * 2));
     min-height: 0;
 }
 

@@ -3,7 +3,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
-import AppHeader from '@/components/AppHeader.vue'
+import App from '@/App.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
@@ -102,85 +102,67 @@ describe('browser interaction contracts', () => {
         await expect.element(trigger).toHaveFocus()
     })
 
-    it('makes retracted navigation operable by pointer and keyboard', async () => {
-        const EmptyRoute = defineComponent({ setup: () => () => h('div') })
-        const router = createRouter({
-            history: createMemoryHistory(),
-            routes: [
-                { path: '/', component: EmptyRoute },
-                { path: '/apply', component: EmptyRoute },
-                { path: '/track', component: EmptyRoute },
-            ],
-        })
-        await router.push('/')
-        await router.isReady()
-        mountVue(AppHeader, { install: (app) => app.use(router) })
-        const trigger = page.getByTestId('app-nav-trigger')
-        const applyLink = page.getByTestId('nav-link-apply')
+    it.each([320, 1024])(
+        'keeps full-width navigation accessible and fixed at %ipx',
+        async (width) => {
+            await page.viewport(width, 768)
+            const TallRoute = defineComponent({
+                setup: () => () =>
+                    h('main', {
+                        'data-testid': 'route-content',
+                        style: { minHeight: '200dvh' },
+                    }),
+            })
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [
+                    { path: '/', component: TallRoute },
+                    { path: '/apply', component: TallRoute },
+                    { path: '/track', component: TallRoute },
+                ],
+            })
+            await router.push('/')
+            await router.isReady()
+            mountVue(App, { install: (app) => app.use(router) })
+            const header = page.getByTestId('app-header')
+            const bounds = header.element().getBoundingClientRect()
+            expect(bounds.left).toBe(0)
+            expect(bounds.right).toBe(document.documentElement.clientWidth)
+            expect(bounds.top).toBe(0)
+            expect(
+                page.getByTestId('route-content').element().getBoundingClientRect().top,
+            ).toBeGreaterThanOrEqual(bounds.bottom)
 
-        applyLink.element().focus()
-        await expect.element(applyLink).not.toHaveFocus()
-
-        await trigger.hover()
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
-        await trigger.unhover()
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-
-        trigger.element().focus()
-        await userEvent.keyboard('{Enter}')
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
-
-        applyLink.element().focus()
-        await expect.element(applyLink).toHaveFocus()
-        await userEvent.keyboard('{Escape}')
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-        await expect.element(trigger).toHaveFocus()
-    })
-
-    it('closes navigation after following a route without hiding the focused link', async () => {
-        const EmptyRoute = defineComponent({ setup: () => () => h('div') })
-        const router = createRouter({
-            history: createMemoryHistory(),
-            routes: [
-                { path: '/', component: EmptyRoute },
-                { path: '/apply', component: EmptyRoute },
-                { path: '/track', component: EmptyRoute },
-            ],
-        })
-        await router.push('/')
-        await router.isReady()
-        const { root } = mountVue(AppHeader, { install: (app) => app.use(router) })
-        const trigger = page.getByTestId('app-nav-trigger')
-        let hidFocusedElement = false
-        const ariaHiddenObserver = new MutationObserver((records) => {
-            for (const { target } of records) {
-                if (
-                    target instanceof HTMLElement &&
-                    target.getAttribute('aria-hidden') === 'true' &&
-                    target.contains(document.activeElement)
-                ) {
-                    hidFocusedElement = true
-                }
+            for (const link of page.getByRole('link').all()) {
+                const rect = link.element().getBoundingClientRect()
+                expect(
+                    rect.left >= 0 &&
+                        rect.right <= bounds.right &&
+                        rect.top >= 0 &&
+                        rect.bottom <= bounds.bottom,
+                ).toBe(true)
             }
-        })
-        ariaHiddenObserver.observe(root, {
-            attributeFilter: ['aria-hidden'],
-            attributes: true,
-            subtree: true,
-        })
 
-        try {
-            await trigger.hover()
-            await page.getByTestId('nav-link-apply').click()
-
+            page.getByTestId('nav-link-review').element().focus()
+            await userEvent.keyboard('{Tab}')
+            await expect.element(page.getByTestId('nav-link-apply')).toHaveFocus()
+            await userEvent.keyboard('{Enter}')
             await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/apply'))
-            await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-        } finally {
-            ariaHiddenObserver.disconnect()
-        }
+            await expect
+                .element(page.getByTestId('nav-link-apply'))
+                .toHaveAttribute('aria-current', 'page')
 
-        expect(hidFocusedElement).toBe(false)
-    })
+            try {
+                window.scrollTo(0, 200)
+                await vi.waitFor(() => expect(window.scrollY).toBe(200))
+                expect(header.element().getBoundingClientRect().top).toBe(0)
+                await page.getByTestId('nav-link-track').click()
+                await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/track'))
+            } finally {
+                window.scrollTo(0, 0)
+            }
+        },
+    )
 
     it('dismisses the add-post pointer state until the button is hovered again', async () => {
         const AddJobPostFixture = defineComponent({
