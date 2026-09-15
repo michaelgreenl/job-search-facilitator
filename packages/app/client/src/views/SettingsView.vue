@@ -242,7 +242,6 @@ onMounted(load)
     max-width: 60rem;
     align-self: center;
     padding: clamp(1rem, 4vw, 2.5rem);
-    margin-top: 3.5rem;
     border-radius: $radius-lg;
 }
 
