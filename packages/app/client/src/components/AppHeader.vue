@@ -32,14 +32,13 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     display: flex;
     align-items: center;
     height: $app-header-height;
-    padding-inline: $space-3;
-    background: $color-night-navigation-alpha-92;
+    padding-inline: calc($space-4 + 0.25rem);
     border-width: 0 0 1px;
 }
 
 .nav-links {
     display: flex;
-    gap: $space-1;
+    gap: calc($space-4 + 0.25rem);
     align-items: center;
 }
 
@@ -47,24 +46,20 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 2.75rem;
     min-height: 2.75rem;
-    padding: $space-2 $space-3;
     color: $color-ink-muted;
-    font-weight: 500;
     text-decoration: none;
     white-space: nowrap;
-    border-radius: $radius-sm;
 
     &:hover,
     &:focus-visible {
         color: $color-ink;
-        background: $color-ink-alpha-5;
     }
 
     &:active,
     &.router-link-exact-active {
         color: $color-signal-light;
-        background: $color-signal-alpha-12;
     }
 }
 </style>
