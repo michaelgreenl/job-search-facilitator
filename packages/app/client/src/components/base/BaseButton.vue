@@ -5,8 +5,8 @@ export type BaseButtonPreset =
     | 'artifact'
     | 'back'
     | 'icon'
-    | 'outline'
     | 'primary'
+    | 'secondary'
     | 'signal'
     | 'text'
 </script>
@@ -375,13 +375,14 @@ defineExpose({ focus })
     }
 }
 
-.preset-outline {
+.preset-secondary {
     display: inline-flex;
     gap: $space-2;
     align-items: center;
     justify-content: center;
     padding: $space-2 $space-3;
     color: $color-ink;
+    text-decoration: none;
     background: transparent;
     border: 1px solid $color-signal-light-alpha-28;
     border-radius: $radius-md;

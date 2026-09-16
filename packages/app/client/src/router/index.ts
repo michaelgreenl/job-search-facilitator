@@ -33,7 +33,7 @@ export const router = createRouter({
             path: '/settings',
             name: 'settings',
             component: () => import('@/views/SettingsView.vue'),
-            meta: { title: 'Resumes' },
+            meta: { title: 'Settings' },
         },
         ...Object.entries(navigationRoutes).map(([name, route]) => ({
             path: route.path,
