@@ -68,9 +68,9 @@ function reloadDocument() {
     z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: $space-4;
+    gap: $space-3;
     min-height: 100dvh;
-    padding: calc($app-header-height + ($space-3 * 2)) $space-3 $space-3;
+    padding: $space-3;
 }
 
 .error-recovery {

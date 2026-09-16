@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import App from '@/App.vue'
+import SettingsView from '@/views/SettingsView.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
@@ -103,9 +104,10 @@ describe('browser interaction contracts', () => {
     })
 
     it.each([320, 1024])(
-        'keeps navigation aligned with page content and fixed at %ipx',
+        'scrolls navigation with the page and limits its width only in Settings at %ipx',
         async (width) => {
             await page.viewport(width, 768)
+            vi.stubGlobal('fetch', async () => Response.json([]))
             const TallRoute = defineComponent({
                 setup: () => () =>
                     h('main', {
@@ -119,7 +121,7 @@ describe('browser interaction contracts', () => {
                     { path: '/', component: TallRoute },
                     { path: '/apply', component: TallRoute },
                     { path: '/track', component: TallRoute },
-                    { path: '/settings', component: TallRoute },
+                    { path: '/settings', component: SettingsView },
                 ],
             })
             await router.push('/')
@@ -159,13 +161,28 @@ describe('browser interaction contracts', () => {
             try {
                 window.scrollTo(0, 200)
                 await vi.waitFor(() => expect(window.scrollY).toBe(200))
-                expect(header.element().getBoundingClientRect().top).toBe(bounds.top)
+                expect(header.element().getBoundingClientRect().top).toBe(bounds.top - 200)
+                window.scrollTo(0, 0)
+                await vi.waitFor(() => expect(window.scrollY).toBe(0))
                 await page.getByTestId('nav-link-track').click()
                 await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/track'))
                 await userEvent.keyboard('{Tab}')
                 await expect.element(page.getByTestId('nav-link-settings')).toHaveFocus()
                 await userEvent.keyboard('{Enter}')
                 await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/settings'))
+                await flushLayout()
+                const settingsBounds = page
+                    .getByTestId('resume-settings')
+                    .element()
+                    .getBoundingClientRect()
+                const settingsHeaderBounds = header.element().getBoundingClientRect()
+                expect(settingsHeaderBounds.left).toBe(settingsBounds.left)
+                expect(settingsHeaderBounds.right).toBe(settingsBounds.right)
+
+                await page.getByTestId('nav-link-review').click()
+                await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
+                await flushLayout()
+                expect(header.element().getBoundingClientRect().width).toBe(bounds.width)
             } finally {
                 window.scrollTo(0, 0)
             }

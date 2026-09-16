@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { navigationRoutes } from '@/router'
 
+const route = useRoute()
 const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => ({
     label: meta.title,
     path,
@@ -9,7 +10,11 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
 </script>
 
 <template>
-    <header class="app-header glass-frame" data-testid="app-header">
+    <header
+        class="app-header glass-frame"
+        :class="{ 'is-settings': route.path === '/settings' }"
+        data-testid="app-header"
+    >
         <nav class="nav-links" aria-label="Primary">
             <RouterLink
                 v-for="item in navigationItems"
@@ -49,14 +54,18 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
 
 <style scoped lang="scss">
 .app-header {
-    position: fixed;
-    inset: $space-3 $space-3 auto;
-    z-index: 10;
     display: flex;
+    flex-shrink: 0;
     align-items: center;
+    align-self: center;
+    width: 100%;
     height: $app-header-height;
     padding-inline: $space-5;
     border-radius: $radius-lg;
+
+    &.is-settings {
+        max-width: 60rem;
+    }
 }
 
 .nav-links {
