@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { inject, onBeforeMount, onBeforeUnmount, onBeforeUpdate } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { panelLayoutChange } from '@/components/base/BasePanelLayout.vue'
 import ArrowLeftIcon from '@/components/svgs/ArrowLeftIcon.vue'
 
 interface Props {
@@ -24,6 +26,11 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
     back: []
 }>()
+
+const notifyLayout = inject(panelLayoutChange, () => {})
+onBeforeMount(notifyLayout)
+onBeforeUpdate(notifyLayout)
+onBeforeUnmount(notifyLayout)
 </script>
 
 <template>

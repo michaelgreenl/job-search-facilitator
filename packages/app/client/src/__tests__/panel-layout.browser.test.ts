@@ -360,12 +360,14 @@ describe('running Agent task panel layout', () => {
         await expect.element(sources).toBeVisible()
         await expect.element(posts).not.toBeVisible()
 
-        const sourcesRect = sources.element().getBoundingClientRect()
-        const importRect = importPanel.element().getBoundingClientRect()
+        await vi.waitFor(() => {
+            const sourcesRect = sources.element().getBoundingClientRect()
+            const importRect = importPanel.element().getBoundingClientRect()
 
-        expect(sourcesRect.left).toBeGreaterThanOrEqual(0)
-        expect(sourcesRect.right).toBeLessThanOrEqual(importRect.left)
-        expect(importRect.right).toBeLessThanOrEqual(848)
+            expect(sourcesRect.left).toBeGreaterThanOrEqual(0)
+            expect(sourcesRect.right).toBeLessThanOrEqual(importRect.left)
+            expect(importRect.right).toBeLessThanOrEqual(848)
+        })
 
         await importBack.click()
 
@@ -374,11 +376,13 @@ describe('running Agent task panel layout', () => {
         await expect.element(importPanel).not.toBeVisible()
         await expect.element(page.getByTestId('job-post-import-progress')).toBeVisible()
 
-        const returnedSourcesRect = sources.element().getBoundingClientRect()
-        const postsRect = posts.element().getBoundingClientRect()
+        await vi.waitFor(() => {
+            const returnedSourcesRect = sources.element().getBoundingClientRect()
+            const postsRect = posts.element().getBoundingClientRect()
 
-        expect(returnedSourcesRect.right).toBeLessThanOrEqual(postsRect.left)
-        expect(postsRect.right).toBeLessThanOrEqual(848)
+            expect(returnedSourcesRect.right).toBeLessThanOrEqual(postsRect.left)
+            expect(postsRect.right).toBeLessThanOrEqual(848)
+        })
 
         await page.getByTestId('job-post-import-progress').click()
 
@@ -433,12 +437,14 @@ describe('running Agent task panel layout', () => {
         await expect.element(posts).not.toBeVisible()
         await expect.element(viewerBack).toBeVisible()
 
-        const viewerRect = viewer.element().getBoundingClientRect()
-        const outreachRect = outreach.element().getBoundingClientRect()
+        await vi.waitFor(() => {
+            const viewerRect = viewer.element().getBoundingClientRect()
+            const outreachRect = outreach.element().getBoundingClientRect()
 
-        expect(viewerRect.left).toBeGreaterThanOrEqual(0)
-        expect(viewerRect.right).toBeLessThanOrEqual(outreachRect.left)
-        expect(outreachRect.right).toBeLessThanOrEqual(848)
+            expect(viewerRect.left).toBeGreaterThanOrEqual(0)
+            expect(viewerRect.right).toBeLessThanOrEqual(outreachRect.left)
+            expect(outreachRect.right).toBeLessThanOrEqual(848)
+        })
 
         await outreachBack.click()
 

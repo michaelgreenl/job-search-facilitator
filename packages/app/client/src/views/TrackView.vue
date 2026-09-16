@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BasePanelLayout from '@/components/base/BasePanelLayout.vue'
 import {
     type ApplicationStatus,
     type OutreachContact,
@@ -428,7 +429,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <section class="track-layout" aria-label="Application tracking">
+    <BasePanelLayout as="section" class="track-layout" aria-label="Application tracking">
         <JobPostListPanel
             class="track-panel track-post-list glass-frame"
             data-testid="track-posts-panel"
@@ -533,16 +534,12 @@ onMounted(() => {
             @retry="retryOutreach"
             @show-viewer="showTrackedDetail"
         />
-    </section>
+    </BasePanelLayout>
 </template>
 
 <style scoped lang="scss">
 .track-layout {
-    display: flex;
-    flex: 1;
-    gap: $space-4;
     max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
-    min-height: 0;
 }
 
 .track-panel {
