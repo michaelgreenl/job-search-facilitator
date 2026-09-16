@@ -106,24 +106,29 @@ onMounted(load)
                     class="resume-card"
                     :data-testid="`resume-${resume.id}`"
                 >
-                    <div class="resume-heading">
-                        <h3>{{ resume.name }}</h3>
-                        <BaseButton
-                            class="history-button"
-                            preset="text"
-                            :data-testid="`history-${resume.id}`"
-                            @click="history = resume"
-                            >Previous uploads
-                            <span class="muted">({{ resume.uploads.length - 1 }})</span></BaseButton
-                        >
-                    </div>
                     <template v-for="upload in resume.uploads.slice(0, 1)" :key="upload.id">
-                        <p class="last-upload muted">
-                            Last upload:
-                            <time :datetime="upload.uploadedAt">{{
-                                formatDate(upload.uploadedAt)
-                            }}</time>
-                        </p>
+                        <div class="resume-heading">
+                            <h3>{{ resume.name }}</h3>
+                            <p class="resume-date muted">
+                                <span aria-hidden="true">-</span>
+                                <span>
+                                    Last upload:
+                                    <time :datetime="upload.uploadedAt">{{
+                                        formatDate(upload.uploadedAt)
+                                    }}</time>
+                                </span>
+                            </p>
+                            <BaseButton
+                                class="history-button"
+                                preset="text"
+                                :data-testid="`history-${resume.id}`"
+                                @click="history = resume"
+                                >Previous uploads
+                                <span class="muted"
+                                    >({{ resume.uploads.length - 1 }})</span
+                                ></BaseButton
+                            >
+                        </div>
                         <div class="actions">
                             <BaseButton
                                 as="a"
@@ -235,8 +240,12 @@ onMounted(load)
     width: 100%;
     max-width: 60rem;
     align-self: center;
-    padding: clamp(1rem, 4vw, 2.5rem);
+    padding: $space-5;
     border-radius: $radius-lg;
+}
+
+section {
+    padding: 0 $space-1;
 }
 
 .section-heading,
@@ -244,12 +253,14 @@ onMounted(load)
 .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: $space-3;
+    gap: $space-2;
     align-items: center;
 }
 
 .page-heading {
-    margin-bottom: $space-6;
+    padding-bottom: $space-4;
+    margin-bottom: $space-5;
+    border-bottom: 1px solid $color-ink-alpha-9;
 }
 
 .section-heading {
@@ -264,6 +275,10 @@ onMounted(load)
 
 h1 {
     font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    text-wrap: balance;
 }
 
 h2,
@@ -273,7 +288,11 @@ h3 {
 }
 
 h2 {
-    font-size: 1.25rem;
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    align-self: flex-end;
 }
 
 h3 {
@@ -283,19 +302,20 @@ h3 {
 .resume-list {
     display: grid;
     gap: $space-4;
-    margin-top: $space-6;
 }
 
 .resume-card {
     padding: $space-4;
 }
 
-.last-upload {
+.resume-heading {
     margin-bottom: $space-2;
 }
 
-.resume-heading {
-    justify-content: space-between;
+.resume-date {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
 }
 
 .history-button {
