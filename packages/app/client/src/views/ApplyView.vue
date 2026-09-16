@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import BasePanelLayout from '@/components/base/BasePanelLayout.vue'
 import {
     USER_LABELS,
     type ApplicationArtifact,
@@ -595,7 +594,7 @@ onMounted(() => {
 
 <template>
     <section class="apply-layout" aria-label="Job applications">
-        <BasePanelLayout>
+        <div class="apply-panels">
             <JobPostListPanel
                 class="apply-panel apply-post-list glass-frame"
                 data-testid="apply-posts-panel"
@@ -678,7 +677,7 @@ onMounted(() => {
                 @retry-contacts="retryOutreachContacts"
                 @show-viewer="showViewer"
             />
-        </BasePanelLayout>
+        </div>
     </section>
 </template>
 
@@ -688,6 +687,14 @@ onMounted(() => {
     flex: 1;
     max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
     min-height: 0;
+}
+
+.apply-panels {
+    display: flex;
+    flex: 1;
+    gap: $space-4;
+    min-height: 0;
+    min-width: 0;
 }
 
 .apply-panel {

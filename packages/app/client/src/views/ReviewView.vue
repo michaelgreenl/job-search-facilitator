@@ -10,7 +10,6 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BasePanelLayout from '@/components/base/BasePanelLayout.vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
 import { useBreakpoints } from '@/composables/useBreakpoints'
@@ -560,7 +559,7 @@ onMounted(() => {
             </template>
         </BasePopUp>
 
-        <BasePanelLayout>
+        <div class="layout-panels">
             <ReviewSourcePanel
                 class="report-list-panel glass-frame"
                 data-testid="review-sources-panel"
@@ -658,7 +657,7 @@ onMounted(() => {
                 @remove="removeUserAddedPost"
                 @update-label="updateUserLabel"
             />
-        </BasePanelLayout>
+        </div>
     </section>
 </template>
 
@@ -669,6 +668,14 @@ onMounted(() => {
     flex: 1;
     max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
     min-height: 0;
+}
+
+.layout-panels {
+    display: flex;
+    flex: 1;
+    gap: $space-4;
+    min-height: 0;
+    min-width: 0;
 }
 
 .job-post-view {
