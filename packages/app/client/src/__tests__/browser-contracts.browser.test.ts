@@ -297,6 +297,81 @@ describe('browser interaction contracts', () => {
 })
 
 describe('browser layout contracts', () => {
+    it.each([
+        { iconSize: undefined, height: 40 },
+        { iconSize: 'sm', height: 32 },
+        { iconSize: 'md', height: 36 },
+        { iconSize: 'lg', height: 44 },
+    ] as const)(
+        'keeps button preset heights consistent with icon size $iconSize',
+        async ({ iconSize, height }) => {
+            const presets = ['primary', 'secondary', 'signal'] as const
+            mountVue(
+                defineComponent({
+                    setup: () => () =>
+                        h(
+                            'div',
+                            presets.map((preset) =>
+                                h(
+                                    BaseButton,
+                                    { preset, iconSize, 'data-testid': `size-${preset}` },
+                                    { default: () => 'Action' },
+                                ),
+                            ),
+                        ),
+                }),
+            )
+            await flushLayout()
+
+            const heights = presets.map(
+                (preset) =>
+                    page.getByTestId(`size-${preset}`).element().getBoundingClientRect().height,
+            )
+            expect(heights).toEqual(presets.map(() => height))
+        },
+    )
+
+    it('keeps primary button text readable at rest, on hover, and with keyboard focus', async () => {
+        mountVue(
+            defineComponent({
+                setup: () => () =>
+                    h(
+                        BaseButton,
+                        { 'data-testid': 'contrast-primary' },
+                        { default: () => 'Action' },
+                    ),
+            }),
+        )
+        const button = page.getByTestId('contrast-primary')
+        const luminance = (color: string) => {
+            const channels = color
+                .match(/[\d.]+/g)!
+                .slice(0, 3)
+                .map((value) => {
+                    const channel = Number(value) / 255
+                    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+                })
+            return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722
+        }
+        const contrast = () => {
+            const style = getComputedStyle(button.element())
+            const foreground = luminance(style.color)
+            const background = luminance(style.backgroundColor)
+            return (
+                (Math.max(foreground, background) + 0.05) /
+                (Math.min(foreground, background) + 0.05)
+            )
+        }
+
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+        await button.hover()
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+        await button.unhover()
+        await userEvent.keyboard('{Tab}')
+        await expect.element(button).toHaveFocus()
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+    })
+
     it('anchors a back-preset tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
         await page.viewport(320, 600)
         const BackButtonFixture = defineComponent({

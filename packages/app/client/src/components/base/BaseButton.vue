@@ -345,17 +345,23 @@ defineExpose({ focus })
     }
 }
 
+.preset-primary,
+.preset-secondary,
+.preset-signal {
+    min-height: 2.5rem;
+    padding: calc($space-2 - 1px) $space-3;
+}
+
 .preset-primary {
     display: inline-flex;
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
-    color: $color-ink;
+    color: $color-night;
     font-weight: 650;
     text-decoration: none;
     background: $color-action;
-    border: 0;
+    border: 1px solid transparent;
     border-radius: $radius-md;
 
     &:hover,
@@ -380,7 +386,6 @@ defineExpose({ focus })
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
     color: $color-ink;
     text-decoration: none;
     background: transparent;
@@ -398,7 +403,6 @@ defineExpose({ focus })
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
     color: $color-night;
     font-weight: 650;
     background: $color-signal-light;
@@ -459,6 +463,7 @@ defineExpose({ focus })
 .icon-size-sm,
 .icon-size-md,
 .icon-size-lg {
+    min-height: 0;
     padding: 0;
     line-height: 1;
 }

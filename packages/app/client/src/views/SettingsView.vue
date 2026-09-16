@@ -148,7 +148,7 @@ onMounted(load)
                             >
                             <BaseButton
                                 class="upload-button"
-                                preset="primary"
+                                preset="secondary"
                                 :disabled="saving"
                                 :data-testid="`upload-${resume.id}`"
                                 @click="openUpload(resume)"
@@ -244,10 +244,6 @@ onMounted(load)
     border-radius: $radius-lg;
 }
 
-section {
-    padding: 0 $space-1;
-}
-
 .section-heading,
 .resume-heading,
 .actions {
@@ -288,11 +284,10 @@ h3 {
 }
 
 h2 {
-    font-size: 1.75rem;
+    font-size: 1.25rem;
     font-weight: 600;
     letter-spacing: -0.02em;
-    line-height: 1.2;
-    align-self: flex-end;
+    line-height: 1.4;
 }
 
 h3 {
@@ -309,7 +304,7 @@ h3 {
 }
 
 .resume-heading {
-    margin-bottom: $space-2;
+    margin-bottom: $space-3;
 }
 
 .resume-date {
@@ -320,7 +315,9 @@ h3 {
 
 .history-button {
     gap: $space-1;
+    min-height: 1.5rem;
     margin-left: auto;
+    font-size: 0.875rem;
 }
 
 .actions {
@@ -328,7 +325,8 @@ h3 {
 }
 
 .resume-card .actions {
-    padding-top: $space-4;
+    gap: $space-3;
+    padding-top: $space-3;
     border-top: 1px solid $color-ink-alpha-9;
 }
 
@@ -350,8 +348,11 @@ h3 {
 }
 
 .save-status {
-    margin-top: $space-4;
     color: $color-signal-light;
+
+    &:not(:empty) {
+        margin-top: $space-4;
+    }
 }
 
 .upload-form,
