@@ -7,6 +7,66 @@ import '@/assets/styles/app.scss'
 
 afterEach(async () => page.viewport(1024, 768))
 
+it.each([320, 656, 1024])(
+    'keeps resume actions reachable beside long names at %ipx',
+    async (width) => {
+        await page.viewport(width, 768)
+        const resume: Resume = {
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'M'.repeat(120),
+            uploads: [
+                {
+                    id: '22222222-2222-4222-8222-222222222222',
+                    fileName: 'resume.pdf',
+                    sizeBytes: 10,
+                    uploadedAt: '2026-09-13T12:00:00Z',
+                },
+            ],
+        }
+        vi.stubGlobal('fetch', async () => Response.json([resume]))
+        mountVue(SettingsView)
+        const row = page.getByTestId(`resume-${resume.id}`)
+        await expect.element(row).toBeVisible()
+        const rowBounds = row.element().getBoundingClientRect()
+        const details = page.getByTestId(`details-${resume.id}`).element().getBoundingClientRect()
+        const actions = ['open', 'download', 'upload'].map((action) =>
+            page.getByTestId(`${action}-${resume.id}`),
+        )
+        const bounds = actions.map((action) => action.element().getBoundingClientRect())
+
+        expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
+        for (const [index, action] of bounds.entries()) {
+            expect(action.width).toBeGreaterThanOrEqual(width === 320 ? 44 : 36)
+            expect(action.height).toBeGreaterThanOrEqual(width === 320 ? 44 : 36)
+            expect(action.left).toBeGreaterThanOrEqual(
+                index ? bounds[index - 1]!.right : rowBounds.left,
+            )
+            expect(action.right).toBeLessThanOrEqual(rowBounds.right)
+            expect(action.bottom).toBeLessThanOrEqual(rowBounds.bottom)
+        }
+        if (width === 320) expect(bounds[0]!.top).toBeGreaterThanOrEqual(details.bottom)
+        else expect(bounds[0]!.left).toBeGreaterThanOrEqual(details.right)
+        expect(
+            page.getByTestId('add-resume').element().getBoundingClientRect().top,
+        ).toBeGreaterThanOrEqual(rowBounds.bottom)
+
+        for (const action of actions) {
+            await userEvent.keyboard('{Tab}')
+            await expect.element(action).toHaveFocus()
+            const tooltip = document.getElementById(
+                action.element().getAttribute('aria-describedby')!,
+            )!
+            await expect.element(tooltip).toBeVisible()
+            await userEvent.keyboard('{Escape}')
+            await expect.element(tooltip).not.toBeVisible()
+        }
+        await userEvent.keyboard('{Enter}')
+        await expect.element(page.getByTestId('resume-upload-dialog')).toBeVisible()
+        await userEvent.keyboard('{Escape}')
+        await expect.element(actions[2]!).toHaveFocus()
+    },
+)
+
 it('saves named PDFs, keeps earlier upload links in an accessible popup, and preserves a failed upload for retry', async () => {
     const resumeId = '11111111-1111-4111-8111-111111111111'
     const firstId = '22222222-2222-4222-8222-222222222222'
@@ -47,6 +107,7 @@ it('saves named PDFs, keeps earlier upload links in an accessible popup, and pre
         .upload(new File(['%PDF-first'], 'first.pdf', { type: 'application/pdf' }))
     await page.getByTestId('save-resume').click()
     await expect.element(page.getByTestId(`resume-${resumeId}`)).toBeVisible()
+    await expect.element(page.getByTestId(`history-${resumeId}`)).toBeDisabled()
     await page.getByTestId(`upload-${resumeId}`).click()
     await page
         .getByTestId('resume-file')
@@ -79,6 +140,7 @@ it('saves named PDFs, keeps earlier upload links in an accessible popup, and pre
     ])
     await page.viewport(360, 640)
     const historyTrigger = page.getByTestId(`history-${resumeId}`)
+    await expect.element(historyTrigger).toBeEnabled()
     await historyTrigger.click()
     const dialog = page.getByTestId('resume-history-dialog')
     await expect.element(dialog).toBeVisible()
