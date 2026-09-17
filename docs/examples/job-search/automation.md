@@ -26,8 +26,8 @@ Create a private temporary directory for all JSON artifacts. Set `REPORT_PATH` t
 
 Perform every startup check in `navigation.md`. Stop and report an exact failure when a check does not pass.
 
-Run `pnpm run job-search:resumes`. Read its complete output before discovery. Pass that context to each discovery and judgment agent.
-Stop if the command fails. It reads the newest PDF for each named resume, not earlier uploads.
+If the launcher supplies resume-library context, read it before discovery. Pass it to each discovery and judgment agent.
+Without supplied context, keep the private resume-selection policy. Do not fetch the resume library from a worker.
 
 Fetch history without printing its body:
 

@@ -68,12 +68,17 @@ After the API starts, run `pnpm run job-search:resumes` to check extraction with
 This command prints private resume text. Do not publish its output.
 Use `JOB_SEARCH_API_URL` when the API does not use `http://127.0.0.1:3000/api`.
 
-The scheduled runner reads this context after startup checks. User-added imports receive the same extracted PDF context automatically.
+The standard `job-search:run` command keeps the private resume-selection policy. It does not read the uploaded resume library.
+To test the library, keep the API running and use `pnpm run job-search:run --resume-library` in a duplicate automation.
+Only that command loads the current PDFs on the launcher host, before starting the sandboxed agents.
+Use `--resume-library --check` to verify extraction and runtime setup without starting a search.
+Set a separate `JOB_SEARCH_CODEX_HOME` for the duplicate's runtime state. It still shares the local application and report storage.
+User-added imports receive the extracted PDF context automatically.
 The current library replaces fixed resume categories. Agents recommend a starting resume without giving tailoring suggestions or requiring perfect wording.
 An empty library keeps the existing choices. Extraction or library errors stop evaluation instead of silently omitting uploaded context.
 
 Deploy the API migration, Agent bridge, and client together. The runner still supports an older API during rollout.
-The feature does not edit saved schedules or private policy files. Existing schedules must call `pnpm run job-search:run` as described below.
+Keep the original saved schedule and private policy files unchanged. Only the duplicate should include `--resume-library` during testing.
 
 ### Manual run
 
