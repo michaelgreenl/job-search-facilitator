@@ -3,6 +3,7 @@ import { MAX_APPLICATION_ARTIFACT_BYTES, type Resume } from '@job-search-facilit
 import { onMounted, shallowRef, useTemplateRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
+import AutomationSettings from '@/components/AutomationSettings.vue'
 import DownloadIcon from '@/components/svgs/DownloadIcon.vue'
 import OpenExternalIcon from '@/components/svgs/OpenExternalIcon.vue'
 import UploadIcon from '@/components/svgs/UploadIcon.vue'
@@ -84,6 +85,7 @@ onMounted(load)
         <header class="page-heading">
             <h1>Settings</h1>
         </header>
+        <AutomationSettings />
         <header class="section-heading">
             <h2 id="resumes-heading">Resumes</h2>
         </header>
@@ -277,7 +279,10 @@ onMounted(load)
 }
 
 .section-heading {
+    margin-top: $space-6;
+    padding-top: $space-6;
     padding-bottom: $space-3;
+    border-top: 1px solid $color-ink-alpha-12;
 }
 
 .settings-section {

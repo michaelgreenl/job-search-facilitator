@@ -23,7 +23,9 @@ it.each([320, 656, 1024])(
                 },
             ],
         }
-        vi.stubGlobal('fetch', async () => Response.json([resume]))
+        vi.stubGlobal('fetch', async (url: string) =>
+            Response.json(url.endsWith('/automations') ? [] : [resume]),
+        )
         mountVue(SettingsView)
         const row = page.getByTestId(`resume-${resume.id}`)
         await expect.element(row).toBeVisible()
@@ -50,8 +52,9 @@ it.each([320, 656, 1024])(
             page.getByTestId('add-resume').element().getBoundingClientRect().top,
         ).toBeGreaterThanOrEqual(rowBounds.bottom)
 
-        for (const action of actions) {
-            await userEvent.keyboard('{Tab}')
+        actions[0]!.element().focus()
+        for (const [index, action] of actions.entries()) {
+            if (index) await userEvent.keyboard('{Tab}')
             await expect.element(action).toHaveFocus()
             const tooltip = document.getElementById(
                 action.element().getAttribute('aria-describedby')!,
@@ -171,7 +174,9 @@ it('does not treat a failed library load as an empty library and allows recovery
         .fn()
         .mockRejectedValueOnce(new Error('Offline'))
         .mockResolvedValueOnce(Response.json([]))
-    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('fetch', (url: string) =>
+        url.endsWith('/automations') ? Promise.resolve(Response.json([])) : fetch(),
+    )
     mountVue(SettingsView)
     await expect.element(page.getByRole('alert')).toBeVisible()
     await expect.element(page.getByTestId('add-resume')).toBeDisabled()

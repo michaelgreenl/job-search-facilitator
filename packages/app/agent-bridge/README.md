@@ -42,12 +42,20 @@ The scheduled desktop task must launch this command and report its result. Its o
 ## Local API
 
 - `GET /health` reports current Agent runtime readiness and its discovered capabilities.
+- `GET /automations` lists local desktop schedules associated with `AGENT_CWD`.
+- `PATCH /automations/:id` changes a schedule or its active/paused state. Requests need the configured client origin and the latest revision.
 - `POST /tasks` starts a structured task.
 - `GET /tasks/:id` returns its current state.
 - `POST /tasks/:id/cancel` interrupts a running task.
 - `GET /tasks/:id/events` streams user-safe progress with server-sent events.
 
 Task events and output are held in memory for the life of the bridge process. Durable workflow state belongs in the Docker API. The bridge is intentionally bound to loopback and starts Agent tasks with a read-only sandbox and no approval escalation.
+
+Automation controls use the desktop user's `CODEX_HOME/automations` files, separate from the isolated agent home.
+Writes preserve configuration fields, reject stale revisions, and atomically replace the selected file.
+Daily and weekly patterns with the same run times on each selected day are editable, with up to 24 times per day. Other patterns can still be paused or resumed.
+The desktop app remains the scheduler. Next scheduled times use the bridge host's time zone; actual runs can start later.
+Cloud schedules are not exposed through this local-file integration.
 
 Task output contracts are validated as synchronous JSON Schema draft-07 with an explicit object root. The public task contract omits dialect markers and `format` validators; use structural keywords such as `pattern` when a task needs a format constraint. Schemas containing `$schema`, `format`, asynchronous validation, or anything else the bridge cannot compile are rejected before an Agent task starts.
 

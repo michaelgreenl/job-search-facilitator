@@ -218,7 +218,8 @@ The task can ask for access to each website it visits. Review each website befor
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
 
-The application does not create or edit ChatGPT tasks or plugin settings. Configure both scheduled tasks in ChatGPT when you want the automated workflow.
+Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
+Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
 
 ### Development commands
 

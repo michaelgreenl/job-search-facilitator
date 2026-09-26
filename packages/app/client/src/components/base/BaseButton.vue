@@ -237,6 +237,15 @@ function detachTooltipListeners() {
 }
 
 watch(
+    [tooltipVisible, tooltipSurface],
+    ([open, surface]) => {
+        surface?.togglePopover?.(!!open)
+        if (open) updateTooltipPosition()
+    },
+    { flush: 'post' },
+)
+
+watch(
     () => props.tooltip,
     (tooltipLabel) => {
         if (!mounted) {
@@ -303,7 +312,7 @@ defineExpose({ focus })
         >
             <slot />
         </component>
-        <Teleport to="body">
+        <Teleport :to="button?.closest('dialog') ?? 'body'">
             <span
                 :id="tooltipId"
                 ref="tooltipSurface"
@@ -312,6 +321,7 @@ defineExpose({ focus })
                 :class="[`is-${placement}`, { 'is-visible': tooltipVisible }]"
                 :style="position"
                 role="tooltip"
+                popover="manual"
             >
                 {{ props.tooltip }}
             </span>
@@ -490,6 +500,8 @@ defineExpose({ focus })
 
 .content.tooltip-surface {
     position: fixed;
+    inset: auto;
+    margin: 0;
     z-index: 50;
     max-width: min(14rem, calc(100vw - #{$space-6}));
     white-space: normal;
