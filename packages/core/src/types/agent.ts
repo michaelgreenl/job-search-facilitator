@@ -27,10 +27,12 @@ export interface AgentPermissionRequired {
 }
 
 export interface StartAgentTaskInput {
+    threadId?: string
     prompt: string
     outputSchema: AgentOutputSchema
     capabilities: AgentCapability[]
     webSearch?: boolean
+    resumeContext?: boolean
 }
 
 export interface AgentHealthResponse {

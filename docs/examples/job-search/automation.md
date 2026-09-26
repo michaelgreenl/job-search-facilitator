@@ -26,6 +26,9 @@ Create a private temporary directory for all JSON artifacts. Set `REPORT_PATH` t
 
 Perform every startup check in `navigation.md`. Stop and report an exact failure when a check does not pass.
 
+If the launcher supplies resume-library context, read it before discovery. Pass it to each discovery and judgment agent.
+Without supplied context, keep the private resume-selection policy. Do not fetch the resume library from a worker.
+
 Fetch history without printing its body:
 
 ```bash
@@ -58,7 +61,9 @@ Correct only source extraction or schema errors. Do not invent a fact or weaken 
 
 Combine all validated candidates into one JSON array at `MERGED_CANDIDATES_PATH`. Keep discovery order.
 
-Write all five lane records to `COVERAGE_PATH`. Preserve blockers and every completed query.
+Write all five lane records to `COVERAGE_PATH`. Preserve every completed query and eligible candidate.
+Use `blocker` only for verified source-wide access failures under `navigation.md`.
+Record unfinished searches in `incompleteReason`. Posting inspection failures do not block a source lane.
 
 Remove stored identities and current-run duplicates. Create the review packet:
 
@@ -71,7 +76,7 @@ Stop if either command fails. Do not edit valid evidence to make a check pass.
 
 ## Judgment
 
-Evaluate every candidate in `REVIEW_PATH` once. Use only the current profile, evaluation policy, strategy, and review packet.
+Evaluate every candidate in `REVIEW_PATH` once. Use the current profile, uploaded resume context, evaluation policy, strategy, and review packet.
 
 Write `JUDGMENT_PATH` with the unchanged `reviewDigest`. Put selected decisions first in rank order.
 
@@ -89,7 +94,8 @@ Use this shape for selected roles:
 }
 ```
 
-`verdict` can be `target` or `quick-app`. `recommendedResume` can be `frontend` or `backend-full-stack`.
+`verdict` can be `target` or `quick-app`. Set `recommendedResume` to an exact name from the uploaded resume context.
+When no resumes are uploaded, keep the existing choices: `frontend`, `backend`, or `full-stack`.
 
 Use this shape for rejected roles:
 
@@ -117,7 +123,7 @@ Report only these results:
 
 - The report path and ID.
 - Candidate, excluded, target, quick-app, and rejection counts.
-- Completed and blocked source lanes.
+- Completed, blocked, and incomplete source lanes from validated coverage.
 - PUT, GET, storage, and Markdown verification results.
 
 Never apply, upload files, submit forms, save jobs, change profiles, or contact anyone.

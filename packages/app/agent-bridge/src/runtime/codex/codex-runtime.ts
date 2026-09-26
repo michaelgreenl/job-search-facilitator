@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { isAbsolute } from 'node:path'
+import { existsSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import type {
     AgentCapability,
     AgentPermissionDecision,
@@ -7,6 +8,7 @@ import type {
     StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { z } from 'zod'
+import { loadResumeContext } from '../../resume-context.ts'
 import type {
     AgentRuntime,
     AgentRuntimeEvent,
@@ -36,7 +38,9 @@ interface PendingPermission {
     decision: AgentPermissionDecision | null
 }
 
-type CodexRuntimeOptions = AppServerConnectionOptions
+interface CodexRuntimeOptions extends AppServerConnectionOptions {
+    chromeRoot?: string
+}
 
 const pluginIds = {
     chrome: 'chrome@openai-bundled',
@@ -46,6 +50,24 @@ const stringValue = (value: unknown): string | null =>
     typeof value === 'string' && value.length > 0 ? value : null
 
 const rpcIdKey = (id: RpcId) => `${typeof id}:${id}`
+
+export async function closeTaskTabs(
+    connection: AppServerConnection,
+    threadId: string,
+    turnId: string,
+) {
+    const result = await connection.request(
+        'mcpServer/tool/call',
+        {
+            threadId,
+            server: 'node_repl',
+            tool: 'turn_ended',
+            arguments: { hook_event_name: 'Stop', session_id: threadId, turn_id: turnId },
+        },
+        z.object({ isError: z.boolean().optional() }),
+    )
+    if (result.isError) throw new Error('Could not close the task’s browser tabs')
+}
 
 const browserOriginPermission = (params: unknown): AgentRuntimePermission | null => {
     if (!isObject(params)) {
@@ -84,9 +106,13 @@ const browserOriginPermission = (params: unknown): AgentRuntimePermission | null
 
 export class CodexRuntime implements AgentRuntime {
     private readonly connection: AppServerConnection
+    private readonly chromeRoot: string | undefined
+    private readonly isolated: boolean
     private readonly pendingPermissions = new Map<string, PendingPermission>()
     private readonly permissionIdsByRequest = new Map<string, string>()
     private readonly capabilityRoots = new Map<AgentCapability, string>()
+    private readonly browserThreads = new Map<string, string | null>()
+    private readonly browserCleanups = new Map<string, Promise<void>>()
     private readonly queuedEvents: AgentRuntimeEvent[] = []
     private eventFlushScheduled = false
     private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
@@ -99,6 +125,8 @@ export class CodexRuntime implements AgentRuntime {
         private readonly cwd: string,
         options: CodexRuntimeOptions = {},
     ) {
+        this.chromeRoot = options.chromeRoot
+        this.isolated = options.environment?.CODEX_HOME !== undefined
         this.connection = new AppServerConnection(
             binary,
             cwd,
@@ -188,6 +216,8 @@ export class CodexRuntime implements AgentRuntime {
 
     async startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.assertReady()
+        const resumeContext = input.resumeContext ? await loadResumeContext() : ''
+        if (input.threadId !== undefined) await this.browserCleanups.get(input.threadId)
         const selectedCapabilityRoots = input.capabilities.map((capability) => {
             const path = this.capabilityRoots.get(capability)
 
@@ -200,9 +230,10 @@ export class CodexRuntime implements AgentRuntime {
                 location: { type: 'environment', environmentId: 'workspace', path },
             }
         })
-        const { thread } = await this.connection.request(
-            'thread/start',
+        const { thread, instructionSources } = await this.connection.request(
+            input.threadId === undefined ? 'thread/start' : 'thread/resume',
             {
+                ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
                 cwd: this.cwd,
                 approvalPolicy: {
                     granular: {
@@ -217,16 +248,55 @@ export class CodexRuntime implements AgentRuntime {
                 sandbox: 'read-only',
                 threadSource: 'job-search-facilitator',
                 selectedCapabilityRoots,
-                ...(input.webSearch === false ? { config: { web_search: 'disabled' } } : {}),
+                developerInstructions: [
+                    resumeContext,
+                    input.capabilities.includes('chrome')
+                        ? 'Use only the supplied task instructions and requested tools. Browser tabs created for this task are temporary. Close every tab you created before returning either success or failure, even after a tool error. Never mark research or error tabs as deliverables or handoffs. Never close existing user tabs or tabs owned by another task. Use only the installed Chrome tool; do not use another browser-control method if it fails.'
+                        : 'Follow the supplied task instructions. Return the final result as one JSON object matching the output schema, without surrounding Markdown.',
+                    'A page or tool failure does not by itself make the task fail. Preserve verified information and complete all required work that remains possible. Recover from ordinary tool or navigation errors using permitted tools and sources when useful. After a security rejection, stop the blocked action without bypassing the restriction. Continue permitted independent work or finish from existing evidence. Skip unavailable optional information using the null or unknown value allowed by the output schema. Do not invent missing facts or discard a valid result because optional research or browser cleanup failed. Report failure only when a required outcome cannot be completed with verified evidence.',
+                    'Before each group of tool calls, send one brief commentary sentence describing the immediate action. Use at most 10 words. Keep explanations and reasoning out of these progress updates. Return the final result separately using the output schema.',
+                ].join('\n\n'),
+                config: {
+                    ...(input.webSearch === false ? { web_search: 'disabled' } : {}),
+                    ...(this.isolated
+                        ? input.capabilities.includes('chrome')
+                            ? {
+                                  'skills.include_instructions': true,
+                                  'mcp_servers.node_repl.enabled': true,
+                              }
+                            : {
+                                  'skills.include_instructions': false,
+                                  'mcp_servers.node_repl.enabled': false,
+                              }
+                        : {}),
+                },
             },
             threadStartResponseSchema,
         )
+
+        if (this.isolated && instructionSources?.length !== 0) {
+            throw new Error('Agent runtime loaded unexpected instruction files')
+        }
+
+        if (input.capabilities.includes('chrome')) this.browserThreads.set(thread.id, null)
+
         const { turn } = await this.connection.request(
             'turn/start',
             {
                 threadId: thread.id,
                 clientUserMessageId: taskId,
-                input: [{ type: 'text', text: input.prompt, text_elements: [] }],
+                input: [
+                    { type: 'text', text: input.prompt, text_elements: [] },
+                    ...(this.chromeRoot !== undefined && input.capabilities.includes('chrome')
+                        ? [
+                              {
+                                  type: 'skill',
+                                  name: 'control-chrome',
+                                  path: join(this.chromeRoot, 'skills/control-chrome/SKILL.md'),
+                              },
+                          ]
+                        : []),
+                ],
                 outputSchema: input.outputSchema,
                 summary: 'concise',
             },
@@ -234,13 +304,36 @@ export class CodexRuntime implements AgentRuntime {
         )
         this.assertReady()
 
+        if (this.browserThreads.has(thread.id)) this.browserThreads.set(thread.id, turn.id)
+
         return { threadId: thread.id, turnId: turn.id }
     }
 
     async interruptTask(threadId: string, turnId: string): Promise<void> {
         this.assertReady()
         await this.connection.request('turn/interrupt', { threadId, turnId }, emptyResponseSchema)
+        await this.cleanupBrowserTabs(threadId, turnId)
         this.assertReady()
+    }
+
+    private cleanupBrowserTabs(threadId: string, turnId: string): Promise<void> {
+        const pending = this.browserCleanups.get(threadId)
+        if (pending !== undefined) return pending
+        if (!this.browserThreads.delete(threadId) || !this.connection.running)
+            return Promise.resolve()
+
+        const cleanup = closeTaskTabs(this.connection, threadId, turnId)
+            .catch(() =>
+                this.queueEvent({
+                    type: 'commentary',
+                    threadId,
+                    turnId,
+                    text: 'The task ended, but its browser tabs could not be closed.',
+                }),
+            )
+            .finally(() => this.browserCleanups.delete(threadId))
+        this.browserCleanups.set(threadId, cleanup)
+        return cleanup
     }
 
     resolvePermission(permissionId: string, decision: AgentPermissionDecision): boolean {
@@ -288,7 +381,24 @@ export class CodexRuntime implements AgentRuntime {
         this.queuedEvents.length = 0
     }
 
+    async shutdown(): Promise<void> {
+        await Promise.allSettled(
+            [...this.browserThreads].map(([threadId, turnId]) =>
+                turnId === null ? Promise.resolve() : this.interruptTask(threadId, turnId),
+            ),
+        )
+        await Promise.allSettled(this.browserCleanups.values())
+        this.close()
+    }
+
     private async loadCapabilities(): Promise<void> {
+        if (this.chromeRoot !== undefined) {
+            if (isAbsolute(this.chromeRoot) && existsSync(this.chromeRoot)) {
+                this.capabilityRoots.set('chrome', this.chromeRoot)
+            }
+            return
+        }
+
         const response = await this.connection.request(
             'plugin/installed',
             { cwds: [this.cwd] },
@@ -443,6 +553,7 @@ export class CodexRuntime implements AgentRuntime {
             if (
                 notification.item.phase !== undefined &&
                 notification.item.phase !== null &&
+                notification.item.phase !== 'commentary' &&
                 notification.item.phase !== 'final_answer'
             ) {
                 return
@@ -454,7 +565,7 @@ export class CodexRuntime implements AgentRuntime {
             }
 
             this.queueEvent({
-                type: 'final-message',
+                type: notification.item.phase === 'commentary' ? 'commentary' : 'final-message',
                 threadId: notification.threadId,
                 turnId: notification.turnId,
                 text: notification.item.text,
@@ -484,13 +595,15 @@ export class CodexRuntime implements AgentRuntime {
                 return
             }
 
-            this.queueEvent({
+            const event = {
                 type: 'turn-completed',
                 threadId: notification.threadId,
                 turnId: notification.turn.id,
                 status: notification.turn.status,
                 error: notification.turn.error?.message ?? null,
-            })
+            } satisfies AgentRuntimeEvent
+            this.queueEvent(event)
+            void this.cleanupBrowserTabs(notification.threadId, notification.turn.id)
         }
     }
 

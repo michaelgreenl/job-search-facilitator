@@ -29,6 +29,12 @@ export const navigationRoutes = {
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
+        {
+            path: '/settings',
+            name: 'settings',
+            component: () => import('@/views/SettingsView.vue'),
+            meta: { title: 'Settings' },
+        },
         ...Object.entries(navigationRoutes).map(([name, route]) => ({
             path: route.path,
             name,
@@ -40,7 +46,10 @@ export const router = createRouter({
     ],
 })
 
-type AgentSessionStore = Pick<ReturnType<typeof useAgentStore>, 'sessions' | 'restoreSessions'>
+type AgentSessionStore = Pick<
+    ReturnType<typeof useAgentStore>,
+    'sessions' | 'restoreSessions' | 'dismissFailedTasks'
+>
 
 export const createPersistedAgentSessionGuard = (
     getAgentStore: () => AgentSessionStore | null,
@@ -48,24 +57,25 @@ export const createPersistedAgentSessionGuard = (
     let startupHandled = false
 
     return async (to) => {
-        if (startupHandled) {
-            return
-        }
-
         const agentStore = getAgentStore()
 
         if (agentStore === null) {
             return
         }
 
+        agentStore.dismissFailedTasks()
+        if (startupHandled) {
+            return
+        }
+
         startupHandled = true
+        await agentStore.restoreSessions().catch(() => undefined)
         const session = agentStore.sessions.at(-1)
 
         if (session === undefined) {
             return
         }
 
-        await agentStore.restoreSessions().catch(() => undefined)
         const routeName = session.kind === 'job-post-import' ? 'review' : 'apply'
 
         return to.name === routeName ? undefined : { name: routeName }

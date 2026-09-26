@@ -36,7 +36,7 @@ export type AgentRuntimeEvent =
           summaryIndex: number
           textDelta: string
       }
-    | { type: 'final-message'; threadId: string; turnId: string; text: string }
+    | { type: 'commentary' | 'final-message'; threadId: string; turnId: string; text: string }
     | {
           type: 'turn-completed'
           threadId: string

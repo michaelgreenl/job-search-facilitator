@@ -23,7 +23,7 @@ Review combines dated search reports and user-added roles. It shows fit evidence
 
 Apply turns labeled roles into a working queue. It stores application files, status changes, and outreach contacts.
 
-Track summarizes active applications, closed outcomes, pending replies, and follow-up dates.
+Track summarizes active applications, closed outcomes, and pending replies.
 
 An Express API stores workflow data in PostgreSQL through Prisma. Shared Zod schemas validate data across each workspace package.
 
@@ -51,7 +51,6 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 - **Pipeline filters:** View open, active, closed, awaiting-reply, and responded roles.
 - **Activity timeline:** Combine application changes and outreach events for each role.
-- **Follow-up list:** Surface due application and outreach follow-ups.
 - **Responsive panels:** Adapt list, detail, description, and outreach panels across screen sizes.
 
 ### Server Side
@@ -200,7 +199,7 @@ Open [http://localhost:5173](http://localhost:5173) after both commands start.
 Check the API and Agent bridge in another terminal:
 
 ```bash
-curl --fail http://localhost:3000/health
+curl --fail http://127.0.0.1:3000/health
 curl --fail http://127.0.0.1:3001/health
 ```
 
@@ -219,7 +218,8 @@ The task can ask for access to each website it visits. Review each website befor
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
 
-The application does not create or edit ChatGPT tasks or plugin settings. Configure both scheduled tasks in ChatGPT when you want the automated workflow.
+Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
+Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
 
 ### Development commands
 

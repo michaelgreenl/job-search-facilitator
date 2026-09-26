@@ -109,12 +109,12 @@ describe('agent store', () => {
         await store.startTask(taskInput, importOwner).started
         await store.startTask(taskInput, outreachOwner).started
 
-        expect(fetch).toHaveBeenNthCalledWith(2, `http://localhost:3001/tasks/${startedTask.id}`, {
+        expect(fetch).toHaveBeenNthCalledWith(2, `http://127.0.0.1:3001/tasks/${startedTask.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(taskInput),
         })
-        expect(fetch).toHaveBeenNthCalledWith(4, `http://localhost:3001/tasks/${nextTask.id}`, {
+        expect(fetch).toHaveBeenNthCalledWith(4, `http://127.0.0.1:3001/tasks/${nextTask.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(taskInput),
@@ -136,8 +136,8 @@ describe('agent store', () => {
         expect(FakeEventSource.instances).toHaveLength(2)
         const importSource = FakeEventSource.instances[0]!
         const outreachSource = FakeEventSource.instances[1]!
-        expect(importSource.url).toBe(`http://localhost:3001/tasks/${startedTask.id}/events`)
-        expect(outreachSource.url).toBe(`http://localhost:3001/tasks/${nextTask.id}/events`)
+        expect(importSource.url).toBe(`http://127.0.0.1:3001/tasks/${startedTask.id}/events`)
+        expect(outreachSource.url).toBe(`http://127.0.0.1:3001/tasks/${nextTask.id}/events`)
         expect(importSource.close).not.toHaveBeenCalled()
 
         importSource.open()
@@ -159,7 +159,7 @@ describe('agent store', () => {
 
         expect(fetch).toHaveBeenNthCalledWith(
             5,
-            `http://localhost:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -184,7 +184,7 @@ describe('agent store', () => {
 
         expect(fetch).toHaveBeenNthCalledWith(
             6,
-            `http://localhost:3001/tasks/${startedTask.id}/cancel`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/cancel`,
             { method: 'POST' },
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
@@ -263,10 +263,10 @@ describe('agent store', () => {
 
         await store.startTask(taskInput, importOwner).started
 
-        expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:3001/health', undefined)
+        expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://127.0.0.1:3001/health', undefined)
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            `http://localhost:3001/tasks/${startedTask.id}`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}`,
             {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -276,7 +276,7 @@ describe('agent store', () => {
         expect(FakeEventSource.instances).toHaveLength(1)
 
         const source = FakeEventSource.instances[0]!
-        expect(source.url).toBe(`http://localhost:3001/tasks/${startedTask.id}/events`)
+        expect(source.url).toBe(`http://127.0.0.1:3001/tasks/${startedTask.id}/events`)
 
         source.open()
         source.message({
@@ -373,9 +373,9 @@ describe('agent store', () => {
             thirdTask,
         ])
         expect(FakeEventSource.instances.map(({ url }) => url)).toEqual([
-            `http://localhost:3001/tasks/${startedTask.id}/events`,
-            `http://localhost:3001/tasks/${nextTask.id}/events`,
-            `http://localhost:3001/tasks/${thirdTask.id}/events`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/events`,
+            `http://127.0.0.1:3001/tasks/${nextTask.id}/events`,
+            `http://127.0.0.1:3001/tasks/${thirdTask.id}/events`,
         ])
 
         FakeEventSource.instances.forEach((source) => source.open())
@@ -422,7 +422,7 @@ describe('agent store', () => {
 
         expect(fetch).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3001/tasks/${startedTask.id}`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}`,
             undefined,
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
@@ -508,7 +508,7 @@ describe('agent store', () => {
         await store.restoreSessions()
 
         expect(fetch).toHaveBeenCalledWith(
-            `http://localhost:3001/tasks/${startedTask.id}`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}`,
             undefined,
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
@@ -517,7 +517,7 @@ describe('agent store', () => {
             restoring: false,
         })
         expect(FakeEventSource.instances[0]?.url).toBe(
-            `http://localhost:3001/tasks/${startedTask.id}/events`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/events`,
         )
     })
 
@@ -787,7 +787,7 @@ describe('agent store', () => {
 
         expect(FakeEventSource.instances).toHaveLength(2)
         expect(FakeEventSource.instances[1]?.url).toBe(
-            `http://localhost:3001/tasks/${startedTask.id}/events`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/events`,
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
             connectionState: 'connecting',
@@ -828,7 +828,7 @@ describe('agent store', () => {
 
         expect(fetch).toHaveBeenNthCalledWith(
             5,
-            `http://localhost:3001/tasks/${startedTask.id}/cancel`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/cancel`,
             { method: 'POST' },
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
@@ -861,7 +861,7 @@ describe('agent store', () => {
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3001/tasks/${startedTask.id}/cancel`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/cancel`,
             { method: 'POST' },
         )
         expect(store.getTaskState(startedTask.id)).toMatchObject({
@@ -935,7 +935,7 @@ describe('agent store', () => {
         expect(store.getTaskState(startedTask.id)?.permissionSubmitting).toBe(true)
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
+            `http://127.0.0.1:3001/tasks/${startedTask.id}/permissions/${firstPermissionId}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1034,7 +1034,7 @@ describe('agent store', () => {
         await vi.waitFor(() => {
             expect(fetchMock).toHaveBeenNthCalledWith(
                 4,
-                `http://localhost:3001/tasks/${startedTask.id}/permissions/${secondPermissionId}`,
+                `http://127.0.0.1:3001/tasks/${startedTask.id}/permissions/${secondPermissionId}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

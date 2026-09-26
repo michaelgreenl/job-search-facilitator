@@ -16,6 +16,6 @@ app.use('/api', apiRouter)
 app.get('/health', (_request, response) => {
     response.json({
         status: 'healthy',
-        capabilities: { jobSearchNetNewGuard: 1 },
+        capabilities: { jobSearchNetNewGuard: 1, resumeLibrary: 1 },
     } satisfies HealthResponse)
 })

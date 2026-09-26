@@ -47,6 +47,15 @@ Use queries for early-career frontend, full-stack, and backend responsibilities.
 
 Review two result pages per query, or all results when fewer exist. Keep every eligible candidate found during completed coverage.
 
+Separate posting inspection from source access. A denied application route affects that posting only.
+Continue other results and required queries, including queries that find no eligible candidates.
+Record only completed result-page inspections as operations. Preserve them if later work fails or stops.
+
+Set `blocker` only after verifying that required searches or result pages are inaccessible across the lane.
+Use the permitted access method and existing session. Record the observed failure and the evidence establishing its scope.
+A failed posting, one unavailable host in a multi-source lane, or unfinished work does not establish that scope.
+Respect approval denials. Never retry a denied destination through another route or bypass an access challenge.
+
 Use this exact coverage shape:
 
 ```json
@@ -56,13 +65,32 @@ Use this exact coverage shape:
             "lane": "linkedin",
             "operations": [{ "query": "actual query", "completion": "two-pages-reviewed" }],
             "accessMethod": "installed-chrome-plugin",
-            "blocker": null
+            "blocker": null,
+            "incompleteReason": null
         }
     ]
 }
 ```
 
-Use `all-results-reviewed` when fewer than two pages exist. Record an exact blocker for each blocked lane.
+Use `all-results-reviewed` when fewer than two pages exist, including zero results.
+For unfinished coverage without verified source-wide failure, keep `blocker: null` and explain the unfinished work in `incompleteReason`.
+For verified source-wide failure, use this blocker shape:
+
+```json
+{
+    "scope": "source-wide",
+    "source": "affected source URLs or names",
+    "failedOperation": "required search or result-page operation",
+    "observation": "observed error and whether the site or approval review caused it",
+    "verification": "observed evidence that required searches remain inaccessible across the lane after permitted setup"
+}
+```
+
+Do not infer verification or copy a posting failure into this object.
+Completed, blocked, and incomplete lane names come from validated coverage.
+Seven distinct completed operations count toward reliable coverage even if later access fails.
+A lane can have completed coverage and a current verified blocker. Incomplete lanes have fewer than seven operations and no blocker.
+Delivery still requires three lanes with seven distinct completed operations each.
 
 ## Candidate shape
 

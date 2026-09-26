@@ -9,6 +9,7 @@ const props = defineProps<{
     closeTestId?: string
     error?: string | null
     errorTestId?: string
+    eyebrow?: string
     heading: string
     open: boolean
 }>()
@@ -87,7 +88,10 @@ function handleClick(event: MouseEvent) {
         @click="handleClick"
     >
         <header class="pop-up-header">
-            <h2 :id="titleId" class="pop-up-title">{{ heading }}</h2>
+            <div :id="titleId">
+                <p v-if="eyebrow" class="pop-up-eyebrow">{{ eyebrow }}</p>
+                <h2 class="pop-up-title">{{ heading }}</h2>
+            </div>
             <BaseButton
                 class="close-button"
                 :data-testid="closeTestId"
@@ -125,7 +129,17 @@ function handleClick(event: MouseEvent) {
     display: flex;
     gap: $space-3;
     align-items: center;
-    margin-bottom: $space-2;
+    margin-bottom: $space-3;
+}
+
+.pop-up-eyebrow {
+    margin: 0;
+    color: $color-signal-light;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
 }
 
 .pop-up-title {
@@ -135,6 +149,7 @@ function handleClick(event: MouseEvent) {
 }
 
 .close-button {
+    align-self: flex-start;
     margin-left: auto;
     font-size: 1.5rem;
     border-radius: $radius-md;

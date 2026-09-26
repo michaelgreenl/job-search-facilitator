@@ -2,13 +2,16 @@ import {
     parseAgentHealth,
     parseAgentTask,
     parseAgentTaskEvent,
+    parseAutomation,
+    parseAutomations,
+    type UpdateAutomation,
     type AgentPermissionDecision,
     type AgentTaskEvent,
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { parseJsonResponse, readResponseError } from '@/api'
 
-const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://localhost:3001').replace(
+const agentBridgeUrl = (import.meta.env.VITE_AGENT_BRIDGE_URL ?? 'http://127.0.0.1:3001').replace(
     /\/$/,
     '',
 )
@@ -62,6 +65,23 @@ export async function fetchAgentHealth() {
     const response = await requestAgentBridge(path)
 
     return parseJsonResponse(response, parseAgentHealth, `Agent ${path}`)
+}
+
+export async function fetchAutomations() {
+    return parseJsonResponse(
+        await requestAgentBridge('/automations'),
+        parseAutomations,
+        'Automations',
+    )
+}
+
+export async function updateAutomation(id: string, input: UpdateAutomation) {
+    const response = await requestAgentBridge(`/automations/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+    })
+    return parseJsonResponse(response, parseAutomation, 'Automation')
 }
 
 export async function startAgentTask(taskId: string, input: StartAgentTaskInput) {

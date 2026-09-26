@@ -102,6 +102,7 @@ describe('application artifact and job update repositories', () => {
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',
             profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            email: null,
             relevanceRationale: 'Her role aligns with the position.',
             draftMessage: 'Hi Ada, could I ask about the team?',
         })
@@ -215,6 +216,7 @@ describe('application artifact and job update repositories', () => {
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',
             profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            email: null,
             relevanceRationale: 'Her role aligns with the position.',
             draftMessage: 'Hi Ada, could I ask about the team?',
         })

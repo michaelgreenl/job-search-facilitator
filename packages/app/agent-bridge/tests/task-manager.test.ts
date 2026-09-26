@@ -268,6 +268,7 @@ describe('Agent task manager', () => {
                     personName: 'Ada Lovelace',
                     personTitle: 'Engineering Manager',
                     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                    email: 'ada@example.com',
                     relevanceRationale: 'Her visible role aligns with the team.',
                     draftMessage: 'Hi Ada, could I ask about the team?',
                 },

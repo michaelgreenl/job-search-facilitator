@@ -14,15 +14,48 @@ pnpm dev:agent
 
 The bridge listens on `127.0.0.1:3001` by default. See `.env.example` for its optional configuration. `CODEX_BIN` only needs to be set when the ChatGPT app is not installed in its standard macOS location.
 
+## Agent context
+
+Application tasks use `.local/agent-codex` as a separate `CODEX_HOME`. Set `AGENT_CODEX_HOME` to use another private directory.
+
+Startup copies the current sign-in and model metadata. It copies only model settings and the browser runtime service configuration. It registers only the installed Chrome skill. Personal instructions, skills, plugins, hooks, and past conversations are excluded. Project instruction files are disabled. Each task checks the runtime's instruction sources before it starts.
+
+Browser tasks receive Chrome's required instructions. Draft requests receive no skill catalog or browser tools. Codex's built-in instructions still apply.
+
+Failed task state is excluded from refresh restoration. A retry after malformed output starts a new task with the original request context.
+
+The bridge requests Chrome's native tab cleanup after browser turns and cancellation. Cleanup targets that task's browser session. Existing user tabs remain open. A runtime crash can prevent cleanup.
+
+## Scheduled job search
+
+Run the application policy in an isolated runtime:
+
+```sh
+pnpm run job-search:run --check
+pnpm run job-search:run
+```
+
+The runner reads `docs/agents/job-search/automation.md` and uses `.local/job-search-codex`. The check verifies instruction isolation and browser availability without starting a search. Set `JOB_SEARCH_CODEX_HOME` to change that directory. `JOB_SEARCH_MODEL` and `JOB_SEARCH_REASONING_EFFORT` preserve schedule-specific model settings.
+
+The scheduled desktop task must launch this command and report its result. Its own desktop instructions still apply to the launcher. They do not enter the isolated coordinator or workers. The runner uses automatic approval review. Requests that need interactive approval stop the run and report the required action.
+
 ## Local API
 
 - `GET /health` reports current Agent runtime readiness and its discovered capabilities.
+- `GET /automations` lists local desktop schedules associated with `AGENT_CWD`.
+- `PATCH /automations/:id` changes a schedule or its active/paused state. Requests need the configured client origin and the latest revision.
 - `POST /tasks` starts a structured task.
 - `GET /tasks/:id` returns its current state.
 - `POST /tasks/:id/cancel` interrupts a running task.
 - `GET /tasks/:id/events` streams user-safe progress with server-sent events.
 
 Task events and output are held in memory for the life of the bridge process. Durable workflow state belongs in the Docker API. The bridge is intentionally bound to loopback and starts Agent tasks with a read-only sandbox and no approval escalation.
+
+Automation controls use the desktop user's `CODEX_HOME/automations` files, separate from the isolated agent home.
+Writes preserve configuration fields, reject stale revisions, and atomically replace the selected file.
+Daily and weekly patterns with the same run times on each selected day are editable, with up to 24 times per day. Other patterns can still be paused or resumed.
+The desktop app remains the scheduler. Next scheduled times use the bridge host's time zone; actual runs can start later.
+Cloud schedules are not exposed through this local-file integration.
 
 Task output contracts are validated as synchronous JSON Schema draft-07 with an explicit object root. The public task contract omits dialect markers and `format` validators; use structural keywords such as `pattern` when a task needs a format constraint. Schemas containing `$schema`, `format`, asynchronous validation, or anything else the bridge cannot compile are rejected before an Agent task starts.
 

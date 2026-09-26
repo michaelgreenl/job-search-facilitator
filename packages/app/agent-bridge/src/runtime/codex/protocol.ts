@@ -29,6 +29,7 @@ export const pluginInstalledResponseSchema = z.object({
 
 export const threadStartResponseSchema = z.object({
     thread: z.object({ id: z.string().min(1) }),
+    instructionSources: z.array(z.string()).optional(),
 })
 
 export const turnStartResponseSchema = z.object({

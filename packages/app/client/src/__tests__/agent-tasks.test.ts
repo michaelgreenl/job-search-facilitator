@@ -29,6 +29,7 @@ const contact: OutreachContact = {
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    email: 'ada@example.com',
     relevanceRationale: 'Her visible role is relevant to the team.',
     draftMessage: 'Hi Ada, could I ask about the team?',
     messaged: false,
@@ -58,6 +59,7 @@ describe('outreach agent tasks', () => {
                             'personName',
                             'personTitle',
                             'profileUrl',
+                            'email',
                             'relevanceRationale',
                             'draftMessage',
                         ],
@@ -66,6 +68,7 @@ describe('outreach agent tasks', () => {
                 ],
             },
         })
+        expect(JSON.stringify(discoveryTask.outputSchema)).not.toMatch(/\(\?(?:[=!]|<[=!])/)
     })
 
     it('defines the draft revision capability and output contract', () => {
@@ -76,6 +79,7 @@ describe('outreach agent tasks', () => {
     it('defines the job-post import capability and nested output contract', () => {
         expect(importTask.capabilities).toEqual(['chrome'])
         expect(importTask.webSearch).toBe(false)
+        expect(importTask.resumeContext).toBe(true)
         expect(importTask.outputSchema).toMatchObject({
             required: [
                 'agentLabel',
