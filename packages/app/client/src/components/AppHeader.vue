@@ -66,6 +66,10 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     &.is-settings {
         max-width: 60rem;
     }
+
+    @media (width <= 42rem) {
+        padding-inline: $space-4;
+    }
 }
 
 .nav-links {
@@ -81,8 +85,7 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
 .link {
     display: flex;
     align-items: center;
-    justify-content: center;
-    min-width: 2.75rem;
+    justify-content: flex-end;
     min-height: 2.75rem;
     color: $color-ink-muted;
     text-decoration: none;
