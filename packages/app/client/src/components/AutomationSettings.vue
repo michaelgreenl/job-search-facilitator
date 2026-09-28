@@ -574,11 +574,12 @@ h2 {
 }
 
 .save-status {
-    color: $color-signal-light;
-}
-
-.save-status:not(:empty) {
-    margin-top: $space-3;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .schedule-dialog {
