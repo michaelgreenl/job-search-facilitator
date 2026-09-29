@@ -5,6 +5,15 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
     plugins: [vue()],
+    server: {
+        proxy: {
+            '/api': 'http://127.0.0.1:3000',
+            '/agent': {
+                target: 'http://127.0.0.1:3001',
+                rewrite: (path) => path.replace(/^\/agent/, ''),
+            },
+        },
+    },
     css: {
         preprocessorOptions: {
             scss: {
