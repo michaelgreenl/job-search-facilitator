@@ -24,9 +24,11 @@ import {
     itemStartedSchema,
     permissionResolvedSchema,
     pluginInstalledResponseSchema,
-    reasoningDeltaSchema,
+    progressMessageSchema,
+    progressToolCallSchema,
     threadStartResponseSchema,
     turnCompletedSchema,
+    turnErrorSchema,
     turnReferenceSchema,
     turnStartResponseSchema,
     type RpcId,
@@ -235,6 +237,7 @@ export class CodexRuntime implements AgentRuntime {
             {
                 ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
                 cwd: this.cwd,
+                model: 'gpt-6-astra',
                 approvalPolicy: {
                     granular: {
                         sandbox_approval: false,
@@ -248,15 +251,30 @@ export class CodexRuntime implements AgentRuntime {
                 sandbox: 'read-only',
                 threadSource: 'job-search-facilitator',
                 selectedCapabilityRoots,
+                ...(input.threadId === undefined
+                    ? {
+                          dynamicTools: [
+                              {
+                                  type: 'function',
+                                  name: 'report_progress',
+                                  description:
+                                      'Show the current task stage to the user. Select the closest allowed message before starting work and when the task stage changes. Do not report every tool call or repeat the current stage.',
+                                  inputSchema: z.toJSONSchema(progressMessageSchema),
+                              },
+                          ],
+                      }
+                    : {}),
                 developerInstructions: [
                     resumeContext,
                     input.capabilities.includes('chrome')
                         ? 'Use only the supplied task instructions and requested tools. Browser tabs created for this task are temporary. Close every tab you created before returning either success or failure, even after a tool error. Never mark research or error tabs as deliverables or handoffs. Never close existing user tabs or tabs owned by another task. Use only the installed Chrome tool; do not use another browser-control method if it fails.'
                         : 'Follow the supplied task instructions. Return the final result as one JSON object matching the output schema, without surrounding Markdown.',
                     'A page or tool failure does not by itself make the task fail. Preserve verified information and complete all required work that remains possible. Recover from ordinary tool or navigation errors using permitted tools and sources when useful. After a security rejection, stop the blocked action without bypassing the restriction. Continue permitted independent work or finish from existing evidence. Skip unavailable optional information using the null or unknown value allowed by the output schema. Do not invent missing facts or discard a valid result because optional research or browser cleanup failed. Report failure only when a required outcome cannot be completed with verified evidence.',
-                    'Before each group of tool calls, send one brief commentary sentence describing the immediate action. Use at most 10 words. Keep explanations and reasoning out of these progress updates. Return the final result separately using the output schema.',
+                    'Call report_progress before starting work and when the task stage changes. Select the closest allowed message. Use this tool for all visible progress; do not send commentary or interim result objects. Return the final result using the output schema.',
                 ].join('\n\n'),
                 config: {
+                    // Keep the ~50 KB Chrome API reference intact in model history.
+                    tool_output_token_limit: 20_000,
                     ...(input.webSearch === false ? { web_search: 'disabled' } : {}),
                     ...(this.isolated
                         ? input.capabilities.includes('chrome')
@@ -298,7 +316,8 @@ export class CodexRuntime implements AgentRuntime {
                         : []),
                 ],
                 outputSchema: input.outputSchema,
-                summary: 'concise',
+                effort: 'xhigh',
+                summary: 'none',
             },
             turnStartResponseSchema,
         )
@@ -328,7 +347,7 @@ export class CodexRuntime implements AgentRuntime {
                     type: 'commentary',
                     threadId,
                     turnId,
-                    text: 'The task ended, but its browser tabs could not be closed.',
+                    text: 'Browser tabs could not be closed',
                 }),
             )
             .finally(() => this.browserCleanups.delete(threadId))
@@ -427,6 +446,30 @@ export class CodexRuntime implements AgentRuntime {
             return
         }
 
+        if (method === 'item/tool/call' && isObject(params) && params.tool === 'report_progress') {
+            const call = progressToolCallSchema.safeParse(params)
+            if (!call.success) {
+                this.connection.respond(id, {
+                    contentItems: [
+                        {
+                            type: 'inputText',
+                            text: 'Select one of the allowed report_progress messages.',
+                        },
+                    ],
+                    success: false,
+                })
+                return
+            }
+            this.queueEvent({
+                type: 'commentary',
+                threadId: call.data.threadId,
+                turnId: call.data.turnId,
+                text: call.data.arguments.message,
+            })
+            this.connection.respond(id, { contentItems: [], success: true })
+            return
+        }
+
         const permission =
             method === 'mcpServer/elicitation/request' ? browserOriginPermission(params) : null
 
@@ -464,6 +507,23 @@ export class CodexRuntime implements AgentRuntime {
     }
 
     private handleNotification(method: string, params: unknown): void {
+        if (method === 'error') {
+            const notification = this.parseNotification(method, turnErrorSchema, params)
+
+            if (notification?.willRetry) {
+                this.queueEvent({
+                    type: 'retrying',
+                    threadId: notification.threadId,
+                    turnId: notification.turnId,
+                    text: notification.error.additionalDetails
+                        ? `${notification.error.message} ${notification.error.additionalDetails}`
+                        : notification.error.message,
+                })
+            }
+
+            return
+        }
+
         if (method === 'serverRequest/resolved') {
             const notification = this.parseNotification(method, permissionResolvedSchema, params)
 
@@ -526,23 +586,6 @@ export class CodexRuntime implements AgentRuntime {
             return
         }
 
-        if (method === 'item/reasoning/summaryTextDelta') {
-            const notification = this.parseNotification(method, reasoningDeltaSchema, params)
-
-            if (notification !== null) {
-                this.queueEvent({
-                    type: 'reasoning-delta',
-                    threadId: notification.threadId,
-                    turnId: notification.turnId,
-                    itemId: notification.itemId,
-                    summaryIndex: notification.summaryIndex,
-                    textDelta: notification.delta,
-                })
-            }
-
-            return
-        }
-
         if (method === 'item/completed') {
             const notification = this.parseNotification(method, itemCompletedSchema, params)
 
@@ -564,8 +607,11 @@ export class CodexRuntime implements AgentRuntime {
                 return
             }
 
+            // Only report_progress supplies visible progress.
+            if (notification.item.phase === 'commentary') return
+
             this.queueEvent({
-                type: notification.item.phase === 'commentary' ? 'commentary' : 'final-message',
+                type: 'final-message',
                 threadId: notification.threadId,
                 turnId: notification.turnId,
                 text: notification.item.text,

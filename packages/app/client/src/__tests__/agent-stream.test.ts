@@ -101,151 +101,101 @@ describe('agent stream', () => {
         return { root, store, taskId }
     }
 
-    it('renders fragmented reasoning sections as clean, separate statements', async () => {
+    it('shows full progress messages and expands earlier updates only when history exists', async () => {
         const { root, store, taskId } = mountAgentStream()
-
         updateTaskState(store, taskId, {
             events: [
-                { type: 'message', textDelta: '**Reviewing ', startsNewStatement: true, createdAt },
-                { type: 'message', textDelta: 'the role**', startsNewStatement: false, createdAt },
-                { type: 'message', textDelta: '**Finding ', startsNewStatement: true, createdAt },
                 {
                     type: 'message',
-                    textDelta: 'the **right** person**',
-                    startsNewStatement: false,
+                    textDelta: 'Reviewing job requirements',
+                    startsNewStatement: true,
                     createdAt,
                 },
-            ] satisfies AgentTaskEvent[],
-        })
-        await nextTick()
-
-        expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(1)
-        expect(
-            Array.from(
-                root.querySelectorAll(
-                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
-                ),
-            ).map((trace) => trace.textContent?.trim()),
-        ).toEqual(['Finding the **right** person', 'Reviewing the role'])
-    })
-
-    it('retains complete statements across activity blocks and incoming updates', async () => {
-        const { root, store, taskId } = mountAgentStream()
-        const block = Array.from({ length: 7 }, (_, index) => `${index}`.repeat(80))
-
-        updateTaskState(store, taskId, {
-            events: [
-                ...block.map((textDelta) => ({
-                    type: 'message' as const,
-                    textDelta,
+                {
+                    type: 'message',
+                    textDelta: 'Reviewing job requirements',
                     startsNewStatement: true,
                     createdAt,
-                })),
-                { type: 'activity' as const, message: 'Reading local context', createdAt },
-                ...block.map((textDelta) => ({
-                    type: 'message' as const,
-                    textDelta,
-                    startsNewStatement: true,
-                    createdAt,
-                })),
+                },
             ],
         })
         await nextTick()
-
-        const reasoningBlocks = Array.from(
-            root.querySelectorAll('[data-testid="agent-stream-commentary"]'),
-        )
-        const retainedTraceNodes = reasoningBlocks.map((item) =>
-            Array.from(
-                item.querySelectorAll(
-                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
-                ),
-            ),
-        )
-        expect(
-            retainedTraceNodes.map((traces) => traces.map((trace) => trace.textContent)),
-        ).toEqual([[...block].reverse(), [...block].reverse()])
-
-        appendEvent(store, taskId, {
-            type: 'message',
-            textDelta: 'new trace',
-            startsNewStatement: true,
-            createdAt,
-        })
-        await nextTick()
-
-        const updatedTraceNodes = Array.from(
-            reasoningBlocks[1]?.querySelectorAll(
-                '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
-            ) ?? [],
-        )
-
-        expect(updatedTraceNodes.map((trace) => trace.textContent)).toEqual([
-            'new trace',
-            ...[...block].reverse(),
-        ])
-
-        const firstDisclosure = reasoningBlocks[0]?.querySelector<HTMLDetailsElement>('details')
-        const firstToggle = reasoningBlocks[0]?.querySelector<HTMLElement>(
-            '[data-testid="agent-reasoning-toggle"]',
-        )
-
-        expect(firstDisclosure?.open).toBe(false)
-        expect(firstToggle?.querySelectorAll('svg')).toHaveLength(1)
-        firstToggle?.click()
-        expect(firstDisclosure?.open).toBe(true)
-    })
-
-    it('preserves paragraphs within a fragmented summary instead of reversing their lines', async () => {
-        const { root, store, taskId } = mountAgentStream()
-        const paragraphs = ['Reviewing the role', 'Checking the requirements', 'Finding a contact']
-
-        for (const [index, textDelta] of paragraphs.join('\n\n').split('').entries()) {
-            appendEvent(store, taskId, {
-                type: 'message',
-                textDelta,
-                startsNewStatement: index === 0,
-                createdAt,
-            })
-        }
-        await nextTick()
-
-        expect(
-            Array.from(
-                root.querySelectorAll(
-                    '[data-testid="agent-reasoning-latest"], [data-testid="agent-reasoning-trace"]',
-                ),
-            ).map((trace) => trace.textContent),
-        ).toEqual([paragraphs.join('\n\n')])
-        expect(root.querySelector('[data-testid="agent-reasoning-preview"]')?.textContent).toBe(
-            paragraphs[0],
-        )
-    })
-
-    it('presents a disclosure only when a reasoning block has hidden traces', async () => {
-        const { root, store, taskId } = mountAgentStream()
-
-        appendEvent(store, taskId, {
-            type: 'message',
-            textDelta: 'First trace',
-            startsNewStatement: true,
-            createdAt,
-        })
-        await nextTick()
-
+        const visibleHeading = () =>
+            root.querySelector('[data-testid="agent-reasoning-latest"]')?.textContent
+        expect(visibleHeading()).toBe('Reviewing job requirements')
         expect(root.querySelector('[data-testid="agent-reasoning-toggle"]')).toBeNull()
 
         appendEvent(store, taskId, {
             type: 'message',
-            textDelta: 'Second trace',
+            textDelta: 'Assessing role fit',
             startsNewStatement: true,
             createdAt,
         })
         await nextTick()
+        expect(visibleHeading()).toBe('Assessing role fit')
+        expect(root.querySelector('[data-testid="agent-reasoning-toggle"]')).not.toBeNull()
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map((item) =>
+                item.textContent?.trim(),
+            ),
+        ).toEqual(['Reviewing job requirements'])
+    })
 
-        const toggle = root.querySelector('[data-testid="agent-reasoning-toggle"]')
+    it('groups repeated tool activity across updates until a different activity starts', async () => {
+        const { root, store, taskId } = mountAgentStream()
+        updateTaskState(store, taskId, {
+            events: [
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                {
+                    type: 'message',
+                    textDelta: 'Reviewing job requirements',
+                    startsNewStatement: true,
+                    createdAt,
+                },
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                {
+                    type: 'message',
+                    textDelta: 'Verifying the job post',
+                    startsNewStatement: true,
+                    createdAt,
+                },
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                {
+                    type: 'message',
+                    textDelta: 'Verifying the job post',
+                    startsNewStatement: true,
+                    createdAt,
+                },
+                { type: 'activity', message: 'Reading local context', createdAt },
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                {
+                    type: 'message',
+                    textDelta: 'Checking application details',
+                    startsNewStatement: true,
+                    createdAt,
+                },
+            ],
+        })
+        await nextTick()
 
-        expect(toggle?.querySelectorAll('svg')).toHaveLength(1)
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-stream-copy"]')).map((item) =>
+                item.textContent?.trim(),
+            ),
+        ).toEqual(['Using Chrome', 'Reading local context', 'Using Chrome'])
+        expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(2)
+        expect(root.querySelectorAll('[data-testid="agent-reasoning-toggle"]')).toHaveLength(1)
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map((item) =>
+                item.textContent?.trim(),
+            ),
+        ).toEqual(['Reviewing job requirements'])
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-latest"]')).map(
+                (item) => item.textContent,
+            ),
+        ).toEqual(['Verifying the job post', 'Checking application details'])
     })
 
     it.each([
@@ -314,7 +264,7 @@ describe('agent stream', () => {
                 { type: 'activity', message: 'Using Chrome', createdAt },
                 {
                     type: 'message',
-                    textDelta: 'Reviewing the hiring team.',
+                    textDelta: 'Finding hiring contacts',
                     startsNewStatement: true,
                     createdAt,
                 },

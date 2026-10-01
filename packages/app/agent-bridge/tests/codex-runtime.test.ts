@@ -209,6 +209,7 @@ describe('Codex runtime', () => {
             expect.objectContaining({
                 method: 'thread/start',
                 params: expect.objectContaining({
+                    model: 'gpt-6-astra',
                     approvalPolicy: {
                         granular: {
                             sandbox_approval: false,
@@ -220,7 +221,7 @@ describe('Codex runtime', () => {
                     },
                     approvalsReviewer: 'user',
                     sandbox: 'read-only',
-                    config: { web_search: 'disabled' },
+                    config: { tool_output_token_limit: 20_000, web_search: 'disabled' },
                     selectedCapabilityRoots: [
                         {
                             id: 'chrome@openai-bundled',
@@ -234,6 +235,28 @@ describe('Codex runtime', () => {
                 }),
             }),
         )
+        expect(fake.requests.find(({ method }) => method === 'thread/start')?.params).toMatchObject(
+            {
+                dynamicTools: [
+                    {
+                        type: 'function',
+                        name: 'report_progress',
+                        inputSchema: {
+                            type: 'object',
+                            required: ['message'],
+                            additionalProperties: false,
+                        },
+                    },
+                ],
+            },
+        )
+        const progressParams = fake.requests.find(({ method }) => method === 'thread/start')
+            ?.params as {
+            dynamicTools: [{ inputSchema: { properties: { message: { enum: string[] } } } }]
+        }
+        const messages = progressParams.dynamicTools[0].inputSchema.properties.message.enum
+        expect(messages.length).toBeGreaterThan(0)
+        expect(messages.every((message) => message.length <= 40)).toBe(true)
         expect(fake.requests).toContainEqual(
             expect.objectContaining({
                 method: 'turn/start',
@@ -241,7 +264,8 @@ describe('Codex runtime', () => {
                     clientUserMessageId: 'task-id',
                     input: [{ type: 'text', text: 'Find contacts', text_elements: [] }],
                     outputSchema: { type: 'object' },
-                    summary: 'concise',
+                    effort: 'xhigh',
+                    summary: 'none',
                 }),
             }),
         )
@@ -423,14 +447,6 @@ describe('Codex runtime', () => {
                 activity: 'web-search',
             },
             {
-                type: 'reasoning-delta',
-                threadId: 'thread-id',
-                turnId: 'turn-id',
-                itemId: 'reasoning-id',
-                summaryIndex: 2,
-                textDelta: 'Checking likely contacts',
-            },
-            {
                 type: 'final-message',
                 threadId: 'thread-id',
                 turnId: 'turn-id',
@@ -455,7 +471,60 @@ describe('Codex runtime', () => {
         runtime.close()
     })
 
-    it('streams outreach commentary before the final structured result', async () => {
+    it('streams connection retries without extending the task inactivity timeout', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        const events: AgentTaskStreamEvent[] = []
+
+        try {
+            await runtime.start()
+            const task = await manager.start({
+                prompt: 'Import the job post',
+                outputSchema: { type: 'object' },
+                capabilities: [],
+            })
+            manager.connect(task.id, (event) => events.push(event))
+            await vi.advanceTimersByTimeAsync(9 * 60 * 1_000)
+
+            const message = 'Reconnecting... 2/5'
+            const additionalDetails = 'Incomplete response returned, reason: content_filter'
+            fake.respond({
+                method: 'error',
+                params: {
+                    threadId: task.threadId,
+                    turnId: task.turnId,
+                    error: { message, additionalDetails },
+                    willRetry: true,
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            expect(events.at(-1)?.event).toMatchObject({
+                type: 'activity',
+                message: 'Reconnecting to Agent',
+            })
+            expect(manager.get(task.id)?.status).toBe('running')
+
+            await vi.advanceTimersByTimeAsync(60 * 1_000)
+
+            expect(manager.get(task.id)?.status).toBe('failed')
+            expect(fake.requests).toContainEqual(
+                expect.objectContaining({
+                    method: 'turn/interrupt',
+                    params: { threadId: task.threadId, turnId: task.turnId },
+                }),
+            )
+        } finally {
+            runtime.close()
+            vi.useRealTimers()
+        }
+    })
+
+    it('streams explicit progress without leaking native reasoning, commentary, or final output', async () => {
         const fake = createFakeProcess()
         const runtime = new CodexRuntime('codex', '/workspace', {
             spawnProcess: () => fake.process,
@@ -474,6 +543,70 @@ describe('Codex runtime', () => {
 
         try {
             fake.respond({
+                id: 'role-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    tool: 'report_progress',
+                    arguments: { message: 'Reviewing job requirements' },
+                },
+            })
+            fake.respond({
+                id: 'fit-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    tool: 'report_progress',
+                    arguments: { message: 'Assessing role fit' },
+                },
+            })
+            fake.respond({
+                id: 'foreign-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    turnId: 'other-turn',
+                    tool: 'report_progress',
+                    arguments: { message: 'Preparing the job post' },
+                },
+            })
+            fake.respond({
+                method: 'item/reasoning/summaryTextDelta',
+                params: {
+                    ...identity,
+                    itemId: 'reasoning-1',
+                    summaryIndex: 0,
+                    delta: '**Handling documentation truncation**',
+                },
+            })
+            fake.respond({
+                method: 'item/reasoning/summaryTextDelta',
+                params: {
+                    ...identity,
+                    itemId: 'reasoning-2',
+                    summaryIndex: 0,
+                    delta: '**Capturing full DOM text content**',
+                },
+            })
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        type: 'agentMessage',
+                        phase: 'commentary',
+                        text: '{"contacts":[],"status":"Checking the hiring team"}',
+                    },
+                },
+            })
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: { type: 'agentMessage', phase: 'commentary', text: '  {"contacts":' },
+                },
+            })
+            fake.respond({
                 method: 'item/completed',
                 params: {
                     ...identity,
@@ -481,18 +614,20 @@ describe('Codex runtime', () => {
                         id: 'commentary',
                         type: 'agentMessage',
                         phase: 'commentary',
-                        text: 'Checking the hiring team',
+                        text: 'I’m using the Chrome skill to inspect the posting.',
                     },
                 },
             })
             await new Promise((resolve) => setImmediate(resolve))
 
-            const commentary = expect.objectContaining({
-                type: 'message',
-                textDelta: 'Checking the hiring team',
-                startsNewStatement: true,
+            const progress = ['Reviewing job requirements', 'Assessing role fit'].map((textDelta) =>
+                expect.objectContaining({ type: 'message', textDelta, startsNewStatement: true }),
+            )
+            expect(events.map(({ event }) => event)).toEqual(progress)
+            expect(fake.requests).toContainEqual({
+                id: 'role-progress',
+                result: { contentItems: [], success: true },
             })
-            expect(events.map(({ event }) => event)).toEqual([commentary])
 
             fake.respond({
                 method: 'item/completed',
@@ -516,11 +651,80 @@ describe('Codex runtime', () => {
             await new Promise((resolve) => setImmediate(resolve))
 
             expect(events.map(({ event }) => event)).toEqual([
-                commentary,
+                ...progress,
                 expect.objectContaining({ type: 'completed', output: { contacts: [] } }),
             ])
         } finally {
             await manager.cancel(task.id)
+            runtime.close()
+        }
+    })
+
+    it.each([
+        'Handling tool output truncation',
+        'I’m using the Chrome skill to inspect the posting.',
+        'Reviewing job requirements\nA paragraph.',
+        'Reviewing the supplied role and applicant experience in detail',
+        '{"message":"Reviewing the task"}',
+    ])('rejects invalid progress without displaying or shortening it: %s', async (message) => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: AgentRuntimeEvent[] = []
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        try {
+            fake.respond({
+                id: 'invalid-progress',
+                method: 'item/tool/call',
+                params: {
+                    threadId: 'thread-id',
+                    turnId: 'turn-id',
+                    tool: 'report_progress',
+                    arguments: { message },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+            expect(fake.requests).toContainEqual({
+                id: 'invalid-progress',
+                result: {
+                    contentItems: [expect.objectContaining({ type: 'inputText' })],
+                    success: false,
+                },
+            })
+            expect(events).toEqual([])
+        } finally {
+            runtime.close()
+        }
+    })
+
+    it('rejects unsupported dynamic tools without emitting their arguments', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: AgentRuntimeEvent[] = []
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        try {
+            fake.respond({
+                id: 'unsupported-tool',
+                method: 'item/tool/call',
+                params: {
+                    threadId: 'thread-id',
+                    turnId: 'turn-id',
+                    tool: 'unknown_tool',
+                    arguments: { message: 'Unexpected content' },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+            expect(fake.requests).toContainEqual({
+                id: 'unsupported-tool',
+                error: { code: -32601, message: 'Unsupported server request' },
+            })
+            expect(events).toEqual([])
+        } finally {
             runtime.close()
         }
     })
@@ -769,7 +973,7 @@ it('resumes the requested draft thread without creating a new conversation', asy
         outputSchema: { type: 'object' },
     })
     expect(fake.requests.find(({ method }) => method === 'thread/resume')).toMatchObject({
-        params: { threadId: 'thread-id' },
+        params: { threadId: 'thread-id', config: { tool_output_token_limit: 20_000 } },
     })
     expect(fake.requests.some(({ method }) => method === 'thread/start')).toBe(false)
     runtime.close()

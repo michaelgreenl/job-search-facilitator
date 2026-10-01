@@ -41,6 +41,11 @@ export const turnReferenceSchema = z.object({
     turnId: z.string().min(1),
 })
 
+export const turnErrorSchema = turnReferenceSchema.extend({
+    error: z.object({ message: z.string(), additionalDetails: z.string().nullish() }),
+    willRetry: z.boolean(),
+})
+
 export const permissionResolvedSchema = z.object({
     threadId: z.string().min(1),
     requestId: rpcIdSchema,
@@ -50,10 +55,32 @@ export const itemStartedSchema = turnReferenceSchema.extend({
     item: z.object({ type: z.string() }),
 })
 
-export const reasoningDeltaSchema = turnReferenceSchema.extend({
-    itemId: z.string().min(1),
-    summaryIndex: z.number().int().nonnegative(),
-    delta: z.string(),
+export const progressMessageSchema = z.strictObject({
+    message: z
+        .enum([
+            'Reviewing the task',
+            'Verifying the job post',
+            'Reviewing job requirements',
+            'Reviewing applicant experience',
+            'Comparing resume options',
+            'Assessing role fit',
+            'Checking application details',
+            'Preparing the job post',
+            'Searching for jobs',
+            'Reviewing job listings',
+            'Reviewing application updates',
+            'Checking outreach replies',
+            'Finding hiring contacts',
+            'Preparing outreach',
+            'Preparing application documents',
+            'Reviewing resume evidence',
+            'Preparing recommendations',
+        ])
+        .check(z.maxLength(40)),
+})
+
+export const progressToolCallSchema = turnReferenceSchema.extend({
+    arguments: progressMessageSchema,
 })
 
 export const itemCompletedSchema = turnReferenceSchema.extend({

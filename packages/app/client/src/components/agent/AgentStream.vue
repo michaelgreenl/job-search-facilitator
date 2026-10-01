@@ -12,7 +12,6 @@ import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 const props = defineProps<{ issue: string | null; taskId: string | null }>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
-const maxReasoningStatementLength = 60
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
 const connectionState = computed(() => state.value?.connectionState ?? 'idle')
@@ -29,8 +28,6 @@ interface StreamItem {
     icon: StreamIcon
     message: string
     statements: string[]
-    preview: string
-    expandable: boolean
     type: 'activity' | 'commentary'
 }
 
@@ -40,20 +37,12 @@ const streamIcons: Record<StreamIcon, Component> = {
     tool: ToolIcon,
 }
 
-const stripStatementMarkers = (message: string) =>
-    message
-        .split('\n')
-        .map((statement) => statement.replace(/^(\s*)\*\*/, '$1').replace(/\*\*(\s*)$/, '$1'))
-        .join('\n')
-
-const limitReasoningStatement = (statement: string) =>
-    statement.length > maxReasoningStatementLength
-        ? `${statement.slice(0, maxReasoningStatementLength - 1).trimEnd()}…`
-        : statement
-
 const streamItems = computed(() => {
+    let lastActivity: string | null = null
     const items = events.value.reduce<StreamItem[]>((currentItems, event) => {
         if (event.type === 'activity') {
+            if (event.message === lastActivity) return currentItems
+            lastActivity = event.message
             currentItems.push({
                 message: event.message,
                 icon:
@@ -61,8 +50,6 @@ const streamItems = computed(() => {
                         ? 'globe'
                         : 'tool',
                 statements: [],
-                preview: '',
-                expandable: false,
                 type: 'activity',
             })
         } else if (event.type === 'message') {
@@ -79,8 +66,6 @@ const streamItems = computed(() => {
                     icon: 'agent',
                     message: event.textDelta,
                     statements: [event.textDelta],
-                    preview: '',
-                    expandable: false,
                     type: 'commentary',
                 })
             }
@@ -89,21 +74,11 @@ const streamItems = computed(() => {
         return currentItems
     }, [])
 
-    return items.map((item) => {
-        if (item.type === 'activity') return item
-
-        const statements = item.statements
-            .map((statement) => stripStatementMarkers(statement).trim())
-            .filter(Boolean)
-            .reverse()
-        const preview = limitReasoningStatement(statements[0]?.split('\n')[0] ?? '')
-
-        return {
-            ...item,
-            statements,
-            preview,
-            expandable: statements.length > 1 || (statements[0] ?? '') !== preview,
-        }
+    return items.flatMap((item) => {
+        if (item.type === 'activity') return [item]
+        const statements = [...new Set([...item.statements].reverse())]
+        const message = statements[0]
+        return message ? [{ ...item, message, statements }] : []
     })
 })
 const latestActivityIndex = computed(() => {
@@ -217,40 +192,30 @@ function allowBrowserActionsForTask() {
                         </span>
                     </template>
                     <component
-                        :is="item.expandable ? 'details' : 'div'"
+                        :is="item.statements.length > 1 ? 'details' : 'div'"
                         v-else
                         class="reasoning-details"
                     >
                         <component
-                            :is="item.expandable ? 'summary' : 'div'"
+                            :is="item.statements.length > 1 ? 'summary' : 'div'"
                             class="reasoning-summary"
-                            :class="{
-                                'reasoning-summary-collapsible': item.expandable,
-                            }"
-                            :data-testid="item.expandable ? 'agent-reasoning-toggle' : undefined"
+                            :class="{ 'reasoning-summary-collapsible': item.statements.length > 1 }"
+                            :data-testid="
+                                item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
+                            "
                         >
-                            <span
-                                data-testid="agent-reasoning-preview"
-                                class="activity-copy reasoning-preview"
-                            >
-                                {{ item.preview }}
-                            </span>
-                            <span
-                                v-if="item.expandable"
-                                data-testid="agent-reasoning-latest"
-                                class="activity-copy reasoning-latest"
-                            >
-                                {{ item.statements[0] }}
+                            <span data-testid="agent-reasoning-latest" class="activity-copy">
+                                {{ item.message }}
                             </span>
                             <ChevronDownIcon
-                                v-if="item.expandable"
+                                v-if="item.statements.length > 1"
                                 class="activity-icon reasoning-chevron"
                             />
                         </component>
                         <div v-if="item.statements.length > 1" class="reasoning-traces">
                             <span
-                                v-for="(statement, statementIndex) in item.statements.slice(1)"
-                                :key="statementIndex"
+                                v-for="statement in item.statements.slice(1)"
+                                :key="statement"
                                 data-testid="agent-reasoning-trace"
                                 class="activity-copy"
                             >
@@ -375,20 +340,8 @@ function allowBrowserActionsForTask() {
     }
 }
 
-.reasoning-latest {
-    display: none;
-}
-
 .reasoning-details[open] > .reasoning-summary {
     color: $color-ink;
-
-    .reasoning-preview {
-        display: none;
-    }
-
-    .reasoning-latest {
-        display: block;
-    }
 }
 
 .reasoning-chevron {

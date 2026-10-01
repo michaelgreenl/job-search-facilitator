@@ -4,7 +4,8 @@ import { MAX_APPLICATION_ARTIFACT_BYTES } from '../types/applications.ts'
 
 export const resumeNameSchema = z
     .string()
-    .regex(/^[^\p{Cc}]+$/u)
+    // oxlint-disable-next-line no-control-regex -- JSON Schema needs portable control-character ranges.
+    .regex(/^[^\x00-\x1f\x7f-\x9f]+$/)
     .trim()
     .min(1)
     .max(120)
