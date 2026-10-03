@@ -9,6 +9,7 @@ import { AgentTaskManager } from './tasks/agent-task-manager.ts'
 const runtime = new CodexRuntime(env.CODEX_BIN, env.AGENT_CWD, {
     environment: prepareAgentHome(env.AGENT_CODEX_HOME),
     chromeRoot,
+    personalCodexHome,
 })
 let server: ReturnType<typeof createServer> | null = null
 let shuttingDown = false

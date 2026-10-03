@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
+import { createJobPostImportAgentOutputSchema } from '@job-search-facilitator/core'
 import type {
     AgentCapability,
     AgentPermissionDecision,
@@ -17,6 +18,13 @@ import type {
     StartedAgentTask,
 } from '../agent-runtime.ts'
 import { AppServerConnection, type AppServerConnectionOptions } from './app-server-connection.ts'
+import { readBrowserConfig } from './isolated-home.ts'
+import {
+    captureJobDescription,
+    completeJobPostImport,
+    descriptionCaptureInputSchema,
+    type CapturedJobDescription,
+} from './job-description.ts'
 import {
     emptyResponseSchema,
     isObject,
@@ -42,6 +50,7 @@ interface PendingPermission {
 
 interface CodexRuntimeOptions extends AppServerConnectionOptions {
     chromeRoot?: string
+    personalCodexHome?: string
 }
 
 const pluginIds = {
@@ -109,12 +118,17 @@ const browserOriginPermission = (params: unknown): AgentRuntimePermission | null
 export class CodexRuntime implements AgentRuntime {
     private readonly connection: AppServerConnection
     private readonly chromeRoot: string | undefined
+    private readonly personalCodexHome: string | undefined
     private readonly isolated: boolean
     private readonly pendingPermissions = new Map<string, PendingPermission>()
     private readonly permissionIdsByRequest = new Map<string, string>()
     private readonly capabilityRoots = new Map<AgentCapability, string>()
     private readonly browserThreads = new Map<string, string | null>()
     private readonly browserCleanups = new Map<string, Promise<void>>()
+    private readonly jobDescriptionCaptures = new Map<
+        string,
+        { turnId: string; captures: Map<string, CapturedJobDescription> }
+    >()
     private readonly queuedEvents: AgentRuntimeEvent[] = []
     private eventFlushScheduled = false
     private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
@@ -128,6 +142,7 @@ export class CodexRuntime implements AgentRuntime {
         options: CodexRuntimeOptions = {},
     ) {
         this.chromeRoot = options.chromeRoot
+        this.personalCodexHome = options.personalCodexHome
         this.isolated = options.environment?.CODEX_HOME !== undefined
         this.connection = new AppServerConnection(
             binary,
@@ -218,6 +233,12 @@ export class CodexRuntime implements AgentRuntime {
 
     async startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.assertReady()
+        if (
+            input.captureJobDescription &&
+            (!input.capabilities.includes('chrome') || input.threadId !== undefined)
+        ) {
+            throw new Error('Description capture requires a new Chrome task')
+        }
         const resumeContext = input.resumeContext ? await loadResumeContext() : ''
         if (input.threadId !== undefined) await this.browserCleanups.get(input.threadId)
         const selectedCapabilityRoots = input.capabilities.map((capability) => {
@@ -261,6 +282,19 @@ export class CodexRuntime implements AgentRuntime {
                                       'Show the current task stage to the user. Select the closest allowed message before starting work and when the task stage changes. Do not report every tool call or repeat the current stage.',
                                   inputSchema: z.toJSONSchema(progressMessageSchema),
                               },
+                              ...(input.captureJobDescription
+                                  ? [
+                                        {
+                                            type: 'function',
+                                            name: 'capture_job_description',
+                                            description:
+                                                'Copy the complete visible job-description element directly into the import. Use the existing chrome binding, a task-owned tab ID, and a CSS selector observed on that page. Exclude application forms and page navigation. Returns descriptionCaptureId and sourceUrl; use these in the final post. Do not reproduce the description in the final output.',
+                                            inputSchema: z.toJSONSchema(
+                                                descriptionCaptureInputSchema,
+                                            ),
+                                        },
+                                    ]
+                                  : []),
                           ],
                       }
                     : {}),
@@ -275,6 +309,10 @@ export class CodexRuntime implements AgentRuntime {
                 config: {
                     // Keep the ~50 KB Chrome API reference intact in model history.
                     tool_output_token_limit: 20_000,
+                    ...(this.personalCodexHome !== undefined &&
+                    input.capabilities.includes('chrome')
+                        ? { 'mcp_servers.node_repl': readBrowserConfig(this.personalCodexHome) }
+                        : {}),
                     ...(input.webSearch === false ? { web_search: 'disabled' } : {}),
                     ...(this.isolated
                         ? input.capabilities.includes('chrome')
@@ -315,7 +353,9 @@ export class CodexRuntime implements AgentRuntime {
                           ]
                         : []),
                 ],
-                outputSchema: input.outputSchema,
+                outputSchema: input.captureJobDescription
+                    ? createJobPostImportAgentOutputSchema()
+                    : input.outputSchema,
                 effort: 'xhigh',
                 summary: 'none',
             },
@@ -324,6 +364,9 @@ export class CodexRuntime implements AgentRuntime {
         this.assertReady()
 
         if (this.browserThreads.has(thread.id)) this.browserThreads.set(thread.id, turn.id)
+        if (input.captureJobDescription) {
+            this.jobDescriptionCaptures.set(thread.id, { turnId: turn.id, captures: new Map() })
+        }
 
         return { threadId: thread.id, turnId: turn.id }
     }
@@ -332,6 +375,7 @@ export class CodexRuntime implements AgentRuntime {
         this.assertReady()
         await this.connection.request('turn/interrupt', { threadId, turnId }, emptyResponseSchema)
         await this.cleanupBrowserTabs(threadId, turnId)
+        this.jobDescriptionCaptures.delete(threadId)
         this.assertReady()
     }
 
@@ -398,6 +442,7 @@ export class CodexRuntime implements AgentRuntime {
         this.pendingPermissions.clear()
         this.permissionIdsByRequest.clear()
         this.queuedEvents.length = 0
+        this.jobDescriptionCaptures.clear()
     }
 
     async shutdown(): Promise<void> {
@@ -443,6 +488,15 @@ export class CodexRuntime implements AgentRuntime {
 
     private handleServerRequest(id: RpcId, method: string, params: unknown): void {
         if (!this.connection.running) {
+            return
+        }
+
+        if (
+            method === 'item/tool/call' &&
+            isObject(params) &&
+            params.tool === 'capture_job_description'
+        ) {
+            void this.handleDescriptionCapture(id, params)
             return
         }
 
@@ -610,11 +664,27 @@ export class CodexRuntime implements AgentRuntime {
             // Only report_progress supplies visible progress.
             if (notification.item.phase === 'commentary') return
 
+            let text = notification.item.text
+            const descriptionCapture = this.jobDescriptionCaptures.get(notification.threadId)
+            if (descriptionCapture?.turnId === notification.turnId) {
+                try {
+                    text = completeJobPostImport(text, descriptionCapture.captures)
+                } catch (error) {
+                    text = JSON.stringify({
+                        result: {
+                            error:
+                                error instanceof Error
+                                    ? error.message.slice(0, 500)
+                                    : 'Could not complete the job-description capture. Try again.',
+                        },
+                    })
+                }
+            }
             this.queueEvent({
                 type: 'final-message',
                 threadId: notification.threadId,
                 turnId: notification.turnId,
-                text: notification.item.text,
+                text,
             })
             return
         }
@@ -649,7 +719,60 @@ export class CodexRuntime implements AgentRuntime {
                 error: notification.turn.error?.message ?? null,
             } satisfies AgentRuntimeEvent
             this.queueEvent(event)
+            this.jobDescriptionCaptures.delete(notification.threadId)
             void this.cleanupBrowserTabs(notification.threadId, notification.turn.id)
+        }
+    }
+
+    private async handleDescriptionCapture(
+        id: RpcId,
+        params: Record<string, unknown>,
+    ): Promise<void> {
+        try {
+            const call = turnReferenceSchema
+                .extend({ arguments: descriptionCaptureInputSchema })
+                .parse(params)
+            const state = this.jobDescriptionCaptures.get(call.threadId)
+            if (state === undefined || state.turnId !== call.turnId) {
+                throw new Error('Description capture is unavailable for this task.')
+            }
+            const capture = await captureJobDescription(
+                this.connection,
+                call.threadId,
+                call.arguments,
+            )
+            if (this.jobDescriptionCaptures.get(call.threadId) !== state) {
+                throw new Error('The import is no longer running.')
+            }
+            const descriptionCaptureId = randomUUID()
+            state.captures.set(descriptionCaptureId, capture)
+            this.connection.respond(id, {
+                contentItems: [
+                    {
+                        type: 'inputText',
+                        text: JSON.stringify({
+                            descriptionCaptureId,
+                            sourceUrl: capture.sourceUrl,
+                            characters: capture.description.length,
+                        }),
+                    },
+                ],
+                success: true,
+            })
+        } catch (error) {
+            if (!this.connection.running) return
+            this.connection.respond(id, {
+                contentItems: [
+                    {
+                        type: 'inputText',
+                        text:
+                            error instanceof Error
+                                ? error.message.slice(0, 500)
+                                : 'Could not capture the job description.',
+                    },
+                ],
+                success: false,
+            })
         }
     }
 
@@ -691,6 +814,7 @@ export class CodexRuntime implements AgentRuntime {
         this.ready = false
         this.runtimeError = error
         this.capabilityRoots.clear()
+        this.jobDescriptionCaptures.clear()
     }
 
     private assertReady(): void {

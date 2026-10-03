@@ -216,7 +216,7 @@ async function startBothLanes(context: ReturnType<typeof createLifecycleContext>
 
 function completeLane(lane: AgentTaskLane, context: ReturnType<typeof createLifecycleContext>) {
     if (lane === 'job-post-import') {
-        context.bridge.complete(importTaskId, importOutput)
+        context.bridge.complete(importTaskId, { result: importOutput })
     } else {
         context.bridge.complete(outreachTaskId, contactOutput)
     }
@@ -225,6 +225,24 @@ function completeLane(lane: AgentTaskLane, context: ReturnType<typeof createLife
 describe('Agent feature lifecycle integration', () => {
     beforeEach(() => {
         FakeEventSource.reset()
+    })
+
+    it('offers retry without saving a job when the import reports a browser failure', async () => {
+        const context = createLifecycleContext()
+        context.importStore.url = importUrl
+        context.importStore.submitUrl()
+        await vi.waitFor(() => {
+            expect(context.agentStore.getTaskState(importTaskId)?.task?.status).toBe('running')
+        })
+        taskSource(importTaskId).open()
+        context.bridge.complete(importTaskId, {
+            result: { error: 'Could not connect to Chrome. Try again.' },
+        })
+        await vi.waitFor(() => {
+            expect(context.importStore.displayIssue).toBe('Could not connect to Chrome. Try again.')
+        })
+        expect(context.writes.imports).toEqual([])
+        expect(context.importStore.retryAvailable).toBe(true)
     })
 
     it.each([

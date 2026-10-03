@@ -28,6 +28,19 @@ const sharedSettingsSchema = z.object({
     mcp_servers: z.object({ node_repl: z.record(z.string(), z.unknown()).optional() }).optional(),
 })
 
+const readSharedSettings = (source: string) => {
+    const settingsFile = join(source, 'config.toml')
+    return sharedSettingsSchema.parse(
+        existsSync(settingsFile) ? parse(readFileSync(settingsFile, 'utf8')) : {},
+    )
+}
+
+export const readBrowserConfig = (source: string) => {
+    const config = readSharedSettings(source).mcp_servers?.node_repl
+    if (config === undefined) throw new Error('Chrome runtime is unavailable')
+    return { ...config, required: true }
+}
+
 export function prepareAgentHome(directory: string, source = personalCodexHome) {
     const destination = resolve(directory)
 
@@ -66,10 +79,7 @@ export function prepareAgentHome(directory: string, source = personalCodexHome) 
         chmodSync(link, 0o600)
     }
 
-    const settingsFile = join(source, 'config.toml')
-    const settings = sharedSettingsSchema.parse(
-        existsSync(settingsFile) ? parse(readFileSync(settingsFile, 'utf8')) : {},
-    )
+    const settings = readSharedSettings(source)
     const config = {
         ...settings,
         mcp_servers:
