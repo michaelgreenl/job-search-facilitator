@@ -9,6 +9,7 @@ import ExpandIcon from '@/components/svgs/ExpandIcon.vue'
 import ShrinkIcon from '@/components/svgs/ShrinkIcon.vue'
 import TrashIcon from '@/components/svgs/TrashIcon.vue'
 import { useOutreachStore } from '@/stores/outreach'
+import { useAgentStore } from '@/stores/agent'
 
 import OutreachContactList from './OutreachContactList.vue'
 import OutreachDiscoverButton from './OutreachDiscoverButton.vue'
@@ -44,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const outreachStore = useOutreachStore()
+const agentStore = useAgentStore()
 const {
     assistantReply,
     contact,
@@ -105,6 +107,14 @@ const draftIssue = computed(
     () => draftSaveError.value ?? resultError.value ?? (drafting.value ? issue.value : null),
 )
 const resizeLabel = computed(() => (props.expanded ? 'Collapse panel' : 'Expand panel'))
+
+watch(
+    () => props.active,
+    (active, wasActive) => {
+        if (wasActive && !active) agentStore.dismissFailedTasks()
+    },
+)
+onBeforeUnmount(() => agentStore.dismissFailedTasks())
 
 watch(
     () => props.post?.id,
@@ -188,7 +198,7 @@ function toggleExpanded() {
 }
 
 function showContacts() {
-    if (!isActive.value && contactsError.value === null) {
+    if (!isActive.value) {
         outreachStore.clearInactiveTask()
     }
 

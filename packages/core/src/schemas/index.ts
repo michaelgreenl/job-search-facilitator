@@ -30,3 +30,14 @@ export {
     parseSavedJobUpdates,
 } from './job-update-check.ts'
 export { parseTrackedJobPosts } from './tracked-job-post.ts'
+export { parseResume, parseResumes, resumeNameSchema } from './resumes.ts'
+export type { Resume, ResumeUpload } from './resumes.ts'
+export {
+    AUTOMATION_DAYS,
+    MAX_AUTOMATION_TIMES,
+    automationScheduleSchema,
+    parseAutomation,
+    parseAutomations,
+    updateAutomationSchema,
+} from './automations.ts'
+export type { Automation, AutomationSchedule, UpdateAutomation } from './automations.ts'

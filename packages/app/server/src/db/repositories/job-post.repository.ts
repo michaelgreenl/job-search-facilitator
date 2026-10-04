@@ -8,6 +8,7 @@ import type {
     UpdateJobPostResult,
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
+import { CURRENT_RESUME_TYPES } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
 import { toApplicationArtifact } from '../mappers/application-artifact.mapper.ts'
 import { toJobPostActivity } from '../mappers/job-post-activity.mapper.ts'
@@ -22,12 +23,9 @@ import {
     userAddedJobPostInclude,
 } from '../mappers/job-post.mapper.ts'
 import { toOutreachContact } from '../mappers/outreach.mapper.ts'
-import {
-    toJobRecommendation,
-    toPrismaAgentLabel,
-    toPrismaResumeType,
-} from '../mappers/search-report.mapper.ts'
+import { toJobRecommendation, toPrismaAgentLabel } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
+import { assertResumeNames } from './resume.repository.ts'
 import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
 
 export interface UserAddedJobPostUpsertResult {
@@ -206,6 +204,7 @@ export const jobPostRepository: JobPostRepository = {
 
     async upsertUserAdded(input) {
         return prisma.$transaction(async (transaction) => {
+            await assertResumeNames(transaction, [input.recommendedResume], CURRENT_RESUME_TYPES)
             await lockJobPostIdentities(transaction, [input.post])
             const listingData = toPrismaJobPostListingData(input.post)
             const post = await transaction.jobPost.upsert({
@@ -236,7 +235,7 @@ export const jobPostRepository: JobPostRepository = {
                 fitRationale: input.fitRationale,
                 applicationFlow: input.applicationFlow,
                 keyLegitimacySignals: input.keyLegitimacySignals,
-                recommendedResume: toPrismaResumeType(input.recommendedResume),
+                recommendedResume: input.recommendedResume,
                 recommendedAction: input.recommendedAction,
                 legitimacyNotes: input.legitimacyNotes,
             }

@@ -33,6 +33,7 @@ const contactOutput = {
         personName: savedContact.personName,
         personTitle: savedContact.personTitle,
         profileUrl: savedContact.profileUrl,
+        email: savedContact.email,
         relevanceRationale: savedContact.relevanceRationale,
         draftMessage: savedContact.draftMessage,
     },

@@ -150,13 +150,23 @@ type UserAddedInputOverrides = Partial<Omit<CreateUserAddedJobPostInput, 'post'>
 const createUserAddedInput = (
     overrides: UserAddedInputOverrides = {},
 ): CreateUserAddedJobPostInput => {
-    const result = createResultInput(overrides)
-    const { agentRank: _agentRank, ...input } = result
+    const { post, ...recommendationOverrides } = overrides
 
-    return input
+    return {
+        agentLabel: 'target',
+        fitRationale: 'Strong TypeScript experience',
+        applicationFlow: 'Direct company application',
+        keyLegitimacySignals: 'Listed on the company careers page',
+        recommendedResume: 'frontend',
+        recommendedAction: 'Apply today',
+        legitimacyNotes: null,
+        ...recommendationOverrides,
+        post: createPostInput(post),
+    }
 }
 
 beforeEach(async () => {
+    await prisma.resume.deleteMany()
     await prisma.outreachContact.deleteMany()
     await prisma.outreachRun.deleteMany()
     await prisma.userAddedJobPost.deleteMany()
@@ -215,6 +225,7 @@ describe('job post repository', () => {
                 personName: 'Ada Lovelace',
                 personTitle: 'Engineering Manager',
                 profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                email: null,
                 relevanceRationale: 'Her role aligns with the position.',
                 draftMessage: 'Hi Ada, could I ask about the team?',
             }),
@@ -518,6 +529,7 @@ describe('job post repository', () => {
                     personName: `Contact for ${post.sourceKey}`,
                     personTitle: 'Engineering Manager',
                     profileUrl: `https://www.linkedin.com/in/${post.id}`,
+                    email: null,
                     relevanceRationale: 'Their role aligns with the position.',
                     draftMessage: 'Hello, I would value your perspective on the role.',
                 }),
@@ -534,6 +546,7 @@ describe('job post repository', () => {
                 personName: 'Unmessaged contact for tracked post',
                 personTitle: 'Staff Engineer',
                 profileUrl: `https://www.linkedin.com/in/unmessaged-${bothPost.id}`,
+                email: null,
                 relevanceRationale: 'Their role aligns with the position.',
                 draftMessage: 'Hello, I would value your perspective on the role.',
             },
@@ -704,6 +717,7 @@ describe('outreach contact repository', () => {
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',
             profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            email: 'ada@example.com',
             relevanceRationale: 'Her visible role aligns with the position.',
             draftMessage: 'Hi Ada, I would value your perspective on the role.',
         })
@@ -711,6 +725,7 @@ describe('outreach contact repository', () => {
             personName: 'Grace Hopper',
             personTitle: 'Director of Engineering',
             profileUrl: 'https://www.linkedin.com/in/grace-hopper',
+            email: null,
             relevanceRationale: 'Her visible role aligns with the team.',
             draftMessage: 'Hi Grace, I would value your perspective on the team.',
         })
@@ -736,6 +751,7 @@ describe('outreach contact repository', () => {
         expect(updatedFirst).toMatchObject({
             id: first.id,
             jobPostId,
+            email: 'ada@example.com',
             draftMessage: revisedDraftMessage,
             messaged: true,
         })
@@ -756,6 +772,7 @@ describe('outreach contact repository', () => {
             personName: 'Ada Lovelace',
             personTitle: 'Engineering Manager',
             profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+            email: null,
             relevanceRationale: 'Her visible role aligns with the position.',
             draftMessage: 'Hi Ada, I would value your perspective on the role.',
         })

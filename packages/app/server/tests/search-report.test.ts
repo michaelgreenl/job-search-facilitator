@@ -49,7 +49,7 @@ const existingReport: JobSearchReport = {
             fitRationale: 'Strong TypeScript experience',
             applicationFlow: 'Direct company application',
             keyLegitimacySignals: 'Listed on the company careers page',
-            recommendedResume: 'frontend',
+            recommendedResume: 'backend',
             recommendedAction: 'Apply today',
             legitimacyNotes: null,
             post,
@@ -66,7 +66,7 @@ const input: UpsertJobSearchReportInput = {
         fitRationale: result.fitRationale,
         applicationFlow: result.applicationFlow,
         keyLegitimacySignals: result.keyLegitimacySignals,
-        recommendedResume: result.recommendedResume,
+        recommendedResume: 'backend',
         recommendedAction: result.recommendedAction,
         legitimacyNotes: result.legitimacyNotes,
         post: {

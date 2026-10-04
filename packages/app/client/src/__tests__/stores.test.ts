@@ -46,6 +46,7 @@ const savedContact: OutreachContact = {
     personName: 'Ada Lovelace',
     personTitle: 'Engineering Manager',
     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    email: null,
     relevanceRationale: 'Her title aligns with the role.',
     draftMessage: 'Initial draft',
     messaged: false,
@@ -131,12 +132,12 @@ describe('report store', () => {
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
-            'http://localhost:3000/api/job-search-reports',
+            'http://127.0.0.1:3000/api/job-search-reports',
             undefined,
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            `http://localhost:3000/api/job-search-reports/${report.id}`,
+            `http://127.0.0.1:3000/api/job-search-reports/${report.id}`,
             undefined,
         )
         expect(store.reports.map(({ id, summary }) => ({ id, summary }))).toEqual([
@@ -261,17 +262,17 @@ describe('post store', () => {
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
-            'http://localhost:3000/api/job-search-reports',
+            'http://127.0.0.1:3000/api/job-search-reports',
             undefined,
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            'http://localhost:3000/api/job-posts',
+            'http://127.0.0.1:3000/api/job-posts',
             undefined,
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
-            `http://localhost:3000/api/job-posts/${post.id}`,
+            `http://127.0.0.1:3000/api/job-posts/${post.id}`,
             {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -283,7 +284,7 @@ describe('post store', () => {
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             4,
-            `http://localhost:3000/api/job-posts/${post.id}`,
+            `http://127.0.0.1:3000/api/job-posts/${post.id}`,
             undefined,
         )
         expect(updateResult.post).toBe(canonicalPost)
@@ -317,7 +318,7 @@ describe('post store', () => {
         const items = await store.fetchApplyQueue()
 
         expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-            'http://localhost:3000/api/job-posts/apply-queue',
+            'http://127.0.0.1:3000/api/job-posts/apply-queue',
             undefined,
         )
         expect(store.posts).toEqual([applyQueuePost])
@@ -413,6 +414,7 @@ describe('outreach store', () => {
                 personName: contact.personName,
                 personTitle: contact.personTitle,
                 profileUrl: contact.profileUrl,
+                email: contact.email,
                 relevanceRationale: contact.relevanceRationale,
                 draftMessage: contact.draftMessage,
             },
@@ -516,7 +518,7 @@ describe('outreach store', () => {
         await expect(store.saveDraft()).resolves.toEqual(updatedContact)
 
         expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-            `http://localhost:3000/api/job-posts/${post.id}/outreach-contacts/${savedContact.id}`,
+            `http://127.0.0.1:3000/api/job-posts/${post.id}/outreach-contacts/${savedContact.id}`,
             expect.objectContaining({
                 method: 'PATCH',
                 body: JSON.stringify({ draftMessage: updatedContact.draftMessage }),

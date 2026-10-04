@@ -20,7 +20,6 @@ export type JobPostViewPanelMode =
 import {
     USER_LABELS,
     type JobPost,
-    type ResumeType,
     type StandaloneJobRecommendation,
     type UserLabel,
 } from '@job-search-facilitator/core'
@@ -59,11 +58,13 @@ const emit = defineEmits<{
     back: []
 }>()
 
-const RESUME_LABELS: Record<ResumeType, string> = {
-    frontend: 'Frontend',
-    'backend-full-stack': 'Backend / full-stack',
-    general: 'General',
-}
+const RESUME_LABELS = new Map([
+    ['frontend', 'Frontend'],
+    ['backend', 'Backend'],
+    ['full-stack', 'Full-stack'],
+    ['backend-full-stack', 'Backend / full-stack (legacy)'],
+    ['general', 'General'],
+])
 const ARTIFACT_OPTIONS = [
     {
         kind: 'resume',
@@ -150,7 +151,8 @@ const content = computed(() => {
         postSource: normalizeText(props.post.postSource),
         recommendedAction: normalizeText(props.recommendation?.recommendedAction),
         recommendedResume: props.recommendation
-            ? RESUME_LABELS[props.recommendation.recommendedResume]
+            ? (RESUME_LABELS.get(props.recommendation.recommendedResume) ??
+              props.recommendation.recommendedResume)
             : null,
         techStack: techStack?.toLowerCase() === 'not recorded' ? null : techStack,
     }
@@ -278,9 +280,7 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                     test-id="job-label"
                     :label="labelPrompt"
                     :options="labelOptions"
-                    :disabled="
-                        labelUpdating || (applyMode?.applicationUpdating ?? false) || applied
-                    "
+                    :disabled="labelUpdating || (applyMode?.applicationUpdating ?? false)"
                     @select="selectLabel"
                 />
             </div>

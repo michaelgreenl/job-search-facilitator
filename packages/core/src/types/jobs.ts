@@ -16,7 +16,9 @@ export const USER_LABELS = ['P1', 'P2', 'quick-app', 'forgo'] as const
 
 export const AGENT_LABELS = ['target', 'quick-app'] as const
 
-export const RESUME_TYPES = ['frontend', 'backend-full-stack', 'general'] as const
+export const CURRENT_RESUME_TYPES = ['frontend', 'backend', 'full-stack', 'general'] as const
+
+export const REPORT_RESUME_TYPES = ['frontend', 'backend', 'full-stack'] as const
 
 export type IsoDateTime = string
 
@@ -27,8 +29,6 @@ export type PostStatus = (typeof POST_STATUSES)[number]
 export type UserLabel = (typeof USER_LABELS)[number]
 
 export type AgentLabel = (typeof AGENT_LABELS)[number]
-
-export type ResumeType = (typeof RESUME_TYPES)[number]
 
 export interface JobPost {
     id: string
@@ -98,7 +98,7 @@ export interface JobRecommendation {
     fitRationale: string
     applicationFlow: string
     keyLegitimacySignals: string
-    recommendedResume: ResumeType
+    recommendedResume: string
     recommendedAction: string
     legitimacyNotes: string | null
 }

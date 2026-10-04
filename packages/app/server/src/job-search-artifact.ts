@@ -270,7 +270,7 @@ const selectionEntrySchema = z.strictObject({
     sourceKey: jobPostInputSchema.shape.sourceKey,
     agentLabel: standaloneJobRecommendationInputSchema.shape.agentLabel,
     fitRationale: standaloneJobRecommendationInputSchema.shape.fitRationale.max(2_500),
-    recommendedResume: z.enum(['frontend', 'backend-full-stack']),
+    recommendedResume: standaloneJobRecommendationInputSchema.shape.recommendedResume,
     recommendedAction: standaloneJobRecommendationInputSchema.shape.recommendedAction.max(1_500),
 })
 const selectionArtifactSchema = z.strictObject({
@@ -340,6 +340,9 @@ const judgmentArtifactSchema = z.strictObject({
 const coverageTextSchema = z.string().trim().min(1).max(1_000)
 const MIN_RELIABLE_COMPLETED_LANES = 3
 const MIN_RELIABLE_OPERATIONS_PER_LANE = 7
+const hasCompletedCoverage = (source: { operations: Array<{ query: string }> }): boolean =>
+    new Set(source.operations.map(({ query }) => query.trim().toLowerCase().replace(/\s+/g, ' ')))
+        .size >= MIN_RELIABLE_OPERATIONS_PER_LANE
 const JOB_SEARCH_COVERAGE_LANES = [
     'linkedin',
     'indeed',
@@ -368,7 +371,16 @@ const coverageSourceSchema = z
             'public-employer-ats',
             'public-long-tail',
         ]),
-        blocker: coverageTextSchema.nullable(),
+        blocker: z
+            .strictObject({
+                scope: z.literal('source-wide'),
+                source: coverageTextSchema,
+                failedOperation: coverageTextSchema,
+                observation: coverageTextSchema,
+                verification: coverageTextSchema,
+            })
+            .nullable(),
+        incompleteReason: coverageTextSchema.nullable().default(null),
     })
     .superRefine((source, context) => {
         if (source.accessMethod !== coverageAccessMethodByLane[source.lane]) {
@@ -379,22 +391,15 @@ const coverageSourceSchema = z
             })
         }
 
-        if (source.operations.length === 0 && source.blocker === null) {
+        if (
+            !hasCompletedCoverage(source) &&
+            source.blocker === null &&
+            source.incompleteReason === null
+        ) {
             context.addIssue({
                 code: 'custom',
-                message: 'A lane without completed query operations must record its blocker',
-                path: ['blocker'],
-            })
-        }
-
-        const normalizedQueries = new Set(
-            source.operations.map(({ query }) => query.toLowerCase().replace(/\s+/g, ' ')),
-        )
-        if (source.blocker === null && normalizedQueries.size < MIN_RELIABLE_OPERATIONS_PER_LANE) {
-            context.addIssue({
-                code: 'custom',
-                message: `An unblocked lane requires ${MIN_RELIABLE_OPERATIONS_PER_LANE} completed, non-duplicate query variants`,
-                path: ['operations'],
+                message: `A lane with fewer than ${MIN_RELIABLE_OPERATIONS_PER_LANE} distinct completed queries requires an incomplete reason or verified source-wide blocker`,
+                path: ['incompleteReason'],
             })
         }
     })
@@ -420,15 +425,12 @@ const coverageSchema = z.strictObject({
 })
 
 const reliableCoverageSchema = coverageSchema.superRefine((coverage, context) => {
-    const completedSources = coverage.sources.filter(
-        (source) =>
-            source.blocker === null && source.operations.length >= MIN_RELIABLE_OPERATIONS_PER_LANE,
-    )
+    const completedSources = coverage.sources.filter(hasCompletedCoverage)
 
     if (completedSources.length < MIN_RELIABLE_COMPLETED_LANES) {
         context.addIssue({
             code: 'custom',
-            message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} unblocked lanes with ${MIN_RELIABLE_OPERATIONS_PER_LANE} completed query operations`,
+            message: `Reliable coverage requires at least ${MIN_RELIABLE_COMPLETED_LANES} lanes with ${MIN_RELIABLE_OPERATIONS_PER_LANE} distinct completed query operations; incomplete coverage is not a source access failure`,
             path: ['sources'],
         })
     }
@@ -444,6 +446,15 @@ type ReviewPacket = z.infer<typeof reviewPacketSchema>
 export type JudgmentArtifact = z.infer<typeof judgmentArtifactSchema>
 export type SelectionArtifact = z.infer<typeof selectionArtifactSchema>
 export type JobSearchCoverage = z.infer<typeof coverageSchema>
+export const summarizeCoverage = (coverage: JobSearchCoverage) => ({
+    completedLanes: coverage.sources.filter(hasCompletedCoverage).map(({ lane }) => lane),
+    blockedLanes: coverage.sources
+        .filter(({ blocker }) => blocker !== null)
+        .map(({ lane }) => lane),
+    incompleteLanes: coverage.sources
+        .filter((source) => !hasCompletedCoverage(source) && source.blocker === null)
+        .map(({ lane }) => lane),
+})
 type HistoryIdentityArtifact = z.infer<typeof historyIdentityArtifactSchema>
 type HistoryFeedbackArtifact = z.infer<typeof historyFeedbackArtifactSchema>
 
@@ -875,11 +886,8 @@ export const assembleFinalReport = (
         (total, source) => total + source.operations.length,
         0,
     )
-    const completedLaneCount = coverage.sources.filter(
-        (source) => source.blocker === null && source.operations.length >= 2,
-    ).length
-    const blockedLaneCount = coverage.sources.filter(({ blocker }) => blocker !== null).length
-    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLaneCount} lanes; ${blockedLaneCount} blocked source ${blockedLaneCount === 1 ? 'lane' : 'lanes'}.`
+    const { completedLanes, blockedLanes, incompleteLanes } = summarizeCoverage(coverage)
+    const summary = `${selectedCount} qualified ${selectedCount === 1 ? 'match' : 'matches'}; ${candidates.length} handed to judgment, ${judgmentExcludedCount} excluded by judgment; ${completedOperationCount} query operations completed across ${completedLanes.length} lanes; ${blockedLanes.length} blocked source ${blockedLanes.length === 1 ? 'lane' : 'lanes'}; ${incompleteLanes.length} incomplete source ${incompleteLanes.length === 1 ? 'lane' : 'lanes'}.`
     const candidateBySourceKey = new Map(
         candidates.map((candidate) => [candidate.post.sourceKey, candidate]),
     )
@@ -1127,11 +1135,17 @@ export const renderJobSearchMarkdown = (
         '',
         '## Coverage',
         '',
-        '| Source | Completed queries / filters | Completion | Access method | Blocker |',
-        '| --- | --- | --- | --- | --- |',
+        '| Source | Completed queries / filters | Completion | Access method | Source-wide blocker evidence | Incomplete reason |',
+        '| --- | --- | --- | --- | --- | --- |',
         ...coverage.sources.map(
             (source) =>
-                `| ${escapeMarkdownText(source.lane)} | ${source.operations.map(({ query }) => escapeMarkdownText(query)).join('<br>')} | ${source.operations.map(({ completion }) => escapeMarkdownText(completion)).join('<br>')} | ${escapeMarkdownText(source.accessMethod)} | ${escapeMarkdownText(source.blocker)} |`,
+                `| ${escapeMarkdownText(source.lane)} | ${source.operations.map(({ query }) => escapeMarkdownText(query)).join('<br>')} | ${source.operations.map(({ completion }) => escapeMarkdownText(completion)).join('<br>')} | ${escapeMarkdownText(source.accessMethod)} | ${
+                    source.blocker === null
+                        ? escapeMarkdownText(null)
+                        : Object.entries(source.blocker)
+                              .map(([key, value]) => `${key}: ${escapeMarkdownText(value)}`)
+                              .join('<br>')
+                } | ${escapeMarkdownText(source.incompleteReason)} |`,
         ),
         '',
         '## Ranked Targets',

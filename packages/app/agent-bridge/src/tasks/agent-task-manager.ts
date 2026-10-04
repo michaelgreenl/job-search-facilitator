@@ -290,6 +290,14 @@ export class AgentTaskManager {
                 startsNewStatement,
                 createdAt: new Date().toISOString(),
             })
+        } else if (event.type === 'commentary') {
+            task.reasoningSection = null
+            this.emit(task, {
+                type: 'message',
+                textDelta: event.text,
+                startsNewStatement: true,
+                createdAt: new Date().toISOString(),
+            })
         } else if (event.type === 'final-message') {
             task.finalMessages.push(event.text)
         } else if (event.type === 'turn-completed') {

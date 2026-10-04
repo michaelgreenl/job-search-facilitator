@@ -5,8 +5,8 @@ export type BaseButtonPreset =
     | 'artifact'
     | 'back'
     | 'icon'
-    | 'outline'
     | 'primary'
+    | 'secondary'
     | 'signal'
     | 'text'
 </script>
@@ -237,6 +237,15 @@ function detachTooltipListeners() {
 }
 
 watch(
+    [tooltipVisible, tooltipSurface],
+    ([open, surface]) => {
+        surface?.togglePopover?.(!!open)
+        if (open) updateTooltipPosition()
+    },
+    { flush: 'post' },
+)
+
+watch(
     () => props.tooltip,
     (tooltipLabel) => {
         if (!mounted) {
@@ -303,7 +312,7 @@ defineExpose({ focus })
         >
             <slot />
         </component>
-        <Teleport to="body">
+        <Teleport :to="button?.closest('dialog') ?? 'body'">
             <span
                 :id="tooltipId"
                 ref="tooltipSurface"
@@ -312,6 +321,7 @@ defineExpose({ focus })
                 :class="[`is-${placement}`, { 'is-visible': tooltipVisible }]"
                 :style="position"
                 role="tooltip"
+                popover="manual"
             >
                 {{ props.tooltip }}
             </span>
@@ -345,17 +355,23 @@ defineExpose({ focus })
     }
 }
 
+.preset-primary,
+.preset-secondary,
+.preset-signal {
+    min-height: 2.5rem;
+    padding: calc($space-2 - 1px) $space-3;
+}
+
 .preset-primary {
     display: inline-flex;
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
-    color: $color-ink;
+    color: $color-night;
     font-weight: 650;
     text-decoration: none;
     background: $color-action;
-    border: 0;
+    border: 1px solid transparent;
     border-radius: $radius-md;
 
     &:hover,
@@ -375,13 +391,13 @@ defineExpose({ focus })
     }
 }
 
-.preset-outline {
+.preset-secondary {
     display: inline-flex;
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
     color: $color-ink;
+    text-decoration: none;
     background: transparent;
     border: 1px solid $color-signal-light-alpha-28;
     border-radius: $radius-md;
@@ -397,7 +413,6 @@ defineExpose({ focus })
     gap: $space-2;
     align-items: center;
     justify-content: center;
-    padding: $space-2 $space-3;
     color: $color-night;
     font-weight: 650;
     background: $color-signal-light;
@@ -458,6 +473,7 @@ defineExpose({ focus })
 .icon-size-sm,
 .icon-size-md,
 .icon-size-lg {
+    min-height: 0;
     padding: 0;
     line-height: 1;
 }
@@ -484,6 +500,8 @@ defineExpose({ focus })
 
 .content.tooltip-surface {
     position: fixed;
+    inset: auto;
+    margin: 0;
     z-index: 50;
     max-width: min(14rem, calc(100vw - #{$space-6}));
     white-space: normal;

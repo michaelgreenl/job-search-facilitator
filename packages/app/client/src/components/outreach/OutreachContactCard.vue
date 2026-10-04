@@ -180,6 +180,9 @@ function toggleMessaged() {
                 {{ contact.personName }} ↗
             </a>
             <span class="person-title">{{ contact.personTitle }}</span>
+            <a v-if="contact.email" class="person-email" :href="`mailto:${contact.email}`">
+                {{ contact.email }}
+            </a>
             <div class="rationale-copy">
                 <p
                     :id="descriptionId"
@@ -318,6 +321,13 @@ function toggleMessaged() {
 
 .person-title {
     color: $color-ink-secondary;
+}
+
+.person-email {
+    position: relative;
+    z-index: 2;
+    width: fit-content;
+    color: $color-signal-light;
 }
 
 .contact-actions {

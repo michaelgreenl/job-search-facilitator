@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { existsSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const bundledCodex = '/Applications/ChatGPT.app/Contents/Resources/codex'
@@ -11,4 +11,5 @@ export const env = {
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
     CODEX_BIN: process.env.CODEX_BIN ?? (existsSync(bundledCodex) ? bundledCodex : 'codex'),
     AGENT_CWD: process.env.AGENT_CWD ?? repositoryRoot,
+    AGENT_CODEX_HOME: process.env.AGENT_CODEX_HOME ?? join(repositoryRoot, '.local/agent-codex'),
 }

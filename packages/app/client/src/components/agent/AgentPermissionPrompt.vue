@@ -65,7 +65,7 @@ function cancelAlwaysAllowConfirmation() {
             <BaseButton
                 ref="alwaysAllowNo"
                 data-testid="agent-permission-always-allow-cancel"
-                preset="outline"
+                preset="secondary"
                 :disabled="submitting"
                 @click="cancelAlwaysAllowConfirmation"
             >
@@ -98,7 +98,7 @@ function cancelAlwaysAllowConfirmation() {
             <BaseButton
                 ref="alwaysAllowPermission"
                 data-testid="agent-permission-always-allow"
-                preset="outline"
+                preset="secondary"
                 :disabled="submitting"
                 @click="requestAlwaysAllowConfirmation"
             >
@@ -108,7 +108,7 @@ function cancelAlwaysAllowConfirmation() {
             <div class="permission-buttons">
                 <BaseButton
                     data-testid="agent-permission-decline"
-                    preset="outline"
+                    preset="secondary"
                     :disabled="submitting"
                     @click="emit('resolve', 'decline')"
                 >

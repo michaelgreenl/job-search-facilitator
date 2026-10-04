@@ -1,4 +1,7 @@
 import {
+    parseContactDiscoveryResult,
+    parseCreateUserAddedJobPostInput,
+    parseDraftRevisionResult,
     type StartAgentTaskInput,
     type AgentPermissionDecision,
     type AgentPermissionRequired,
@@ -107,6 +110,11 @@ export const useAgentStore = defineStore('agent', () => {
         writeAgentSessions(sessions.value.filter(({ taskId }) => !nonRestorableTaskIds.has(taskId)))
     }
 
+    function forgetOnRefresh(taskId: string) {
+        nonRestorableTaskIds.add(taskId)
+        persistSessions()
+    }
+
     function getSession(taskId: string) {
         return sessions.value.find((session) => session.taskId === taskId) ?? null
     }
@@ -189,9 +197,23 @@ export const useAgentStore = defineStore('agent', () => {
         })
         closeConnection(task.id, 'closed')
 
-        if (task.status === 'cancelled') {
-            nonRestorableTaskIds.add(task.id)
-            persistSessions()
+        if (task.status === 'cancelled' || task.status === 'failed') {
+            forgetOnRefresh(task.id)
+        } else if (task.status === 'completed') {
+            try {
+                const session = getSession(task.id)
+                if (session?.kind === 'outreach-contact') {
+                    if (parseContactDiscoveryResult(task.output).outcome === 'failed') {
+                        forgetOnRefresh(task.id)
+                    }
+                } else if (session?.kind === 'outreach-draft') {
+                    parseDraftRevisionResult(task.output)
+                } else if (session?.kind === 'job-post-import') {
+                    parseCreateUserAddedJobPostInput(task.output)
+                }
+            } catch {
+                forgetOnRefresh(task.id)
+            }
         }
 
         return task
@@ -352,6 +374,7 @@ export const useAgentStore = defineStore('agent', () => {
                                 : 'Could not start Agent task',
                     })
                     closeConnection(taskId, 'disconnected')
+                    if (getTaskState(taskId)?.sessionUnavailable) forgetOnRefresh(taskId)
                 }
 
                 throw requestError
@@ -364,6 +387,17 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
     function startTask(input: StartAgentTaskInput, owner: AgentSessionOwner): AgentTaskStart {
+        if (owner.kind === 'outreach-draft') {
+            for (const session of sessions.value) {
+                if (session.kind !== 'outreach-draft' || session.contactId !== owner.contactId) {
+                    continue
+                }
+                if (isTaskActive(session.taskId)) {
+                    throw new Error('A draft request is already active for this contact')
+                }
+                dismissSession(session.taskId)
+            }
+        }
         if (owner.kind === 'job-post-import') {
             const currentSession = sessions.value.find(
                 (session) => session.kind === 'job-post-import',
@@ -459,6 +493,9 @@ export const useAgentStore = defineStore('agent', () => {
                 throw requestError
             } finally {
                 updateTaskState(taskId, { restoring: false })
+                if (nonRestorableTaskIds.has(taskId) || getTaskState(taskId)?.sessionUnavailable) {
+                    dismissSession(taskId)
+                }
             }
         }
 
@@ -484,6 +521,14 @@ export const useAgentStore = defineStore('agent', () => {
         removeSession(taskId)
         removeTaskState(taskId)
         return true
+    }
+
+    function dismissFailedTasks() {
+        for (const { taskId } of sessions.value) {
+            if (nonRestorableTaskIds.has(taskId) || getTaskState(taskId)?.sessionUnavailable) {
+                dismissSession(taskId)
+            }
+        }
     }
 
     function retryTask(taskId: string, input: StartAgentTaskInput): AgentTaskStart {
@@ -620,6 +665,8 @@ export const useAgentStore = defineStore('agent', () => {
         restoreTask,
         restoreSessions,
         dismissSession,
+        dismissFailedTasks,
+        forgetOnRefresh,
         resolvePermission,
         allowBrowserActionsForTask,
         cancelTask,
