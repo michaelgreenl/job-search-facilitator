@@ -9,7 +9,12 @@ import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import { useAgentStore } from '@/stores/agent'
 import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 
-const props = defineProps<{ issue: string | null; taskId: string | null }>()
+const props = defineProps<{
+    issue: string | null
+    taskId: string | null
+    statusMessage?: string | null
+    statusTestId?: string
+}>()
 const agentStore = useAgentStore()
 const noEvents: AgentTaskEvent[] = []
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
@@ -24,11 +29,11 @@ const permissionNeedsAttention = computed(
 
 type StreamIcon = 'agent' | 'globe' | 'tool'
 
-interface StreamItem {
+interface StreamBlock {
     icon: StreamIcon
-    message: string
+    activity: string | null
+    startup: string | null
     statements: string[]
-    type: 'activity' | 'commentary'
 }
 
 const streamIcons: Record<StreamIcon, Component> = {
@@ -38,54 +43,67 @@ const streamIcons: Record<StreamIcon, Component> = {
 }
 
 const streamItems = computed(() => {
-    let lastActivity: string | null = null
-    const items = events.value.reduce<StreamItem[]>((currentItems, event) => {
-        if (event.type === 'activity') {
-            if (event.message === lastActivity) return currentItems
-            lastActivity = event.message
-            currentItems.push({
-                message: event.message,
-                icon:
-                    event.message === 'Using Chrome' || event.message === 'Searching the web'
-                        ? 'globe'
-                        : 'tool',
-                statements: [],
-                type: 'activity',
-            })
-        } else if (event.type === 'message') {
-            const lastItem = currentItems.at(-1)
+    const items: StreamBlock[] = []
+    const newBlock = (): StreamBlock => ({
+        icon: 'agent',
+        activity: null,
+        startup: null,
+        statements: [],
+    })
 
-            if (lastItem?.type === 'commentary') {
-                if (event.startsNewStatement) {
-                    lastItem.statements.push(event.textDelta)
-                } else {
-                    lastItem.statements[lastItem.statements.length - 1] += event.textDelta
-                }
-            } else if (event.textDelta) {
-                currentItems.push({
-                    icon: 'agent',
-                    message: event.textDelta,
-                    statements: [event.textDelta],
-                    type: 'commentary',
-                })
-            }
+    if (props.statusMessage === 'Starting Agent…') {
+        items.push({ ...newBlock(), startup: props.statusMessage })
+    }
+
+    for (const event of events.value) {
+        if (event.type !== 'activity' && event.type !== 'message') continue
+        let block = items.at(-1)
+
+        if (event.type === 'activity' && event.message === 'Task started') {
+            if (block === undefined) items.push(newBlock())
+            items[0]!.startup = event.message
+            continue
         }
 
-        return currentItems
-    }, [])
+        if (event.type === 'activity') {
+            if (block?.activity === event.message) continue
+            // A tool change without an update belongs to the current block.
+            if (block?.statements.length === 0 && items.at(-2)?.activity === event.message) {
+                items.pop()
+                continue
+            }
+            if (block === undefined || block.statements.length > 0) {
+                block = newBlock()
+                items.push(block)
+            }
+            block.activity = event.message
+            block.icon =
+                event.message === 'Using Chrome' || event.message === 'Searching the web'
+                    ? 'globe'
+                    : 'tool'
+        } else if (event.textDelta) {
+            if (block === undefined) {
+                block = newBlock()
+                items.push(block)
+            }
+            if (event.startsNewStatement || block.statements.length === 0) {
+                block.statements.push(event.textDelta)
+            } else {
+                block.statements[block.statements.length - 1] += event.textDelta
+            }
+        }
+    }
 
-    return items.flatMap((item) => {
-        if (item.type === 'activity') return [item]
+    return items.map((item) => {
         const statements = [...new Set([...item.statements].reverse())]
-        const message = statements[0]
-        return message ? [{ ...item, message, statements }] : []
+        return { ...item, statements }
     })
 })
 const latestActivityIndex = computed(() => {
     const items = streamItems.value
 
     for (let index = items.length - 1; index >= 0; index -= 1) {
-        if (items[index]?.type === 'activity') {
+        if (items[index]?.activity !== null) {
             return index
         }
     }
@@ -99,6 +117,7 @@ const scrollRevision = computed(() => [
     streamItems.value,
     visiblePendingPermission.value?.id ?? null,
     props.issue,
+    props.statusMessage,
 ])
 const progress = useTemplateRef<HTMLElement>('progress')
 const issueMessage = useTemplateRef<HTMLElement>('issueMessage')
@@ -160,71 +179,111 @@ function allowBrowserActionsForTask() {
             :class="{ 'agent-progress-following': followingLatest }"
             @scroll.passive="handleScroll"
         >
-            <ul
-                v-if="streamItems.length"
-                class="activity-list"
-                aria-label="Agent activity"
-                aria-live="polite"
-                :aria-busy="isActive"
-                role="log"
-            >
-                <li
-                    v-for="(item, index) in streamItems"
-                    :key="`${index}:${item.type}`"
-                    :data-testid="`agent-stream-${item.type}`"
-                    class="activity-item"
-                    :class="{ 'activity-item-commentary': item.type === 'commentary' }"
+            <div class="progress-content">
+                <ul
+                    v-if="streamItems.length"
+                    class="activity-list"
+                    aria-label="Agent activity"
+                    aria-live="polite"
+                    :aria-busy="isActive"
+                    role="log"
                 >
-                    <template v-if="item.type === 'activity'">
-                        <span
-                            v-if="
-                                isActive &&
-                                visiblePendingPermission === null &&
-                                index === latestActivityIndex
-                            "
-                            data-testid="agent-progress-indicator"
-                            class="activity-progress"
-                            aria-hidden="true"
-                        ></span>
-                        <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
-                        <span data-testid="agent-stream-copy" class="activity-copy">
-                            {{ item.message }}
-                        </span>
-                    </template>
-                    <component
-                        :is="item.statements.length > 1 ? 'details' : 'div'"
-                        v-else
-                        class="reasoning-details"
+                    <li
+                        v-for="(item, index) in streamItems"
+                        :key="index"
+                        class="stream-block"
+                        data-testid="agent-stream-block"
                     >
-                        <component
-                            :is="item.statements.length > 1 ? 'summary' : 'div'"
-                            class="reasoning-summary"
-                            :class="{ 'reasoning-summary-collapsible': item.statements.length > 1 }"
+                        <div
+                            v-if="item.startup"
+                            class="activity-item"
                             :data-testid="
-                                item.statements.length > 1 ? 'agent-reasoning-toggle' : undefined
+                                item.startup === props.statusMessage
+                                    ? props.statusTestId
+                                    : undefined
                             "
                         >
-                            <span data-testid="agent-reasoning-latest" class="activity-copy">
-                                {{ item.message }}
-                            </span>
-                            <ChevronDownIcon
-                                v-if="item.statements.length > 1"
-                                class="activity-icon reasoning-chevron"
-                            />
-                        </component>
-                        <div v-if="item.statements.length > 1" class="reasoning-traces">
                             <span
-                                v-for="statement in item.statements.slice(1)"
-                                :key="statement"
-                                data-testid="agent-reasoning-trace"
-                                class="activity-copy"
-                            >
-                                {{ statement }}
+                                v-if="
+                                    isActive &&
+                                    latestActivityIndex === -1 &&
+                                    visiblePendingPermission === null
+                                "
+                                data-testid="agent-progress-indicator"
+                                class="activity-progress"
+                                aria-hidden="true"
+                            ></span>
+                            <ToolIcon v-else class="activity-icon" />
+                            <span class="activity-copy">{{ item.startup }}</span>
+                        </div>
+                        <div
+                            v-if="item.activity"
+                            class="activity-item"
+                            data-testid="agent-stream-activity"
+                        >
+                            <span
+                                v-if="
+                                    isActive &&
+                                    visiblePendingPermission === null &&
+                                    index === latestActivityIndex
+                                "
+                                data-testid="agent-progress-indicator"
+                                class="activity-progress"
+                                aria-hidden="true"
+                            ></span>
+                            <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
+                            <span data-testid="agent-stream-copy" class="activity-copy">
+                                {{ item.activity }}
                             </span>
                         </div>
-                    </component>
-                </li>
-            </ul>
+                        <component
+                            v-if="item.statements.length"
+                            :is="item.statements.length > 1 ? 'details' : 'div'"
+                            class="reasoning-details activity-item-commentary"
+                            data-testid="agent-stream-commentary"
+                        >
+                            <component
+                                :is="item.statements.length > 1 ? 'summary' : 'div'"
+                                class="reasoning-summary"
+                                :class="{
+                                    'reasoning-summary-collapsible': item.statements.length > 1,
+                                }"
+                                :data-testid="
+                                    item.statements.length > 1
+                                        ? 'agent-reasoning-toggle'
+                                        : undefined
+                                "
+                            >
+                                <span data-testid="agent-reasoning-latest" class="activity-copy">
+                                    {{ item.statements[0] }}
+                                </span>
+                                <ChevronDownIcon
+                                    v-if="item.statements.length > 1"
+                                    class="activity-icon reasoning-chevron"
+                                />
+                            </component>
+                            <div v-if="item.statements.length > 1" class="reasoning-traces">
+                                <span
+                                    v-for="statement in item.statements.slice(1)"
+                                    :key="statement"
+                                    data-testid="agent-reasoning-trace"
+                                    class="activity-copy"
+                                >
+                                    {{ statement }}
+                                </span>
+                            </div>
+                        </component>
+                    </li>
+                </ul>
+                <p
+                    v-if="props.statusMessage && props.statusMessage !== 'Starting Agent…'"
+                    class="task-status"
+                    :data-testid="props.statusTestId"
+                    role="status"
+                >
+                    {{ props.statusMessage }}
+                </p>
+            </div>
         </div>
     </div>
 
@@ -273,15 +332,31 @@ function allowBrowserActionsForTask() {
     }
 }
 
+.progress-content {
+    margin-top: auto;
+}
+
+.task-status {
+    margin: $space-2 0 0;
+    color: $color-ink-muted;
+    font-size: 0.875rem;
+}
+
 .activity-list {
     display: flex;
     flex-direction: column;
     gap: $space-2;
-    margin: auto 0 0;
+    margin: 0;
     padding: 0;
     color: $color-ink-muted;
     font-size: 0.875rem;
     list-style: none;
+}
+
+.stream-block {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
 }
 
 .activity-item {

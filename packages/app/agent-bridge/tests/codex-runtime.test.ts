@@ -608,7 +608,7 @@ describe('Codex runtime', () => {
         }
         const messages = progressParams.dynamicTools[0].inputSchema.properties.message.enum
         expect(messages.length).toBeGreaterThan(0)
-        expect(messages.every((message) => message.length <= 40)).toBe(true)
+        expect(messages.every((message) => message.length >= 35 && message.length <= 40)).toBe(true)
         expect(fake.requests).toContainEqual(
             expect.objectContaining({
                 method: 'turn/start',
@@ -900,7 +900,7 @@ describe('Codex runtime', () => {
                 params: {
                     ...identity,
                     tool: 'report_progress',
-                    arguments: { message: 'Reviewing job requirements' },
+                    arguments: { message: 'Preparing tailored application documents' },
                 },
             })
             fake.respond({
@@ -972,7 +972,10 @@ describe('Codex runtime', () => {
             })
             await new Promise((resolve) => setImmediate(resolve))
 
-            const progress = ['Reviewing job requirements', 'Assessing role fit'].map((textDelta) =>
+            const progress = [
+                'Preparing tailored application documents',
+                'Checking the role against your profile',
+            ].map((textDelta) =>
                 expect.objectContaining({ type: 'message', textDelta, startsNewStatement: true }),
             )
             expect(events.map(({ event }) => event)).toEqual(progress)

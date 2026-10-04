@@ -64,16 +64,12 @@ const emit = defineEmits<{
         @back="emit('back')"
     >
         <div v-if="props.active" class="agent-task-content">
-            <p
-                v-if="props.statusMessage"
-                class="task-status"
-                :data-testid="props.statusTestId"
-                role="status"
-            >
-                {{ props.statusMessage }}
-            </p>
-
-            <AgentStream :task-id="props.taskId" :issue="props.issue" />
+            <AgentStream
+                :task-id="props.taskId"
+                :issue="props.issue"
+                :status-message="props.statusMessage"
+                :status-test-id="props.statusTestId"
+            />
 
             <div v-if="props.running || props.retryAvailable" class="task-actions">
                 <BaseButton
@@ -112,11 +108,6 @@ const emit = defineEmits<{
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
-}
-
-.task-status {
-    margin: 0;
-    color: $color-ink-muted;
 }
 
 .task-actions {

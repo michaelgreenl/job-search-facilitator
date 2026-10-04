@@ -77,6 +77,7 @@ interface MountAgentStreamOptions {
     sessions?: AgentSession[]
     taskId?: string
     taskStates?: Record<string, AgentTaskState>
+    statusMessage?: string | null
 }
 
 describe('agent stream', () => {
@@ -87,6 +88,7 @@ describe('agent stream', () => {
         taskStates = {
             [importSession.taskId]: createTaskState(importSession.taskId),
         },
+        statusMessage = null,
     }: MountAgentStreamOptions = {}) {
         const pinia = createPinia()
         setActivePinia(pinia)
@@ -94,7 +96,7 @@ describe('agent stream', () => {
         store.sessions = sessions
         store.taskStates = taskStates
         const { root } = mountVue(AgentStream, {
-            props: { issue, taskId },
+            props: { issue, taskId, statusMessage },
             install: (app) => app.use(pinia),
         })
 
@@ -139,9 +141,23 @@ describe('agent stream', () => {
                 item.textContent?.trim(),
             ),
         ).toEqual(['Reviewing job requirements'])
+
+        appendEvent(store, taskId, {
+            type: 'message',
+            textDelta: 'Reviewing job requirements',
+            startsNewStatement: true,
+            createdAt,
+        })
+        await nextTick()
+        expect(visibleHeading()).toBe('Reviewing job requirements')
+        expect(
+            Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map((item) =>
+                item.textContent?.trim(),
+            ),
+        ).toEqual(['Assessing role fit'])
     })
 
-    it('groups repeated tool activity across updates until a different activity starts', async () => {
+    it('combines empty tool headers and keeps repeated tool updates in one block', async () => {
         const { root, store, taskId } = mountAgentStream()
         updateTaskState(store, taskId, {
             events: [
@@ -183,19 +199,69 @@ describe('agent stream', () => {
             Array.from(root.querySelectorAll('[data-testid="agent-stream-copy"]')).map((item) =>
                 item.textContent?.trim(),
             ),
-        ).toEqual(['Using Chrome', 'Reading local context', 'Using Chrome'])
-        expect(root.querySelectorAll('[data-testid="agent-stream-commentary"]')).toHaveLength(2)
+        ).toEqual(['Using Chrome'])
+        expect(root.querySelectorAll('[data-testid="agent-stream-block"]')).toHaveLength(1)
         expect(root.querySelectorAll('[data-testid="agent-reasoning-toggle"]')).toHaveLength(1)
         expect(
             Array.from(root.querySelectorAll('[data-testid="agent-reasoning-trace"]')).map((item) =>
                 item.textContent?.trim(),
             ),
-        ).toEqual(['Reviewing job requirements'])
+        ).toEqual(['Verifying the job post', 'Reviewing job requirements'])
         expect(
             Array.from(root.querySelectorAll('[data-testid="agent-reasoning-latest"]')).map(
                 (item) => item.textContent,
             ),
-        ).toEqual(['Verifying the job post', 'Checking application details'])
+        ).toEqual(['Checking application details'])
+    })
+
+    it('keeps startup in the first work block without counting it as progress history', async () => {
+        const { root, store, taskId } = mountAgentStream({
+            taskStates: {
+                [importSession.taskId]: createTaskState(importSession.taskId, { starting: true }),
+            },
+            statusMessage: 'Starting Agent…',
+        })
+        const progress = root.querySelector('[data-testid="agent-progress"]')!
+        expect(progress.querySelectorAll('[data-testid="agent-stream-block"]')).toHaveLength(1)
+        expect(progress.querySelector('[data-testid="agent-progress-indicator"]')).not.toBeNull()
+
+        updateTaskState(store, taskId, {
+            starting: false,
+            task: runningTask,
+            events: [
+                { type: 'activity', message: 'Task started', createdAt },
+                { type: 'activity', message: 'Reading local context', createdAt },
+                { type: 'activity', message: 'Using Chrome', createdAt },
+                {
+                    type: 'message',
+                    textDelta: 'Verifying the role and employer details',
+                    startsNewStatement: true,
+                    createdAt,
+                },
+            ],
+        })
+        await nextTick()
+        const firstBlock = progress.querySelector('[data-testid="agent-stream-block"]')!
+        expect(progress.querySelectorAll('[data-testid="agent-stream-block"]')).toHaveLength(1)
+        expect(firstBlock.textContent).toContain('Task started')
+        expect(firstBlock.querySelector('[data-testid="agent-stream-activity"]')).not.toBeNull()
+        expect(firstBlock.querySelector('[data-testid="agent-reasoning-latest"]')).not.toBeNull()
+        expect(firstBlock.querySelector('[data-testid="agent-reasoning-toggle"]')).toBeNull()
+
+        appendEvent(store, taskId, {
+            type: 'activity',
+            message: 'Reading local context',
+            createdAt,
+        })
+        appendEvent(store, taskId, {
+            type: 'message',
+            textDelta: 'Comparing the role with resume evidence',
+            startsNewStatement: true,
+            createdAt,
+        })
+        await nextTick()
+        expect(progress.querySelectorAll('[data-testid="agent-stream-block"]')).toHaveLength(2)
+        expect(progress.querySelectorAll('[data-testid="agent-reasoning-toggle"]')).toHaveLength(0)
     })
 
     it.each([
