@@ -263,19 +263,25 @@ describe('browser interaction contracts', () => {
         await trigger.click()
         await expect.element(dialog).toBeVisible()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await page.getByLabelText('Job post URL').fill('https://example.com/job')
         await userEvent.keyboard('{Enter}')
         await expect.element(dialog).not.toBeVisible()
         await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await trigger.unhover()
         await trigger.hover()
         await expect.element(tooltip).toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(hoverBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(hoverBackground)
 
         await trigger.click()
         await expect.element(dialog).toBeVisible()
@@ -283,7 +289,9 @@ describe('browser interaction contracts', () => {
         await expect.element(dialog).not.toBeVisible()
         await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await trigger.unhover()
         await trigger.hover()
