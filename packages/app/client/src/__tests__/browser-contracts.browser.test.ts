@@ -3,7 +3,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
-import AppHeader from '@/components/AppHeader.vue'
+import App from '@/App.vue'
+import SettingsView from '@/views/SettingsView.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
@@ -102,85 +103,91 @@ describe('browser interaction contracts', () => {
         await expect.element(trigger).toHaveFocus()
     })
 
-    it('makes retracted navigation operable by pointer and keyboard', async () => {
-        const EmptyRoute = defineComponent({ setup: () => () => h('div') })
-        const router = createRouter({
-            history: createMemoryHistory(),
-            routes: [
-                { path: '/', component: EmptyRoute },
-                { path: '/apply', component: EmptyRoute },
-                { path: '/track', component: EmptyRoute },
-            ],
-        })
-        await router.push('/')
-        await router.isReady()
-        mountVue(AppHeader, { install: (app) => app.use(router) })
-        const trigger = page.getByTestId('app-nav-trigger')
-        const applyLink = page.getByTestId('nav-link-apply')
+    it.each([320, 1024])(
+        'scrolls navigation with the page and limits its width only in Settings at %ipx',
+        async (width) => {
+            await page.viewport(width, 768)
+            vi.stubGlobal('fetch', async () => Response.json([]))
+            const TallRoute = defineComponent({
+                setup: () => () =>
+                    h('main', {
+                        'data-testid': 'route-content',
+                        style: { minHeight: '200dvh' },
+                    }),
+            })
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [
+                    { path: '/', component: TallRoute },
+                    { path: '/apply', component: TallRoute },
+                    { path: '/track', component: TallRoute },
+                    { path: '/settings', component: SettingsView },
+                ],
+            })
+            await router.push('/')
+            await router.isReady()
+            mountVue(App, { install: (app) => app.use(router) })
+            const header = page.getByTestId('app-header')
+            const bounds = header.element().getBoundingClientRect()
+            const contentBounds = page
+                .getByTestId('route-content')
+                .element()
+                .getBoundingClientRect()
+            expect(bounds.left).toBe(contentBounds.left)
+            expect(bounds.right).toBe(contentBounds.right)
+            expect(bounds.top).toBeGreaterThan(0)
+            expect(bounds.top).toBe(bounds.left)
+            expect(contentBounds.top - bounds.bottom).toBe(bounds.top)
 
-        applyLink.element().focus()
-        await expect.element(applyLink).not.toHaveFocus()
-
-        await trigger.hover()
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
-        await trigger.unhover()
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-
-        trigger.element().focus()
-        await userEvent.keyboard('{Enter}')
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
-
-        applyLink.element().focus()
-        await expect.element(applyLink).toHaveFocus()
-        await userEvent.keyboard('{Escape}')
-        await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-        await expect.element(trigger).toHaveFocus()
-    })
-
-    it('closes navigation after following a route without hiding the focused link', async () => {
-        const EmptyRoute = defineComponent({ setup: () => () => h('div') })
-        const router = createRouter({
-            history: createMemoryHistory(),
-            routes: [
-                { path: '/', component: EmptyRoute },
-                { path: '/apply', component: EmptyRoute },
-                { path: '/track', component: EmptyRoute },
-            ],
-        })
-        await router.push('/')
-        await router.isReady()
-        const { root } = mountVue(AppHeader, { install: (app) => app.use(router) })
-        const trigger = page.getByTestId('app-nav-trigger')
-        let hidFocusedElement = false
-        const ariaHiddenObserver = new MutationObserver((records) => {
-            for (const { target } of records) {
-                if (
-                    target instanceof HTMLElement &&
-                    target.getAttribute('aria-hidden') === 'true' &&
-                    target.contains(document.activeElement)
-                ) {
-                    hidFocusedElement = true
-                }
+            for (const link of page.getByRole('link').all()) {
+                const rect = link.element().getBoundingClientRect()
+                expect(
+                    rect.left >= bounds.left &&
+                        rect.right <= bounds.right &&
+                        rect.top >= bounds.top &&
+                        rect.bottom <= bounds.bottom,
+                ).toBe(true)
             }
-        })
-        ariaHiddenObserver.observe(root, {
-            attributeFilter: ['aria-hidden'],
-            attributes: true,
-            subtree: true,
-        })
 
-        try {
-            await trigger.hover()
-            await page.getByTestId('nav-link-apply').click()
-
+            page.getByTestId('nav-link-review').element().focus()
+            await userEvent.keyboard('{Tab}')
+            await expect.element(page.getByTestId('nav-link-apply')).toHaveFocus()
+            await userEvent.keyboard('{Enter}')
             await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/apply'))
-            await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-        } finally {
-            ariaHiddenObserver.disconnect()
-        }
+            await expect
+                .element(page.getByTestId('nav-link-apply'))
+                .toHaveAttribute('aria-current', 'page')
 
-        expect(hidFocusedElement).toBe(false)
-    })
+            try {
+                window.scrollTo(0, 200)
+                await vi.waitFor(() => expect(window.scrollY).toBe(200))
+                expect(header.element().getBoundingClientRect().top).toBe(bounds.top - 200)
+                window.scrollTo(0, 0)
+                await vi.waitFor(() => expect(window.scrollY).toBe(0))
+                await page.getByTestId('nav-link-track').click()
+                await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/track'))
+                await userEvent.keyboard('{Tab}')
+                await expect.element(page.getByTestId('nav-link-settings')).toHaveFocus()
+                await userEvent.keyboard('{Enter}')
+                await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/settings'))
+                await flushLayout()
+                const settingsBounds = page
+                    .getByTestId('resume-settings')
+                    .element()
+                    .getBoundingClientRect()
+                const settingsHeaderBounds = header.element().getBoundingClientRect()
+                expect(settingsHeaderBounds.left).toBe(settingsBounds.left)
+                expect(settingsHeaderBounds.right).toBe(settingsBounds.right)
+
+                await page.getByTestId('nav-link-review').click()
+                await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
+                await flushLayout()
+                expect(header.element().getBoundingClientRect().width).toBe(bounds.width)
+            } finally {
+                window.scrollTo(0, 0)
+            }
+        },
+    )
 
     it('dismisses the add-post pointer state until the button is hovered again', async () => {
         const AddJobPostFixture = defineComponent({
@@ -256,19 +263,25 @@ describe('browser interaction contracts', () => {
         await trigger.click()
         await expect.element(dialog).toBeVisible()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await page.getByLabelText('Job post URL').fill('https://example.com/job')
         await userEvent.keyboard('{Enter}')
         await expect.element(dialog).not.toBeVisible()
         await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await trigger.unhover()
         await trigger.hover()
         await expect.element(tooltip).toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(hoverBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(hoverBackground)
 
         await trigger.click()
         await expect.element(dialog).toBeVisible()
@@ -276,7 +289,9 @@ describe('browser interaction contracts', () => {
         await expect.element(dialog).not.toBeVisible()
         await expect.element(trigger).not.toHaveFocus()
         await expect.element(tooltip).not.toBeVisible()
-        expect(getComputedStyle(trigger.element()).backgroundColor).toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .toBe(restingBackground)
 
         await trigger.unhover()
         await trigger.hover()
@@ -290,6 +305,81 @@ describe('browser interaction contracts', () => {
 })
 
 describe('browser layout contracts', () => {
+    it.each([
+        { iconSize: undefined, height: 40 },
+        { iconSize: 'sm', height: 32 },
+        { iconSize: 'md', height: 36 },
+        { iconSize: 'lg', height: 44 },
+    ] as const)(
+        'keeps button preset heights consistent with icon size $iconSize',
+        async ({ iconSize, height }) => {
+            const presets = ['primary', 'secondary', 'signal'] as const
+            mountVue(
+                defineComponent({
+                    setup: () => () =>
+                        h(
+                            'div',
+                            presets.map((preset) =>
+                                h(
+                                    BaseButton,
+                                    { preset, iconSize, 'data-testid': `size-${preset}` },
+                                    { default: () => 'Action' },
+                                ),
+                            ),
+                        ),
+                }),
+            )
+            await flushLayout()
+
+            const heights = presets.map(
+                (preset) =>
+                    page.getByTestId(`size-${preset}`).element().getBoundingClientRect().height,
+            )
+            expect(heights).toEqual(presets.map(() => height))
+        },
+    )
+
+    it('keeps primary button text readable at rest, on hover, and with keyboard focus', async () => {
+        mountVue(
+            defineComponent({
+                setup: () => () =>
+                    h(
+                        BaseButton,
+                        { 'data-testid': 'contrast-primary' },
+                        { default: () => 'Action' },
+                    ),
+            }),
+        )
+        const button = page.getByTestId('contrast-primary')
+        const luminance = (color: string) => {
+            const channels = color
+                .match(/[\d.]+/g)!
+                .slice(0, 3)
+                .map((value) => {
+                    const channel = Number(value) / 255
+                    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+                })
+            return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722
+        }
+        const contrast = () => {
+            const style = getComputedStyle(button.element())
+            const foreground = luminance(style.color)
+            const background = luminance(style.backgroundColor)
+            return (
+                (Math.max(foreground, background) + 0.05) /
+                (Math.min(foreground, background) + 0.05)
+            )
+        }
+
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+        await button.hover()
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+        await button.unhover()
+        await userEvent.keyboard('{Tab}')
+        await expect.element(button).toHaveFocus()
+        expect(contrast()).toBeGreaterThanOrEqual(4.5)
+    })
+
     it('anchors a back-preset tooltip to its control, keeps it inside the viewport, and dismisses it with Escape', async () => {
         await page.viewport(320, 600)
         const BackButtonFixture = defineComponent({

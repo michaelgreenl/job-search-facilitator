@@ -5,6 +5,7 @@ import {
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Ajv } from 'ajv'
 import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
 import { InvalidAgentOutputSchemaError } from '../src/tasks/output-schema.ts'
 import { FakeRuntime } from './fake-runtime.ts'
@@ -74,12 +75,10 @@ describe('Agent task manager', () => {
         })
 
         runtime.emit({
-            type: 'reasoning-delta',
+            type: 'commentary',
             threadId: first.threadId,
             turnId: first.turnId,
-            itemId: 'reasoning',
-            summaryIndex: 0,
-            textDelta: 'First task progress',
+            text: 'First task progress',
         })
         runtime.emit({
             type: 'activity',
@@ -199,19 +198,15 @@ describe('Agent task manager', () => {
         const connection = manager.connect(started.id, (event) => streamedEvents.push(event))
 
         runtime.emit({
-            type: 'reasoning-delta',
+            type: 'commentary',
             ...eventIdentity,
-            itemId: 'reasoning',
-            summaryIndex: 0,
-            textDelta: 'First update',
+            text: 'First update',
         })
         connection?.unsubscribe()
         runtime.emit({
-            type: 'reasoning-delta',
+            type: 'commentary',
             ...eventIdentity,
-            itemId: 'reasoning',
-            summaryIndex: 0,
-            textDelta: 'Second update',
+            text: 'Second update',
         })
 
         expect(streamedEvents.map(({ id, event }) => [id, event.type])).toEqual([[2, 'message']])
@@ -223,11 +218,9 @@ describe('Agent task manager', () => {
         const started = await manager.start(input)
 
         runtime.emit({
-            type: 'reasoning-delta',
+            type: 'commentary',
             ...eventIdentity,
-            itemId: 'reasoning',
-            summaryIndex: 0,
-            textDelta: 'Comparing relevant employees',
+            text: 'Comparing relevant employees',
         })
         runtime.emit({
             type: 'final-message',
@@ -268,6 +261,7 @@ describe('Agent task manager', () => {
                     personName: 'Ada Lovelace',
                     personTitle: 'Engineering Manager',
                     profileUrl: 'https://www.linkedin.com/in/ada-lovelace',
+                    email: 'ada@example.com',
                     relevanceRationale: 'Her visible role aligns with the team.',
                     draftMessage: 'Hi Ada, could I ask about the team?',
                 },
@@ -312,6 +306,28 @@ describe('Agent task manager', () => {
             })
         },
     )
+
+    it('validates resume names with flag-free JSON Schema patterns', () => {
+        const validate = new Ajv({ unicodeRegExp: false }).compile(
+            createUserAddedJobPostOutputSchema(),
+        )
+
+        expect(
+            validate({
+                ...userAddedJobPostOutput,
+                recommendedResume: 'C++ / Développement 👩‍💻',
+            }),
+        ).toBe(true)
+
+        for (let code = 0; code <= 0x9f; code++) {
+            expect(
+                validate({
+                    ...userAddedJobPostOutput,
+                    recommendedResume: `A${String.fromCharCode(code)}B`,
+                }),
+            ).toBe(code >= 0x20 && code < 0x7f)
+        }
+    })
 
     it('rejects report-only fields from the generated user-added post contract', async () => {
         const runtime = new FakeRuntime()
@@ -407,36 +423,36 @@ describe('Agent task manager', () => {
         expect(runtime.startAttempts).toBe(0)
     })
 
-    it('marks boundaries between fragmented reasoning summary sections', async () => {
+    it('streams progress as complete updates and keeps the task alive', async () => {
+        vi.useFakeTimers()
         const runtime = new FakeRuntime()
         const manager = new AgentTaskManager(runtime)
         const started = await manager.start(input)
+        const events: AgentTaskStreamEvent[] = []
+        manager.connect(started.id, (event) => events.push(event))
+        await vi.advanceTimersByTimeAsync(inactivityTimeoutMs - 1_000)
 
-        for (const [summaryIndex, delta] of [
-            [0, '**Reviewing '],
-            [0, 'the role**'],
-            [1, '**Finding '],
-            [1, 'the team**'],
-        ] as const) {
+        for (const text of ['Reviewing job requirements', 'Finding hiring contacts']) {
             runtime.emit({
-                type: 'reasoning-delta',
+                type: 'commentary',
                 ...eventIdentity,
-                itemId: 'reasoning',
-                summaryIndex,
-                textDelta: delta,
+                text,
             })
         }
 
-        const messages = manager
-            .connect(started.id, () => {})
-            ?.events.flatMap(({ event }) => (event.type === 'message' ? [event] : []))
-
-        expect(messages).toEqual([
-            expect.objectContaining({ textDelta: '**Reviewing ', startsNewStatement: true }),
-            expect.objectContaining({ textDelta: 'the role**', startsNewStatement: false }),
-            expect.objectContaining({ textDelta: '**Finding ', startsNewStatement: true }),
-            expect.objectContaining({ textDelta: 'the team**', startsNewStatement: false }),
+        await vi.advanceTimersByTimeAsync(2_000)
+        expect(events.map(({ event }) => event)).toEqual([
+            expect.objectContaining({
+                textDelta: 'Reviewing job requirements',
+                startsNewStatement: true,
+            }),
+            expect.objectContaining({
+                textDelta: 'Finding hiring contacts',
+                startsNewStatement: true,
+            }),
         ])
+        expect(manager.get(started.id)?.status).toBe('running')
+        await manager.cancel(started.id)
     })
 
     it('fails a completed turn whose final output is not JSON', async () => {

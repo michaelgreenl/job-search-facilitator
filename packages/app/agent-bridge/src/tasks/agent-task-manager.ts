@@ -33,7 +33,6 @@ interface StoredTask {
     finalMessages: string[]
     outputValidator: AgentOutputValidator
     pendingPermission: AgentPermissionRequired | null
-    reasoningSection: { itemId: string; summaryIndex: number } | null
     inactivityTimeout: ReturnType<typeof setTimeout> | null
 }
 
@@ -131,7 +130,6 @@ export class AgentTaskManager {
             finalMessages: [],
             outputValidator,
             pendingPermission: null,
-            reasoningSection: null,
             inactivityTimeout: null,
         }
 
@@ -262,6 +260,11 @@ export class AgentTaskManager {
             return
         }
 
+        if (event.type === 'retrying') {
+            this.activity(task, 'Reconnecting to Agent')
+            return
+        }
+
         this.armInactivityTimeout(task)
 
         if (event.type === 'activity') {
@@ -273,21 +276,11 @@ export class AgentTaskManager {
                 'plan-update': 'Plan updated',
             }[event.activity]
             this.activity(task, message)
-        } else if (event.type === 'reasoning-delta') {
-            const startsNewStatement =
-                task.reasoningSection === null ||
-                task.reasoningSection.itemId !== event.itemId ||
-                task.reasoningSection.summaryIndex !== event.summaryIndex
-
-            task.reasoningSection = {
-                itemId: event.itemId,
-                summaryIndex: event.summaryIndex,
-            }
-
+        } else if (event.type === 'commentary') {
             this.emit(task, {
                 type: 'message',
-                textDelta: event.textDelta,
-                startsNewStatement,
+                textDelta: event.text,
+                startsNewStatement: true,
                 createdAt: new Date().toISOString(),
             })
         } else if (event.type === 'final-message') {

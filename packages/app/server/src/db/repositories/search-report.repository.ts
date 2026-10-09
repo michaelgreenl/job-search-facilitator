@@ -7,12 +7,9 @@ import {
     toPrismaJobPostListingData,
 } from '../mappers/job-post.mapper.ts'
 import { lockJobPostIdentities } from '../lock-job-post-identities.ts'
-import {
-    toJobRecommendation,
-    toPrismaAgentLabel,
-    toPrismaResumeType,
-} from '../mappers/search-report.mapper.ts'
+import { toJobRecommendation, toPrismaAgentLabel } from '../mappers/search-report.mapper.ts'
 import { prisma } from '../prisma.ts'
+import { assertResumeNames } from './resume.repository.ts'
 
 const reportInclude = {
     results: {
@@ -100,6 +97,10 @@ const persistReport = async (
     input: UpsertJobSearchReportInput,
     sameReportSourceKeys?: ReadonlySet<string>,
 ): Promise<SearchReportUpsertResult> => {
+    await assertResumeNames(
+        transaction,
+        input.results.map(({ recommendedResume }) => recommendedResume),
+    )
     const date = toReportDate(reportDate)
     const insertedReport = await transaction.jobSearchReport.createMany({
         data: { id: reportId, reportDate: date, summary: input.summary },
@@ -181,7 +182,7 @@ const persistReport = async (
                 fitRationale: result.fitRationale,
                 applicationFlow: result.applicationFlow,
                 keyLegitimacySignals: result.keyLegitimacySignals,
-                recommendedResume: toPrismaResumeType(result.recommendedResume),
+                recommendedResume: result.recommendedResume,
                 recommendedAction: result.recommendedAction,
                 legitimacyNotes: result.legitimacyNotes,
             },

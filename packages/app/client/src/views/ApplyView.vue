@@ -57,9 +57,7 @@ const postFilter = shallowRef<PostFilter>(
 )
 const startupOutreachTaskPostIds = [...outreachTaskPostIds.value]
 const startupOutreachPostId =
-    startupOutreachTaskPostIds.length > 0 || restoreContactListPending.value
-        ? outreachPostId.value
-        : null
+    outreachTaskVisible.value || restoreContactListPending.value ? outreachPostId.value : null
 const activePanel = shallowRef<ActivePanel>(
     outreachPostId.value !== null && (outreachTaskVisible.value || restoreContactListPending.value)
         ? 'outreach'
@@ -67,7 +65,7 @@ const activePanel = shallowRef<ActivePanel>(
 )
 const outreachExpanded = shallowRef(false)
 const selectedPostId = shallowRef<string | null>(
-    outreachPostId.value ?? readSessionStorage(selectedPostStorageKey),
+    startupOutreachPostId ?? readSessionStorage(selectedPostStorageKey),
 )
 const listLoading = shallowRef(true)
 const listError = shallowRef<string | null>(null)
@@ -687,7 +685,7 @@ onMounted(() => {
 .apply-layout {
     display: flex;
     flex: 1;
-    max-height: calc(100dvh - ($space-3 * 2));
+    max-height: calc(100dvh - $app-header-height - ($space-3 * 3));
     min-height: 0;
 }
 

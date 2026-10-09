@@ -59,6 +59,9 @@ Do not use `quick-app` to hide unsupported central work or several material gaps
 - Put visible application steps and unknowns in `applicationFlow`.
 - Put current source evidence in `keyLegitimacySignals`.
 - Put material legitimacy concerns in `legitimacyNotes`.
-- Select `frontend` or `backend-full-stack` for a scheduled report. A user-added import can also use `general`.
+- Review the current uploaded resumes alongside the verified profile. Recommend one exact library name as the closest starting point.
+- Do not reject credible roles for untailored wording or missing keywords alone. Keep material eligibility and evidence requirements.
+- Do not give tailoring suggestions. Tailoring happens after search, outside this workflow.
+- With no uploaded resumes, select `frontend`, `backend`, or `full-stack`. A user-added import can also use `general`.
 - Make `recommendedAction` truthful, specific, and concise.
 - Never invent experience, relationships, facts, or application results.

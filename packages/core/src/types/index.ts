@@ -10,5 +10,6 @@ export interface HealthResponse {
     status: 'healthy'
     capabilities: {
         jobSearchNetNewGuard: 1
+        resumeLibrary: 1
     }
 }

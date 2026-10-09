@@ -4,7 +4,6 @@ import {
     AGENT_LABELS,
     APPLICATION_STATUSES,
     POST_STATUSES,
-    RESUME_TYPES,
     USER_LABELS,
     type ApplyQueueItem,
     type CreateUserAddedJobPostInput,
@@ -19,6 +18,7 @@ import {
     type UserAddedJobPost,
 } from '../types/jobs.ts'
 import type { AgentOutputSchema } from '../types/agent.ts'
+import { resumeNameSchema } from './resumes.ts'
 import {
     createParser,
     httpUrlSchema,
@@ -53,7 +53,7 @@ export const standaloneJobRecommendationInputSchema = z.strictObject({
     fitRationale: nonBlankInputStringSchema,
     applicationFlow: nonBlankInputStringSchema,
     keyLegitimacySignals: nonBlankInputStringSchema,
-    recommendedResume: z.enum(RESUME_TYPES),
+    recommendedResume: resumeNameSchema,
     recommendedAction: nonBlankInputStringSchema,
     legitimacyNotes: nonBlankInputStringSchema.nullable(),
 }) satisfies z.ZodType<StandaloneJobRecommendation>
@@ -99,7 +99,7 @@ const standaloneJobRecommendationShape = {
     fitRationale: nonBlankStringSchema,
     applicationFlow: nonBlankStringSchema,
     keyLegitimacySignals: nonBlankStringSchema,
-    recommendedResume: z.enum(RESUME_TYPES),
+    recommendedResume: resumeNameSchema,
     recommendedAction: nonBlankStringSchema,
     legitimacyNotes: nonBlankStringSchema.nullable(),
 }
@@ -146,6 +146,40 @@ const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({
 })
 
 const userAddedJobPostOutputSchema = toAgentOutputSchema(createUserAddedJobPostInputSchema)
+const jobPostImportResultSchema = z.strictObject({
+    result: z.union([
+        createUserAddedJobPostInputSchema,
+        z.strictObject({ error: nonBlankInputStringSchema.max(500) }),
+    ]),
+})
+const jobPostImportOutputSchema = toAgentOutputSchema(jobPostImportResultSchema)
+const jobPostImportAgentResultSchema = z.strictObject({
+    result: z.union([
+        createUserAddedJobPostInputSchema.extend({
+            post: jobPostInputSchema.omit({ description: true }).extend({
+                descriptionCaptureId: z.string().regex(/^[0-9a-f-]{36}$/),
+            }),
+        }),
+        z.strictObject({ error: nonBlankInputStringSchema.max(500) }),
+    ]),
+})
+const jobPostImportAgentOutputSchema = toAgentOutputSchema(jobPostImportAgentResultSchema)
+
+export const createJobPostImportAgentOutputSchema = (): AgentOutputSchema =>
+    structuredClone(jobPostImportAgentOutputSchema)
+
+export const parseJobPostImportAgentResult = createParser(
+    'Job post import agent result',
+    jobPostImportAgentResultSchema,
+)
+
+export const createJobPostImportOutputSchema = (): AgentOutputSchema =>
+    structuredClone(jobPostImportOutputSchema)
+
+export const parseJobPostImportResult = createParser(
+    'Job post import result',
+    jobPostImportResultSchema,
+)
 
 export const createUserAddedJobPostOutputSchema = (): AgentOutputSchema =>
     structuredClone(userAddedJobPostOutputSchema)

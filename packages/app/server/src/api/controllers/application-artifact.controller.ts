@@ -2,6 +2,7 @@ import { BAD_REQUEST, NOT_FOUND, type ApplicationArtifactKind } from '@job-searc
 import type { Request, Response } from 'express'
 import type { ApplicationArtifactRepository } from '../../db/repositories/application-artifact.repository.ts'
 import { applicationArtifactParamsSchema } from '../schemas/application-artifact.schema.ts'
+import { contentDisposition, isPdf, readFileName } from '../file-upload.ts'
 
 const invalidRequest = { error: 'Invalid application artifact' }
 const jobPostNotFound = { error: 'Job post not found' }
@@ -19,54 +20,14 @@ const fileExtension = (fileName: string) => {
     return index < 0 ? '' : fileName.slice(index).toLowerCase()
 }
 
-const hasControlCharacter = (value: string) => {
-    for (let index = 0; index < value.length; index += 1) {
-        const codeUnit = value.charCodeAt(index)
-
-        if (codeUnit <= 0x1f || codeUnit === 0x7f) {
-            return true
-        }
-    }
-
-    return false
-}
-
-const readFileName = (request: Request) => {
-    const encodedFileName = request.header('x-artifact-filename')
-
-    if (encodedFileName === undefined) {
-        return null
-    }
-
-    try {
-        const fileName = decodeURIComponent(encodedFileName).trim()
-        return fileName.length > 0 &&
-            fileName.length <= 255 &&
-            !fileName.includes('/') &&
-            !fileName.includes('\\') &&
-            !hasControlCharacter(fileName)
-            ? fileName
-            : null
-    } catch {
-        return null
-    }
-}
-
 const validatedMediaType = (kind: ApplicationArtifactKind, fileName: string, content: Buffer) => {
     const extension = fileExtension(fileName)
 
     if (kind === 'resume' || kind === 'cover-letter') {
-        return extension === '.pdf' && content.subarray(0, 5).toString('ascii') === '%PDF-'
-            ? 'application/pdf'
-            : null
+        return isPdf(fileName, content) ? 'application/pdf' : null
     }
 
     return archiveExtensions.get(extension) ?? null
-}
-
-const contentDisposition = (fileName: string) => {
-    const asciiFileName = fileName.replace(/[^\x20-\x7e]|["\\]/g, '_')
-    return `inline; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
 }
 
 export const createApplicationArtifactController = (repository: ApplicationArtifactRepository) => ({

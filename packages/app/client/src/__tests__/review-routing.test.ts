@@ -710,7 +710,7 @@ describe('review route selection', () => {
         updateImportAgentTask(agentStore, {
             ...runningTask,
             status: 'completed',
-            output: importOutput,
+            output: { result: importOutput },
             error: null,
         })
 

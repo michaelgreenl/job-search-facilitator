@@ -1,17 +1,32 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
+import { runInNewContext } from 'node:vm'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import {
+    createJobPostImportOutputSchema,
+    parseJobPostImportResult,
+} from '@job-search-facilitator/core'
+import { describe, expect, it, vi } from 'vitest'
+import * as resumeContext from '../src/resume-context.ts'
 import type { AgentRuntimeEvent } from '../src/runtime/agent-runtime.ts'
 import { CodexRuntime } from '../src/runtime/codex/codex-runtime.ts'
-import { AgentTaskManager } from '../src/tasks/agent-task-manager.ts'
+import { AgentTaskManager, type AgentTaskStreamEvent } from '../src/tasks/agent-task-manager.ts'
+
+type BrowserResult = { isError?: boolean; content: Array<{ type: string; text?: string }> }
 
 const createFakeProcess = ({
     completeTaskImmediately = false,
     ignoredMethods = [],
+    instructionSources = [],
+    browserResult = { isError: true, content: [] },
 }: {
     completeTaskImmediately?: boolean
     ignoredMethods?: string[]
+    instructionSources?: string[]
+    browserResult?: BrowserResult | ((code: string) => Promise<BrowserResult>)
 } = {}) => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
@@ -69,8 +84,28 @@ const createFakeProcess = ({
                             ],
                         },
                     })
-                } else if (request.method === 'thread/start') {
-                    respond({ id: request.id, result: { thread: { id: 'thread-id' } } })
+                } else if (
+                    request.method === 'mcpServer/tool/call' &&
+                    (request.params as { tool: string }).tool === 'js'
+                ) {
+                    const result =
+                        typeof browserResult === 'function'
+                            ? browserResult(
+                                  (request.params as { arguments: { code: string } }).arguments
+                                      .code,
+                              )
+                            : browserResult
+                    void Promise.resolve(result).then((result) =>
+                        respond({ id: request.id, result }),
+                    )
+                } else if (
+                    request.method === 'thread/start' ||
+                    request.method === 'thread/resume'
+                ) {
+                    respond({
+                        id: request.id,
+                        result: { thread: { id: 'thread-id' }, instructionSources },
+                    })
                 } else if (request.method === 'turn/start') {
                     const messages: Array<Record<string, unknown>> = [
                         { id: request.id, result: { turn: { id: 'turn-id' } } },
@@ -105,7 +140,10 @@ const createFakeProcess = ({
                     stdout.write(
                         `${messages.map((message) => JSON.stringify(message)).join('\n')}\n`,
                     )
-                } else if (request.method === 'turn/interrupt') {
+                } else if (
+                    request.method === 'turn/interrupt' ||
+                    request.method === 'mcpServer/tool/call'
+                ) {
                     respond({ id: request.id, result: {} })
                 }
             }
@@ -123,7 +161,372 @@ const createFakeProcess = ({
     return { process, requests, respond, writeStderr, endStdout }
 }
 
+const importEvaluation = {
+    agentLabel: 'target',
+    fitRationale: 'Documented experience fits the role.',
+    applicationFlow: 'Public application form.',
+    keyLegitimacySignals: 'Official employer posting.',
+    recommendedResume: 'full-stack',
+    recommendedAction: 'Apply with the recommended resume.',
+    legitimacyNotes: null,
+    post: {
+        sourceKey: 'example:123',
+        roleTitle: 'Software Engineer',
+        company: 'Example',
+        location: null,
+        compensation: null,
+        techStack: 'Not specified',
+        postSource: 'Employer',
+        postUrl: 'https://example.com/jobs/123',
+        applicationUrl: 'https://example.com/jobs/123#apply',
+        postStatus: 'active',
+    },
+}
+
+describe('job-description capture', () => {
+    it('copies text through the restricted DOM reader into the validated import without model transcription', async () => {
+        const description =
+            'Responsibilities\n\nBuild “software”\u00a0& tools.\n• Preserve lists.\n\nQualifications\nOne year.\n'
+        const fake = createFakeProcess({
+            browserResult: async (code) => {
+                const content: BrowserResult['content'] = []
+                await runInNewContext(`(async () => { ${code} })()`, {
+                    chrome: {
+                        tabs: {
+                            get: async () => ({
+                                url: async () => importEvaluation.post.postUrl,
+                                playwright: {
+                                    evaluate: async (
+                                        read: (selector: string) => string,
+                                        selector: string,
+                                    ) =>
+                                        runInNewContext(`(${read.toString()})(selector)`, {
+                                            selector,
+                                            // Chrome's read-only scope supplies DOM data without browser constructors.
+                                            document: {
+                                                querySelectorAll: (value: string) =>
+                                                    value === '.job-description'
+                                                        ? [
+                                                              {
+                                                                  innerText: description,
+                                                                  querySelector: () => null,
+                                                              },
+                                                          ]
+                                                        : [],
+                                            },
+                                        }),
+                                },
+                            }),
+                        },
+                    },
+                    nodeRepl: { write: (text: string) => content.push({ type: 'text', text }) },
+                })
+                return { content }
+            },
+        })
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        try {
+            await runtime.start()
+            const task = await manager.start({
+                prompt: 'Import the role',
+                capabilities: ['chrome'],
+                captureJobDescription: true,
+                outputSchema: createJobPostImportOutputSchema(),
+            })
+            fake.respond({
+                id: 'capture',
+                method: 'item/tool/call',
+                params: {
+                    threadId: task.threadId,
+                    turnId: task.turnId,
+                    tool: 'capture_job_description',
+                    arguments: { tabId: '123', selector: '.job-description' },
+                },
+            })
+            await vi.waitFor(() =>
+                expect(fake.requests.find((request) => request.id === 'capture')).toBeDefined(),
+            )
+            const reply = fake.requests.find((request) => request.id === 'capture')?.result as {
+                contentItems: [{ text: string }]
+                success: boolean
+            }
+            const { descriptionCaptureId } = JSON.parse(reply.contentItems[0].text) as {
+                descriptionCaptureId: string
+            }
+            const wireOutput = {
+                result: {
+                    ...importEvaluation,
+                    post: { ...importEvaluation.post, descriptionCaptureId },
+                },
+            }
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    threadId: task.threadId,
+                    turnId: task.turnId,
+                    item: {
+                        type: 'agentMessage',
+                        phase: 'final_answer',
+                        text: JSON.stringify(wireOutput),
+                    },
+                },
+            })
+            fake.respond({
+                method: 'turn/completed',
+                params: { threadId: task.threadId, turn: { id: task.turnId, status: 'completed' } },
+            })
+            await vi.waitFor(() => expect(manager.get(task.id)?.status).toBe('completed'))
+            expect(parseJobPostImportResult(manager.get(task.id)?.output)).toEqual({
+                result: { ...importEvaluation, post: { ...importEvaluation.post, description } },
+            })
+            const turnRequest = fake.requests.find((request) => request.method === 'turn/start')
+            if (turnRequest === undefined) throw new Error('No turn request')
+            const schema = (
+                turnRequest.params as {
+                    outputSchema: {
+                        properties: {
+                            result: {
+                                anyOf: [
+                                    {
+                                        properties: {
+                                            post: { properties: Record<string, unknown> }
+                                        }
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                }
+            ).outputSchema
+            expect(
+                Object.keys(schema.properties.result.anyOf[0].properties.post.properties),
+            ).not.toContain('description')
+        } finally {
+            runtime.close()
+        }
+    })
+
+    it.each(['missing-capture', 'wrong-post'] as const)(
+        'rejects an import with %s instead of using model-written description text',
+        async (failure) => {
+            const fake = createFakeProcess({
+                browserResult: {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                description: 'Original page text',
+                                sourceUrl: 'https://example.com/jobs/other',
+                            }),
+                        },
+                    ],
+                },
+            })
+            const runtime = new CodexRuntime('codex', '/workspace', {
+                spawnProcess: () => fake.process,
+            })
+            const manager = new AgentTaskManager(runtime)
+            try {
+                await runtime.start()
+                const task = await manager.start({
+                    prompt: 'Import the role',
+                    capabilities: ['chrome'],
+                    captureJobDescription: true,
+                    outputSchema: createJobPostImportOutputSchema(),
+                })
+                let descriptionCaptureId = '00000000-0000-4000-8000-000000000001'
+                if (failure === 'wrong-post') {
+                    fake.respond({
+                        id: 'capture',
+                        method: 'item/tool/call',
+                        params: {
+                            threadId: task.threadId,
+                            turnId: task.turnId,
+                            tool: 'capture_job_description',
+                            arguments: { tabId: '123', selector: '.job-description' },
+                        },
+                    })
+                    await vi.waitFor(() =>
+                        expect(
+                            fake.requests.find((request) => request.id === 'capture'),
+                        ).toBeDefined(),
+                    )
+                    const reply = fake.requests.find((request) => request.id === 'capture')
+                        ?.result as { contentItems: [{ text: string }] }
+                    descriptionCaptureId = (
+                        JSON.parse(reply.contentItems[0].text) as { descriptionCaptureId: string }
+                    ).descriptionCaptureId
+                }
+                fake.respond({
+                    method: 'item/completed',
+                    params: {
+                        threadId: task.threadId,
+                        turnId: task.turnId,
+                        item: {
+                            type: 'agentMessage',
+                            phase: 'final_answer',
+                            text: JSON.stringify({
+                                result: {
+                                    ...importEvaluation,
+                                    post: { ...importEvaluation.post, descriptionCaptureId },
+                                },
+                            }),
+                        },
+                    },
+                })
+                fake.respond({
+                    method: 'turn/completed',
+                    params: {
+                        threadId: task.threadId,
+                        turn: { id: task.turnId, status: 'completed' },
+                    },
+                })
+                await vi.waitFor(() => expect(manager.get(task.id)?.status).toBe('completed'))
+                expect(parseJobPostImportResult(manager.get(task.id)?.output)).toEqual({
+                    result: {
+                        error:
+                            failure === 'missing-capture'
+                                ? 'The job description was not captured for this import. Try again.'
+                                : 'The captured description does not match the job-post URL. Try again.',
+                    },
+                })
+            } finally {
+                runtime.close()
+            }
+        },
+    )
+
+    it('reports a browser capture failure without returning a capture reference', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        try {
+            await runtime.start()
+            const task = await runtime.startTask('import', {
+                prompt: 'Import the role',
+                capabilities: ['chrome'],
+                captureJobDescription: true,
+                outputSchema: createJobPostImportOutputSchema(),
+            })
+            fake.respond({
+                id: 'capture',
+                method: 'item/tool/call',
+                params: {
+                    threadId: task.threadId,
+                    turnId: task.turnId,
+                    tool: 'capture_job_description',
+                    arguments: { tabId: '123', selector: '.job-description' },
+                },
+            })
+            await vi.waitFor(() =>
+                expect(fake.requests.find((request) => request.id === 'capture')).toBeDefined(),
+            )
+            expect(fake.requests.find((request) => request.id === 'capture')?.result).toEqual({
+                success: false,
+                contentItems: [
+                    {
+                        type: 'inputText',
+                        text: 'Chrome could not capture the description. Check the tab and selector, then retry.',
+                    },
+                ],
+            })
+        } finally {
+            runtime.close()
+        }
+    })
+})
+
 describe('Codex runtime', () => {
+    it('refreshes browser settings between tasks after an app update', async () => {
+        const source = mkdtempSync(join(tmpdir(), 'agent-browser-settings-'))
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+            personalCodexHome: source,
+        })
+        const input = {
+            prompt: 'Read the supplied job post',
+            outputSchema: { type: 'object' as const },
+            capabilities: ['chrome' as const],
+        }
+        try {
+            await runtime.start()
+            for (const version of ['old', 'current']) {
+                writeFileSync(
+                    join(source, 'config.toml'),
+                    `[mcp_servers.node_repl]\ncommand = "/browser/runtime"\n[mcp_servers.node_repl.env]\nNODE_REPL_TRUSTED_SERVICES = '{"browser":"/plugins/browser/${version}/scripts/browser-service.mjs"}'\n`,
+                )
+                await runtime.startTask(version, input)
+            }
+            expect(
+                fake.requests
+                    .filter(({ method }) => method === 'thread/start')
+                    .map(
+                        ({ params }) =>
+                            (params as { config: Record<string, unknown> }).config[
+                                'mcp_servers.node_repl'
+                            ],
+                    ),
+            ).toEqual(
+                ['old', 'current'].map((version) => ({
+                    command: '/browser/runtime',
+                    required: true,
+                    env: {
+                        NODE_REPL_TRUSTED_SERVICES: JSON.stringify({
+                            browser: `/plugins/browser/${version}/scripts/browser-service.mjs`,
+                        }),
+                    },
+                })),
+            )
+        } finally {
+            runtime.close()
+            rmSync(source, { recursive: true, force: true })
+        }
+    })
+
+    it('passes loaded resume evidence to an import task and blocks evaluation when loading fails', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const load = vi
+            .spyOn(resumeContext, 'loadResumeContext')
+            .mockResolvedValue('Synthetic current PDF evidence')
+        const input = {
+            prompt: 'Evaluate the supplied role',
+            outputSchema: { type: 'object' as const },
+            capabilities: [],
+            resumeContext: true,
+        }
+        try {
+            await runtime.start()
+            await runtime.startTask('resume-import', input)
+            expect(fake.requests).toContainEqual(
+                expect.objectContaining({
+                    method: 'thread/start',
+                    params: expect.objectContaining({
+                        developerInstructions: expect.stringContaining(
+                            'Synthetic current PDF evidence',
+                        ),
+                    }),
+                }),
+            )
+            fake.requests.length = 0
+            load.mockRejectedValueOnce(new Error('Unreadable resume'))
+            await expect(runtime.startTask('failed-import', input)).rejects.toThrow(
+                'Unreadable resume',
+            )
+            expect(fake.requests.filter(({ method }) => method === 'turn/start')).toEqual([])
+        } finally {
+            load.mockRestore()
+            runtime.close()
+        }
+    })
+
     it('discovers Chrome and starts a structured read-only task', async () => {
         const fake = createFakeProcess()
         const runtime = new CodexRuntime('codex', '/workspace', {
@@ -158,6 +561,7 @@ describe('Codex runtime', () => {
             expect.objectContaining({
                 method: 'thread/start',
                 params: expect.objectContaining({
+                    model: 'gpt-6-astra',
                     approvalPolicy: {
                         granular: {
                             sandbox_approval: false,
@@ -169,7 +573,7 @@ describe('Codex runtime', () => {
                     },
                     approvalsReviewer: 'user',
                     sandbox: 'read-only',
-                    config: { web_search: 'disabled' },
+                    config: { tool_output_token_limit: 20_000, web_search: 'disabled' },
                     selectedCapabilityRoots: [
                         {
                             id: 'chrome@openai-bundled',
@@ -183,6 +587,28 @@ describe('Codex runtime', () => {
                 }),
             }),
         )
+        expect(fake.requests.find(({ method }) => method === 'thread/start')?.params).toMatchObject(
+            {
+                dynamicTools: [
+                    {
+                        type: 'function',
+                        name: 'report_progress',
+                        inputSchema: {
+                            type: 'object',
+                            required: ['message'],
+                            additionalProperties: false,
+                        },
+                    },
+                ],
+            },
+        )
+        const progressParams = fake.requests.find(({ method }) => method === 'thread/start')
+            ?.params as {
+            dynamicTools: [{ inputSchema: { properties: { message: { enum: string[] } } } }]
+        }
+        const messages = progressParams.dynamicTools[0].inputSchema.properties.message.enum
+        expect(messages.length).toBeGreaterThan(0)
+        expect(messages.every((message) => message.length >= 35 && message.length <= 40)).toBe(true)
         expect(fake.requests).toContainEqual(
             expect.objectContaining({
                 method: 'turn/start',
@@ -190,7 +616,8 @@ describe('Codex runtime', () => {
                     clientUserMessageId: 'task-id',
                     input: [{ type: 'text', text: 'Find contacts', text_elements: [] }],
                     outputSchema: { type: 'object' },
-                    summary: 'concise',
+                    effort: 'xhigh',
+                    summary: 'none',
                 }),
             }),
         )
@@ -372,14 +799,6 @@ describe('Codex runtime', () => {
                 activity: 'web-search',
             },
             {
-                type: 'reasoning-delta',
-                threadId: 'thread-id',
-                turnId: 'turn-id',
-                itemId: 'reasoning-id',
-                summaryIndex: 2,
-                textDelta: 'Checking likely contacts',
-            },
-            {
                 type: 'final-message',
                 threadId: 'thread-id',
                 turnId: 'turn-id',
@@ -402,6 +821,267 @@ describe('Codex runtime', () => {
         expect(runtime.health.status).toBe('healthy')
 
         runtime.close()
+    })
+
+    it('streams connection retries without extending the task inactivity timeout', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        const events: AgentTaskStreamEvent[] = []
+
+        try {
+            await runtime.start()
+            const task = await manager.start({
+                prompt: 'Import the job post',
+                outputSchema: { type: 'object' },
+                capabilities: [],
+            })
+            manager.connect(task.id, (event) => events.push(event))
+            await vi.advanceTimersByTimeAsync(9 * 60 * 1_000)
+
+            const message = 'Reconnecting... 2/5'
+            const additionalDetails = 'Incomplete response returned, reason: content_filter'
+            fake.respond({
+                method: 'error',
+                params: {
+                    threadId: task.threadId,
+                    turnId: task.turnId,
+                    error: { message, additionalDetails },
+                    willRetry: true,
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            expect(events.at(-1)?.event).toMatchObject({
+                type: 'activity',
+                message: 'Reconnecting to Agent',
+            })
+            expect(manager.get(task.id)?.status).toBe('running')
+
+            await vi.advanceTimersByTimeAsync(60 * 1_000)
+
+            expect(manager.get(task.id)?.status).toBe('failed')
+            expect(fake.requests).toContainEqual(
+                expect.objectContaining({
+                    method: 'turn/interrupt',
+                    params: { threadId: task.threadId, turnId: task.turnId },
+                }),
+            )
+        } finally {
+            runtime.close()
+            vi.useRealTimers()
+        }
+    })
+
+    it('streams explicit progress without leaking native reasoning, commentary, or final output', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        const events: AgentTaskStreamEvent[] = []
+
+        await runtime.start()
+        const task = await manager.start({
+            prompt: 'Find contacts',
+            outputSchema: { type: 'object' },
+            capabilities: ['chrome'],
+        })
+        const identity = { threadId: task.threadId, turnId: task.turnId }
+        manager.connect(task.id, (event) => events.push(event))
+
+        try {
+            fake.respond({
+                id: 'role-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    tool: 'report_progress',
+                    arguments: { message: 'Preparing tailored application documents' },
+                },
+            })
+            fake.respond({
+                id: 'fit-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    tool: 'report_progress',
+                    arguments: { message: 'Assessing role fit' },
+                },
+            })
+            fake.respond({
+                id: 'foreign-progress',
+                method: 'item/tool/call',
+                params: {
+                    ...identity,
+                    turnId: 'other-turn',
+                    tool: 'report_progress',
+                    arguments: { message: 'Preparing the job post' },
+                },
+            })
+            fake.respond({
+                method: 'item/reasoning/summaryTextDelta',
+                params: {
+                    ...identity,
+                    itemId: 'reasoning-1',
+                    summaryIndex: 0,
+                    delta: '**Handling documentation truncation**',
+                },
+            })
+            fake.respond({
+                method: 'item/reasoning/summaryTextDelta',
+                params: {
+                    ...identity,
+                    itemId: 'reasoning-2',
+                    summaryIndex: 0,
+                    delta: '**Capturing full DOM text content**',
+                },
+            })
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        type: 'agentMessage',
+                        phase: 'commentary',
+                        text: '{"contacts":[],"status":"Checking the hiring team"}',
+                    },
+                },
+            })
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: { type: 'agentMessage', phase: 'commentary', text: '  {"contacts":' },
+                },
+            })
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        id: 'commentary',
+                        type: 'agentMessage',
+                        phase: 'commentary',
+                        text: 'I’m using the Chrome skill to inspect the posting.',
+                    },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            const progress = [
+                'Preparing tailored application documents',
+                'Checking the role against your profile',
+            ].map((textDelta) =>
+                expect.objectContaining({ type: 'message', textDelta, startsNewStatement: true }),
+            )
+            expect(events.map(({ event }) => event)).toEqual(progress)
+            expect(fake.requests).toContainEqual({
+                id: 'role-progress',
+                result: { contentItems: [], success: true },
+            })
+
+            fake.respond({
+                method: 'item/completed',
+                params: {
+                    ...identity,
+                    item: {
+                        id: 'final',
+                        type: 'agentMessage',
+                        phase: 'final_answer',
+                        text: '{"contacts":[]}',
+                    },
+                },
+            })
+            fake.respond({
+                method: 'turn/completed',
+                params: {
+                    threadId: task.threadId,
+                    turn: { id: task.turnId, status: 'completed' },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+
+            expect(events.map(({ event }) => event)).toEqual([
+                ...progress,
+                expect.objectContaining({ type: 'completed', output: { contacts: [] } }),
+            ])
+        } finally {
+            await manager.cancel(task.id)
+            runtime.close()
+        }
+    })
+
+    it.each([
+        'Handling tool output truncation',
+        'I’m using the Chrome skill to inspect the posting.',
+        'Reviewing job requirements\nA paragraph.',
+        'Reviewing the supplied role and applicant experience in detail',
+        '{"message":"Reviewing the task"}',
+    ])('rejects invalid progress without displaying or shortening it: %s', async (message) => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: AgentRuntimeEvent[] = []
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        try {
+            fake.respond({
+                id: 'invalid-progress',
+                method: 'item/tool/call',
+                params: {
+                    threadId: 'thread-id',
+                    turnId: 'turn-id',
+                    tool: 'report_progress',
+                    arguments: { message },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+            expect(fake.requests).toContainEqual({
+                id: 'invalid-progress',
+                result: {
+                    contentItems: [expect.objectContaining({ type: 'inputText' })],
+                    success: false,
+                },
+            })
+            expect(events).toEqual([])
+        } finally {
+            runtime.close()
+        }
+    })
+
+    it('rejects unsupported dynamic tools without emitting their arguments', async () => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const events: AgentRuntimeEvent[] = []
+        runtime.onEvent((event) => events.push(event))
+        await runtime.start()
+        try {
+            fake.respond({
+                id: 'unsupported-tool',
+                method: 'item/tool/call',
+                params: {
+                    threadId: 'thread-id',
+                    turnId: 'turn-id',
+                    tool: 'unknown_tool',
+                    arguments: { message: 'Unexpected content' },
+                },
+            })
+            await new Promise((resolve) => setImmediate(resolve))
+            expect(fake.requests).toContainEqual({
+                id: 'unsupported-tool',
+                error: { code: -32601, message: 'Unsupported server request' },
+            })
+            expect(events).toEqual([])
+        } finally {
+            runtime.close()
+        }
     })
 
     it('rejects an invalid task response and becomes unavailable', async () => {
@@ -635,4 +1315,109 @@ describe('Codex runtime', () => {
             error: 'Agent runtime request "initialize" timed out after 10ms',
         })
     })
+})
+
+it('resumes the requested draft thread without creating a new conversation', async () => {
+    const fake = createFakeProcess()
+    const runtime = new CodexRuntime('codex', '/workspace', { spawnProcess: () => fake.process })
+    await runtime.start()
+    await runtime.startTask('followup', {
+        threadId: 'thread-id',
+        prompt: 'Use my earlier feedback',
+        capabilities: [],
+        outputSchema: { type: 'object' },
+    })
+    expect(fake.requests.find(({ method }) => method === 'thread/resume')).toMatchObject({
+        params: { threadId: 'thread-id', config: { tool_output_token_limit: 20_000 } },
+    })
+    expect(fake.requests.some(({ method }) => method === 'thread/start')).toBe(false)
+    runtime.close()
+})
+
+it('rejects inherited instruction files before an isolated agent runs', async () => {
+    const fake = createFakeProcess({ instructionSources: ['/personal/AGENTS.md'] })
+    const runtime = new CodexRuntime('codex', '/workspace', {
+        environment: { CODEX_HOME: '/isolated' },
+        spawnProcess: () => fake.process,
+    })
+    await runtime.start()
+    await expect(
+        runtime.startTask('task', {
+            prompt: 'Draft a reply',
+            capabilities: [],
+            outputSchema: { type: 'object' },
+        }),
+    ).rejects.toThrow('unexpected instruction files')
+    expect(fake.requests.some(({ method }) => method === 'turn/start')).toBe(false)
+    runtime.close()
+})
+
+it.each(['malformed-output', 'failed-turn'] as const)(
+    'closes only the browser session owned by a %s task',
+    async (failure) => {
+        const fake = createFakeProcess()
+        const runtime = new CodexRuntime('codex', '/workspace', {
+            spawnProcess: () => fake.process,
+        })
+        const manager = new AgentTaskManager(runtime)
+        await runtime.start()
+        const task = await manager.start({
+            prompt: 'Find the job',
+            capabilities: ['chrome'],
+            outputSchema: { type: 'object' },
+        })
+        fake.respond({
+            method: 'item/completed',
+            params: {
+                threadId: task.threadId,
+                turnId: task.turnId,
+                item: { type: 'agentMessage', phase: 'final_answer', text: 'not valid JSON' },
+            },
+        })
+        fake.respond({
+            method: 'turn/completed',
+            params: {
+                threadId: task.threadId,
+                turn: {
+                    id: task.turnId,
+                    status: failure === 'failed-turn' ? 'failed' : 'completed',
+                },
+            },
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(manager.get(task.id)?.status).toBe('failed')
+        expect(fake.requests.filter(({ method }) => method === 'mcpServer/tool/call')).toEqual([
+            expect.objectContaining({
+                params: {
+                    threadId: task.threadId,
+                    server: 'node_repl',
+                    tool: 'turn_ended',
+                    arguments: {
+                        hook_event_name: 'Stop',
+                        session_id: task.threadId,
+                        turn_id: task.turnId,
+                    },
+                },
+            }),
+        ])
+        runtime.close()
+    },
+)
+
+it('interrupts and cleans up an active browser task before shutdown', async () => {
+    const fake = createFakeProcess()
+    const runtime = new CodexRuntime('codex', '/workspace', { spawnProcess: () => fake.process })
+    await runtime.start()
+    await runtime.startTask('task', {
+        prompt: 'Read the job',
+        capabilities: ['chrome'],
+        outputSchema: { type: 'object' },
+    })
+    await runtime.shutdown()
+    expect(
+        fake.requests
+            .filter(({ method }) => method === 'turn/interrupt' || method === 'mcpServer/tool/call')
+            .map(({ method }) => method),
+    ).toEqual(['turn/interrupt', 'mcpServer/tool/call'])
+    expect(runtime.health.status).toBe('unavailable')
 })

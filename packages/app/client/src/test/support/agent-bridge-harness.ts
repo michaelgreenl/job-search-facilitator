@@ -14,7 +14,7 @@ interface AgentBridgeHarnessOptions {
     fallback?: FetchFallback
 }
 
-const agentBridgeOrigin = 'http://localhost:3001'
+const agentBridgeOrigin = 'http://127.0.0.1:3001'
 const createdAt = '2026-07-20T12:00:00.000Z'
 
 export class AgentBridgeHarness {
@@ -55,6 +55,12 @@ export class AgentBridgeHarness {
         this.tasks.set(taskId, completedTask)
         this.emit(taskId, { type: 'completed', output, createdAt })
         return completedTask
+    }
+
+    fail(taskId: string, error: string) {
+        const task = this.requireTask(taskId)
+        this.tasks.set(taskId, { ...task, status: 'failed', output: null, error })
+        this.emit(taskId, { type: 'failed', error, createdAt })
     }
 
     private requireTask(taskId: string) {

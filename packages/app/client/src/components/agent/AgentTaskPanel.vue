@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import { useAgentStore } from '@/stores/agent'
 import AgentStream from './AgentStream.vue'
 
 interface Props {
@@ -33,6 +35,14 @@ const props = withDefaults(defineProps<Props>(), {
     retryTestId: undefined,
 })
 
+const agentStore = useAgentStore()
+watch(
+    () => props.active,
+    (active, wasActive) => {
+        if (wasActive && !active) agentStore.dismissFailedTasks()
+    },
+)
+
 const emit = defineEmits<{
     back: []
     cancel: []
@@ -54,16 +64,12 @@ const emit = defineEmits<{
         @back="emit('back')"
     >
         <div v-if="props.active" class="agent-task-content">
-            <p
-                v-if="props.statusMessage"
-                class="task-status"
-                :data-testid="props.statusTestId"
-                role="status"
-            >
-                {{ props.statusMessage }}
-            </p>
-
-            <AgentStream :task-id="props.taskId" :issue="props.issue" />
+            <AgentStream
+                :task-id="props.taskId"
+                :issue="props.issue"
+                :status-message="props.statusMessage"
+                :status-test-id="props.statusTestId"
+            />
 
             <div v-if="props.running || props.retryAvailable" class="task-actions">
                 <BaseButton
@@ -102,11 +108,6 @@ const emit = defineEmits<{
     flex-direction: column;
     gap: $space-4;
     min-height: 0;
-}
-
-.task-status {
-    margin: 0;
-    color: $color-ink-muted;
 }
 
 .task-actions {

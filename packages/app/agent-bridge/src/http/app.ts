@@ -3,8 +3,13 @@ import cors from 'cors'
 import express from 'express'
 import type { AgentTaskManager } from '../tasks/agent-task-manager.ts'
 import { createTaskRouter } from './task-routes.ts'
+import { createAutomationRouter } from './automation-routes.ts'
 
-export const createApp = (taskManager: AgentTaskManager, clientOrigin: string) => {
+export const createApp = (
+    taskManager: AgentTaskManager,
+    clientOrigin: string,
+    automations?: { directory: string; projectRoot: string },
+) => {
     const app = express()
 
     app.use(cors({ origin: clientOrigin }))
@@ -21,6 +26,10 @@ export const createApp = (taskManager: AgentTaskManager, clientOrigin: string) =
     })
 
     app.use(createTaskRouter(taskManager))
+    if (automations)
+        app.use(
+            createAutomationRouter(automations.directory, automations.projectRoot, clientOrigin),
+        )
 
     return app
 }

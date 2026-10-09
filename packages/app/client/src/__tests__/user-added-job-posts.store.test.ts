@@ -51,7 +51,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     fitRationale: userAddedPost.fitRationale,
     applicationFlow: userAddedPost.applicationFlow,
     keyLegitimacySignals: userAddedPost.keyLegitimacySignals,
-    recommendedResume: userAddedPost.recommendedResume,
+    recommendedResume: 'frontend',
     recommendedAction: userAddedPost.recommendedAction,
     legitimacyNotes: userAddedPost.legitimacyNotes,
     post: {
@@ -98,7 +98,7 @@ describe('user-added posts in the post store', () => {
         const items = await store.fetchUserAddedPosts()
 
         expect(fetch).toHaveBeenCalledExactlyOnceWith(
-            'http://localhost:3000/api/job-posts/user-added',
+            'http://127.0.0.1:3000/api/job-posts/user-added',
             undefined,
         )
         expect(items).toBe(store.userAddedPosts)
@@ -148,7 +148,7 @@ describe('user-added posts in the post store', () => {
 
         const savedItem = await store.addUserAddedPost(createUserAddedPostInput)
 
-        expect(fetchMock).toHaveBeenCalledExactlyOnceWith('http://localhost:3000/api/job-posts', {
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith('http://127.0.0.1:3000/api/job-posts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(createUserAddedPostInput),

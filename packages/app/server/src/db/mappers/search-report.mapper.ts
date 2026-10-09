@@ -1,7 +1,6 @@
 import type {
     AgentLabel,
     JobRecommendation,
-    ResumeType,
     StandaloneJobRecommendation,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
@@ -39,18 +38,6 @@ const agentLabelToPrisma = {
     'quick-app': 'QUICK_APP',
 } satisfies Record<AgentLabel, PrismaStandaloneRecommendation['agentLabel']>
 
-const resumeTypeToApi = {
-    FRONTEND: 'frontend',
-    BACKEND_FULL_STACK: 'backend-full-stack',
-    GENERAL: 'general',
-} satisfies Record<PrismaStandaloneRecommendation['recommendedResume'], ResumeType>
-
-const resumeTypeToPrisma = {
-    frontend: 'FRONTEND',
-    'backend-full-stack': 'BACKEND_FULL_STACK',
-    general: 'GENERAL',
-} satisfies Record<ResumeType, PrismaStandaloneRecommendation['recommendedResume']>
-
 export const toStandaloneJobRecommendation = (
     result: PrismaStandaloneRecommendation,
 ): StandaloneJobRecommendation => ({
@@ -58,7 +45,7 @@ export const toStandaloneJobRecommendation = (
     fitRationale: result.fitRationale,
     applicationFlow: result.applicationFlow,
     keyLegitimacySignals: result.keyLegitimacySignals,
-    recommendedResume: resumeTypeToApi[result.recommendedResume],
+    recommendedResume: result.recommendedResume,
     recommendedAction: result.recommendedAction,
     legitimacyNotes: result.legitimacyNotes,
 })
@@ -69,5 +56,3 @@ export const toJobRecommendation = (result: PrismaRecommendation): JobRecommenda
 })
 
 export const toPrismaAgentLabel = (agentLabel: AgentLabel) => agentLabelToPrisma[agentLabel]
-
-export const toPrismaResumeType = (resumeType: ResumeType) => resumeTypeToPrisma[resumeType]

@@ -29,14 +29,11 @@ export type AgentRuntimeEvent =
           activity: 'web-search' | 'tool-use' | 'local-read' | 'delegation' | 'plan-update'
       }
     | {
-          type: 'reasoning-delta'
+          type: 'commentary' | 'final-message' | 'retrying'
           threadId: string
           turnId: string
-          itemId: string
-          summaryIndex: number
-          textDelta: string
+          text: string
       }
-    | { type: 'final-message'; threadId: string; turnId: string; text: string }
     | {
           type: 'turn-completed'
           threadId: string

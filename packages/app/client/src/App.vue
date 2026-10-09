@@ -68,13 +68,9 @@ function reloadDocument() {
     z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: $space-4;
+    gap: $space-3;
     min-height: 100dvh;
     padding: $space-3;
-
-    @include bp-max('sm') {
-        padding: $space-3;
-    }
 }
 
 .error-recovery {

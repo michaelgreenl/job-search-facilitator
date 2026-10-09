@@ -16,7 +16,7 @@ describe('GET /health', () => {
             .get('/health')
             .expect(200, {
                 status: 'healthy',
-                capabilities: { jobSearchNetNewGuard: 1 },
+                capabilities: { jobSearchNetNewGuard: 1, resumeLibrary: 1 },
             })
     })
 })
