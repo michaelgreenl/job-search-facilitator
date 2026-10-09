@@ -43,7 +43,7 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 #### Apply Workspace
 
 - **Application queue:** Show labeled roles that have not reached an applied state.
-- **Application files:** Store a resume, cover letter, and application-page capture for each role.
+- **Application files:** Store a resume, cover letter, and application-page capture for each role. Use the [SingleFile](https://www.getsinglefile.com/) browser extension to save application-page snapshots as a single HTML file.
 - **Application status:** Move roles through applied, interviewing, rejected, and hired states.
 - **Outreach:** Discover relevant contacts, edit message drafts, and record sent messages or responses.
 
