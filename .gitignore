@@ -16,3 +16,4 @@ pnpm-debug.log*
 *.timestamp-*-*.mjs
 packages/core/src/generated/prisma/
 /docs/agents/
+packages/native/
