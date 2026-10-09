@@ -33,6 +33,7 @@ export interface StartAgentTaskInput {
     capabilities: AgentCapability[]
     webSearch?: boolean
     resumeContext?: boolean
+    captureJobDescription?: true
 }
 
 export interface AgentHealthResponse {

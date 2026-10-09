@@ -146,6 +146,40 @@ const jobSearchReportSchema: z.ZodType<JobSearchReport> = z.looseObject({
 })
 
 const userAddedJobPostOutputSchema = toAgentOutputSchema(createUserAddedJobPostInputSchema)
+const jobPostImportResultSchema = z.strictObject({
+    result: z.union([
+        createUserAddedJobPostInputSchema,
+        z.strictObject({ error: nonBlankInputStringSchema.max(500) }),
+    ]),
+})
+const jobPostImportOutputSchema = toAgentOutputSchema(jobPostImportResultSchema)
+const jobPostImportAgentResultSchema = z.strictObject({
+    result: z.union([
+        createUserAddedJobPostInputSchema.extend({
+            post: jobPostInputSchema.omit({ description: true }).extend({
+                descriptionCaptureId: z.string().regex(/^[0-9a-f-]{36}$/),
+            }),
+        }),
+        z.strictObject({ error: nonBlankInputStringSchema.max(500) }),
+    ]),
+})
+const jobPostImportAgentOutputSchema = toAgentOutputSchema(jobPostImportAgentResultSchema)
+
+export const createJobPostImportAgentOutputSchema = (): AgentOutputSchema =>
+    structuredClone(jobPostImportAgentOutputSchema)
+
+export const parseJobPostImportAgentResult = createParser(
+    'Job post import agent result',
+    jobPostImportAgentResultSchema,
+)
+
+export const createJobPostImportOutputSchema = (): AgentOutputSchema =>
+    structuredClone(jobPostImportOutputSchema)
+
+export const parseJobPostImportResult = createParser(
+    'Job post import result',
+    jobPostImportResultSchema,
+)
 
 export const createUserAddedJobPostOutputSchema = (): AgentOutputSchema =>
     structuredClone(userAddedJobPostOutputSchema)

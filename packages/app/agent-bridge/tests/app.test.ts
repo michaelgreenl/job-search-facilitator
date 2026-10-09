@@ -42,7 +42,10 @@ describe('Agent bridge routes', () => {
             .get('/health')
             .expect(200, { status: 'healthy', capabilities: ['chrome'] })
 
-        const response = await request(app).post('/tasks').send(taskInput).expect(202)
+        const response = await request(app)
+            .post('/tasks')
+            .send({ ...taskInput, captureJobDescription: true })
+            .expect(202)
 
         expect(response.body).toMatchObject({
             status: 'running',

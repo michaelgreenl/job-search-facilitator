@@ -13,7 +13,7 @@ const mountPanel = (overrides: Partial<InstanceType<typeof AgentTaskPanel>['$pro
         props: {
             active: true,
             adjacent: false,
-            lane: 'job-post-import',
+            taskId: null,
             eyebrow: 'Agent task',
             backLabel: 'Back',
             backTestId: 'agent-task-back',
@@ -34,6 +34,21 @@ const mountPanel = (overrides: Partial<InstanceType<typeof AgentTaskPanel>['$pro
 }
 
 describe('AgentTaskPanel', () => {
+    it('puts startup and saving status inside the stream viewport', () => {
+        for (const statusMessage of ['Starting Agent…', 'Saving job post…']) {
+            const { root, unmount } = mountPanel({
+                statusMessage,
+                statusTestId: 'agent-task-status',
+            })
+            const status = root.querySelector('[data-testid="agent-task-status"]')
+            expect(status).not.toBeNull()
+            expect(root.querySelector('[data-testid="agent-progress"]')?.contains(status)).toBe(
+                true,
+            )
+            unmount()
+        }
+    })
+
     it('keeps back available while a running task can be cancelled', () => {
         const { root, onBack, onCancel } = mountPanel({ running: true })
         const back = root.querySelector<HTMLButtonElement>('[data-testid="agent-task-back"]')

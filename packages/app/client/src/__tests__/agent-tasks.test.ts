@@ -80,31 +80,28 @@ describe('outreach agent tasks', () => {
         expect(importTask.capabilities).toEqual(['chrome'])
         expect(importTask.webSearch).toBe(false)
         expect(importTask.resumeContext).toBe(true)
+        expect(importTask.captureJobDescription).toBe(true)
         expect(importTask.outputSchema).toMatchObject({
-            required: [
-                'agentLabel',
-                'fitRationale',
-                'applicationFlow',
-                'keyLegitimacySignals',
-                'recommendedResume',
-                'recommendedAction',
-                'legitimacyNotes',
-                'post',
-            ],
+            required: ['result'],
             properties: {
-                post: {
-                    required: [
-                        'sourceKey',
-                        'description',
-                        'roleTitle',
-                        'company',
-                        'location',
-                        'compensation',
-                        'techStack',
-                        'postSource',
-                        'postUrl',
-                        'applicationUrl',
-                        'postStatus',
+                result: {
+                    anyOf: [
+                        {
+                            required: expect.arrayContaining(['post', 'agentLabel']),
+                            properties: {
+                                post: {
+                                    required: expect.arrayContaining([
+                                        'sourceKey',
+                                        'description',
+                                        'roleTitle',
+                                        'company',
+                                        'postUrl',
+                                        'applicationUrl',
+                                    ]),
+                                },
+                            },
+                        },
+                        { required: ['error'], properties: { error: { type: 'string' } } },
                     ],
                 },
             },

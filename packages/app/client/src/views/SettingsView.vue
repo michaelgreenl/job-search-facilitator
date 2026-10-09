@@ -275,7 +275,9 @@ onMounted(load)
 }
 
 .page-heading {
-    margin-bottom: $space-4;
+    margin-bottom: $space-5;
+    padding-bottom: $space-4;
+    border-bottom: 1px solid $color-ink-alpha-12;
 }
 
 .section-heading {
