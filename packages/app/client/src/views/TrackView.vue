@@ -571,6 +571,7 @@ onMounted(() => {
     margin: 0;
 
     button {
+        position: relative;
         display: flex;
         width: 100%;
         gap: $space-2;
@@ -586,8 +587,20 @@ onMounted(() => {
         border-bottom: 1px solid $color-ink-alpha-9;
         cursor: pointer;
 
-        &[aria-pressed='true'] {
-            border-color: $color-signal-light;
+        &::after {
+            position: absolute;
+            right: 0;
+            bottom: -1px;
+            left: 0;
+            height: 1px;
+            content: '';
+            background: $color-signal-light;
+            transform: scaleX(0);
+            transition: transform 200ms ease;
+        }
+
+        &[aria-pressed='true']::after {
+            transform: scaleX(1);
         }
     }
 

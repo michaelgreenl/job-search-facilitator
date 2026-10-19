@@ -344,6 +344,11 @@ defineExpose({ focus })
     box-sizing: border-box;
     font: inherit;
     cursor: pointer;
+    transition:
+        color 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease,
+        transform 120ms ease;
 
     &.is-pointer-dismissed {
         pointer-events: none;
@@ -352,6 +357,10 @@ defineExpose({ focus })
     &:disabled {
         cursor: not-allowed;
         opacity: 0.55;
+    }
+
+    &:active:not(:disabled) {
+        transform: scale(0.98);
     }
 }
 
@@ -453,6 +462,10 @@ defineExpose({ focus })
     &:hover,
     &:focus-visible {
         color: $color-signal-light;
+    }
+
+    &:active:not(:disabled) {
+        transform: scale(0.92);
     }
 }
 

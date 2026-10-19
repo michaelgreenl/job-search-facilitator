@@ -54,6 +54,9 @@ const props = withDefaults(defineProps<Props>(), {
     background: $color-ink-alpha-5;
     border: 1px solid $color-ink-alpha-9;
     border-radius: $radius-md;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease;
 
     &.layout-flex {
         display: flex;

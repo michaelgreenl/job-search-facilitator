@@ -187,6 +187,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     background: $color-ink-alpha-6;
     border: 1px solid $color-ink-alpha-16;
     border-radius: $radius-md;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease;
 
     &:hover,
     &:focus-visible,
@@ -230,6 +233,15 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     list-style: none;
     border-radius: $radius-md;
     backdrop-filter: blur(24px) saturate(130%);
+    transform-origin: top right;
+    animation: menu-open 140ms ease-out;
+}
+
+@keyframes menu-open {
+    from {
+        opacity: 0;
+        transform: translateY(-$space-1) scale(0.98);
+    }
 }
 
 .option.has-separator {
@@ -252,6 +264,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     background: transparent;
     border: 0;
     border-radius: $radius-sm;
+    transition:
+        color 120ms ease,
+        background-color 120ms ease;
 
     &:hover,
     &:focus-visible {

@@ -257,8 +257,9 @@ describe('browser interaction contracts', () => {
 
         await trigger.hover()
         await expect.element(tooltip).toBeVisible()
-        const hoverBackground = getComputedStyle(trigger.element()).backgroundColor
-        expect(hoverBackground).not.toBe(restingBackground)
+        await expect
+            .poll(() => getComputedStyle(trigger.element()).backgroundColor)
+            .not.toBe(restingBackground)
 
         await trigger.click()
         await expect.element(dialog).toBeVisible()
@@ -281,7 +282,7 @@ describe('browser interaction contracts', () => {
         await expect.element(tooltip).toBeVisible()
         await expect
             .poll(() => getComputedStyle(trigger.element()).backgroundColor)
-            .toBe(hoverBackground)
+            .not.toBe(restingBackground)
 
         await trigger.click()
         await expect.element(dialog).toBeVisible()
