@@ -150,9 +150,9 @@ it('saves named PDFs, keeps earlier upload links in an accessible popup, and pre
     const links = Array.from(dialog.element().getElementsByTagName('a'))
     expect(links.map((link) => ({ href: link.getAttribute('href'), target: link.target }))).toEqual(
         [
-            { href: `http://127.0.0.1:3000/api/resumes/uploads/${firstId}`, target: '_blank' },
+            { href: `http://127.0.0.1:4000/api/resumes/uploads/${firstId}`, target: '_blank' },
             {
-                href: `http://127.0.0.1:3000/api/resumes/uploads/${firstId}?download=true`,
+                href: `http://127.0.0.1:4000/api/resumes/uploads/${firstId}?download=true`,
                 target: '',
             },
         ],

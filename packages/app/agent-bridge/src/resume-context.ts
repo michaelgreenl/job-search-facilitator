@@ -13,7 +13,7 @@ const healthSchema = z.object({
 })
 
 export async function loadResumeContext(
-    apiUrl = process.env.JOB_SEARCH_API_URL ?? 'http://127.0.0.1:3000/api',
+    apiUrl = process.env.JOB_SEARCH_API_URL ?? 'http://127.0.0.1:4000/api',
 ) {
     const base = apiUrl.replace(/\/$/, '')
     const request = async (url: string) => {

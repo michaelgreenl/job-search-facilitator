@@ -190,7 +190,7 @@ pnpm run dev
 pnpm run dev:agent
 ```
 
-The client uses port `5173`. The API uses port `3000`. The Agent bridge uses port `3001`.
+The client uses port `5173`. The API uses port `4000`. The Agent bridge uses port `3001`.
 
 Open [http://localhost:5173](http://localhost:5173) after both commands start.
 
@@ -199,7 +199,7 @@ Open [http://localhost:5173](http://localhost:5173) after both commands start.
 Check the API and Agent bridge in another terminal:
 
 ```bash
-curl --fail http://127.0.0.1:3000/health
+curl --fail http://127.0.0.1:4000/health
 curl --fail http://127.0.0.1:3001/health
 ```
 

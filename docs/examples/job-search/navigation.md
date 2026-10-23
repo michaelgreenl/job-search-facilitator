@@ -11,7 +11,7 @@ Confirm the project has these properties:
 - Every file in `docs/agents/job-search` is readable.
 - `docs/agents` is a separate Git repository with no remote.
 
-Check `http://127.0.0.1:3000/health`. Reuse the API when it returns `healthy` and `jobSearchNetNewGuard: 1`.
+Check `http://127.0.0.1:4000/health`. Reuse the API when it returns `healthy` and `jobSearchNetNewGuard: 1`.
 
 If the API is unavailable, run `pnpm run dev:stack` once. Check health again and stop if it remains unavailable.
 
