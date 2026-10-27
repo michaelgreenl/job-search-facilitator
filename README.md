@@ -12,8 +12,8 @@
 
 ## Links
 
-- **💼 [Portfolio Link](https://michaelgreenl.net/#projects?slug=jsf&autoplay=false)**
-- **🎥 [Demo Video](https://michaelgreenl.net/#projects?slug=jsf&autoplay=true)**
+- **💼 [Portfolio Link](https://michaelgreenl.net/projects/jsf/)**
+- **🎥 [Demo Video](https://michaelgreenl.net/projects/jsf/)**
 
 ## Overview
 
