@@ -175,6 +175,9 @@ Two scheduled automations complete the workflow:
 
 Complete the [automation setup guide](docs/automation-setup.md). The guide includes both prompts and an end-to-end check.
 
+Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
+Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
+
 ### Start the application
 
 Start PostgreSQL, deploy migrations, and add sample data:
@@ -217,9 +220,6 @@ The task can ask for access to each website it visits. Review each website befor
 - If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
-
-Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
-Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
 
 ### Development commands
 
