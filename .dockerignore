@@ -11,6 +11,8 @@ dist
 coverage
 **/coverage
 .env
+**/.env
 .env.*
+**/.env.*
 !**/.env.example
 docs/job-search-user-info.md
