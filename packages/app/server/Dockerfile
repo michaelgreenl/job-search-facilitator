@@ -23,6 +23,6 @@ COPY packages ./packages
 
 RUN pnpm run prisma:generate && pnpm --filter server run build
 
-EXPOSE 3000
+EXPOSE 4000
 
 CMD ["sh", "-c", "pnpm --filter @job-search-facilitator/core run db:deploy && exec node packages/app/server/dist/server.js"]

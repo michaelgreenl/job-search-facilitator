@@ -66,19 +66,15 @@ The reader requires `pdftotext` on `PATH`. Use unlocked PDFs with selectable tex
 
 After the API starts, run `pnpm run job-search:resumes` to check extraction without running a search.
 This command prints private resume text. Do not publish its output.
-Use `JOB_SEARCH_API_URL` when the API does not use `http://127.0.0.1:3000/api`.
+Use `JOB_SEARCH_API_URL` when the API does not use `http://127.0.0.1:4000/api`.
 
 The standard `job-search:run` command keeps the private resume-selection policy. It does not read the uploaded resume library.
-To test the library, keep the API running and use `pnpm run job-search:run --resume-library` in a duplicate automation.
+To include the library in a search, keep the API running and use `pnpm run job-search:run --resume-library`.
 Only that command loads the current PDFs on the launcher host, before starting the sandboxed agents.
 Use `--resume-library --check` to verify extraction and runtime setup without starting a search.
-Set a separate `JOB_SEARCH_CODEX_HOME` for the duplicate's runtime state. It still shares the local application and report storage.
 User-added imports receive the extracted PDF context automatically.
 The current library replaces fixed resume categories. Agents recommend a starting resume without giving tailoring suggestions or requiring perfect wording.
 An empty library keeps the existing choices. Extraction or library errors stop evaluation instead of silently omitting uploaded context.
-
-Deploy the API migration, Agent bridge, and client together. The runner still supports an older API during rollout.
-Keep the original saved schedule and private policy files unchanged. Only the duplicate should include `--resume-library` during testing.
 
 ### Manual run
 
@@ -146,6 +142,6 @@ The automation never submits applications or sends messages. Those actions alway
 - A task starts in a worktree: change it to the local project. Ignored private files do not follow worktrees.
 - Gmail, LinkedIn, Indeed, or VueJobs is blocked: open the site in connected Chrome and finish sign-in.
 - Local API access fails: allow the task to run Docker and local requests when ChatGPT asks.
-- Docker already serves port 3000: use `pnpm run dev:client` instead of `pnpm run dev`.
+- Docker already serves port 4000: use `pnpm run dev:client` instead of `pnpm run dev`.
 - A search cannot sync: confirm `/health` includes `jobSearchNetNewGuard: 1`.
 - An update does not leave context: review-needed events can remain active by design.

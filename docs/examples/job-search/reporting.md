@@ -19,7 +19,7 @@ Submit the unchanged payload:
 ```bash
 curl --fail-with-body --silent --show-error --output PUT_RESPONSE_PATH \
   --request PUT --header 'Content-Type: application/json' --data-binary @PAYLOAD_PATH \
-  'http://127.0.0.1:3000/api/job-search-reports/REPORT_DATE/REPORT_ID?requireNetNew=true'
+  'http://127.0.0.1:4000/api/job-search-reports/REPORT_DATE/REPORT_ID?requireNetNew=true'
 ```
 
 Verify the response:
@@ -32,7 +32,7 @@ Fetch and verify the stored report:
 
 ```bash
 curl --fail-with-body --silent --show-error --output GET_RESPONSE_PATH \
-  'http://127.0.0.1:3000/api/job-search-reports/REPORT_ID'
+  'http://127.0.0.1:4000/api/job-search-reports/REPORT_ID'
 pnpm run job-search:artifact -- verify REPORT_DATE REPORT_ID PAYLOAD_PATH GET_RESPONSE_PATH
 pnpm run job-search:artifact -- verify-storage REPORT_ID PAYLOAD_PATH
 pnpm run job-search:artifact -- verify-markdown REPORT_DATE REPORT_ID PAYLOAD_PATH COVERAGE_PATH REPORT_PATH

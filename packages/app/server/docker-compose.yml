@@ -22,11 +22,11 @@ services:
             context: ../../..
             dockerfile: packages/app/server/Dockerfile
         environment:
-            PORT: 3000
+            PORT: 4000
             CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
             DATABASE_URL: postgresql://${POSTGRES_USER:-job_search}:${POSTGRES_PASSWORD:-local_dev_password}@postgres:5432/${POSTGRES_DB:-job_search_facilitator}
         ports:
-            - '127.0.0.1:${PORT:-3000}:3000'
+            - '127.0.0.1:${PORT:-4000}:4000'
         depends_on:
             postgres:
                 condition: service_healthy
@@ -36,7 +36,7 @@ services:
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+                    "fetch('http://127.0.0.1:4000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
                 ]
             interval: 5s
             timeout: 3s

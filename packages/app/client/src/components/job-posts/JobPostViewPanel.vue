@@ -697,6 +697,11 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     @include artifact-button;
 
     cursor: pointer;
+    transition:
+        color 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease,
+        transform 120ms ease;
 
     &:disabled {
         cursor: wait;
@@ -736,6 +741,10 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                 display: inline;
             }
         }
+    }
+
+    &:active:not(:disabled, :has(input:disabled)) {
+        transform: scale(0.98);
     }
 
     input {

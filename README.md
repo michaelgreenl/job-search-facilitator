@@ -12,8 +12,7 @@
 
 ## Links
 
-- **💼 [Portfolio Link](https://michaelgreenl.net/#projects?slug=jsf&autoplay=false)**
-- **🎥 [Demo Video](https://michaelgreenl.net/#projects?slug=jsf&autoplay=true)**
+- **💼 [Portfolio Link](https://michaelgreenl.net/projects/jsf/)**
 
 ## Overview
 
@@ -175,6 +174,9 @@ Two scheduled automations complete the workflow:
 
 Complete the [automation setup guide](docs/automation-setup.md). The guide includes both prompts and an end-to-end check.
 
+Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
+Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
+
 ### Start the application
 
 Start PostgreSQL, deploy migrations, and add sample data:
@@ -190,7 +192,7 @@ pnpm run dev
 pnpm run dev:agent
 ```
 
-The client uses port `5173`. The API uses port `3000`. The Agent bridge uses port `3001`.
+The client uses port `5173`. The API uses port `4000`. The Agent bridge uses port `3001`.
 
 Open [http://localhost:5173](http://localhost:5173) after both commands start.
 
@@ -199,7 +201,7 @@ Open [http://localhost:5173](http://localhost:5173) after both commands start.
 Check the API and Agent bridge in another terminal:
 
 ```bash
-curl --fail http://127.0.0.1:3000/health
+curl --fail http://127.0.0.1:4000/health
 curl --fail http://127.0.0.1:3001/health
 ```
 
@@ -217,9 +219,6 @@ The task can ask for access to each website it visits. Review each website befor
 - If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
-
-Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
-Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
 
 ### Development commands
 

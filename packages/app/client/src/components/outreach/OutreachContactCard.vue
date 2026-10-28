@@ -275,6 +275,9 @@ function toggleMessaged() {
     cursor: pointer;
     background: transparent;
     border: 1px solid $color-ink-alpha-50;
+    transition:
+        color 140ms ease,
+        border-color 140ms ease;
 
     &:not(.is-messaged):hover:not(:disabled) {
         color: $color-ink;
@@ -312,6 +315,7 @@ function toggleMessaged() {
     font-size: 1.125rem;
     font-weight: 700;
     text-decoration: none;
+    transition: color 140ms ease;
 
     &:hover,
     &:focus-visible {

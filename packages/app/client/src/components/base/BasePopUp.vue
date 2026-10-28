@@ -119,9 +119,30 @@ function handleClick(event: MouseEvent) {
     color: $color-ink;
     border-radius: $radius-lg;
 
+    &[open] {
+        animation: pop-up-open 160ms ease-out;
+    }
+
     &::backdrop {
         background: $color-black-alpha-28;
         backdrop-filter: blur(3px);
+    }
+
+    &[open]::backdrop {
+        animation: backdrop-fade 160ms ease-out;
+    }
+}
+
+@keyframes pop-up-open {
+    from {
+        opacity: 0;
+        transform: translateY($space-1) scale(0.98);
+    }
+}
+
+@keyframes backdrop-fade {
+    from {
+        opacity: 0;
     }
 }
 
@@ -164,5 +185,6 @@ function handleClick(event: MouseEvent) {
     margin: $space-2 0 0;
     color: lighten-color($color-red-600, 20%);
     font-size: 0.8125rem;
+    text-align: center;
 }
 </style>

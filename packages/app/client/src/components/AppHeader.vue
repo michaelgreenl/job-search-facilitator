@@ -90,6 +90,7 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     color: $color-ink-muted;
     text-decoration: none;
     white-space: nowrap;
+    transition: color 140ms ease;
 
     &:hover,
     &:focus-visible {

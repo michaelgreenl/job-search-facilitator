@@ -12,7 +12,7 @@ Confirm these properties:
 - `docs/agents` is a separate Git repository with no remote.
 - The parent repository ignores `docs/agents`.
 
-Check `http://127.0.0.1:3000/health`. Reuse the API when it returns `"status":"healthy"`.
+Check `http://127.0.0.1:4000/health`. Reuse the API when it returns `"status":"healthy"`.
 
 If the API is unavailable, run `pnpm run dev:stack` once. Check health again and stop if it remains unavailable.
 
@@ -23,7 +23,7 @@ Use host permission for Docker and localhost requests when required.
 Fetch the current work set:
 
 ```text
-GET http://127.0.0.1:3000/api/job-update-check/context
+GET http://127.0.0.1:4000/api/job-update-check/context
 ```
 
 If `posts` is empty, do not browse or submit an update.
@@ -60,7 +60,7 @@ A review event uses `kind: "review-needed"`. Its `outreachContactId` can be the 
 Submit the complete object once:
 
 ```text
-POST http://127.0.0.1:3000/api/job-update-check
+POST http://127.0.0.1:4000/api/job-update-check
 Content-Type: application/json
 ```
 

@@ -353,6 +353,7 @@ function formatReportTime(report: JobSearchReport) {
     background: $color-ink-alpha-6;
     border: 1px solid $color-ink-alpha-16;
     border-radius: $radius-sm;
+    transition: border-color 140ms ease;
 
     &:disabled {
         cursor: not-allowed;

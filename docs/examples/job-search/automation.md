@@ -33,7 +33,7 @@ Fetch history without printing its body:
 
 ```bash
 curl --fail-with-body --silent --show-error --output JOB_POSTS_RESPONSE_PATH \
-  'http://127.0.0.1:3000/api/job-posts'
+  'http://127.0.0.1:4000/api/job-posts'
 pnpm run job-search:artifact -- history JOB_POSTS_RESPONSE_PATH EXISTING_IDENTITIES_PATH FEEDBACK_PATH
 ```
 

@@ -7,7 +7,7 @@ export default defineConfig({
     plugins: [vue()],
     server: {
         proxy: {
-            '/api': 'http://127.0.0.1:3000',
+            '/api': 'http://127.0.0.1:4000',
             '/agent': {
                 target: 'http://127.0.0.1:3001',
                 rewrite: (path) => path.replace(/^\/agent/, ''),

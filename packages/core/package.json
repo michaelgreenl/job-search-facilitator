@@ -22,12 +22,12 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@prisma/client": "^7.8.0",
-        "zod": "4.4.3"
+        "@prisma/client": "^7.10.1",
+        "zod": "4.6.7"
     },
     "devDependencies": {
-        "@prisma/adapter-pg": "^7.8.0",
+        "@prisma/adapter-pg": "^7.10.1",
         "dotenv": "^17.3.1",
-        "prisma": "^7.8.0"
+        "prisma": "^7.10.1"
     }
 }

@@ -462,6 +462,10 @@ onMounted(load)
 .refresh-button {
     align-items: center;
     gap: $space-2;
+
+    .section-heading &:active:not(:disabled) {
+        transform: none;
+    }
 }
 
 .action-icon {
@@ -473,6 +477,25 @@ onMounted(load)
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.75;
+
+    .automation-actions & {
+        fill: currentcolor;
+        fill-opacity: 0;
+        transition: fill-opacity 140ms ease;
+    }
+
+    .refresh-button & {
+        transition: transform 500ms ease;
+    }
+
+    .refresh-button:active:not(:disabled) & {
+        transform: rotate(-360deg);
+        transition: none;
+    }
+
+    .automation-actions .base-button:is(:hover, :focus-visible):not(:disabled) & {
+        fill-opacity: 1;
+    }
 }
 
 .edit-schedule {
@@ -665,6 +688,7 @@ legend {
     font-size: clamp(0.6875rem, 2.5vw, 0.875rem);
     cursor: pointer;
     white-space: nowrap;
+    transition: border-color 140ms ease;
 
     &:hover {
         border-color: $color-signal-light-alpha-50;
@@ -790,6 +814,10 @@ legend {
     font-size: 0.8125rem;
     border-radius: $radius-sm;
     cursor: pointer;
+    transition:
+        color 140ms ease,
+        background-color 140ms ease,
+        box-shadow 140ms ease;
 
     &:hover {
         color: $color-ink;
