@@ -13,7 +13,6 @@
 ## Links
 
 - **💼 [Portfolio Link](https://michaelgreenl.net/projects/jsf/)**
-- **🎥 [Demo Video](https://michaelgreenl.net/projects/jsf/)**
 
 ## Overview
 
