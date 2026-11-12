@@ -28,6 +28,15 @@ export {
 } from './outreach.ts'
 export type { RuntimeParser } from './shared.ts'
 export { parseAgentHealth, parseAgentTask, parseAgentTaskEvent } from './agent.ts'
+export { AGENT_PROVIDERS, agentSettingsSchema, parseAgentSettingsState } from './agent-settings.ts'
+export type {
+    AgentModel,
+    AgentModelSelection,
+    AgentProvider,
+    AgentProviderStatus,
+    AgentSettings,
+    AgentSettingsState,
+} from './agent-settings.ts'
 export {
     parseJobUpdateCheckContext,
     parseJobUpdateCheckResult,

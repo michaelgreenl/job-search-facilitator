@@ -12,4 +12,6 @@ export const env = {
     CODEX_BIN: process.env.CODEX_BIN ?? (existsSync(bundledCodex) ? bundledCodex : 'codex'),
     AGENT_CWD: process.env.AGENT_CWD ?? repositoryRoot,
     AGENT_CODEX_HOME: process.env.AGENT_CODEX_HOME ?? join(repositoryRoot, '.local/agent-codex'),
+    AGENT_SETTINGS_FILE:
+        process.env.AGENT_SETTINGS_FILE ?? join(repositoryRoot, '.local/agent-settings.json'),
 }

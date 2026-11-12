@@ -4,6 +4,8 @@ import { isAbsolute, join } from 'node:path'
 import { createJobPostImportAgentOutputSchema } from '@job-search-facilitator/core'
 import type {
     AgentCapability,
+    AgentModel,
+    AgentModelSelection,
     AgentPermissionDecision,
     JsonObject,
     StartAgentTaskInput,
@@ -11,7 +13,7 @@ import type {
 import { z } from 'zod'
 import { loadResumeContext } from '../../resume-context.ts'
 import type {
-    AgentRuntime,
+    AgentProviderRuntime,
     AgentRuntimeEvent,
     AgentRuntimeHealth,
     AgentRuntimePermission,
@@ -19,20 +21,17 @@ import type {
 } from '../agent-runtime.ts'
 import { AppServerConnection, type AppServerConnectionOptions } from './app-server-connection.ts'
 import { readBrowserConfig } from './isolated-home.ts'
-import {
-    captureJobDescription,
-    completeJobPostImport,
-    descriptionCaptureInputSchema,
-    type CapturedJobDescription,
-} from './job-description.ts'
+import { completeJobPostImport, type CapturedJobDescription } from '../job-description.ts'
+import { progressMessageSchema } from '../progress.ts'
+import { captureJobDescription, descriptionCaptureInputSchema } from './job-description.ts'
 import {
     emptyResponseSchema,
     isObject,
     itemCompletedSchema,
     itemStartedSchema,
+    modelListResponseSchema,
     permissionResolvedSchema,
     pluginInstalledResponseSchema,
-    progressMessageSchema,
     progressToolCallSchema,
     threadStartResponseSchema,
     turnCompletedSchema,
@@ -51,6 +50,7 @@ interface PendingPermission {
 interface CodexRuntimeOptions extends AppServerConnectionOptions {
     chromeRoot?: string
     personalCodexHome?: string
+    selection?: () => AgentModelSelection
 }
 
 const pluginIds = {
@@ -115,11 +115,12 @@ const browserOriginPermission = (params: unknown): AgentRuntimePermission | null
     }
 }
 
-export class CodexRuntime implements AgentRuntime {
+export class CodexRuntime implements AgentProviderRuntime {
     private readonly connection: AppServerConnection
     private readonly chromeRoot: string | undefined
     private readonly personalCodexHome: string | undefined
     private readonly isolated: boolean
+    private readonly selection: () => AgentModelSelection
     private readonly pendingPermissions = new Map<string, PendingPermission>()
     private readonly permissionIdsByRequest = new Map<string, string>()
     private readonly capabilityRoots = new Map<AgentCapability, string>()
@@ -144,6 +145,8 @@ export class CodexRuntime implements AgentRuntime {
         this.chromeRoot = options.chromeRoot
         this.personalCodexHome = options.personalCodexHome
         this.isolated = options.environment?.CODEX_HOME !== undefined
+        this.selection =
+            options.selection ?? (() => ({ model: 'gpt-6-astra', reasoningEffort: 'xhigh' }))
         this.connection = new AppServerConnection(
             binary,
             cwd,
@@ -231,6 +234,31 @@ export class CodexRuntime implements AgentRuntime {
         }
     }
 
+    async listModels(): Promise<AgentModel[]> {
+        this.assertReady()
+        const models: AgentModel[] = []
+        let cursor: string | null = null
+
+        do {
+            const page: z.infer<typeof modelListResponseSchema> = await this.connection.request(
+                'model/list',
+                { cursor },
+                modelListResponseSchema,
+            )
+            for (const model of page.data) {
+                const reasoningEfforts = model.supportedReasoningEfforts.map(
+                    ({ reasoningEffort }) => reasoningEffort,
+                )
+                if (!model.hidden && reasoningEfforts.length > 0) {
+                    models.push({ id: model.model, name: model.displayName, reasoningEfforts })
+                }
+            }
+            cursor = page.nextCursor ?? null
+        } while (cursor !== null)
+
+        return models
+    }
+
     async startTask(taskId: string, input: StartAgentTaskInput): Promise<StartedAgentTask> {
         this.assertReady()
         if (
@@ -240,6 +268,7 @@ export class CodexRuntime implements AgentRuntime {
             throw new Error('Description capture requires a new Chrome task')
         }
         const resumeContext = input.resumeContext ? await loadResumeContext() : ''
+        const { model, reasoningEffort } = this.selection()
         if (input.threadId !== undefined) await this.browserCleanups.get(input.threadId)
         const selectedCapabilityRoots = input.capabilities.map((capability) => {
             const path = this.capabilityRoots.get(capability)
@@ -258,7 +287,7 @@ export class CodexRuntime implements AgentRuntime {
             {
                 ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
                 cwd: this.cwd,
-                model: 'gpt-6-astra',
+                model,
                 approvalPolicy: {
                     granular: {
                         sandbox_approval: false,
@@ -361,7 +390,7 @@ export class CodexRuntime implements AgentRuntime {
                 outputSchema: input.captureJobDescription
                     ? createJobPostImportAgentOutputSchema()
                     : input.outputSchema,
-                effort: 'xhigh',
+                effort: reasoningEffort,
                 summary: 'none',
             },
             turnStartResponseSchema,

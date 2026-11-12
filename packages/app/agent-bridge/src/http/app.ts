@@ -1,14 +1,18 @@
 import { SERVICE_UNAVAILABLE } from '@job-search-facilitator/core'
 import cors from 'cors'
 import express from 'express'
+import type { ProviderRouter } from '../runtime/provider-router.ts'
+import type { AgentSettingsStore } from '../settings/agent-settings.ts'
 import type { AgentTaskManager } from '../tasks/agent-task-manager.ts'
 import { createTaskRouter } from './task-routes.ts'
 import { createAutomationRouter } from './automation-routes.ts'
+import { createSettingsRouter } from './settings-routes.ts'
 
 export const createApp = (
     taskManager: AgentTaskManager,
     clientOrigin: string,
     automations?: { directory: string; projectRoot: string },
+    settings?: { store: AgentSettingsStore; providers: ProviderRouter },
 ) => {
     const app = express()
 
@@ -30,6 +34,7 @@ export const createApp = (
         app.use(
             createAutomationRouter(automations.directory, automations.projectRoot, clientOrigin),
         )
+    if (settings) app.use(createSettingsRouter(settings.store, settings.providers, clientOrigin))
 
     return app
 }

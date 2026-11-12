@@ -1,17 +1,11 @@
-import { parseJobPostImportAgentResult } from '@job-search-facilitator/core'
 import { z } from 'zod'
+import { capturedDescriptionSchema, type CapturedJobDescription } from '../job-description.ts'
 import type { AppServerConnection } from './app-server-connection.ts'
 
 export const descriptionCaptureInputSchema = z.strictObject({
     tabId: z.string().min(1).max(100),
     selector: z.string().min(1).max(2_000),
 })
-
-const capturedDescriptionSchema = z.object({
-    description: z.string().regex(/\S/),
-    sourceUrl: z.url({ protocol: /^https?$/ }),
-})
-export type CapturedJobDescription = z.infer<typeof capturedDescriptionSchema>
 
 export async function captureJobDescription(
     connection: AppServerConnection,
@@ -61,27 +55,4 @@ export async function captureJobDescription(
                 'Chrome could not capture the description. Check the tab and selector, then retry.',
         )
     return capturedDescriptionSchema.parse(JSON.parse(text))
-}
-
-export function completeJobPostImport(
-    text: string,
-    captures: Map<string, CapturedJobDescription>,
-): string {
-    const { result } = parseJobPostImportAgentResult(JSON.parse(text))
-    if ('error' in result) return JSON.stringify({ result })
-
-    const { descriptionCaptureId, ...post } = result.post
-    const capture = captures.get(descriptionCaptureId)
-    if (capture === undefined)
-        throw new Error('The job description was not captured for this import. Try again.')
-
-    const sourceUrl = new URL(capture.sourceUrl)
-    const postUrl = new URL(post.postUrl)
-    sourceUrl.hash = postUrl.hash = ''
-    if (sourceUrl.href !== postUrl.href) {
-        throw new Error('The captured description does not match the job-post URL. Try again.')
-    }
-    return JSON.stringify({
-        result: { ...result, post: { ...post, description: capture.description } },
-    })
 }

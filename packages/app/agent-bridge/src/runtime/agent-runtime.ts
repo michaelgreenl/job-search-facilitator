@@ -1,5 +1,6 @@
 import type {
     AgentCapability,
+    AgentModel,
     AgentPermissionDecision,
     AgentPermissionRequired,
     StartAgentTaskInput,
@@ -49,4 +50,8 @@ export interface AgentRuntime {
     interruptTask(threadId: string, turnId: string): Promise<void>
     resolvePermission(permissionId: string, decision: AgentPermissionDecision): boolean
     onEvent(listener: (event: AgentRuntimeEvent) => void): () => void
+}
+
+export interface AgentProviderRuntime extends AgentRuntime {
+    listModels(): Promise<AgentModel[]>
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { progressMessageSchema } from '../progress.ts'
 
 type JsonObject = { [key: string]: unknown }
 
@@ -7,6 +8,18 @@ export type RpcId = z.infer<typeof rpcIdSchema>
 
 export const rpcErrorSchema = z.object({ code: z.number().int(), message: z.string() })
 export const emptyResponseSchema = z.object({})
+
+export const modelListResponseSchema = z.object({
+    data: z.array(
+        z.object({
+            model: z.string(),
+            displayName: z.string(),
+            hidden: z.boolean(),
+            supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string() })),
+        }),
+    ),
+    nextCursor: z.string().nullish(),
+})
 
 export const pluginInstalledResponseSchema = z.object({
     marketplaces: z.array(
@@ -53,38 +66,6 @@ export const permissionResolvedSchema = z.object({
 
 export const itemStartedSchema = turnReferenceSchema.extend({
     item: z.object({ type: z.string() }),
-})
-
-export const progressMessageSchema = z.strictObject({
-    message: z
-        .enum([
-            'Reviewing the supplied task details',
-            'Loading applicant and resume evidence',
-            'Verifying the role and employer details',
-            'Reading role duties and requirements',
-            'Checking required experience and skills',
-            'Comparing the role with resume evidence',
-            'Reviewing location and salary details',
-            'Verifying the direct application route',
-            'Checking whether the job is still open',
-            'Capturing the complete job description',
-            'Preparing the verified job-post result',
-            'Reviewing applicant career experience',
-            'Comparing available resume versions',
-            'Checking the role against your profile',
-            'Searching for relevant job openings',
-            'Reviewing current job listings and fit',
-            'Checking recent application updates',
-            'Checking for replies to your outreach',
-            'Finding contacts on the hiring team',
-            'Reviewing hiring contacts and sources',
-            'Checking contact details and relevance',
-            'Drafting outreach for the selected role',
-            'Preparing tailored application documents',
-            'Reviewing verified resume experience',
-            'Preparing the final recommendations',
-        ])
-        .check(z.maxLength(40)),
 })
 
 // Resumed threads retain the progress tool schema from their first turn.
