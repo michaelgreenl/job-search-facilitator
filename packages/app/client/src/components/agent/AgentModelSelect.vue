@@ -1,3 +1,16 @@
+<script lang="ts">
+const effortNames: Record<string, string> = {
+    low: 'Low',
+    medium: 'Medium',
+    high: 'High',
+    xhigh: 'Extra high',
+    max: 'Max',
+    ultra: 'Ultra',
+}
+
+export const effortName = (effort: string) => effortNames[effort] ?? effort
+</script>
+
 <script setup lang="ts">
 import type { AgentModel, AgentModelSelection } from '@job-search-facilitator/core'
 import { computed } from 'vue'
@@ -14,15 +27,6 @@ const emit = defineEmits<{
     change: [selection: AgentModelSelection]
 }>()
 
-const effortNames: Record<string, string> = {
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    xhigh: 'Extra high',
-    max: 'Max',
-    ultra: 'Ultra',
-}
-const effortName = (effort: string) => effortNames[effort] ?? effort
 const model = computed(() => props.models.find(({ id }) => id === props.selection.model))
 const efforts = computed(() => model.value?.reasoningEfforts ?? [])
 

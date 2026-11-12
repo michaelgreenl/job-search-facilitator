@@ -3,17 +3,46 @@ import {
     AUTOMATION_DAYS,
     MAX_AUTOMATION_TIMES,
     automationScheduleSchema,
+    type AgentModelSelection,
+    type AgentSettingsState,
     type Automation,
     type AutomationSchedule,
     type UpdateAutomation,
 } from '@job-search-facilitator/core'
-import { computed, nextTick, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    shallowRef,
+    useTemplateRef,
+    watch,
+} from 'vue'
+import { effortName } from '@/components/agent/AgentModelSelect.vue'
+import AutomationModelDialog from '@/components/AutomationModelDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
+import ClaudeIcon from '@/components/svgs/ClaudeIcon.vue'
+import OpenAiIcon from '@/components/svgs/OpenAiIcon.vue'
 import PauseIcon from '@/components/svgs/PauseIcon.vue'
 import PlayIcon from '@/components/svgs/PlayIcon.vue'
 import RefreshIcon from '@/components/svgs/RefreshIcon.vue'
-import { fetchAutomations, updateAutomation } from '@/services/agent/agent-bridge'
+import RunIcon from '@/components/svgs/RunIcon.vue'
+import StopIcon from '@/components/svgs/StopIcon.vue'
+import {
+    cancelAutomationRun,
+    fetchAgentSettings,
+    fetchAutomations,
+    runAutomation,
+    updateAutomation,
+} from '@/services/agent/agent-bridge'
+
+const providers = {
+    codex: { name: 'Codex', icon: OpenAiIcon },
+    claude: { name: 'Claude', icon: ClaudeIcon },
+}
+const runPollMs = 3_000
 
 const automations = shallowRef<Automation[]>([])
 const loading = shallowRef(true)
@@ -22,6 +51,10 @@ const saveError = shallowRef('')
 const message = shallowRef('')
 const saving = shallowRef<string | null>(null)
 const editing = shallowRef<Automation | null>(null)
+const agent = shallowRef<AgentSettingsState | null>(null)
+const choosingModel = shallowRef<Automation | null>(null)
+const startingRun = shallowRef<string | null>(null)
+let runPoll: ReturnType<typeof setInterval> | undefined
 const days = shallowRef<AutomationSchedule['days']>([])
 const runTimes = ref<
     { key: number; hour: number | string; minute: number | string; period: string }[]
@@ -84,6 +117,31 @@ function scheduleLabel(automation: Automation) {
     return `${dayLabel} at ${clocks.join(' · ')}`
 }
 
+const providerModels = (automation: Automation) =>
+    agent.value?.providers.find(({ id }) => id === automation.provider)?.models ?? []
+
+function modelLabel(automation: Automation) {
+    if (!automation.model) return 'Default model'
+    const { model, reasoningEffort } = automation.model
+    const name = providerModels(automation).find(({ id }) => id === model)?.name ?? model
+    return `${name} · ${effortName(reasoningEffort)}`
+}
+
+const clock = (time: string) =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+        new Date(time),
+    )
+
+function runLabel({ status, startedAt, finishedAt }: NonNullable<Automation['run']>) {
+    if (status === 'running') return `Running since ${clock(startedAt)}`
+    const ended = clock(finishedAt ?? startedAt)
+    return status === 'completed'
+        ? `Finished at ${ended}`
+        : status === 'failed'
+          ? `Failed at ${ended}`
+          : `Stopped at ${ended}`
+}
+
 function nextLabel(automation: Automation) {
     if (!automation.nextScheduledAt) return 'See the desktop app for the next run'
     return `Next scheduled: ${new Intl.DateTimeFormat(undefined, {
@@ -101,13 +159,64 @@ async function load() {
     loadError.value = ''
     saveError.value = ''
     try {
-        automations.value = await fetchAutomations()
+        // Model names come from the Agent settings. The list still loads without them.
+        const [list, settings] = await Promise.all([
+            fetchAutomations(),
+            fetchAgentSettings().catch(() => null),
+        ])
+        automations.value = list
+        agent.value = settings
     } catch (error) {
         loadError.value = errorMessage(error)
     } finally {
         loading.value = false
     }
 }
+
+const replace = (saved: Automation) =>
+    (automations.value = automations.value.map((item) => (item.id === saved.id ? saved : item)))
+
+async function toggleRun(automation: Automation) {
+    if (startingRun.value) return
+    const running = automation.run?.status === 'running'
+    startingRun.value = automation.id
+    saveError.value = ''
+    message.value = ''
+    try {
+        replace(await (running ? cancelAutomationRun : runAutomation)(automation.id))
+        message.value = running ? `${automation.name} is stopping.` : `${automation.name} started.`
+    } catch (error) {
+        saveError.value = errorMessage(error)
+    } finally {
+        startingRun.value = null
+    }
+}
+
+async function refreshRuns() {
+    const before = automations.value
+    try {
+        automations.value = await fetchAutomations()
+    } catch {
+        // The next check tries again.
+        return
+    }
+    for (const automation of automations.value) {
+        const previous = before.find(({ id }) => id === automation.id)?.run?.status
+        if (previous === 'running' && automation.run && automation.run.status !== 'running') {
+            message.value = `${automation.name}: ${runLabel(automation.run)}.`
+        }
+    }
+}
+
+// Check on a run only while one is in progress.
+watch(
+    () => automations.value.some(({ run }) => run?.status === 'running'),
+    (running) => {
+        clearInterval(runPoll)
+        if (running) runPoll = setInterval(() => void refreshRuns(), runPollMs)
+    },
+)
+onBeforeUnmount(() => clearInterval(runPoll))
 
 function timeDraft(time: string) {
     const [hours, minutes] = time.split(':')
@@ -155,16 +264,34 @@ async function save(automation: Automation, changes: Omit<UpdateAutomation, 'rev
             ...changes,
             revision: automation.revision,
         })
-        automations.value = automations.value.map((item) => (item.id === saved.id ? saved : item))
+        replace(saved)
         editing.value = null
-        message.value = changes.schedule
-            ? `Schedule saved for ${saved.name}.`
-            : `${saved.name} ${saved.status === 'PAUSED' ? 'paused' : 'resumed'}.`
+        choosingModel.value = null
+        message.value = changes.model
+            ? `Model saved for ${saved.name}.`
+            : changes.schedule
+              ? `Schedule saved for ${saved.name}.`
+              : `${saved.name} ${saved.status === 'PAUSED' ? 'paused' : 'resumed'}.`
     } catch (error) {
         saveError.value = errorMessage(error)
     } finally {
         saving.value = null
     }
+}
+
+function chooseModel(automation: Automation) {
+    choosingModel.value = automation
+    saveError.value = ''
+    message.value = ''
+}
+
+function fallbackModel(automation: Automation | null): AgentModelSelection {
+    return (
+        agent.value?.settings.models[automation?.provider ?? 'codex'] ?? {
+            model: '',
+            reasoningEffort: '',
+        }
+    )
 }
 
 function saveSchedule() {
@@ -222,8 +349,19 @@ onMounted(load)
                 >
                     <div class="automation-details">
                         <div class="automation-heading">
+                            <span
+                                class="provider"
+                                role="img"
+                                :aria-label="providers[automation.provider].name"
+                                :title="providers[automation.provider].name"
+                                :data-testid="`provider-${automation.id}`"
+                                :data-provider="automation.provider"
+                            >
+                                <component :is="providers[automation.provider].icon" />
+                            </span>
                             <strong>{{ automation.name }}</strong>
                             <span
+                                v-if="automation.scheduleEditable"
                                 class="status"
                                 :class="{ active: automation.status === 'ACTIVE' }"
                                 :data-testid="`status-${automation.id}`"
@@ -231,18 +369,61 @@ onMounted(load)
                             >
                         </div>
                         <p class="schedule-summary" :data-testid="`schedule-${automation.id}`">
-                            {{ scheduleLabel(automation) }}
+                            {{
+                                automation.scheduleEditable
+                                    ? scheduleLabel(automation)
+                                    : `Schedule managed in the ${providers[automation.provider].name} desktop app`
+                            }}
                         </p>
                         <p
-                            v-if="automation.status === 'ACTIVE'"
+                            v-if="automation.scheduleEditable && automation.status === 'ACTIVE'"
                             class="muted"
                             :data-testid="`next-${automation.id}`"
                         >
                             {{ nextLabel(automation) }}
                         </p>
+                        <BaseButton
+                            preset="text"
+                            class="model-button"
+                            :disabled="saving !== null || providerModels(automation).length === 0"
+                            :aria-label="`${providers[automation.provider].name} model and reasoning for ${automation.name}: ${modelLabel(automation)}`"
+                            :data-testid="`model-${automation.id}`"
+                            @click="chooseModel(automation)"
+                            >{{ modelLabel(automation) }}</BaseButton
+                        >
+                        <div
+                            v-if="automation.run"
+                            class="run"
+                            :class="`run-${automation.run.status}`"
+                            :data-testid="`run-${automation.id}`"
+                            :data-status="automation.run.status"
+                        >
+                            <p class="run-state">
+                                <span class="run-dot" aria-hidden="true"></span>
+                                {{ runLabel(automation.run) }}
+                            </p>
+                            <p v-if="automation.run.message" class="run-message muted">
+                                {{ automation.run.message }}
+                            </p>
+                        </div>
                     </div>
                     <div class="automation-actions">
                         <BaseButton
+                            preset="secondary"
+                            :disabled="startingRun !== null"
+                            :aria-label="`${automation.run?.status === 'running' ? 'Stop' : 'Run'} ${automation.name} with ${providers[automation.provider].name}`"
+                            :data-testid="`run-toggle-${automation.id}`"
+                            @click="toggleRun(automation)"
+                        >
+                            <StopIcon
+                                v-if="automation.run?.status === 'running'"
+                                class="action-icon"
+                            />
+                            <RunIcon v-else class="action-icon" />
+                            {{ automation.run?.status === 'running' ? 'Stop' : 'Run now' }}
+                        </BaseButton>
+                        <BaseButton
+                            v-if="automation.scheduleEditable"
                             preset="secondary"
                             :disabled="saving !== null"
                             :aria-label="`${automation.status === 'ACTIVE' ? 'Pause' : 'Resume'} ${automation.name}`"
@@ -264,6 +445,7 @@ onMounted(load)
                             }}
                         </BaseButton>
                         <BaseButton
+                            v-if="automation.scheduleEditable"
                             preset="primary"
                             class="edit-schedule"
                             :disabled="saving !== null || !automation.schedule"
@@ -276,9 +458,21 @@ onMounted(load)
                 </li>
             </ul>
         </div>
-        <p v-if="saveError && !editing" role="alert" class="save-error">{{ saveError }}</p>
+        <p v-if="saveError && !editing && !choosingModel" role="alert" class="save-error">
+            {{ saveError }}
+        </p>
         <p role="status" class="save-status" data-testid="automation-save-status">{{ message }}</p>
     </section>
+
+    <AutomationModelDialog
+        :automation="choosingModel"
+        :models="choosingModel ? providerModels(choosingModel) : []"
+        :fallback="fallbackModel(choosingModel)"
+        :saving="saving !== null"
+        :error="saveError"
+        @close="choosingModel = null"
+        @save="choosingModel && save(choosingModel, { model: $event })"
+    />
 
     <BasePopUp
         :open="editing !== null"
@@ -554,6 +748,82 @@ h2 {
 .automation-heading strong {
     font-size: 1rem;
     font-weight: 600;
+}
+
+.provider {
+    display: inline-flex;
+    align-self: center;
+    color: $color-ink-secondary;
+
+    svg {
+        width: 1rem;
+        height: 1rem;
+        fill: currentcolor;
+    }
+}
+
+.model-button {
+    font-size: 0.875rem;
+    text-align: left;
+}
+
+.run {
+    display: grid;
+    gap: $space-1;
+    padding-top: $space-1;
+    font-size: 0.875rem;
+}
+
+.run-state {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+}
+
+.run-dot {
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    background: $color-ink-muted;
+    border-radius: $radius-full;
+
+    .run-running & {
+        background: $color-signal-light;
+        animation: run-pulse 1.4s ease-in-out infinite;
+    }
+
+    .run-completed & {
+        background: $color-signal-light;
+    }
+
+    .run-failed & {
+        background: lighten-color($color-red-600, 20%);
+    }
+}
+
+@keyframes run-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.run-message {
+    white-space: pre-line;
+
+    // Progress text changes often, so it stays short. A result shows in full.
+    .run-running & {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .run-dot {
+        animation: none;
+    }
 }
 
 .status {

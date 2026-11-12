@@ -103,6 +103,17 @@ export async function updateAutomation(id: string, input: UpdateAutomation) {
     return parseJsonResponse(response, parseAutomation, 'Automation')
 }
 
+async function postAutomation(path: string) {
+    const response = await requestAgentBridge(path, { method: 'POST' })
+    return parseJsonResponse(response, parseAutomation, 'Automation')
+}
+
+export const runAutomation = (id: string) =>
+    postAutomation(`/automations/${encodeURIComponent(id)}/run`)
+
+export const cancelAutomationRun = (id: string) =>
+    postAutomation(`/automations/${encodeURIComponent(id)}/run/cancel`)
+
 export async function startAgentTask(taskId: string, input: StartAgentTaskInput) {
     const path = `/tasks/${encodeURIComponent(taskId)}`
     const response = await requestAgentBridge(path, {
