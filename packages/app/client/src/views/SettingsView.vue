@@ -69,7 +69,7 @@ async function save() {
             a.name.localeCompare(b.name),
         )
         uploadOpen.value = false
-        status.value = `Saved ${saved.name}.`
+        status.value = `Saved ${saved.name}`
     } catch (error) {
         uploadError.value = errorMessage(error)
     } finally {
@@ -88,6 +88,7 @@ onMounted(load)
         <AutomationSettings />
         <header class="section-heading">
             <h2 id="resumes-heading">Resumes</h2>
+            <p class="save-status" role="status" data-testid="resume-save-status">{{ status }}</p>
         </header>
         <section class="settings-section" aria-labelledby="resumes-heading">
             <p v-if="loading" class="section-message muted" role="status">Loading resumes…</p>
@@ -171,7 +172,6 @@ onMounted(load)
                     </template>
                 </li>
             </ul>
-            <p class="save-status" role="status" data-testid="resume-save-status">{{ status }}</p>
         </section>
         <footer class="section-footer">
             <BaseButton
@@ -281,6 +281,9 @@ onMounted(load)
 }
 
 .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-top: $space-6;
     padding-top: $space-6;
     padding-bottom: $space-3;
@@ -429,10 +432,6 @@ h2 {
 
 .save-status {
     color: $color-signal-light;
-
-    &:not(:empty) {
-        margin-top: $space-4;
-    }
 }
 
 .upload-form,
