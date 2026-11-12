@@ -19,14 +19,20 @@ import {
 import express from 'express'
 import { parse, stringify } from 'smol-toml'
 import { z } from 'zod'
+import type { AutomationRuns } from '../automations/automation-runs.ts'
+import { readClaudeTasks } from '../automations/claude-tasks.ts'
+import type { AgentSettingsStore } from '../settings/agent-settings.ts'
 
 const idSchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}$/)
 const configSchema = z.object({
     version: z.literal(1),
     id: idSchema,
     name: z.string().min(1),
+    prompt: z.string().min(1),
     status: z.enum(['ACTIVE', 'PAUSED']),
     rrule: z.string(),
+    model: z.string().min(1).optional(),
+    reasoning_effort: z.string().min(1).optional(),
 })
 const revision = (source: string) => createHash('sha256').update(source).digest('hex')
 
@@ -152,12 +158,23 @@ function nextScheduledAt(schedule: AutomationSchedule | null, status: Automation
     return null
 }
 
+export interface AutomationSources {
+    /** The Codex desktop app's automations folder. */
+    directory: string
+    projectRoot: string
+    /** Present when Claude desktop tasks and runs from Settings are available. */
+    claude?: { appData: string; settings: AgentSettingsStore }
+    runs?: AutomationRuns
+}
+
+const claudePrefix = 'claude:'
+
 export function createAutomationRouter(
-    directory: string,
-    projectRoot: string,
+    { directory, projectRoot, claude, runs }: AutomationSources,
     clientOrigin: string,
 ) {
     const router = express.Router()
+    const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 
     function read(id: string) {
         const folder = join(directory, id)
@@ -181,13 +198,50 @@ export function createAutomationRouter(
         const automation: Automation = {
             id,
             name: config.name,
+            provider: 'codex',
             status: config.status,
+            scheduleEditable: true,
             schedule,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: timeZone(),
             nextScheduledAt: nextScheduledAt(schedule, config.status),
+            model:
+                config.model && config.reasoning_effort
+                    ? { model: config.model, reasoningEffort: config.reasoning_effort }
+                    : null,
+            run: runs?.get(id) ?? null,
             revision: revision(source),
         }
-        return { path, source, document, automation }
+        return { path, source, document, automation, prompt: config.prompt }
+    }
+
+    function readClaude() {
+        if (!claude) return []
+        return readClaudeTasks(claude.appData, projectRoot).map((task) => {
+            const id = `${claudePrefix}${task.id}`
+            const model = claude.settings.claudeTaskModel(task.id)
+            const automation: Automation = {
+                id,
+                name: task.name,
+                provider: 'claude',
+                status: task.enabled ? 'ACTIVE' : 'PAUSED',
+                // The Claude desktop app owns the schedule and does not read outside changes.
+                scheduleEditable: false,
+                schedule: null,
+                timeZone: timeZone(),
+                nextScheduledAt: null,
+                model,
+                run: runs?.get(id) ?? null,
+                revision: revision(JSON.stringify([task, model])),
+            }
+            return { task, automation }
+        })
+    }
+
+    const findClaude = (id: string) => readClaude().find((entry) => entry.automation.id === id)
+    const fromApplication = (request: express.Request, response: express.Response) => {
+        if (request.get('Origin') === clientOrigin) return true
+        response.status(403).json({ error: 'Automation changes must come from this application.' })
+        return false
     }
 
     router.get('/automations', (_request, response) => {
@@ -195,11 +249,15 @@ export function createAutomationRouter(
             const entries = existsSync(directory)
                 ? readdirSync(directory, { withFileTypes: true })
                 : []
-            const automations = entries
-                .filter((entry) => entry.isDirectory() && idSchema.safeParse(entry.name).success)
-                .map((entry) => read(entry.name)?.automation)
-                .filter((entry) => entry !== undefined)
-                .sort((a, b) => a.name.localeCompare(b.name))
+            const automations = [
+                ...entries
+                    .filter(
+                        (entry) => entry.isDirectory() && idSchema.safeParse(entry.name).success,
+                    )
+                    .map((entry) => read(entry.name)?.automation)
+                    .filter((entry) => entry !== undefined),
+                ...readClaude().map(({ automation }) => automation),
+            ].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
             response.set('Cache-Control', 'no-store').json(automations)
         } catch {
             response.status(503).json({
@@ -209,14 +267,43 @@ export function createAutomationRouter(
     })
 
     router.patch('/automations/:id', (request, response) => {
-        if (request.get('Origin') !== clientOrigin || !request.is('application/json')) {
+        if (!fromApplication(request, response)) return
+        if (!request.is('application/json')) {
             response
                 .status(403)
                 .json({ error: 'Automation changes must come from this application.' })
             return
         }
-        const id = idSchema.safeParse(request.params.id)
         const input = updateAutomationSchema.safeParse(request.body)
+        if (claude && request.params.id.startsWith(claudePrefix)) {
+            const current = findClaude(request.params.id)
+            if (!input.success) {
+                response.status(400).json({ error: 'Choose a model and reasoning effort.' })
+            } else if (!current) {
+                response.status(404).json({
+                    error: 'This local automation is no longer available. Refresh the list.',
+                })
+            } else if (current.automation.revision !== input.data.revision) {
+                response.status(409).json({
+                    error: 'This automation changed elsewhere. Refresh the list before saving.',
+                })
+            } else if (!input.data.model || input.data.status || input.data.schedule) {
+                response
+                    .status(409)
+                    .json({ error: 'Change this schedule in the Claude desktop app.' })
+            } else {
+                try {
+                    claude.settings.saveClaudeTaskModel(current.task.id, input.data.model)
+                    response.json(findClaude(request.params.id)!.automation)
+                } catch {
+                    response.status(503).json({
+                        error: 'Could not save the automation. Refresh the list to check its state.',
+                    })
+                }
+            }
+            return
+        }
+        const id = idSchema.safeParse(request.params.id)
         if (!id.success || !input.success) {
             response.status(400).json({ error: 'Choose at least one day and a valid time.' })
             return
@@ -247,6 +334,10 @@ export function createAutomationRouter(
             if (input.data.schedule) {
                 updated.rrule = writeSchedule(input.data.schedule)
             }
+            if (input.data.model) {
+                updated.model = input.data.model.model
+                updated.reasoning_effort = input.data.model.reasoningEffort
+            }
             temporary = `${current.path}.${randomUUID()}.tmp`
             writeFileSync(temporary, stringify(updated), {
                 mode: lstatSync(current.path).mode & 0o777,
@@ -268,5 +359,67 @@ export function createAutomationRouter(
             if (temporary) rmSync(temporary, { force: true })
         }
     })
+
+    if (runs) {
+        /** Finds what a run needs. A Claude task without its own model uses the Agent default. */
+        const runnable = (id: string) => {
+            if (claude && id.startsWith(claudePrefix)) {
+                const entry = findClaude(id)
+                return entry
+                    ? {
+                          provider: 'claude' as const,
+                          prompt: entry.task.prompt,
+                          model: entry.automation.model ?? claude.settings.current.models.claude,
+                      }
+                    : null
+            }
+            const entry = idSchema.safeParse(id).success ? read(id) : null
+            return entry
+                ? {
+                      provider: 'codex' as const,
+                      prompt: entry.prompt,
+                      model: entry.automation.model,
+                  }
+                : null
+        }
+        const current = (id: string) =>
+            id.startsWith(claudePrefix) ? findClaude(id)?.automation : read(id)?.automation
+
+        router.post('/automations/:id/run', (request, response) => {
+            if (!fromApplication(request, response)) return
+            try {
+                const { id } = request.params
+                const automation = runnable(id)
+                if (!automation) {
+                    response.status(404).json({
+                        error: 'This local automation is no longer available. Refresh the list.',
+                    })
+                } else if (
+                    !runs.start(id, automation.provider, {
+                        prompt: automation.prompt,
+                        cwd: projectRoot,
+                        model: automation.model,
+                    })
+                ) {
+                    response.status(409).json({ error: 'This automation is already running.' })
+                } else {
+                    response.status(202).json(current(id))
+                }
+            } catch {
+                response.status(503).json({ error: 'Could not start the automation. Try again.' })
+            }
+        })
+
+        router.post('/automations/:id/run/cancel', (request, response) => {
+            if (!fromApplication(request, response)) return
+            const { id } = request.params
+            if (!runs.cancel(id)) {
+                response.status(409).json({ error: 'This automation is not running.' })
+                return
+            }
+            response.status(202).json(current(id))
+        })
+    }
+
     return router
 }

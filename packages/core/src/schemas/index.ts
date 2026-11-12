@@ -53,4 +53,9 @@ export {
     parseAutomations,
     updateAutomationSchema,
 } from './automations.ts'
-export type { Automation, AutomationSchedule, UpdateAutomation } from './automations.ts'
+export type {
+    Automation,
+    AutomationRun,
+    AutomationSchedule,
+    UpdateAutomation,
+} from './automations.ts'

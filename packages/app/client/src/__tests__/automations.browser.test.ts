@@ -12,10 +12,14 @@ import '@/assets/styles/app.scss'
 const initial: Automation = {
     id: 'search',
     name: 'Weekday job search',
+    provider: 'codex',
     status: 'PAUSED',
+    scheduleEditable: true,
     schedule: { days: ['MO', 'TU', 'WE', 'TH', 'FR'], times: ['08:00'] },
     timeZone: 'America/Detroit',
     nextScheduledAt: null,
+    model: null,
+    run: null,
     revision: 'a'.repeat(64),
 }
 afterEach(async () => page.viewport(1024, 768))

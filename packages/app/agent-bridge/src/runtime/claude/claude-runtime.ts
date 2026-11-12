@@ -35,7 +35,7 @@ import {
 } from '../job-description.ts'
 import { progressMessageSchema } from '../progress.ts'
 
-type QueryFunction = (input: {
+export type QueryFunction = (input: {
     prompt: string | AsyncIterable<SDKUserMessage>
     options?: Options
 }) => Query

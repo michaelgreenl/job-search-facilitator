@@ -5,13 +5,13 @@ import type { ProviderRouter } from '../runtime/provider-router.ts'
 import type { AgentSettingsStore } from '../settings/agent-settings.ts'
 import type { AgentTaskManager } from '../tasks/agent-task-manager.ts'
 import { createTaskRouter } from './task-routes.ts'
-import { createAutomationRouter } from './automation-routes.ts'
+import { createAutomationRouter, type AutomationSources } from './automation-routes.ts'
 import { createSettingsRouter } from './settings-routes.ts'
 
 export const createApp = (
     taskManager: AgentTaskManager,
     clientOrigin: string,
-    automations?: { directory: string; projectRoot: string },
+    automations?: AutomationSources,
     settings?: { store: AgentSettingsStore; providers: ProviderRouter },
 ) => {
     const app = express()
@@ -30,10 +30,7 @@ export const createApp = (
     })
 
     app.use(createTaskRouter(taskManager))
-    if (automations)
-        app.use(
-            createAutomationRouter(automations.directory, automations.projectRoot, clientOrigin),
-        )
+    if (automations) app.use(createAutomationRouter(automations, clientOrigin))
     if (settings) app.use(createSettingsRouter(settings.store, settings.providers, clientOrigin))
 
     return app

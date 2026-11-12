@@ -3,9 +3,9 @@ import { createParser, nonBlankStringSchema } from './shared.ts'
 
 export const AGENT_PROVIDERS = ['codex', 'claude'] as const
 
-const agentProviderSchema = z.enum(AGENT_PROVIDERS)
+export const agentProviderSchema = z.enum(AGENT_PROVIDERS)
 
-const agentModelSelectionSchema = z.strictObject({
+export const agentModelSelectionSchema = z.strictObject({
     model: nonBlankStringSchema,
     reasoningEffort: nonBlankStringSchema,
 })

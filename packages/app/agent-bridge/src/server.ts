@@ -1,8 +1,11 @@
 import { createServer } from 'node:http'
 import { join } from 'node:path'
+import { AutomationRuns } from './automations/automation-runs.ts'
 import { env } from './config.ts'
 import { createApp } from './http/app.ts'
+import { createClaudeAutomationRunner } from './runtime/claude/claude-automation.ts'
 import { ClaudeRuntime } from './runtime/claude/claude-runtime.ts'
+import { createCodexAutomationRunner } from './runtime/codex/codex-automation.ts'
 import { CodexRuntime } from './runtime/codex/codex-runtime.ts'
 import { chromeRoot, personalCodexHome, prepareAgentHome } from './runtime/codex/isolated-home.ts'
 import { ProviderRouter } from './runtime/provider-router.ts'
@@ -24,6 +27,10 @@ const providers = new ProviderRouter(
     () => settings.current.provider,
     async (threadId) => ((await claude.ownsThread(threadId)) ? 'claude' : 'codex'),
 )
+const runs = new AutomationRuns({
+    codex: createCodexAutomationRunner(env.CODEX_BIN, chromeRoot),
+    claude: createClaudeAutomationRunner(),
+})
 let server: ReturnType<typeof createServer> | null = null
 let shuttingDown = false
 
@@ -31,6 +38,7 @@ const close = () => {
     shuttingDown = true
     server?.close()
     server?.closeAllConnections()
+    runs.cancelAll()
     void codex.shutdown()
     void claude.shutdown()
 }
@@ -46,7 +54,12 @@ if (!shuttingDown) {
         createApp(
             new AgentTaskManager(providers),
             env.CLIENT_ORIGIN,
-            { directory: join(personalCodexHome, 'automations'), projectRoot: env.AGENT_CWD },
+            {
+                directory: join(personalCodexHome, 'automations'),
+                projectRoot: env.AGENT_CWD,
+                claude: { appData: env.CLAUDE_APP_DATA, settings },
+                runs,
+            },
             { store: settings, providers },
         ),
     )
