@@ -37,6 +37,7 @@ const userAddedPost: UserAddedJobPost = {
     recommendedResume: 'frontend',
     recommendedAction: 'Tailor the frontend resume and apply',
     legitimacyNotes: null,
+    criteriaBlockers: [],
     post,
     jobPostSnapshot: {
         description: 'Complete job description',
@@ -55,6 +56,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     recommendedResume: 'frontend',
     recommendedAction: userAddedPost.recommendedAction,
     legitimacyNotes: userAddedPost.legitimacyNotes,
+    criteriaBlockers: userAddedPost.criteriaBlockers,
     post: {
         sourceKey: post.sourceKey,
         description: 'Complete job description',

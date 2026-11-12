@@ -66,6 +66,7 @@ model UserAddedJobPost {
   recommendedResume    String
   recommendedAction    String
   legitimacyNotes      String?
+  criteriaBlockers     String[]   @default([])
   createdAt            DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime   @updatedAt @db.Timestamptz(3)
   post                 JobPost    @relation(fields: [postId], references: [id], onDelete: Cascade)

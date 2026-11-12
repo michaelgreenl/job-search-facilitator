@@ -160,6 +160,7 @@ const createUserAddedInput = (
         recommendedResume: 'frontend',
         recommendedAction: 'Apply today',
         legitimacyNotes: null,
+        criteriaBlockers: ['Base compensation is below the minimum'],
         ...recommendationOverrides,
         post: createPostInput(post),
     }
@@ -196,6 +197,7 @@ describe('job post repository', () => {
         expect(created.item.jobPostSnapshot?.description).toBe(
             createUserAddedInput().post.description,
         )
+        expect(created.item.criteriaBlockers).toEqual(createUserAddedInput().criteriaBlockers)
         expect(postCount).toBe(1)
         expect(userAddedCount).toBe(1)
         expect(reportCount).toBe(0)

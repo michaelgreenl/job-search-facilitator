@@ -61,6 +61,7 @@ export const standaloneJobRecommendationInputSchema = z.strictObject({
 export const createUserAddedJobPostInputSchema = z.strictObject({
     ...standaloneJobRecommendationInputSchema.shape,
     post: jobPostInputSchema,
+    criteriaBlockers: z.array(nonBlankInputStringSchema.max(500)).max(20),
 }) satisfies z.ZodType<CreateUserAddedJobPostInput>
 
 export const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
@@ -124,6 +125,7 @@ const jobSearchResultSchema: z.ZodType<JobSearchResult> = z.looseObject({
 const userAddedJobPostSchema: z.ZodType<UserAddedJobPost> = z.looseObject({
     ...standaloneJobRecommendationShape,
     post: jobPostSchema,
+    criteriaBlockers: z.array(nonBlankStringSchema),
     jobPostSnapshot: jobPostSnapshotSchema.nullable(),
     addedAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,

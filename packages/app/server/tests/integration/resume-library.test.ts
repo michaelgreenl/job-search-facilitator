@@ -91,6 +91,7 @@ it('preserves old recommendations and accepts only library names for new search 
         recommendedResume: 'frontend',
         recommendedAction: 'Apply',
         legitimacyNotes: null,
+        criteriaBlockers: [],
         post: {
             sourceKey: 'resume:legacy',
             description: 'Build accessible interfaces.',
@@ -109,11 +110,12 @@ it('preserves old recommendations and accepts only library names for new search 
     await upload('/api/resumes?name=UI%20engineer', '%PDF-UI').expect(201)
     const reportId = randomUUID()
     const reportPath = `/api/job-search-reports/2026-09-14/${reportId}`
+    const { criteriaBlockers: _criteriaBlockers, ...recommendation } = input
     const report = {
         summary: 'One match',
         results: [
             {
-                ...input,
+                ...recommendation,
                 agentRank: 1,
                 recommendedResume: 'UI engineer',
                 post: {

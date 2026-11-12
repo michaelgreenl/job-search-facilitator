@@ -93,6 +93,7 @@ const userAddedPost = {
     recommendedResume: 'backend-full-stack',
     recommendedAction: 'Apply',
     legitimacyNotes: null,
+    criteriaBlockers: [],
     post: createPost('30000000-0000-4000-8000-000000000001', 'User-added Engineer'),
     jobPostSnapshot: {
         description: 'Complete user-added job description',
@@ -110,6 +111,7 @@ const importOutput = {
     recommendedResume: 'frontend',
     recommendedAction: 'Apply with the frontend resume.',
     legitimacyNotes: null,
+    criteriaBlockers: ['Base compensation is below the minimum'],
     post: {
         sourceKey: 'example:imported-role',
         description: 'Complete imported job description',
@@ -681,7 +683,7 @@ describe('review route selection', () => {
         })
     })
 
-    it('saves matching completed Agent output and opens the imported user-added post', async () => {
+    it('saves completed Agent output with criteria blockers and opens the imported post with them', async () => {
         let postRequestCount = 0
         vi.mocked(fetch).mockImplementation((input, init) => {
             const { method, url } = requestParts(input, init)
@@ -719,6 +721,7 @@ describe('review route selection', () => {
             expect(
                 root.querySelector('[data-testid="job-post-viewer"]')?.getAttribute('data-post-id'),
             ).toBe(savedImportedPost.post.id)
+            expect(root.querySelector('[data-testid="post-criteria-blockers"]')).not.toBeNull()
             expect(router.options.history.state).toMatchObject({
                 reviewCollection: 'user-added',
                 reviewPostId: savedImportedPost.post.id,

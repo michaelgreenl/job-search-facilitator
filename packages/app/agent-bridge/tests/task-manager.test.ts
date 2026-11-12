@@ -37,6 +37,7 @@ const userAddedJobPostOutput = {
     recommendedResume: 'frontend',
     recommendedAction: 'Apply today',
     legitimacyNotes: null,
+    criteriaBlockers: [],
     post: {
         sourceKey: 'example-source:123',
         description: 'Complete example job description',

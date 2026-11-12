@@ -169,6 +169,7 @@ const importEvaluation = {
     recommendedResume: 'full-stack',
     recommendedAction: 'Apply with the recommended resume.',
     legitimacyNotes: null,
+    criteriaBlockers: [],
     post: {
         sourceKey: 'example:123',
         roleTitle: 'Software Engineer',

@@ -93,6 +93,7 @@ export const toJobPostSnapshot = (snapshot: PrismaJobPostSnapshot): JobPostSnaps
 export const toUserAddedJobPost = (item: PrismaUserAddedJobPost): UserAddedJobPost => ({
     ...toStandaloneJobRecommendation(item),
     post: toJobPost(item.post),
+    criteriaBlockers: item.criteriaBlockers,
     jobPostSnapshot: item.post.snapshot === null ? null : toJobPostSnapshot(item.post.snapshot),
     addedAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),

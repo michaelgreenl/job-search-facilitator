@@ -34,6 +34,7 @@ interface ReviewItem {
     post: JobPost
     description: string | null
     recommendation: StandaloneJobRecommendation
+    criteriaBlockers: readonly string[]
 }
 
 type ReviewSourceItem = JobSearchReport['results'][number] | UserAddedJobPost
@@ -42,6 +43,7 @@ const toReviewItem = (item: ReviewSourceItem): ReviewItem => ({
     post: item.post,
     description: item.jobPostSnapshot?.description ?? null,
     recommendation: item,
+    criteriaBlockers: 'criteriaBlockers' in item ? item.criteriaBlockers : [],
 })
 
 const postFilterOptions: BaseDropdownOption[] = [
@@ -370,11 +372,7 @@ watch(
 
         const source = { kind: 'user-added' } satisfies ReviewSource
         selectedSource.value = source
-        selectedItem.value = {
-            post: savedItem.post,
-            description: savedItem.jobPostSnapshot?.description ?? null,
-            recommendation: savedItem,
-        }
+        selectedItem.value = toReviewItem(savedItem)
         labelError.value = null
         activePanel.value = 'viewer'
         pushSelectionState(source, savedItem.post.id)
@@ -648,6 +646,7 @@ onMounted(() => {
                 :post="selectedItem.post"
                 :description="selectedItem.description"
                 :recommendation="selectedItem.recommendation"
+                :criteria-blockers="selectedItem.criteriaBlockers"
                 :label-updating="labelUpdating || postRemoving"
                 :label-error="labelError"
                 :removable="selectedSource?.kind === 'user-added'"

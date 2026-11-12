@@ -43,6 +43,7 @@ const props = defineProps<{
     post: JobPost
     description?: string | null
     recommendation?: StandaloneJobRecommendation
+    criteriaBlockers?: readonly string[]
     labelUpdating: boolean
     labelError: string | null
     removable?: boolean
@@ -174,8 +175,13 @@ const hasLegitimacy = computed(
     () => content.value.keyLegitimacySignals !== null || content.value.legitimacyNotes !== null,
 )
 const hasAnalysis = computed(() => hasRecommendation.value || hasLegitimacy.value)
+const hasBlockers = computed(() => (props.criteriaBlockers?.length ?? 0) > 0)
 const hasContent = computed(
-    () => hasFacts.value || hasAnalysis.value || content.value.description !== null,
+    () =>
+        hasFacts.value ||
+        hasBlockers.value ||
+        hasAnalysis.value ||
+        content.value.description !== null,
 )
 
 const isUserLabel = (value: string): value is UserLabel =>
@@ -339,6 +345,20 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
                             </dl>
                         </div>
                     </div>
+                </section>
+
+                <section
+                    v-if="hasBlockers"
+                    class="content-section criteria-blockers"
+                    data-testid="post-criteria-blockers"
+                >
+                    <h3 class="content-section-title">Criteria blockers</h3>
+
+                    <ul class="criteria-blocker-list">
+                        <li v-for="blocker in criteriaBlockers" :key="blocker" class="content-copy">
+                            {{ blocker }}
+                        </li>
+                    </ul>
                 </section>
 
                 <div v-if="hasAnalysis" class="post-analysis">
@@ -596,6 +616,22 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.criteria-blockers {
+    background: $color-amber-500-alpha-12;
+    border-color: $color-amber-500-alpha-40;
+
+    .content-section-title {
+        color: $color-amber-500;
+    }
+}
+
+.criteria-blocker-list {
+    display: grid;
+    gap: $space-2;
+    margin: 0;
+    padding-left: $space-4;
 }
 
 .post-facts {

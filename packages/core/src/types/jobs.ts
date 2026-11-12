@@ -130,10 +130,12 @@ export type StandaloneJobRecommendation = Omit<JobRecommendation, 'agentRank'>
 
 export type CreateUserAddedJobPostInput = StandaloneJobRecommendation & {
     post: JobPostInput
+    criteriaBlockers: string[]
 }
 
 export type UserAddedJobPost = StandaloneJobRecommendation & {
     post: JobPost
+    criteriaBlockers: string[]
     jobPostSnapshot: JobPostSnapshot | null
     addedAt: IsoDateTime
     updatedAt: IsoDateTime

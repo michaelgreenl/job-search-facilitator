@@ -238,6 +238,7 @@ export const jobPostRepository: JobPostRepository = {
                 recommendedResume: input.recommendedResume,
                 recommendedAction: input.recommendedAction,
                 legitimacyNotes: input.legitimacyNotes,
+                criteriaBlockers: input.criteriaBlockers,
             }
             const inserted = await transaction.userAddedJobPost.createMany({
                 data: {

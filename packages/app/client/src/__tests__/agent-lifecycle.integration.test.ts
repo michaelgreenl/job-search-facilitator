@@ -47,6 +47,7 @@ const importOutput = {
     recommendedResume: 'frontend',
     recommendedAction: 'Apply with the frontend resume.',
     legitimacyNotes: null,
+    criteriaBlockers: [],
     post: {
         sourceKey: 'example:imported-role',
         description: 'Complete imported job description',

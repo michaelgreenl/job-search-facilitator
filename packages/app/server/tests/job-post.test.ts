@@ -60,6 +60,7 @@ const userAddedPost: UserAddedJobPost = {
     recommendedResume: 'frontend',
     recommendedAction: 'Apply today',
     legitimacyNotes: null,
+    criteriaBlockers: ['Base compensation is below the minimum'],
     post: existingPost,
     jobPostSnapshot: null,
     addedAt: '2026-07-12T10:00:00.000Z',
@@ -73,6 +74,7 @@ const createUserAddedPostInput: CreateUserAddedJobPostInput = {
     recommendedResume: 'frontend',
     recommendedAction: userAddedPost.recommendedAction,
     legitimacyNotes: userAddedPost.legitimacyNotes,
+    criteriaBlockers: userAddedPost.criteriaBlockers,
     post: {
         sourceKey: existingPost.sourceKey,
         description: 'Complete job description',
