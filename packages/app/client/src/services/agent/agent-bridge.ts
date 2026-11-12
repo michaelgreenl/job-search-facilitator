@@ -1,11 +1,13 @@
 import {
     parseAgentHealth,
+    parseAgentSettingsState,
     parseAgentTask,
     parseAgentTaskEvent,
     parseAutomation,
     parseAutomations,
     type UpdateAutomation,
     type AgentPermissionDecision,
+    type AgentSettings,
     type AgentTaskEvent,
     type StartAgentTaskInput,
 } from '@job-search-facilitator/core'
@@ -65,6 +67,23 @@ export async function fetchAgentHealth() {
     const response = await requestAgentBridge(path)
 
     return parseJsonResponse(response, parseAgentHealth, `Agent ${path}`)
+}
+
+export async function fetchAgentSettings() {
+    return parseJsonResponse(
+        await requestAgentBridge('/settings'),
+        parseAgentSettingsState,
+        'Agent settings',
+    )
+}
+
+export async function saveAgentSettings(settings: AgentSettings) {
+    const response = await requestAgentBridge('/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+    })
+    return parseJsonResponse(response, parseAgentSettingsState, 'Agent settings')
 }
 
 export async function fetchAutomations() {

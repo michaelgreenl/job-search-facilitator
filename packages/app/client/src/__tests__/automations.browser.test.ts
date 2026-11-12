@@ -48,7 +48,7 @@ it('saves a schedule without resuming it and waits for successful pause/resume r
     await expect.element(page.getByTestId('status-search')).toHaveTextContent('Paused')
     fail = true
     await page.getByTestId('toggle-search').click()
-    await expect.element(page.getByRole('alert')).toBeVisible()
+    await expect.element(page.getByTestId('automation-settings').getByRole('alert')).toBeVisible()
     await expect.element(page.getByTestId('status-search')).toHaveTextContent('Paused')
     fail = false
     await page.getByTestId('toggle-search').click()

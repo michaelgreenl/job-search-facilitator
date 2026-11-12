@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import type { Resume } from '@job-search-facilitator/core'
 import SettingsView from '@/views/SettingsView.vue'
+import { agentSettingsState } from '@/test/fixtures/agent-settings'
 import { mountVue } from '@/test/support/mount'
 import '@/assets/styles/app.scss'
 
@@ -175,7 +176,9 @@ it('does not treat a failed library load as an empty library and allows recovery
         .mockRejectedValueOnce(new Error('Offline'))
         .mockResolvedValueOnce(Response.json([]))
     vi.stubGlobal('fetch', (url: string) =>
-        url.endsWith('/automations') ? Promise.resolve(Response.json([])) : fetch(),
+        url.endsWith('/resumes')
+            ? fetch()
+            : Promise.resolve(Response.json(url.endsWith('/settings') ? agentSettingsState : [])),
     )
     mountVue(SettingsView)
     await expect.element(page.getByRole('alert')).toBeVisible()

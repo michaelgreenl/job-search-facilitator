@@ -3,6 +3,7 @@ import { MAX_APPLICATION_ARTIFACT_BYTES, type Resume } from '@job-search-facilit
 import { onMounted, shallowRef, useTemplateRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
+import AgentSettings from '@/components/agent/AgentSettings.vue'
 import AutomationSettings from '@/components/AutomationSettings.vue'
 import DownloadIcon from '@/components/svgs/DownloadIcon.vue'
 import OpenExternalIcon from '@/components/svgs/OpenExternalIcon.vue'
@@ -86,6 +87,7 @@ onMounted(load)
             <h1>Settings</h1>
         </header>
         <AutomationSettings />
+        <AgentSettings />
         <header class="section-heading">
             <h2 id="resumes-heading">Resumes</h2>
             <p class="save-status" role="status" data-testid="resume-save-status">{{ status }}</p>
