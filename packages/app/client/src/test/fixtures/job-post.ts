@@ -23,6 +23,7 @@ export function makeJobPost(overrides: Partial<JobPost> = {}): JobPost {
         applicationStatus: 'not-applied',
         appliedAt: null,
         userLabel: null,
+        notes: '',
         archivedAt: null,
         createdAt: '2026-07-20T12:00:00.000Z',
         updatedAt: '2026-07-20T12:00:00.000Z',

@@ -11,6 +11,7 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue'
 import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDropdown.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobPostNotesPanel from '@/components/job-posts/JobPostNotesPanel.vue'
 import JobPostViewPanel, {
     type JobPostViewPanelMode,
 } from '@/components/job-posts/JobPostViewPanel.vue'
@@ -26,7 +27,7 @@ import { usePostStore } from '@/stores/post'
 
 type ApplyLabel = Exclude<UserLabel, 'forgo'>
 type PostFilter = 'all' | ApplyLabel
-type ActivePanel = 'posts' | 'viewer' | 'outreach'
+type ActivePanel = 'posts' | 'viewer' | 'outreach' | 'notes'
 
 const selectedPostStorageKey = 'job-search-facilitator:apply-selected-post'
 const postFilterStorageKey = 'job-search-facilitator:apply-post-filter'
@@ -142,6 +143,7 @@ const applyViewerMode = computed<JobPostViewPanelMode>(() => ({
     applicationArtifacts: selectedApplicationArtifacts.value,
     artifactRemoving: artifactRemoving.value,
     artifactUploading: artifactUploading.value,
+    notesOpen: activePanel.value === 'notes',
     outreachDisabled: outreachActionDisabled.value,
     outreachLoading:
         activePanel.value !== 'outreach' &&
@@ -243,6 +245,16 @@ function showViewer() {
 
     outreachExpanded.value = false
     activePanel.value = 'viewer'
+}
+
+function toggleNotes() {
+    if (activePanel.value === 'notes') {
+        showViewer()
+        return
+    }
+
+    outreachExpanded.value = false
+    activePanel.value = 'notes'
 }
 
 async function startContactDiscovery(post: JobPost) {
@@ -637,7 +649,9 @@ onMounted(() => {
                 data-testid="apply-viewer-panel"
                 :active="activePanel === 'viewer'"
                 :adjacent="
-                    activePanel === 'posts' || (activePanel === 'outreach' && !outreachExpanded)
+                    activePanel === 'posts' ||
+                    activePanel === 'notes' ||
+                    (activePanel === 'outreach' && !outreachExpanded)
                 "
                 :back-label="activePanel !== 'posts' ? 'Back to job posts' : undefined"
                 :back-mobile-only="activePanel === 'viewer' && outreachContact === null"
@@ -652,7 +666,19 @@ onMounted(() => {
                 @open-outreach="openOutreach"
                 @mark-applied="markApplied"
                 @remove-artifact="removeArtifact"
+                @toggle-notes="toggleNotes"
                 @upload-artifact="uploadArtifact"
+            />
+
+            <JobPostNotesPanel
+                v-if="selectedPost"
+                :key="selectedPost.id"
+                class="apply-panel apply-notes glass-frame"
+                data-testid="apply-notes-panel"
+                :active="activePanel === 'notes'"
+                :adjacent="false"
+                :post="selectedPost"
+                @back="showViewer"
             />
 
             <OutreachPanel
@@ -708,6 +734,11 @@ onMounted(() => {
 
     &.apply-job-post-view {
         flex: 2;
+        padding: $space-5;
+    }
+
+    &.apply-notes {
+        flex: 1.5;
         padding: $space-5;
     }
 

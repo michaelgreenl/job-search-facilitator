@@ -6,6 +6,7 @@ import type {
     UpdateJobPostInput,
     UserAddedJobPost,
 } from '@job-search-facilitator/core'
+import { MAX_JOB_POST_NOTES_LENGTH } from '@job-search-facilitator/core'
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
@@ -27,6 +28,7 @@ const existingPost: JobPost = {
     applicationStatus: 'not-applied',
     appliedAt: null,
     userLabel: null,
+    notes: '',
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
     updatedAt: '2026-07-12T10:00:00.000Z',
@@ -260,6 +262,7 @@ describe('job post routes', () => {
             applicationStatus: 'interviewing',
             postStatus: 'closed',
             userLabel: 'forgo',
+            notes: 'Recruiter call on Friday',
             archivedAt: '2026-07-12T12:00:00.000Z',
         }
 
@@ -276,6 +279,7 @@ describe('job post routes', () => {
 
     it.each([
         ['an invalid field value', { archivedAt: 'not-a-date' }],
+        ['notes over the length limit', { notes: 'n'.repeat(MAX_JOB_POST_NOTES_LENGTH + 1) }],
         ['an extra field', { roleTitle: 'Changed title' }],
         ['an empty body', {}],
     ])('rejects %s without updating', async (_description, input) => {

@@ -2,6 +2,8 @@ import type { ApplicationArtifact } from './applications.ts'
 
 export const MAX_JSON_REQUEST_BYTES = 1024 * 1024
 
+export const MAX_JOB_POST_NOTES_LENGTH = 20_000
+
 export const APPLICATION_STATUSES = [
     'not-applied',
     'awaiting-response',
@@ -45,6 +47,7 @@ export interface JobPost {
     applicationStatus: ApplicationStatus
     appliedAt: IsoDateTime | null
     userLabel: UserLabel | null
+    notes: string
     archivedAt: IsoDateTime | null
     createdAt: IsoDateTime
     updatedAt: IsoDateTime
@@ -74,6 +77,7 @@ export interface UpdateJobPostInput {
     applicationStatus?: ApplicationStatus
     postStatus?: PostStatus
     userLabel?: UserLabel | null
+    notes?: string
     archivedAt?: IsoDateTime | null
 }
 

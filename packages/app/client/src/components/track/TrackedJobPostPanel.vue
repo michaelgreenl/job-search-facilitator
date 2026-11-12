@@ -12,6 +12,7 @@ import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDro
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import { APPLICATION_STATUS_LABELS } from '@/components/job-posts/job-post-labels'
+import JobPostNotesButton from '@/components/job-posts/JobPostNotesButton.vue'
 import OutreachContactList from '@/components/outreach/OutreachContactList.vue'
 import OutreachDiscoverButton from '@/components/outreach/OutreachDiscoverButton.vue'
 import { applicationArtifactUrl } from '@/services/application-artifacts'
@@ -24,6 +25,7 @@ const props = defineProps<{
     contactError: string | null
     contactUpdatingId: string | null
     entry: TrackedJobPost
+    notesOpen: boolean
     outreachContacts: OutreachContact[]
     outreachContactsError: string | null
     outreachContactsLoading: boolean
@@ -41,6 +43,7 @@ const emit = defineEmits<{
     retryOutreachContacts: []
     selectContact: [contact: OutreachContact]
     showOutreachTask: [taskId: string]
+    toggleNotes: []
     updateContact: [contactId: string, responded: boolean]
     updateStatus: [status: ApplicationStatus]
 }>()
@@ -94,7 +97,10 @@ function selectStatus(value: string) {
             :data-post-id="entry.post.id"
         >
             <header class="job-heading">
-                <span class="eyebrow">{{ entry.post.company }}</span>
+                <div class="job-heading-top">
+                    <span class="eyebrow">{{ entry.post.company }}</span>
+                    <JobPostNotesButton :open="notesOpen" @click="emit('toggleNotes')" />
+                </div>
                 <h2>{{ entry.post.roleTitle }}</h2>
                 <span v-if="entry.post.location" class="location">{{ entry.post.location }}</span>
             </header>
@@ -242,6 +248,13 @@ function selectStatus(value: string) {
         margin: 0;
         font-size: clamp(1.5rem, 3vw, 2rem);
     }
+}
+
+.job-heading-top {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .eyebrow,

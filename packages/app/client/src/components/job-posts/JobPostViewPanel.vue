@@ -11,6 +11,7 @@ export type JobPostViewPanelMode =
           applicationArtifacts: readonly ApplicationArtifact[]
           artifactRemoving: ApplicationArtifactKind | null
           artifactUploading: ApplicationArtifactKind | null
+          notesOpen: boolean
           outreachDisabled: boolean
           outreachLoading: boolean
       }
@@ -31,6 +32,7 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import TrashIcon from '@/components/svgs/TrashIcon.vue'
 
 import JobPostLabel from './JobPostLabel.vue'
+import JobPostNotesButton from './JobPostNotesButton.vue'
 import { USER_LABEL_OPTIONS } from './job-post-labels'
 
 const props = defineProps<{
@@ -54,6 +56,7 @@ const emit = defineEmits<{
     markApplied: []
     removeArtifact: [kind: ApplicationArtifactKind]
     remove: []
+    toggleNotes: []
     uploadArtifact: [kind: ApplicationArtifactKind, file: File]
     back: []
 }>()
@@ -238,10 +241,17 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
             <div class="post-heading">
                 <div class="post-labels">
                     <span class="component-label">{{ post.company }}</span>
-                    <JobPostLabel
-                        :application-status="post.applicationStatus"
-                        :user-label="post.userLabel"
-                    />
+                    <div class="post-label-controls">
+                        <JobPostLabel
+                            :application-status="post.applicationStatus"
+                            :user-label="post.userLabel"
+                        />
+                        <JobPostNotesButton
+                            v-if="applyMode"
+                            :open="applyMode.notesOpen"
+                            @click="emit('toggleNotes')"
+                        />
+                    </div>
                 </div>
 
                 <h2 id="selected-post-title" class="post-title">{{ post.roleTitle }}</h2>
@@ -509,9 +519,14 @@ function selectArtifact(kind: ApplicationArtifactKind, event: Event) {
     gap: $space-1;
 }
 
-.post-labels {
+.post-labels,
+.post-label-controls {
     display: flex;
+    gap: $space-2;
     align-items: center;
+}
+
+.post-labels {
     justify-content: space-between;
 }
 

@@ -278,6 +278,10 @@ export const jobPostRepository: JobPostRepository = {
             data.userLabel = input.userLabel === null ? null : toPrismaUserLabel(input.userLabel)
         }
 
+        if (input.notes !== undefined) {
+            data.notes = input.notes
+        }
+
         if (input.archivedAt !== undefined) {
             data.archivedAt = input.archivedAt === null ? null : new Date(input.archivedAt)
         }

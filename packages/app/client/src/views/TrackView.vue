@@ -7,6 +7,7 @@ import {
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, shallowRef, watch } from 'vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
+import JobPostNotesPanel from '@/components/job-posts/JobPostNotesPanel.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
@@ -16,7 +17,7 @@ import { readSessionStorage, writeSessionStorage } from '@/services/session-stor
 import { useOutreachStore } from '@/stores/outreach'
 import { usePostStore } from '@/stores/post'
 
-type ActivePanel = 'description' | 'detail' | 'outreach' | 'posts'
+type ActivePanel = 'description' | 'detail' | 'notes' | 'outreach' | 'posts'
 type PostFilter = 'open' | 'active' | 'closed' | 'awaiting-replies' | 'outreach-responses'
 const selectedPostStorageKey = 'job-search-facilitator:track-selected-post'
 
@@ -356,6 +357,11 @@ function collapseOutreach() {
     activePanel.value = 'outreach'
 }
 
+function toggleNotes() {
+    outreachExpanded.value = false
+    activePanel.value = activePanel.value === 'notes' ? 'detail' : 'notes'
+}
+
 function openJobDescription() {
     if (selectedEntry.value?.jobPostSnapshot) {
         activePanel.value = 'description'
@@ -479,14 +485,18 @@ onMounted(() => {
             :adjacent="
                 activePanel === 'posts' ||
                 activePanel === 'description' ||
+                activePanel === 'notes' ||
                 (activePanel === 'outreach' && !outreachExpanded)
             "
             :back-on-desktop="
-                activePanel === 'description' || (activePanel === 'outreach' && !outreachExpanded)
+                activePanel === 'description' ||
+                activePanel === 'notes' ||
+                (activePanel === 'outreach' && !outreachExpanded)
             "
             :contact-error="contactError"
             :contact-updating-id="selectedContactUpdatingId"
             :entry="selectedEntry"
+            :notes-open="activePanel === 'notes'"
             :outreach-contacts="outreachContacts"
             :outreach-contacts-error="outreachContactsError"
             :outreach-contacts-loading="outreachContactsLoading"
@@ -501,6 +511,7 @@ onMounted(() => {
             @retry-outreach-contacts="retryOutreachContacts"
             @select-contact="selectOutreachContact"
             @show-outreach-task="showOutreachTask"
+            @toggle-notes="toggleNotes"
             @update-contact="updateContact"
             @update-status="updateApplicationStatus"
         />
@@ -511,6 +522,17 @@ onMounted(() => {
             :active="activePanel === 'description'"
             :post="selectedEntry.post"
             :snapshot="selectedEntry.jobPostSnapshot"
+            @back="activePanel = 'detail'"
+        />
+
+        <JobPostNotesPanel
+            v-if="selectedEntry"
+            :key="selectedEntry.post.id"
+            class="track-panel track-notes glass-frame"
+            data-testid="track-notes-panel"
+            :active="activePanel === 'notes'"
+            :adjacent="false"
+            :post="selectedEntry.post"
             @back="activePanel = 'detail'"
         />
 
@@ -557,6 +579,10 @@ onMounted(() => {
 
 .track-description {
     flex: 1.2;
+}
+
+.track-notes {
+    padding: $space-5;
 }
 
 .track-outreach {

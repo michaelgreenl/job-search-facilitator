@@ -464,6 +464,11 @@ defineExpose({ focus })
         color: $color-signal-light;
     }
 
+    &[aria-pressed='true'] {
+        color: $color-signal-light;
+        background: $color-signal-alpha-14;
+    }
+
     &:active:not(:disabled) {
         transform: scale(0.92);
     }

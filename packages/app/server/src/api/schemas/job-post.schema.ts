@@ -1,4 +1,9 @@
-import { APPLICATION_STATUSES, POST_STATUSES, USER_LABELS } from '@job-search-facilitator/core'
+import {
+    APPLICATION_STATUSES,
+    MAX_JOB_POST_NOTES_LENGTH,
+    POST_STATUSES,
+    USER_LABELS,
+} from '@job-search-facilitator/core'
 import { z } from 'zod'
 
 export { createUserAddedJobPostInputSchema } from '@job-search-facilitator/core'
@@ -12,6 +17,7 @@ export const updateJobPostInputSchema = z
         applicationStatus: z.enum(APPLICATION_STATUSES).optional(),
         postStatus: z.enum(POST_STATUSES).optional(),
         userLabel: z.enum(USER_LABELS).nullable().optional(),
+        notes: z.string().max(MAX_JOB_POST_NOTES_LENGTH).optional(),
         archivedAt: z.iso.datetime({ offset: true }).nullable().optional(),
     })
     .refine((input) => Object.keys(input).length > 0, {

@@ -937,6 +937,7 @@ const responsePostFields = [
     'applicationStatus',
     'appliedAt',
     'userLabel',
+    'notes',
     'archivedAt',
     'createdAt',
     'updatedAt',

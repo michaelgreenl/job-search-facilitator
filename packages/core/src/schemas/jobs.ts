@@ -78,6 +78,7 @@ export const jobPostSchema: z.ZodType<JobPost> = z.looseObject({
     applicationStatus: z.enum(APPLICATION_STATUSES),
     appliedAt: isoDateTimeSchema.nullable(),
     userLabel: z.enum(USER_LABELS).nullable(),
+    notes: z.string(),
     archivedAt: isoDateTimeSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,

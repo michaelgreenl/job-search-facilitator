@@ -30,6 +30,7 @@ const post: JobPost = {
     applicationStatus: 'not-applied',
     appliedAt: null,
     userLabel: null,
+    notes: '',
     archivedAt: null,
     createdAt: '2026-07-12T10:00:00.000Z',
     updatedAt: '2026-07-12T10:00:00.000Z',
