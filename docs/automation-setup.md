@@ -112,6 +112,7 @@ See OpenAI's [scheduled tasks guide](https://learn.chatgpt.com/docs/automations)
 ### Manage local schedules in Settings
 
 Settings lists local desktop automations associated with this project. Keep the Agent bridge running to load or change them.
+The list includes ChatGPT automations and Claude desktop tasks. Each row shows the logo of the provider that runs it.
 Each row shows its active or paused state, schedule, computer time zone, and next scheduled time.
 Use **Pause** or **Resume** to change its state. Pausing prevents future scheduled runs; it does not cancel a run already in progress.
 
@@ -119,8 +120,23 @@ Use **Edit schedule** to choose run days and times, then select **Save schedule*
 The editor supports daily and weekly schedules with up to 24 run times on each selected day. Edit other recurrence patterns in the desktop app.
 Use **Refresh** after changing a schedule elsewhere. Conflicting edits require a refresh before saving.
 
-These controls update the existing local schedule files in the desktop user's Codex home. They preserve the prompt, model, and other configuration.
+These controls update the existing local schedule files in the desktop user's Codex home. They preserve the prompt and other configuration.
 They do not create schedules or manage cloud schedules. Keep the computer awake and the desktop app open for scheduled runs.
+
+The Claude desktop app owns the schedule of a Claude task. Change that schedule in the Claude desktop app.
+
+### Set the model of an automation
+
+Each row shows the model and reasoning effort of the automation. Select that line to change them, then select **Save**.
+A ChatGPT automation keeps its model in its local schedule file, so scheduled runs use it.
+The Agent bridge keeps the model of a Claude task. Runs started from Settings use it.
+A Claude task with no model of its own uses the Claude model selected under **Agent**.
+
+### Run an automation from Settings
+
+Use **Run now** to start an automation without waiting for its schedule. The Agent bridge runs the saved prompt with the provider's own agent.
+The row shows the progress of the run, then its result. Use **Stop** to end a run.
+A run continues only while the Agent bridge is open. A run has no user to approve requests, so each provider reviews its own actions.
 
 ## Full workflow check
 

@@ -26,7 +26,7 @@ Track summarizes active applications, closed outcomes, and pending replies.
 
 An Express API stores workflow data in PostgreSQL through Prisma. Shared Zod schemas validate data across each workspace package.
 
-A host-side bridge connects the client to Codex and Chrome. It runs structured, read-only research tasks with browser approval prompts.
+A host-side bridge connects the client to Codex or Claude, and to Chrome. It runs structured, read-only research tasks with browser approval prompts.
 
 ## Architecture & Key Features
 
@@ -36,7 +36,7 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 - **Search reports:** Browse dated reports, ranked recommendations, job descriptions, and source links.
 - **User labels:** Mark roles as `P1`, `P2`, `quick-app`, or `forgo`.
-- **Job import:** Submit one job URL for Codex to inspect and return as structured data.
+- **Job import:** Submit one job URL for the Agent to inspect and return as structured data.
 - **Saved state:** Restore filters, selections, and active Agent tasks after navigation or reloads.
 
 #### Apply Workspace
@@ -71,12 +71,14 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 ### Agent Bridge
 
-- **Local adapter:** The bridge starts the bundled Codex app-server on the host Mac.
-- **Chrome capability:** Codex can inspect job posts and LinkedIn pages through the installed Chrome plugin.
+- **Local adapters:** The bridge runs Agent tasks with the bundled Codex app-server or with the Claude Agent SDK.
+- **Provider settings:** Settings selects the provider, model, and reasoning effort for new Agent tasks.
+- **Chrome capability:** The selected Agent inspects job posts and LinkedIn pages through its Chrome extension.
 - **Structured output:** JSON Schema contracts validate job imports, contact results, and draft revisions.
 - **Live progress:** Server-sent events stream task status, results, failures, and permission requests.
 - **Read-only runtime:** Agent tasks use a read-only sandbox with no shell approval escalation.
 - **Task lifetime:** Task state remains in memory until the bridge process stops.
+- **Automation runs:** Settings starts a saved Codex or Claude automation, shows its progress, and can stop it.
 
 ## Tech Stack
 
@@ -98,8 +100,8 @@ A host-side bridge connects the client to Codex and Chrome. It runs structured, 
 
 **Agent Bridge:**
 
-- **Runtime:** Codex app-server bundled with the ChatGPT Mac app
-- **Browser:** Codex Chrome capability
+- **Runtime:** Codex app-server bundled with the ChatGPT Mac app, and the Claude Agent SDK
+- **Browser:** Codex Chrome capability and Claude in Chrome
 - **Transport:** Express and server-sent events
 - **Validation:** AJV and Zod
 
@@ -119,6 +121,7 @@ Install these tools for the complete application:
 - Docker Desktop with Docker Compose
 - macOS with the [ChatGPT desktop app](https://learn.chatgpt.com/docs/app)
 - Google Chrome
+- Optional: [Claude Code](https://code.claude.com/docs/en/overview) to run Agent tasks with Claude
 
 The web app and API can run without the Agent bridge. Job imports and contact discovery need the complete setup.
 
@@ -148,6 +151,14 @@ Complete the extension setup in Chrome. Approve its permissions and confirm that
 
 See OpenAI's [Chrome extension setup](https://learn.chatgpt.com/docs/chrome-extension) for current instructions and security details.
 
+### Configure Claude (optional)
+
+Install Claude Code. Run `claude /login` in a terminal and sign in.
+
+Install the Claude in Chrome extension and sign in with the same account. See Anthropic's [Chrome guide](https://code.claude.com/docs/en/chrome) for current instructions.
+
+Open Settings in the app and select **Claude** under **Agent**. Then select a model and a reasoning effort.
+
 The app keeps applicant facts and automation policy outside Git. Copy the public templates into the ignored private directory:
 
 ```bash
@@ -174,8 +185,10 @@ Two scheduled automations complete the workflow:
 
 Complete the [automation setup guide](docs/automation-setup.md). The guide includes both prompts and an end-to-end check.
 
-Create scheduled tasks in ChatGPT. Settings can pause, resume, and edit daily or weekly local schedules for this project through the Agent bridge.
-Cloud schedules, advanced recurrence patterns, and plugin settings remain in ChatGPT.
+Create scheduled tasks in ChatGPT or in the Claude desktop app. Settings lists the tasks for this project through the Agent bridge.
+Settings can run each task, stop a run, and set its model and reasoning effort.
+Settings can also pause, resume, and edit daily or weekly ChatGPT schedules.
+Cloud schedules, advanced recurrence patterns, plugin settings, and Claude schedules remain in the desktop apps.
 
 ### Start the application
 
@@ -217,6 +230,7 @@ The task can ask for access to each website it visits. Review each website befor
 - Confirm that the ChatGPT side panel loads in the active Chrome profile.
 - Restart Chrome, ChatGPT, and `pnpm run dev:agent` after a plugin change.
 - If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
+- If Settings shows Claude as unavailable, run `claude /login`, then restart `pnpm run dev:agent`.
 - If an Agent cannot read the profile, start the bridge from the repository root.
 - If a port differs, copy the applicable `.env.example` file and update its values.
 
