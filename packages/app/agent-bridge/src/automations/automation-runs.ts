@@ -3,12 +3,15 @@ import type {
     AgentProvider,
     AutomationRun,
 } from '@job-search-facilitator/core'
+import type { PluginSwitch } from '../plugins/agent-plugins.ts'
 
 export interface AutomationRunInput {
     prompt: string
     cwd: string
     /** Null runs with the provider's own default. */
     model: AgentModelSelection | null
+    /** The user's choice for each plugin of the provider. A run uses only a plugin that is on. */
+    plugins: PluginSwitch[]
     signal: AbortSignal
     onProgress: (text: string) => void
 }
@@ -22,7 +25,10 @@ const maxMessageLength = 2_000
 export class AutomationRuns {
     private readonly runs = new Map<string, { run: AutomationRun; abort: AbortController }>()
 
-    constructor(private readonly runners: Record<AgentProvider, AutomationRunner>) {}
+    constructor(
+        private readonly runners: Record<AgentProvider, AutomationRunner>,
+        private readonly switches: (provider: AgentProvider) => PluginSwitch[],
+    ) {}
 
     get(id: string): AutomationRun | null {
         return this.runs.get(id)?.run ?? null
@@ -32,7 +38,7 @@ export class AutomationRuns {
     start(
         id: string,
         provider: AgentProvider,
-        input: Omit<AutomationRunInput, 'signal' | 'onProgress'>,
+        input: Pick<AutomationRunInput, 'prompt' | 'cwd' | 'model'>,
     ): boolean {
         if (this.get(id)?.status === 'running') return false
 
@@ -55,6 +61,7 @@ export class AutomationRuns {
 
         void this.runners[provider]({
             ...input,
+            plugins: this.switches(provider),
             signal: abort.signal,
             onProgress: (text) => update({ message: message(text) }),
         }).then(

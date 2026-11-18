@@ -1,4 +1,5 @@
 import type {
+    AgentCapability,
     AgentPermissionDecision,
     AgentProvider,
     AgentProviderStatus,
@@ -23,6 +24,11 @@ export class ProviderRouter implements AgentRuntime {
         private readonly providers: Providers,
         private readonly selected: () => AgentProvider,
         private readonly findProvider: (threadId: string) => Promise<AgentProvider>,
+        /** Reports whether the user lets the provider use the plugin behind a capability. */
+        private readonly allows: (
+            provider: AgentProvider,
+            capability: AgentCapability,
+        ) => boolean = () => true,
     ) {
         for (const provider of Object.keys(providers) as AgentProvider[]) {
             providers[provider].onEvent((event) => this.forward(provider, event))
@@ -30,7 +36,17 @@ export class ProviderRouter implements AgentRuntime {
     }
 
     get health(): AgentRuntimeHealth {
-        return this.providers[this.selected()].health
+        const provider = this.selected()
+        const { health } = this.providers[provider]
+
+        return health.status === 'healthy'
+            ? {
+                  ...health,
+                  capabilities: health.capabilities.filter((capability) =>
+                      this.allows(provider, capability),
+                  ),
+              }
+            : health
     }
 
     status(): Promise<AgentProviderStatus[]> {
@@ -57,6 +73,9 @@ export class ProviderRouter implements AgentRuntime {
                 ? this.selected()
                 : (this.threads.get(input.threadId)?.provider ??
                   (await this.findProvider(input.threadId)))
+        const blocked = input.capabilities.find((capability) => !this.allows(provider, capability))
+        if (blocked !== undefined) throw new Error(`Agent capability is unavailable: ${blocked}`)
+
         const started = await this.providers[provider].startTask(taskId, input)
         this.threads.set(started.threadId, { provider, turnId: started.turnId })
 

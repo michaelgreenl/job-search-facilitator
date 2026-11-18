@@ -12,57 +12,70 @@ const fileSchema = agentSettingsSchema.extend({
     claudeTaskModels: z
         .record(z.string(), agentSettingsSchema.shape.models.shape.claude)
         .default({}),
+    // The plugin switches that the user changed. Every other plugin keeps its default.
+    plugins: z.record(z.string(), z.boolean()).default({}),
 })
 
-const defaultSettings: AgentSettings = {
+type SettingsFile = z.infer<typeof fileSchema>
+
+const defaultSettings: SettingsFile = {
     provider: 'codex',
     models: {
         codex: { model: 'gpt-6-astra', reasoningEffort: 'xhigh' },
         claude: { model: 'claude-opus-5-5', reasoningEffort: 'high' },
     },
+    claudeTaskModels: {},
+    plugins: {},
 }
 
-/** Keeps the chosen Agent provider, model, and reasoning effort in one local file. */
+/** Keeps the Agent choices that the user makes in Settings in one local file. */
 export class AgentSettingsStore {
-    current: AgentSettings
-    private claudeTaskModels: Record<string, AgentModelSelection>
+    private saved: SettingsFile
 
     constructor(private readonly file: string) {
-        let saved: unknown
+        let content: unknown
         try {
-            saved = JSON.parse(readFileSync(file, 'utf8'))
+            content = JSON.parse(readFileSync(file, 'utf8'))
         } catch {
             // A missing or unreadable file means no choice was saved.
         }
-        const { claudeTaskModels, ...settings } = fileSchema.safeParse(saved).data ?? {
-            ...defaultSettings,
-            claudeTaskModels: {},
-        }
-        this.current = settings
-        this.claudeTaskModels = claudeTaskModels
+        this.saved = fileSchema.safeParse(content).data ?? defaultSettings
+    }
+
+    /** The selected provider, with the model and reasoning effort of each provider. */
+    get current(): AgentSettings {
+        return { provider: this.saved.provider, models: this.saved.models }
     }
 
     save(settings: AgentSettings): void {
-        this.write(settings, this.claudeTaskModels)
+        this.write({ ...this.saved, ...settings })
     }
 
     claudeTaskModel(taskId: string): AgentModelSelection | null {
-        return this.claudeTaskModels[taskId] ?? null
+        return this.saved.claudeTaskModels[taskId] ?? null
     }
 
     saveClaudeTaskModel(taskId: string, model: AgentModelSelection): void {
-        this.write(this.current, { ...this.claudeTaskModels, [taskId]: model })
+        this.write({
+            ...this.saved,
+            claudeTaskModels: { ...this.saved.claudeTaskModels, [taskId]: model },
+        })
     }
 
-    private write(
-        settings: AgentSettings,
-        claudeTaskModels: Record<string, AgentModelSelection>,
-    ): void {
+    /** Returns undefined when the user did not change the switch of this plugin. */
+    pluginEnabled(pluginId: string): boolean | undefined {
+        return this.saved.plugins[pluginId]
+    }
+
+    savePluginEnabled(pluginId: string, enabled: boolean): void {
+        this.write({ ...this.saved, plugins: { ...this.saved.plugins, [pluginId]: enabled } })
+    }
+
+    private write(next: SettingsFile): void {
         const temporary = `${this.file}.${process.pid}.tmp`
         mkdirSync(dirname(this.file), { recursive: true })
-        writeFileSync(temporary, `${JSON.stringify({ ...settings, claudeTaskModels }, null, 4)}\n`)
+        writeFileSync(temporary, `${JSON.stringify(next, null, 4)}\n`)
         renameSync(temporary, this.file)
-        this.current = settings
-        this.claudeTaskModels = claudeTaskModels
+        this.saved = next
     }
 }

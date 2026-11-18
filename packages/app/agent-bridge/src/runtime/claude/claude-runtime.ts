@@ -7,6 +7,8 @@ import {
     type CanUseTool,
     type EffortLevel,
     type HookCallback,
+    type McpClaudeAIProxyServerConfig,
+    type McpServerStatus,
     type Options,
     type Query,
     type SDKMessage,
@@ -18,6 +20,7 @@ import type {
     AgentModel,
     AgentModelSelection,
     AgentPermissionDecision,
+    AgentPluginStatus,
     StartAgentTaskInput,
 } from '@job-search-facilitator/core'
 import { loadResumeContext } from '../../resume-context.ts'
@@ -61,12 +64,15 @@ interface PendingPermission {
 }
 
 const bridgeServer = 'job_search'
-const chromeServer = 'claude-in-chrome'
+export const chromeServer = 'claude-in-chrome'
 const chromeTools = `mcp__${chromeServer}__`
 const pageTextTool = `${chromeTools}get_page_text`
 const localTools = ['Read', 'Glob', 'Grep']
 const webTools = ['WebSearch', 'WebFetch']
 const startTimeoutMs = 30_000
+const statusPollMs = 250
+// The connectors of the Claude account load a moment after a session starts.
+const connectorWaitMs = 3_000
 const pageTextResult = /^Title: .*\nURL: (\S+)\n(?:.*\n)?---\n([\s\S]*)$/
 const captureInput = {
     tabId: z.union([z.number(), z.string()]),
@@ -76,6 +82,11 @@ const captureInput = {
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isConnector = (
+    server: McpServerStatus,
+): server is McpServerStatus & { config: McpClaudeAIProxyServerConfig } =>
+    server.config?.type === 'claudeai-proxy'
 
 /** Lists each website origin that a Chrome tool call reads or changes. */
 const chromeOrigins = (input: Record<string, unknown>, reason: string | undefined): string[] => {
@@ -112,6 +123,8 @@ export class ClaudeRuntime implements AgentProviderRuntime {
     private eventFlushScheduled = false
     private readonly eventListeners = new Set<(event: AgentRuntimeEvent) => void>()
     private models: AgentModel[] = []
+    private connectors = new Map<string, McpClaudeAIProxyServerConfig>()
+    private pluginRead: Promise<Map<string, AgentPluginStatus>> | null = null
     private chrome = false
     private ready = false
     private runtimeError = new Error('Agent runtime has not started')
@@ -132,8 +145,113 @@ export class ClaudeRuntime implements AgentProviderRuntime {
 
     /** Reads the account, model list, and Chrome connection without sending a prompt. */
     async start(): Promise<void> {
+        try {
+            await this.inspect(this.baseOptions(true), async (session, signal) => {
+                const account = await session.accountInfo()
+                if (account.tokenSource === 'none' && account.apiKeySource === undefined) {
+                    throw new Error('Claude is not signed in. Run "claude /login" in a terminal.')
+                }
+
+                this.models = (await session.supportedModels()).flatMap((model) => {
+                    const reasoningEfforts = model.supportedEffortLevels ?? []
+                    return model.value === 'default' || reasoningEfforts.length === 0
+                        ? []
+                        : [
+                              {
+                                  id: model.resolvedModel ?? model.value,
+                                  name: model.displayName,
+                                  reasoningEfforts,
+                              },
+                          ]
+                })
+                this.models = this.models.filter(
+                    (model, index) => this.models.findIndex(({ id }) => id === model.id) === index,
+                )
+
+                let servers = await session.mcpServerStatus()
+                const pending = () =>
+                    servers.some(
+                        ({ name, status }) => name === chromeServer && status === 'pending',
+                    )
+                while (pending() && !signal.aborted) {
+                    await new Promise((resolve) => setTimeout(resolve, statusPollMs))
+                    servers = await session.mcpServerStatus()
+                }
+                this.chrome = servers.some(
+                    ({ name, status }) => name === chromeServer && status === 'connected',
+                )
+            })
+            this.ready = true
+        } catch (error) {
+            this.runtimeError = error instanceof Error ? error : new Error('Could not start Claude')
+            throw this.runtimeError
+        }
+    }
+
+    /** Reads the state of Claude in Chrome and of each connector on the Claude account. */
+    readPlugins(): Promise<Map<string, AgentPluginStatus>> {
+        if (!this.ready) return Promise.reject(this.runtimeError)
+
+        this.pluginRead = this.inspect(
+            // This session keeps the account's connectors, so that it can report them.
+            { cwd: this.cwd, settingSources: [], extraArgs: { chrome: null } },
+            async (session, signal) => {
+                const waitUntil = Date.now() + connectorWaitMs
+                let servers = await session.mcpServerStatus()
+                const loading = () =>
+                    servers.some(({ status }) => status === 'pending') ||
+                    (Date.now() < waitUntil && !servers.some(isConnector))
+                while (loading() && !signal.aborted) {
+                    await new Promise((resolve) => setTimeout(resolve, statusPollMs))
+                    servers = await session.mcpServerStatus()
+                }
+
+                this.chrome = servers.some(
+                    ({ name, status }) => name === chromeServer && status === 'connected',
+                )
+                this.connectors = new Map(
+                    servers.flatMap((server) =>
+                        server.status === 'connected' && isConnector(server)
+                            ? [[server.name, server.config]]
+                            : [],
+                    ),
+                )
+                return new Map(
+                    servers.map(({ name, status }): [string, AgentPluginStatus] => [
+                        name,
+                        status === 'connected'
+                            ? 'ready'
+                            : status === 'needs-auth'
+                              ? 'needs-sign-in'
+                              : 'unavailable',
+                    ]),
+                )
+            },
+        )
+        return this.pluginRead
+    }
+
+    /** Returns the connection settings of the named account connectors that are connected. */
+    async connectorServers(names: string[]): Promise<Record<string, McpClaudeAIProxyServerConfig>> {
+        await (this.pluginRead ?? this.readPlugins()).catch(() => undefined)
+
+        return Object.fromEntries(
+            names.flatMap((name) => {
+                const config = this.connectors.get(name)
+                return config === undefined ? [] : [[name, config]]
+            }),
+        )
+    }
+
+    /**
+     * Opens a session that sends no prompt, for status requests only. The session
+     * closes when `read` returns.
+     */
+    private async inspect<T>(
+        options: Options,
+        read: (session: Query, signal: AbortSignal) => Promise<T>,
+    ): Promise<T> {
         const abort = new AbortController()
-        // An input that sends nothing keeps the process open for status requests only.
         const idle: AsyncIterable<SDKUserMessage> = {
             [Symbol.asyncIterator]: () => ({
                 next: () =>
@@ -144,52 +262,20 @@ export class ClaudeRuntime implements AgentProviderRuntime {
                     ),
             }),
         }
-        const probe = this.query({
+        const session = this.query({
             prompt: idle,
-            options: { ...this.baseOptions(true), abortController: abort, tools: [] },
+            options: { ...options, abortController: abort, tools: [] },
         })
         const timeout = setTimeout(() => abort.abort(), startTimeoutMs)
 
         try {
-            const account = await probe.accountInfo()
-            if (account.tokenSource === 'none' && account.apiKeySource === undefined) {
-                throw new Error('Claude is not signed in. Run "claude /login" in a terminal.')
-            }
-
-            this.models = (await probe.supportedModels()).flatMap((model) => {
-                const reasoningEfforts = model.supportedEffortLevels ?? []
-                return model.value === 'default' || reasoningEfforts.length === 0
-                    ? []
-                    : [
-                          {
-                              id: model.resolvedModel ?? model.value,
-                              name: model.displayName,
-                              reasoningEfforts,
-                          },
-                      ]
-            })
-            this.models = this.models.filter(
-                (model, index) => this.models.findIndex(({ id }) => id === model.id) === index,
-            )
-
-            let chrome = (await probe.mcpServerStatus()).find(({ name }) => name === chromeServer)
-            while (chrome?.status === 'pending' && !abort.signal.aborted) {
-                await new Promise((resolve) => setTimeout(resolve, 250))
-                chrome = (await probe.mcpServerStatus()).find(({ name }) => name === chromeServer)
-            }
-            this.chrome = chrome?.status === 'connected'
-            this.ready = true
+            return await read(session, abort.signal)
         } catch (error) {
-            this.runtimeError = abort.signal.aborted
-                ? new Error('Claude did not start in time')
-                : error instanceof Error
-                  ? error
-                  : new Error('Could not start Claude')
-            throw this.runtimeError
+            throw abort.signal.aborted ? new Error('Claude did not answer in time') : error
         } finally {
             clearTimeout(timeout)
             abort.abort()
-            probe.close()
+            session.close()
         }
     }
 

@@ -23,6 +23,9 @@ const success = (output: unknown) => ({
     structured_output: output,
 })
 
+const gmailConnector = { type: 'claudeai-proxy', url: 'https://mail.example.com/mcp', id: 'gmail' }
+const driveConnector = { type: 'claudeai-proxy', url: 'https://drive.example.com/mcp', id: 'drive' }
+
 /** Stands in for the Claude process. Each query gets a stream the test writes to. */
 const createFakeClaude = (account: Record<string, string> = { email: 'user@example.com' }) => {
     const queries: Array<{ options: Options; send: (message: unknown) => void }> = []
@@ -67,7 +70,15 @@ const createFakeClaude = (account: Record<string, string> = { email: 'user@examp
                     },
                 ]),
             mcpServerStatus: () =>
-                Promise.resolve([{ name: 'claude-in-chrome', status: 'connected' }]),
+                Promise.resolve([
+                    { name: 'claude-in-chrome', status: 'connected' },
+                    { name: 'claude.ai Gmail', status: 'connected', config: gmailConnector },
+                    {
+                        name: 'claude.ai Google Drive',
+                        status: 'needs-auth',
+                        config: driveConnector,
+                    },
+                ]),
             close: () => {},
         }) as unknown as Query
     }
@@ -170,6 +181,32 @@ describe('Claude runtime', () => {
             resume: task.threadId,
             forkSession: true,
         })
+    })
+
+    it('reports the state of each connector on the Claude account', async () => {
+        const runtime = new ClaudeRuntime('/workspace', {
+            selection: () => ({ model: 'claude-opus-5-5', reasoningEffort: 'high' }),
+            query: createFakeClaude().query,
+        })
+        await runtime.start()
+
+        expect(Object.fromEntries(await runtime.readPlugins())).toEqual({
+            'claude-in-chrome': 'ready',
+            'claude.ai Gmail': 'ready',
+            'claude.ai Google Drive': 'needs-sign-in',
+        })
+    })
+
+    it('gives a run the settings of a connected connector only', async () => {
+        const runtime = new ClaudeRuntime('/workspace', {
+            selection: () => ({ model: 'claude-opus-5-5', reasoningEffort: 'high' }),
+            query: createFakeClaude().query,
+        })
+        await runtime.start()
+
+        await expect(
+            runtime.connectorServers(['claude.ai Gmail', 'claude.ai Google Drive']),
+        ).resolves.toEqual({ 'claude.ai Gmail': gmailConnector })
     })
 
     it('reports that Claude is unavailable when no account is signed in', async () => {

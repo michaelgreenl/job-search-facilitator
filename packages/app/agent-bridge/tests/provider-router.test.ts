@@ -32,13 +32,14 @@ const input: StartAgentTaskInput = {
     capabilities: [],
 }
 
-const createRouter = () => {
+const createRouter = (allows?: () => boolean) => {
     const providers = { codex: new FakeProvider('codex'), claude: new FakeProvider('claude') }
     const selection: { provider: AgentProvider } = { provider: 'claude' }
     const router = new ProviderRouter(
         providers,
         () => selection.provider,
         () => Promise.resolve('codex'),
+        allows,
     )
 
     return { providers, router, selection }
@@ -63,6 +64,16 @@ describe('Provider router', () => {
 
         expect(providers.claude.startAttempts).toBe(2)
         expect(providers.codex.startAttempts).toBe(0)
+    })
+
+    it('does not offer or start a capability whose plugin is off', async () => {
+        const { providers, router } = createRouter(() => false)
+
+        expect(router.health).toMatchObject({ status: 'healthy', capabilities: [] })
+        await expect(
+            router.startTask('task-id', { ...input, capabilities: ['chrome'] }),
+        ).rejects.toThrow()
+        expect(providers.claude.startAttempts).toBe(0)
     })
 
     it('fails only the tasks of the provider that failed', async () => {

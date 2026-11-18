@@ -18,6 +18,10 @@ import { FakeRuntime } from './fake-runtime.ts'
 const clientOrigin = 'http://localhost:5173'
 const projectRoot = '/workspace/job-search'
 const model = { model: 'chosen-model', reasoningEffort: 'low' }
+const switches = {
+    codex: [{ source: 'codex-plugin', enabled: false }],
+    claude: [{ source: 'claude-plugin', enabled: true }],
+}
 let directory: string
 let settings: AgentSettingsStore
 let started: Array<AutomationRunInput & { finish: (result: string) => void }>
@@ -43,7 +47,10 @@ const app = () =>
         directory: join(directory, 'codex'),
         projectRoot,
         claude: { appData: join(directory, 'claude'), settings },
-        runs: new AutomationRuns({ codex: runner, claude: runner }),
+        runs: new AutomationRuns(
+            { codex: runner, claude: runner },
+            (provider) => switches[provider],
+        ),
     })
 
 const list = async (server: ReturnType<typeof app>) =>
@@ -131,6 +138,15 @@ it('runs a Claude task with the Agent default model when it has none of its own'
     await send(server, '/automations/claude:search/run').expect(202)
 
     expect(started[0]!.model).toEqual(settings.current.models.claude)
+})
+
+it('gives each run the plugin switches of its provider', async () => {
+    const server = app()
+
+    await send(server, '/automations/search/run').expect(202)
+    await send(server, '/automations/claude:search/run').expect(202)
+
+    expect(started.map(({ plugins }) => plugins)).toEqual([switches.codex, switches.claude])
 })
 
 it('does not let Settings change a schedule that the Claude desktop app owns', async () => {

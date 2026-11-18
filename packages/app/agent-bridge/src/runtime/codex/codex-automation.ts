@@ -1,6 +1,13 @@
 import { existsSync } from 'node:fs'
 import type { AutomationRunner } from '../../automations/automation-runs.ts'
 import { AppServerConnection } from './app-server-connection.ts'
+import { startAppServer } from './app-server-session.ts'
+import {
+    chromePlugin,
+    pluginOverrides,
+    readInstalledPlugins,
+    readPluginApps,
+} from './codex-plugins.ts'
 import { closeTaskTabs } from './codex-runtime.ts'
 import {
     emptyResponseSchema,
@@ -16,7 +23,7 @@ import {
  */
 export const createCodexAutomationRunner =
     (binary: string, chromeRoot: string): AutomationRunner =>
-    async ({ prompt, cwd, model, signal, onProgress }) => {
+    async ({ prompt, cwd, model, plugins, signal, onProgress }) => {
         let threadId: string | null = null
         let turnId: string | null = null
         let finalMessage: string | null = null
@@ -75,16 +82,13 @@ export const createCodexAutomationRunner =
         })
 
         try {
-            connection.start()
-            await connection.request(
-                'initialize',
-                {
-                    clientInfo: { name: 'job-search-facilitator', version: '0.1.0' },
-                    capabilities: { experimentalApi: true, mcpServerOpenaiFormElicitation: true },
-                },
-                emptyResponseSchema,
+            await startAppServer(connection)
+            const overrides = await pluginOverrides(
+                await readInstalledPlugins(connection, cwd),
+                plugins,
+                (pluginId) => readPluginApps(connection, pluginId),
             )
-            connection.notify('initialized')
+            const chrome = plugins.some(({ source, enabled }) => source === chromePlugin && enabled)
             const started = await connection.request(
                 'thread/start',
                 {
@@ -94,19 +98,23 @@ export const createCodexAutomationRunner =
                     approvalsReviewer: 'auto_review',
                     sandbox: 'workspace-write',
                     threadSource: 'job-search-facilitator',
-                    config: model ? { model_reasoning_effort: model.reasoningEffort } : {},
-                    selectedCapabilityRoots: existsSync(chromeRoot)
-                        ? [
-                              {
-                                  id: 'chrome@openai-bundled',
-                                  location: {
-                                      type: 'environment',
-                                      environmentId: 'workspace',
-                                      path: chromeRoot,
+                    config: {
+                        ...(model ? { model_reasoning_effort: model.reasoningEffort } : {}),
+                        ...overrides,
+                    },
+                    selectedCapabilityRoots:
+                        chrome && existsSync(chromeRoot)
+                            ? [
+                                  {
+                                      id: chromePlugin,
+                                      location: {
+                                          type: 'environment',
+                                          environmentId: 'workspace',
+                                          path: chromeRoot,
+                                      },
                                   },
-                              },
-                          ]
-                        : [],
+                              ]
+                            : [],
                 },
                 threadStartResponseSchema,
             )
