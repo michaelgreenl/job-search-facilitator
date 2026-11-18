@@ -138,6 +138,21 @@ Use **Run now** to start an automation without waiting for its schedule. The Age
 The row shows the progress of the run, then its result. Use **Stop** to end a run.
 A run continues only while the Agent bridge is open. A run has no user to approve requests, so each provider reviews its own actions.
 
+### Choose the plugins that agents can use
+
+Settings lists the plugins of each provider under **Plugins**. The list has three groups: browser, documents, and mail.
+Each row shows the plugin, its provider, and its state. **Ready** means that the provider can use the plugin now.
+Install a plugin, or sign in to it, in the desktop app of its provider. Then select **Refresh**.
+
+Use the switch on a row to turn that plugin on or off for the agents that this app starts.
+A browser plugin starts on. Every other plugin starts off.
+
+A task from the Review or Apply workspace needs the browser plugin of the selected provider.
+A run started with **Run now** uses only the listed plugins that are on.
+A Claude run loads no other connector from the Claude account. A ChatGPT plugin that is not in the list keeps its setting from the ChatGPT desktop app.
+
+The switches do not change a plugin in the desktop apps. They do not change a scheduled run that a desktop app starts.
+
 ## Full workflow check
 
 Use this sequence after setup:

@@ -73,6 +73,7 @@ A host-side bridge connects the client to Codex or Claude, and to Chrome. It run
 
 - **Local adapters:** The bridge runs Agent tasks with the bundled Codex app-server or with the Claude Agent SDK.
 - **Provider settings:** Settings selects the provider, model, and reasoning effort for new Agent tasks.
+- **Plugin switches:** Settings lists the browser, documents, and mail plugins of each provider. A switch turns a plugin on or off for the Agents that the app starts.
 - **Chrome capability:** The selected Agent inspects job posts and LinkedIn pages through its Chrome extension.
 - **Structured output:** JSON Schema contracts validate job imports, contact results, and draft revisions.
 - **Live progress:** Server-sent events stream task status, results, failures, and permission requests.
@@ -188,7 +189,8 @@ Complete the [automation setup guide](docs/automation-setup.md). The guide inclu
 Create scheduled tasks in ChatGPT or in the Claude desktop app. Settings lists the tasks for this project through the Agent bridge.
 Settings can run each task, stop a run, and set its model and reasoning effort.
 Settings can also pause, resume, and edit daily or weekly ChatGPT schedules.
-Cloud schedules, advanced recurrence patterns, plugin settings, and Claude schedules remain in the desktop apps.
+Settings also turns each listed plugin on or off for the Agents that the app starts.
+Cloud schedules, advanced recurrence patterns, and Claude schedules remain in the desktop apps. Plugin installation and sign-in also remain there.
 
 ### Start the application
 
@@ -226,7 +228,7 @@ The task can ask for access to each website it visits. Review each website befor
 
 ### Troubleshooting
 
-- If Chrome is missing, confirm that the Chrome plugin is on in ChatGPT.
+- If Chrome is missing, confirm that the Chrome plugin is on in ChatGPT and under **Plugins** in Settings.
 - Confirm that the ChatGPT side panel loads in the active Chrome profile.
 - Restart Chrome, ChatGPT, and `pnpm run dev:agent` after a plugin change.
 - If the bridge cannot find Codex, set `CODEX_BIN` in `packages/app/agent-bridge/.env`.
