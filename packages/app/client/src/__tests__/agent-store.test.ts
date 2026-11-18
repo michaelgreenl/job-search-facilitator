@@ -901,7 +901,7 @@ describe('agent store', () => {
         const store = useAgentStore()
 
         await expect(store.startTask(taskInput, importOwner).started).rejects.toThrow(
-            'Agent capability is unavailable: chrome',
+            'The browser plugin is off or unavailable. Check Plugins in Settings.',
         )
 
         expect(fetchMock).toHaveBeenCalledOnce()
@@ -909,7 +909,7 @@ describe('agent store', () => {
         expect(store.getTaskState(startedTask.id)).toMatchObject({
             connectionState: 'disconnected',
             sessionUnavailable: true,
-            error: 'Agent capability is unavailable: chrome',
+            error: 'The browser plugin is off or unavailable. Check Plugins in Settings.',
         })
     })
 

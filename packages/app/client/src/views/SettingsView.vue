@@ -4,6 +4,7 @@ import { onMounted, shallowRef, useTemplateRef } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
 import AgentSettings from '@/components/agent/AgentSettings.vue'
+import PluginSettings from '@/components/agent/PluginSettings.vue'
 import AutomationSettings from '@/components/AutomationSettings.vue'
 import DownloadIcon from '@/components/svgs/DownloadIcon.vue'
 import OpenExternalIcon from '@/components/svgs/OpenExternalIcon.vue'
@@ -88,6 +89,7 @@ onMounted(load)
         </header>
         <AutomationSettings />
         <AgentSettings />
+        <PluginSettings />
         <header class="section-heading">
             <h2 id="resumes-heading">Resumes</h2>
             <p class="save-status" role="status" data-testid="resume-save-status">{{ status }}</p>

@@ -6,6 +6,7 @@ import BaseDropdown, { type BaseDropdownOption } from '@/components/base/BaseDro
 import App from '@/App.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseHint from '@/components/base/BaseHint.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
 import JobPostListPanel from '@/components/job-posts/JobPostListPanel.vue'
@@ -302,6 +303,30 @@ describe('browser interaction contracts', () => {
         await expect.element(dialog).toBeVisible()
         await userEvent.click(dialog, { position: { x: -8, y: -8 } })
         await expect.element(dialog).not.toBeVisible()
+    })
+
+    it('keeps a hint note open after a press until a press elsewhere', async () => {
+        const HintFixture = defineComponent({
+            setup: () => () =>
+                h('div', [
+                    h(
+                        BaseHint,
+                        { text: 'Install it.', 'data-testid': 'hint' },
+                        { default: () => 'Not installed' },
+                    ),
+                    h('p', { 'data-testid': 'elsewhere' }, 'Elsewhere'),
+                ]),
+        })
+        mountVue(HintFixture)
+        const elsewhere = page.getByTestId('elsewhere')
+        const note = page.getByTestId('hint-note')
+
+        await page.getByTestId('hint').click()
+        await elsewhere.hover()
+        await expect.element(note).toBeVisible()
+
+        await elsewhere.click()
+        await expect.element(note).not.toBeVisible()
     })
 })
 

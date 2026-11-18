@@ -2,6 +2,7 @@ import {
     parseContactDiscoveryResult,
     parseCreateUserAddedJobPostInput,
     parseDraftRevisionResult,
+    type AgentCapability,
     type StartAgentTaskInput,
     type AgentPermissionDecision,
     type AgentPermissionRequired,
@@ -93,6 +94,9 @@ const assertTaskIdentity = (task: AgentTask, taskId: string) => {
 }
 
 const getSessionOwner = ({ taskId: _taskId, ...owner }: AgentSession): AgentSessionOwner => owner
+
+/** The plugin kind in Settings that gives each task capability. */
+const capabilityPlugins: Record<AgentCapability, string> = { chrome: 'browser' }
 
 export const useAgentStore = defineStore('agent', () => {
     const initialSessions = readAgentSessions()
@@ -339,7 +343,9 @@ export const useAgentStore = defineStore('agent', () => {
                 )
 
                 if (unavailableCapability !== undefined) {
-                    throw new Error(`Agent capability is unavailable: ${unavailableCapability}`)
+                    throw new Error(
+                        `The ${capabilityPlugins[unavailableCapability]} plugin is off or unavailable. Check Plugins in Settings.`,
+                    )
                 }
 
                 taskRequestStarted = true

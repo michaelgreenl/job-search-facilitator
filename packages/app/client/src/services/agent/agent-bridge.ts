@@ -1,5 +1,7 @@
 import {
     parseAgentHealth,
+    parseAgentPlugin,
+    parseAgentPlugins,
     parseAgentSettingsState,
     parseAgentTask,
     parseAgentTaskEvent,
@@ -84,6 +86,29 @@ export async function saveAgentSettings(settings: AgentSettings) {
         body: JSON.stringify(settings),
     })
     return parseJsonResponse(response, parseAgentSettingsState, 'Agent settings')
+}
+
+export async function fetchAgentPlugins() {
+    return parseJsonResponse(
+        await requestAgentBridge('/plugins'),
+        parseAgentPlugins,
+        'Agent plugins',
+    )
+}
+
+/** Asks each provider for its plugin states again. */
+export async function refreshAgentPlugins() {
+    const response = await requestAgentBridge('/plugins/refresh', { method: 'POST' })
+    return parseJsonResponse(response, parseAgentPlugins, 'Agent plugins')
+}
+
+export async function setAgentPluginEnabled(id: string, enabled: boolean) {
+    const response = await requestAgentBridge(`/plugins/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    })
+    return parseJsonResponse(response, parseAgentPlugin, 'Agent plugin')
 }
 
 export async function fetchAutomations() {
