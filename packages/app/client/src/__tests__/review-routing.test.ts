@@ -506,6 +506,22 @@ describe('review route selection', () => {
         })
     })
 
+    it('opens the add form from the Added by you post list only', async () => {
+        const { root } = await mountReview()
+
+        expect(root.querySelector('[data-testid="job-post-list-add"]')).toBeNull()
+
+        findTestButton(root, 'user-added-source').click()
+        const addButton = await vi.waitFor(() => findTestButton(root, 'job-post-list-add'))
+        addButton.click()
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector('[data-testid="job-post-url-dialog"]')?.hasAttribute('open'),
+            ).toBe(true),
+        )
+    })
+
     it('normalizes and starts a job-post import while a persisted outreach task remains active', async () => {
         class SilentEventSource {
             static readonly CLOSED = 2

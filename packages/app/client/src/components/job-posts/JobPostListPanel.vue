@@ -27,6 +27,7 @@ const props = withDefaults(
         pending?: boolean
         showApplicationStatus?: boolean
         outreachResponsePostIds?: readonly string[]
+        addable?: boolean
     }>(),
     {
         titleTag: 'h2',
@@ -38,6 +39,7 @@ const props = withDefaults(
         pending: false,
         showApplicationStatus: false,
         outreachResponsePostIds: () => [],
+        addable: false,
     },
 )
 const orderedPosts = computed(() => [
@@ -50,11 +52,13 @@ const emit = defineEmits<{
     selectPending: []
     retry: []
     back: []
+    addPost: []
 }>()
 </script>
 
 <template>
     <BasePanel
+        class="job-post-list-panel"
         :active="active"
         :adjacent="adjacent"
         :eyebrow="eyebrow"
@@ -75,7 +79,10 @@ const emit = defineEmits<{
             :key="scrollKey"
             class="card-list"
             data-testid="job-post-list"
-            :class="{ 'card-list-status': pending && (loading || error) }"
+            :class="{
+                'card-list-addable': addable,
+                'card-list-status': pending && (loading || error),
+            }"
         >
             <li v-if="pending">
                 <BaseCard
@@ -139,10 +146,30 @@ const emit = defineEmits<{
             </BaseButton>
         </template>
         <p v-else-if="!pending && !posts.length" class="list-message">{{ emptyMessage }}</p>
+
+        <BaseButton
+            v-if="addable"
+            class="add-button"
+            icon-size="md"
+            preset="primary"
+            tooltip="Add job post"
+            data-testid="job-post-list-add"
+            aria-label="Add job post"
+            @click="emit('addPost')"
+        >
+            <span class="add-button-icon" aria-hidden="true">+</span>
+        </BaseButton>
     </BasePanel>
 </template>
 
 <style scoped lang="scss">
+// Lets the last card scroll clear of the add button: its inset, its height, and a card gap.
+$add-button-clearance: $space-5 + 2.25rem + $space-3;
+
+.job-post-list-panel {
+    position: relative;
+}
+
 .card-list {
     display: flex;
     flex: 1 0 0;
@@ -158,6 +185,11 @@ const emit = defineEmits<{
         min-width: 0;
     }
 
+    &-addable {
+        padding-bottom: $add-button-clearance;
+        scroll-padding-bottom: $add-button-clearance;
+    }
+
     &-status {
         flex: 0 0 auto;
         padding-bottom: 0;
@@ -166,6 +198,16 @@ const emit = defineEmits<{
 
 .list-message {
     color: $color-ink-muted;
+}
+
+.add-button {
+    position: absolute;
+    right: $space-5;
+    bottom: $space-5;
+}
+
+.add-button-icon {
+    font-size: 1.25rem;
 }
 
 .post-card {

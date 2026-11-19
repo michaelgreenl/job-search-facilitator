@@ -612,10 +612,12 @@ onMounted(() => {
                 :loading="postListLoading"
                 :error="postListError"
                 :pending="selectedSource?.kind === 'user-added' && showImportCard"
+                :addable="selectedSource?.kind === 'user-added'"
                 @back="showSources"
                 @select="selectPost"
                 @select-pending="showImportProgress"
                 @retry="loadUserAddedPosts"
+                @add-post="showImport"
             >
                 <template #heading-controls>
                     <span class="item-count">{{ postCountLabel }}</span>
