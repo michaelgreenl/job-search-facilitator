@@ -45,6 +45,19 @@ const stubBridge = (plugins: AgentPlugin[], { failSave = false } = {}) => {
     return { saved, state }
 }
 
+it('keeps the section hint on one line', async () => {
+    stubBridge([])
+    mountVue(PluginSettings)
+
+    await page.getByRole('button', { name: 'About plugins' }).hover()
+
+    const note = page.getByTestId('hint-note')
+    await expect.element(note).toBeVisible()
+    const text = document.createRange()
+    text.selectNodeContents(note.element())
+    expect(text.getClientRects()).toHaveLength(1)
+})
+
 it('saves the switch that the user changes', async () => {
     const { saved } = stubBridge([chrome, gmail])
     mountVue(PluginSettings)

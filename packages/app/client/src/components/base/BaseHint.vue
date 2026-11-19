@@ -108,7 +108,7 @@ watch(open, (isOpen) => note.value?.togglePopover(isOpen), { flush: 'post' })
     position-area: block-end;
     position-try-fallbacks: flip-block;
     inset: auto;
-    max-width: min(14rem, calc(100vw - #{$space-6}));
+    max-width: calc(100vw - #{$space-6});
     margin: $space-2 $space-3;
     white-space: normal;
 }
