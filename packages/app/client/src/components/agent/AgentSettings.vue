@@ -3,7 +3,9 @@ import type { AgentProvider, AgentSettings, AgentSettingsState } from '@job-sear
 import { computed, onMounted, shallowRef } from 'vue'
 import AgentModelSelect from '@/components/agent/AgentModelSelect.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseHint from '@/components/base/BaseHint.vue'
 import ClaudeIcon from '@/components/svgs/ClaudeIcon.vue'
+import InfoIcon from '@/components/svgs/InfoIcon.vue'
 import OpenAiIcon from '@/components/svgs/OpenAiIcon.vue'
 import { fetchAgentSettings, saveAgentSettings } from '@/services/agent/agent-bridge'
 
@@ -58,6 +60,13 @@ onMounted(load)
 <template>
     <header class="section-heading">
         <h2 id="agent-heading">Agent</h2>
+        <BaseHint
+            class="heading-hint"
+            text="New agent tasks run with this provider and model."
+            aria-label="About agent settings"
+        >
+            <InfoIcon class="hint-icon" />
+        </BaseHint>
     </header>
     <section class="settings-section" aria-labelledby="agent-heading" data-testid="agent-settings">
         <p v-if="loading" class="section-message muted" role="status">Loading agent settings…</p>
@@ -71,7 +80,6 @@ onMounted(load)
         <div v-else class="agent-form" :aria-busy="saving">
             <fieldset :disabled="saving">
                 <legend>Provider</legend>
-                <p class="muted hint">New agent tasks run with this provider and model.</p>
                 <div class="providers">
                     <label
                         v-for="provider in state.providers"
@@ -130,6 +138,9 @@ onMounted(load)
 
 <style scoped lang="scss">
 .section-heading {
+    display: flex;
+    gap: $space-1;
+    align-items: center;
     margin-top: $space-6;
     padding-top: $space-6;
     padding-bottom: $space-3;
@@ -144,6 +155,32 @@ h2 {
     font-weight: 650;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.heading-hint {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    color: $color-ink-muted;
+    border-radius: $radius-full;
+    transition: color 140ms ease;
+
+    &:hover,
+    &:focus-visible {
+        color: $color-signal-light;
+    }
+}
+
+.hint-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
 }
 
 .settings-section {
@@ -177,14 +214,11 @@ legend {
     font-size: 0.875rem;
 }
 
-.hint {
-    margin: $space-1 0 $space-3;
-}
-
 .providers {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: $space-3;
+    margin-top: $space-3;
 }
 
 .provider {
