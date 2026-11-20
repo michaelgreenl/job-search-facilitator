@@ -36,7 +36,7 @@ A host-side bridge connects the client to Codex or Claude, and to Chrome. It run
 
 - **Search reports:** Browse dated reports, ranked recommendations, job descriptions, and source links.
 - **User labels:** Mark roles as `P1`, `P2`, `quick-app`, or `forgo`.
-- **Job import:** Submit one job URL for the Agent to inspect and return as structured data.
+- **Job import:** Submit a job URL for the Agent to inspect and return as structured data. Several imports can run at the same time.
 - **Saved state:** Restore filters, selections, and active Agent tasks after navigation or reloads.
 
 #### Apply Workspace
