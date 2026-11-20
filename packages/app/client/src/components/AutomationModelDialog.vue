@@ -71,9 +71,6 @@ watch(
 .model-dialog {
     width: min(30rem, calc(100vw - 2rem));
     padding: $space-5;
-
-    // An open model menu extends past the dialog.
-    overflow: visible;
 }
 
 .model-form {

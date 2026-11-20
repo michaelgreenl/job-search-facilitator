@@ -53,6 +53,8 @@ async function showMenu(focus: 'first' | 'last' = 'first') {
 
     open.value = true
     await nextTick()
+    // In the top layer, a glass ancestor's backdrop-filter cannot cut off the menu's own blur.
+    menu.value?.showPopover?.()
     focusOption(focus === 'first' ? 0 : optionButtons().length - 1)
 }
 
@@ -113,6 +115,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
         <button
             ref="trigger"
             class="trigger"
+            :style="`anchor-name: --${menuId}`"
             type="button"
             :data-testid="testId ? `${testId}-trigger` : undefined"
             aria-haspopup="menu"
@@ -133,7 +136,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
             :id="menuId"
             ref="menu"
             class="list glass-frame"
+            :style="`position-anchor: --${menuId}`"
             :data-testid="testId ? `${testId}-menu` : undefined"
+            popover="manual"
             role="menu"
             :aria-label="accessibleLabel"
             @keydown.down.prevent="moveFocus(1)"
@@ -169,7 +174,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
 
 <style scoped lang="scss">
 .base-dropdown {
-    position: relative;
     display: inline-flex;
 }
 
@@ -219,16 +223,15 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleOutsideP
     }
 }
 
+// The browser puts the menu below the trigger, or above it when the space below is too small.
 .list {
-    position: absolute;
-    top: calc(100% + $space-2);
-    right: 0;
-    z-index: 20;
+    position-area: bottom span-left;
+    position-try-fallbacks: flip-block;
     display: grid;
     width: max-content;
     min-width: 12rem;
     gap: $space-1;
-    margin: 0;
+    margin: $space-2 0 0;
     padding: $space-2;
     list-style: none;
     border-radius: $radius-md;

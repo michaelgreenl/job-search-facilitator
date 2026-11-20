@@ -104,6 +104,36 @@ describe('browser interaction contracts', () => {
         await expect.element(trigger).toHaveFocus()
     })
 
+    it('opens a dropdown menu in the top layer under its own trigger', async () => {
+        const options: BaseDropdownOption[] = [{ value: 'all', label: 'All' }]
+        const DropdownPair = defineComponent({
+            setup: () => () =>
+                ['first', 'second'].map((testId) =>
+                    h(BaseDropdown, {
+                        accessibleLabel: testId,
+                        disabled: false,
+                        label: testId,
+                        options,
+                        testId,
+                    }),
+                ),
+        })
+        mountVue(DropdownPair, {
+            style: { display: 'flex', justifyContent: 'flex-end', gap: '2rem' },
+        })
+        const trigger = page.getByTestId('first-trigger')
+        const menu = page.getByTestId('first-menu')
+
+        await trigger.click()
+
+        // In the top layer, a glass panel's backdrop-filter cannot cut off the menu's blur.
+        await vi.waitFor(() => expect(menu.element().matches(':popover-open')).toBe(true))
+        const triggerBounds = trigger.element().getBoundingClientRect()
+        const menuBounds = menu.element().getBoundingClientRect()
+        expect(menuBounds.right).toBeCloseTo(triggerBounds.right, 0)
+        expect(menuBounds.top).toBeGreaterThan(triggerBounds.bottom)
+    })
+
     it.each([320, 1024])(
         'scrolls navigation with the page and limits its width only in Settings at %ipx',
         async (width) => {

@@ -108,8 +108,7 @@ function selectEffort(reasoningEffort: string) {
 <style lang="scss">
 // The menu matches the field width and scrolls when the model list is long.
 .model-fields .base-dropdown .list {
-    left: 0;
-    width: auto;
+    width: anchor-size(width);
     max-height: 18rem;
     overflow-y: auto;
 }
