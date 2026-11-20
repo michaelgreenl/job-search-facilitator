@@ -5,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import type { JobPostImportItem } from '@/stores/job-post-import'
 
 import JobPostLabel from './JobPostLabel.vue'
 
@@ -24,7 +25,7 @@ const props = withDefaults(
         loadingMessage?: string
         loading?: boolean
         error?: string | null
-        pending?: boolean
+        pendingImports?: readonly JobPostImportItem[]
         showApplicationStatus?: boolean
         outreachResponsePostIds?: readonly string[]
         addable?: boolean
@@ -36,7 +37,7 @@ const props = withDefaults(
         loadingMessage: 'Loading job posts…',
         loading: false,
         error: null,
-        pending: false,
+        pendingImports: () => [],
         showApplicationStatus: false,
         outreachResponsePostIds: () => [],
         addable: false,
@@ -46,10 +47,27 @@ const orderedPosts = computed(() => [
     ...props.posts.filter(({ userLabel }) => userLabel !== 'forgo'),
     ...props.posts.filter(({ userLabel }) => userLabel === 'forgo'),
 ])
+// Card text inside a button is not announced, so this region tells screen readers when an
+// import waits on the user. The counts change the text, so each new wait is announced again.
+const importStatus = computed(() => {
+    const permission = props.pendingImports.filter((item) => item.permissionRequired).length
+    const attention = props.pendingImports.filter((item) => !item.active).length
+    const messages: string[] = []
+
+    if (permission > 0) {
+        messages.push(`Imports that need permission: ${permission}.`)
+    }
+
+    if (attention > 0) {
+        messages.push(`Imports that need attention: ${attention}.`)
+    }
+
+    return messages.join(' ')
+})
 
 const emit = defineEmits<{
     select: [postId: string]
-    selectPending: []
+    selectImport: [taskId: string]
     retry: []
     back: []
     addPost: []
@@ -75,28 +93,37 @@ const emit = defineEmits<{
         <slot name="summary" />
 
         <ul
-            v-if="pending || (!loading && !error && posts.length)"
+            v-if="pendingImports.length > 0 || (!loading && !error && posts.length)"
             :key="scrollKey"
             class="card-list"
             data-testid="job-post-list"
             :class="{
                 'card-list-addable': addable,
-                'card-list-status': pending && (loading || error),
+                'card-list-status': pendingImports.length > 0 && (loading || error),
             }"
         >
-            <li v-if="pending">
+            <li v-for="item in pendingImports" :key="item.taskId">
                 <BaseCard
                     as="button"
                     class="post-card"
-                    data-testid="job-post-import-progress"
-                    aria-busy="true"
-                    aria-label="View job-post import progress"
-                    @click="emit('selectPending')"
+                    :data-testid="`job-post-import-${item.taskId}`"
+                    :aria-busy="item.active || undefined"
+                    @click="emit('selectImport', item.taskId)"
                 >
                     <span class="component-label">Job post</span>
                     <span class="loading-post">
-                        <LoadingSpinner />
-                        Reviewing job post…
+                        <template v-if="item.active">
+                            <LoadingSpinner />
+                            Reviewing job post…
+                        </template>
+                        <template v-else>Import needs attention</template>
+                    </span>
+                    <span
+                        v-if="item.permissionRequired"
+                        class="permission-notice"
+                        :data-testid="`job-post-import-${item.taskId}-permission-needed`"
+                    >
+                        Permission needed — open import to continue
                     </span>
                 </BaseCard>
             </li>
@@ -138,6 +165,7 @@ const emit = defineEmits<{
                 </li>
             </template>
         </ul>
+        <p class="import-status" role="status">{{ importStatus }}</p>
         <p v-if="loading" class="list-message" role="status">{{ loadingMessage }}</p>
         <template v-else-if="error">
             <p class="list-message" role="alert">{{ error }}</p>
@@ -145,7 +173,9 @@ const emit = defineEmits<{
                 Retry
             </BaseButton>
         </template>
-        <p v-else-if="!pending && !posts.length" class="list-message">{{ emptyMessage }}</p>
+        <p v-else-if="!pendingImports.length && !posts.length" class="list-message">
+            {{ emptyMessage }}
+        </p>
 
         <BaseButton
             v-if="addable"
@@ -247,6 +277,26 @@ $add-button-clearance: $space-5 + 2.25rem + $space-3;
     align-items: center;
     min-height: 2rem;
     color: $color-ink-secondary;
+}
+
+.import-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.permission-notice {
+    width: fit-content;
+    padding: $space-1 $space-2;
+    margin-top: $space-1;
+    color: $color-amber-500;
+    font-size: 0.75rem;
+    font-weight: 650;
+    background: $color-amber-500-alpha-12;
+    border-radius: $radius-full;
 }
 
 .post-role {

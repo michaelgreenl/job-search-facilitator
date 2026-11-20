@@ -98,6 +98,13 @@ const getSessionOwner = ({ taskId: _taskId, ...owner }: AgentSession): AgentSess
 /** The plugin kind in Settings that gives each task capability. */
 const capabilityPlugins: Record<AgentCapability, string> = { chrome: 'browser' }
 
+/**
+ * Each active task keeps one event stream open to the bridge. Browsers open at most six
+ * HTTP/1.1 connections to one host, so this limit keeps two free for permission answers,
+ * cancels, and new starts.
+ */
+export const maxActiveAgentTasks = 4
+
 export const useAgentStore = defineStore('agent', () => {
     const initialSessions = readAgentSessions()
     const sessions = shallowRef<AgentSession[]>(initialSessions)
@@ -132,6 +139,12 @@ export const useAgentStore = defineStore('agent', () => {
         return state !== null && taskStateActive(state)
     }
 
+    function hasTaskCapacity() {
+        return (
+            sessions.value.filter(({ taskId }) => isTaskActive(taskId)).length < maxActiveAgentTasks
+        )
+    }
+
     function updateTaskState(
         taskId: string,
         update: Partial<AgentTaskState> | ((state: AgentTaskState) => AgentTaskState),
@@ -160,12 +173,10 @@ export const useAgentStore = defineStore('agent', () => {
 
     function saveSession(nextSession: AgentSession) {
         nonRestorableTaskIds.delete(nextSession.taskId)
-        const otherSessions = sessions.value.filter(
-            (session) =>
-                session.taskId !== nextSession.taskId &&
-                (nextSession.kind !== 'job-post-import' || session.kind !== 'job-post-import'),
-        )
-        sessions.value = [...otherSessions, nextSession]
+        sessions.value = [
+            ...sessions.value.filter((session) => session.taskId !== nextSession.taskId),
+            nextSession,
+        ]
         persistSessions()
     }
 
@@ -402,23 +413,6 @@ export const useAgentStore = defineStore('agent', () => {
                     throw new Error('A draft request is already active for this contact')
                 }
                 dismissSession(session.taskId)
-            }
-        }
-        if (owner.kind === 'job-post-import') {
-            const currentSession = sessions.value.find(
-                (session) => session.kind === 'job-post-import',
-            )
-
-            if (currentSession !== undefined) {
-                const currentState = getTaskState(currentSession.taskId)
-
-                if (currentState !== null && taskStateActive(currentState)) {
-                    throw new Error('Another job-post-import Agent task is already active')
-                }
-
-                closeConnection(currentSession.taskId, 'idle')
-                removeSession(currentSession.taskId)
-                removeTaskState(currentSession.taskId)
             }
         }
 
@@ -666,6 +660,7 @@ export const useAgentStore = defineStore('agent', () => {
         getSession,
         getTaskState,
         isTaskActive,
+        hasTaskCapacity,
         startTask,
         retryTask,
         restoreTask,

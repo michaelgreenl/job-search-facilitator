@@ -98,9 +98,8 @@ const parseStoredSessions = (value: unknown): AgentSession[] | null => {
     }
 
     const taskIds = new Set(validSessions.map(({ taskId }) => taskId))
-    const importCount = validSessions.filter(({ kind }) => kind === 'job-post-import').length
 
-    return taskIds.size === validSessions.length && importCount <= 1 ? validSessions : null
+    return taskIds.size === validSessions.length ? validSessions : null
 }
 
 export const readAgentSessions = (): AgentSession[] => {

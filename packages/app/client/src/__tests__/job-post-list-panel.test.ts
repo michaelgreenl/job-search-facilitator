@@ -74,11 +74,13 @@ describe('JobPostListPanel', () => {
                     selectedPostId: null,
                     emptyMessage: 'No posts',
                     error: 'Could not load posts',
-                    pending: true,
+                    pendingImports: [
+                        { taskId: 'import-task', active: true, permissionRequired: false },
+                    ],
                 }),
         })
 
-        expect(root.querySelector('[data-testid="job-post-import-progress"]')).not.toBeNull()
+        expect(root.querySelector('[data-testid="job-post-import-import-task"]')).not.toBeNull()
         expect(root.querySelector('[data-testid="job-post-list-retry"]')).not.toBeNull()
     })
 

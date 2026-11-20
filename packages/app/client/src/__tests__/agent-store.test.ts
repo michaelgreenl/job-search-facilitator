@@ -230,28 +230,34 @@ describe('agent store', () => {
         expect(store.getTaskState(samePostStart.taskId)?.task).toEqual(nextTask)
     })
 
-    it('rejects a second import while the first start is pending', async () => {
-        let resolveHealth: ((response: Response) => void) | undefined
-        const healthResponse = new Promise<Response>((resolve) => {
-            resolveHealth = resolve
-        })
-        const fetchMock = vi
-            .mocked(fetch)
-            .mockReturnValueOnce(healthResponse)
+    it('runs a second import while the first import is running', async () => {
+        const secondImportOwner = {
+            ...importOwner,
+            url: 'https://example.com/jobs/another-role',
+        } satisfies AgentSessionOwner
+        const randomUUID = vi
+            .fn()
+            .mockReturnValueOnce(startedTask.id)
+            .mockReturnValueOnce(nextTask.id)
+        vi.stubGlobal('crypto', { randomUUID })
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
             .mockResolvedValueOnce(jsonResponse(startedTask, 202))
+            .mockResolvedValueOnce(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
+            .mockResolvedValueOnce(jsonResponse(nextTask, 202))
         const store = useAgentStore()
 
         const firstStart = store.startTask(taskInput, importOwner)
+        await firstStart.started
+        const secondStart = store.startTask(taskInput, secondImportOwner)
+        await secondStart.started
 
-        expect(() => store.startTask(taskInput, importOwner)).toThrow(
-            'Another job-post-import Agent task is already active',
-        )
-        expect(fetchMock).toHaveBeenCalledOnce()
-
-        resolveHealth?.(jsonResponse({ status: 'healthy', capabilities: ['chrome'] }))
-        await expect(firstStart.started).resolves.toEqual(startedTask)
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-        expect(FakeEventSource.instances).toHaveLength(1)
+        expect(store.sessions).toEqual([
+            { ...importOwner, taskId: firstStart.taskId },
+            { ...secondImportOwner, taskId: secondStart.taskId },
+        ])
+        expect(store.isTaskActive(firstStart.taskId)).toBe(true)
+        expect(store.isTaskActive(secondStart.taskId)).toBe(true)
     })
 
     it('keeps a running task active while its event stream reconnects', async () => {
@@ -553,7 +559,7 @@ describe('agent store', () => {
         expect(sessionStorage.getItem(agentSessionStorageKey)).not.toBeNull()
     })
 
-    it('rejects a v2 envelope with more than one job-post-import', () => {
+    it('reads every job-post-import from a v2 envelope', () => {
         const sessions = [
             { ...importOwner, taskId: startedTask.id },
             {
@@ -566,8 +572,7 @@ describe('agent store', () => {
 
         const store = useAgentStore()
 
-        expect(store.sessions).toEqual([])
-        expect(sessionStorage.getItem(agentSessionStorageKey)).toBeNull()
+        expect(store.sessions).toEqual(sessions)
     })
 
     it('rejects a v2 envelope with duplicate valid task IDs', () => {

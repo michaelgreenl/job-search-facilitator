@@ -372,7 +372,8 @@ describe('running Agent task panel layout', () => {
         await expect.element(posts).toBeVisible()
         await expect.element(sources).toBeVisible()
         await expect.element(importPanel).not.toBeVisible()
-        await expect.element(page.getByTestId('job-post-import-progress')).toBeVisible()
+        const importCard = page.getByTestId(`job-post-import-${[...agentBridge.tasks.keys()][0]}`)
+        await expect.element(importCard).toBeVisible()
 
         const returnedSourcesRect = sources.element().getBoundingClientRect()
         const postsRect = posts.element().getBoundingClientRect()
@@ -380,7 +381,7 @@ describe('running Agent task panel layout', () => {
         expect(returnedSourcesRect.right).toBeLessThanOrEqual(postsRect.left)
         expect(postsRect.right).toBeLessThanOrEqual(848)
 
-        await page.getByTestId('job-post-import-progress').click()
+        await importCard.click()
 
         await expect.element(importPanel).toBeVisible()
         await expect.element(importBack).toBeVisible()

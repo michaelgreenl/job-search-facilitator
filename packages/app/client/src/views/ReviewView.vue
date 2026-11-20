@@ -65,6 +65,7 @@ const importStore = useJobPostImportStore()
 const {
     hasSession: hasImportSession,
     taskId: importTaskId,
+    items: importItems,
     dialogOpen: importDialogOpen,
     url: addPostUrl,
     importedItem,
@@ -73,10 +74,8 @@ const {
     running: importRunning,
     displayIssue: importDisplayIssue,
     retryAvailable: importRetryAvailable,
-    showCard: showImportCard,
     popupError: importPopUpError,
     cancelling: importCancelling,
-    requestStarting: importRequestStarting,
 } = storeToRefs(importStore)
 const activePanel = shallowRef<ActivePanel>(hasImportSession.value ? 'import' : 'sources')
 const storedPostFilter = readSessionStorage(postFilterStorageKey)
@@ -292,11 +291,26 @@ const postListLoading = computed(
 const postListError = computed(() =>
     selectedSource.value?.kind === 'user-added' ? userAddedError.value : null,
 )
+const pendingImports = computed(() =>
+    selectedSource.value?.kind === 'user-added' ? importItems.value : [],
+)
 
 watch(bp.isLaptop, () => {
     restoreRouteSelection()
 })
 watch(postFilter, (filter) => writeSessionStorage(postFilterStorageKey, filter))
+// An import opens its saved post only while its panel is open.
+watch(activePanel, (panel) => {
+    if (panel !== 'import') {
+        importStore.selectTask(null)
+    }
+})
+// A navigation discards a failed import, so leave its panel unless its saved post is opening.
+watch(hasImportSession, (hasSession) => {
+    if (!hasSession && activePanel.value === 'import' && importedItem.value === null) {
+        activePanel.value = bp.isLaptop.value ? 'sources' : 'posts'
+    }
+})
 
 const removeRouteListener = router.afterEach(() => {
     restoreRouteSelection()
@@ -357,8 +371,8 @@ function showImportPosts() {
     pushSelectionState(source)
 }
 
-function showImportProgress() {
-    if (hasImportSession.value) {
+function showImportProgress(taskId: string) {
+    if (importStore.selectTask(taskId)) {
         activePanel.value = 'import'
     }
 }
@@ -536,7 +550,6 @@ onMounted(() => {
                             placeholder="Job post URL for agent to review"
                             :aria-describedby="importPopUpError ? errorId : undefined"
                             :aria-invalid="importPopUpError !== null"
-                            :disabled="importRequestStarting"
                             autofocus
                             @input="importStore.clearUrlError"
                         />
@@ -548,7 +561,6 @@ onMounted(() => {
                             type="submit"
                             aria-label="Add job post"
                             title="Add job post"
-                            :disabled="importRequestStarting"
                         >
                             <span aria-hidden="true">→</span>
                         </BaseButton>
@@ -611,11 +623,11 @@ onMounted(() => {
                 :empty-message="postListEmptyMessage"
                 :loading="postListLoading"
                 :error="postListError"
-                :pending="selectedSource?.kind === 'user-added' && showImportCard"
+                :pending-imports="pendingImports"
                 :addable="selectedSource?.kind === 'user-added'"
                 @back="showSources"
                 @select="selectPost"
-                @select-pending="showImportProgress"
+                @select-import="showImportProgress"
                 @retry="loadUserAddedPosts"
                 @add-post="showImport"
             >
@@ -713,20 +725,11 @@ onMounted(() => {
     &:focus-visible {
         border-color: $color-signal-light;
     }
-
-    &:disabled {
-        cursor: wait;
-        opacity: 0.55;
-    }
 }
 
 .submit-button {
     flex: 0 0 auto;
     font-size: 1.25rem;
-
-    &:disabled {
-        cursor: wait;
-    }
 }
 
 .item-count {

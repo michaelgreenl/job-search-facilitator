@@ -8,10 +8,29 @@ import {
 } from '@job-search-facilitator/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
-import { useAgentStore, type AgentTaskStart } from './agent'
+import { maxActiveAgentTasks, useAgentStore, type AgentSession, type AgentTaskStart } from './agent'
 import { usePostStore } from './post'
 
 type ImportRetryMode = 'save' | 'task'
+type ImportSession = Extract<AgentSession, { kind: 'job-post-import' }>
+
+interface ImportResultState {
+    saving: boolean
+    issue: string | null
+    retry: ImportRetryMode | null
+}
+
+/** The state of one import's in-progress card in the list of added job posts. */
+export interface JobPostImportItem {
+    taskId: string
+    active: boolean
+    permissionRequired: boolean
+}
+
+const isImportSession = (session: AgentSession): session is ImportSession =>
+    session.kind === 'job-post-import'
+
+const taskLimitIssue = `Agent can run ${maxActiveAgentTasks} tasks at a time. Wait for one to finish, then try again.`
 
 export const createJobPostImportTask = (url: string) =>
     ({
@@ -28,57 +47,100 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
     const agentStore = useAgentStore()
     const dialogOpen = shallowRef(false)
     const url = shallowRef('')
-    const saving = shallowRef(false)
-    const issue = shallowRef<string | null>(null)
     const dialogIssue = shallowRef<string | null>(null)
     const urlError = shallowRef<string | null>(null)
-    const processingTaskId = shallowRef<string | null>(null)
-    const retryMode = shallowRef<ImportRetryMode | null>(null)
     const importedItem = shallowRef<UserAddedJobPost | null>(null)
-    let revision = 0
+    const resultStates = shallowRef<Record<string, ImportResultState>>({})
+    const importSessions = computed(() => agentStore.sessions.filter(isImportSession))
+    // The import that the import panel shows. Review clears it when the panel closes.
+    const selectedTaskId = shallowRef(importSessions.value.at(-1)?.taskId ?? null)
 
     const session = computed(
-        () =>
-            agentStore.sessions.find(
-                (currentSession) => currentSession.kind === 'job-post-import',
-            ) ?? null,
+        () => importSessions.value.find(({ taskId }) => taskId === selectedTaskId.value) ?? null,
     )
     const agentState = computed(() =>
         session.value === null ? null : agentStore.getTaskState(session.value.taskId),
     )
+    const resultState = computed(() =>
+        session.value === null ? null : (resultStates.value[session.value.taskId] ?? null),
+    )
     const task = computed(() => agentState.value?.task ?? null)
     const taskId = computed(() => session.value?.taskId ?? null)
     const hasSession = computed(() => session.value !== null)
+    const saving = computed(() => resultState.value?.saving ?? false)
     const cancelling = computed(() => agentState.value?.cancelling ?? false)
-    const requestStarting = computed(() => agentState.value?.starting ?? false)
     const starting = computed(
         () =>
             session.value !== null &&
             task.value === null &&
-            (requestStarting.value || agentState.value?.restoring === true),
+            (agentState.value?.starting === true || agentState.value?.restoring === true),
     )
     const running = computed(() => task.value?.status === 'running')
-    const busy = computed(
-        () =>
-            (session.value !== null && agentStore.isTaskActive(session.value.taskId)) ||
-            saving.value,
-    )
+    const busy = computed(() => taskId.value !== null && isImportBusy(taskId.value))
     const displayIssue = computed(
         () =>
-            issue.value ??
+            resultState.value?.issue ??
             (task.value?.status === 'failed' ? task.value.error : null) ??
-            (session.value !== null ? (agentState.value?.error ?? null) : null),
+            agentState.value?.error ??
+            null,
     )
     const retryAvailable = computed(
         () =>
             session.value !== null &&
             !busy.value &&
-            (retryMode.value !== null || displayIssue.value !== null),
+            (task.value?.status === 'cancelled' || displayIssue.value !== null),
     )
-    const showCard = computed(
-        () => session.value !== null && (starting.value || running.value || saving.value),
+    const items = computed<JobPostImportItem[]>(() =>
+        importSessions.value.map(({ taskId: importTaskId }) => {
+            const state = agentStore.getTaskState(importTaskId)
+
+            return {
+                taskId: importTaskId,
+                active: isImportBusy(importTaskId),
+                permissionRequired:
+                    state?.pendingPermission != null && !state.alwaysAllowBrowserActions,
+            }
+        }),
     )
     const popupError = computed(() => urlError.value ?? dialogIssue.value)
+
+    function isImportBusy(importTaskId: string) {
+        return (
+            agentStore.isTaskActive(importTaskId) ||
+            resultStates.value[importTaskId]?.saving === true
+        )
+    }
+
+    function updateResultState(importTaskId: string, update: Partial<ImportResultState> | null) {
+        const nextStates = { ...resultStates.value }
+
+        if (update === null) {
+            delete nextStates[importTaskId]
+        } else {
+            nextStates[importTaskId] = {
+                saving: false,
+                issue: null,
+                retry: null,
+                ...nextStates[importTaskId],
+                ...update,
+            }
+        }
+
+        resultStates.value = nextStates
+    }
+
+    function failImport(importTaskId: string, issue: string, retry: ImportRetryMode) {
+        if (agentStore.getSession(importTaskId) === null) {
+            updateResultState(importTaskId, null)
+            return
+        }
+
+        updateResultState(importTaskId, { saving: false, issue, retry })
+
+        if (retry === 'task') {
+            agentStore.forgetOnRefresh(importTaskId)
+        }
+    }
 
     function openDialog() {
         dialogIssue.value = null
@@ -95,137 +157,80 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         urlError.value = null
     }
 
-    async function saveImportedPost(input: unknown, currentRevision: number, taskId: string) {
-        let parsedInput: CreateUserAddedJobPostInput
+    async function handleTask(currentTask: AgentTask) {
+        const importTaskId = currentTask.id
 
-        try {
-            const { result } = parseJobPostImportResult(input)
-            if ('error' in result) {
-                if (currentRevision === revision && session.value?.taskId === taskId) {
-                    issue.value = result.error
-                    retryMode.value = 'task'
-                    agentStore.forgetOnRefresh(taskId)
-                }
-                return
-            }
-            parsedInput = result
-        } catch {
-            if (currentRevision === revision && session.value?.taskId === taskId) {
-                issue.value = 'Agent did not return a valid job post. Try again.'
-                retryMode.value = 'task'
-                agentStore.forgetOnRefresh(taskId)
-            }
-            return
-        }
-
-        saving.value = true
-        issue.value = null
-        retryMode.value = 'save'
-
-        try {
-            const savedItem = await postStore.addUserAddedPost(parsedInput)
-
-            if (currentRevision !== revision || session.value?.taskId !== taskId) {
-                return
-            }
-
-            agentStore.dismissSession(taskId)
-            issue.value = null
-            importedItem.value = savedItem
-        } catch (error) {
-            if (currentRevision === revision && session.value?.taskId === taskId) {
-                issue.value =
-                    error instanceof Error ? error.message : 'Could not save the imported job post'
-            }
-        } finally {
-            if (currentRevision === revision) {
-                saving.value = false
-            }
-        }
-    }
-
-    async function handleTask(currentTask: AgentTask, currentRevision = revision) {
         if (
-            currentRevision !== revision ||
-            currentTask.id !== session.value?.taskId ||
-            processingTaskId.value === currentTask.id
+            currentTask.status !== 'completed' ||
+            agentStore.getSession(importTaskId) === null ||
+            resultStates.value[importTaskId] !== undefined
         ) {
             return
         }
 
-        if (currentTask.status === 'running') {
-            return
-        }
-
-        if (currentTask.status === 'failed') {
-            issue.value = currentTask.error
-            retryMode.value = 'task'
-            return
-        }
-
-        if (currentTask.status === 'cancelled') {
-            issue.value = null
-            retryMode.value = 'task'
-            return
-        }
-
-        processingTaskId.value = currentTask.id
+        let input: CreateUserAddedJobPostInput
 
         try {
-            await saveImportedPost(currentTask.output, currentRevision, currentTask.id)
-        } finally {
-            if (processingTaskId.value === currentTask.id) {
-                processingTaskId.value = null
+            const { result } = parseJobPostImportResult(currentTask.output)
+
+            if ('error' in result) {
+                failImport(importTaskId, result.error, 'task')
+                return
             }
+
+            input = result
+        } catch {
+            failImport(importTaskId, 'Agent did not return a valid job post. Try again.', 'task')
+            return
+        }
+
+        updateResultState(importTaskId, { saving: true, issue: null, retry: 'save' })
+
+        try {
+            const savedItem = await postStore.addUserAddedPost(input)
+            updateResultState(importTaskId, null)
+
+            // Only the import that the panel shows opens its saved post.
+            if (agentStore.dismissSession(importTaskId) && selectedTaskId.value === importTaskId) {
+                importedItem.value = savedItem
+            }
+        } catch (error) {
+            failImport(
+                importTaskId,
+                error instanceof Error ? error.message : 'Could not save the imported job post',
+                'save',
+            )
         }
     }
 
-    function observeTaskStart(taskStart: AgentTaskStart, currentRevision: number) {
-        void taskStart.started
-            .then((startedTask) => {
-                url.value = ''
-                return handleTask(startedTask, currentRevision)
-            })
-            .catch((error: unknown) => {
-                if (
-                    currentRevision === revision &&
-                    agentStore.getSession(taskStart.taskId) !== null
-                ) {
-                    issue.value =
-                        error instanceof Error
-                            ? error.message
-                            : 'Could not start the job-post import'
-                    retryMode.value = 'task'
-                }
-            })
+    function observeTaskStart(taskStart: AgentTaskStart) {
+        selectedTaskId.value = taskStart.taskId
+        // A failed start keeps its error on the task, where the import panel shows it.
+        void taskStart.started.catch(() => undefined)
     }
 
     function startImport(importUrl: string) {
-        if (busy.value) {
-            dialogIssue.value = 'Finish the current job-post import before starting another.'
+        if (!agentStore.hasTaskCapacity()) {
+            dialogIssue.value = taskLimitIssue
             return false
         }
 
-        const currentRevision = ++revision
-        issue.value = null
-        dialogIssue.value = null
-        retryMode.value = null
-        importedItem.value = null
-        dialogOpen.value = false
+        let taskStart: AgentTaskStart
 
         try {
-            const taskStart = agentStore.startTask(createJobPostImportTask(importUrl), {
+            taskStart = agentStore.startTask(createJobPostImportTask(importUrl), {
                 kind: 'job-post-import',
                 url: importUrl,
             })
-            observeTaskStart(taskStart, currentRevision)
         } catch (error) {
-            issue.value =
+            dialogIssue.value =
                 error instanceof Error ? error.message : 'Could not start the job-post import'
-            retryMode.value = 'task'
             return false
         }
 
+        observeTaskStart(taskStart)
+        url.value = ''
+        closeDialog()
         return true
     }
 
@@ -247,6 +252,18 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
         }
     }
 
+    function selectTask(nextTaskId: string | null) {
+        if (
+            nextTaskId !== null &&
+            !importSessions.value.some(({ taskId: importTaskId }) => importTaskId === nextTaskId)
+        ) {
+            return false
+        }
+
+        selectedTaskId.value = nextTaskId
+        return true
+    }
+
     function retry() {
         const currentSession = session.value
         const currentTask = task.value
@@ -255,59 +272,63 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
             return
         }
 
-        if (currentTask?.status === 'completed' && retryMode.value === 'save') {
+        if (resultState.value?.retry === 'save' && currentTask?.status === 'completed') {
+            updateResultState(currentSession.taskId, null)
             void handleTask(currentTask)
-        } else {
-            const currentRevision = ++revision
-            issue.value = null
-            retryMode.value = null
+            return
+        }
 
-            try {
-                observeTaskStart(
-                    agentStore.retryTask(
-                        currentSession.taskId,
-                        createJobPostImportTask(currentSession.url),
-                    ),
-                    currentRevision,
-                )
-            } catch (error) {
-                issue.value =
-                    error instanceof Error ? error.message : 'Could not retry the job-post import'
-                retryMode.value = 'task'
-            }
+        // Check before retryTask, which discards the old import before it starts the new one.
+        if (!agentStore.hasTaskCapacity()) {
+            updateResultState(currentSession.taskId, { issue: taskLimitIssue })
+            return
+        }
+
+        updateResultState(currentSession.taskId, null)
+
+        try {
+            observeTaskStart(
+                agentStore.retryTask(
+                    currentSession.taskId,
+                    createJobPostImportTask(currentSession.url),
+                ),
+            )
+        } catch (error) {
+            updateResultState(currentSession.taskId, {
+                issue:
+                    error instanceof Error ? error.message : 'Could not retry the job-post import',
+            })
         }
     }
 
     async function cancel() {
-        const taskId = session.value?.taskId
+        const currentTaskId = taskId.value
 
-        if (!running.value || taskId === undefined) {
+        if (!running.value || currentTaskId === null) {
             return
         }
 
-        issue.value = null
-
-        try {
-            await agentStore.cancelTask(taskId)
-        } catch (error) {
-            issue.value =
-                error instanceof Error ? error.message : 'Could not cancel the job-post import'
-        }
+        // A failed cancel keeps its error on the task, where the import panel shows it.
+        await agentStore.cancelTask(currentTaskId).catch(() => undefined)
     }
 
     function clearRestoredCancellation() {
-        const currentSession = session.value
+        let selectedCleared = false
 
-        if (currentSession === null || task.value?.status !== 'cancelled') {
-            return false
+        for (const { taskId: importTaskId } of importSessions.value) {
+            if (
+                agentStore.getTaskState(importTaskId)?.task?.status === 'cancelled' &&
+                agentStore.dismissSession(importTaskId)
+            ) {
+                updateResultState(importTaskId, null)
+
+                if (importTaskId === selectedTaskId.value) {
+                    selectedCleared = true
+                }
+            }
         }
 
-        agentStore.dismissSession(currentSession.taskId)
-        revision += 1
-        issue.value = null
-        processingTaskId.value = null
-        retryMode.value = null
-        return true
+        return selectedCleared
     }
 
     function consumeImportedItem(item: UserAddedJobPost) {
@@ -317,16 +338,14 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
     }
 
     watch(
-        [session, task] as const,
-        ([currentSession, currentTask]) => {
-            if (currentSession === null) {
-                return
-            }
+        [importSessions, () => agentStore.taskStates] as const,
+        ([sessions, taskStates]) => {
+            for (const { taskId: importTaskId } of sessions) {
+                const currentTask = taskStates[importTaskId]?.task
 
-            url.value = ''
-
-            if (currentTask?.id === currentSession.taskId) {
-                void handleTask(currentTask)
+                if (currentTask?.id === importTaskId) {
+                    void handleTask(currentTask)
+                }
             }
         },
         { immediate: true },
@@ -335,23 +354,22 @@ export const useJobPostImportStore = defineStore('job-post-import', () => {
     return {
         hasSession,
         taskId,
+        items,
         dialogOpen,
         url,
         importedItem,
         saving,
         starting,
         running,
-        busy,
         displayIssue,
         retryAvailable,
-        showCard,
         popupError,
         cancelling,
-        requestStarting,
         openDialog,
         closeDialog,
         clearUrlError,
         submitUrl,
+        selectTask,
         retry,
         cancel,
         clearRestoredCancellation,

@@ -11,6 +11,7 @@ import { createPinia, type Pinia } from 'pinia'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type HistoryState, type Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPersistedAgentSessionGuard } from '@/router'
 import { createJobPostImportTask } from '@/stores/job-post-import'
 import { useAgentStore, type AgentSession, type AgentTaskStart } from '@/stores/agent'
 import { makeAgentTask, makeAgentTaskState } from '@/test/fixtures/agent'
@@ -175,7 +176,7 @@ const seedImportAgent = (
     } satisfies AgentSession
 
     agentStore.sessions = [
-        ...agentStore.sessions.filter(({ kind }) => kind !== 'job-post-import'),
+        ...agentStore.sessions.filter(({ taskId }) => taskId !== task.id),
         session,
     ]
     agentStore.taskStates = {
@@ -796,42 +797,262 @@ describe('review route selection', () => {
         })
     })
 
-    it('shows a selectable in-progress card after leaving a running import', async () => {
+    it('starts another import while one runs and opens each import from its own card', async () => {
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
-        const runningTask = makeAgentTask({
-            id: 'visible-import-task',
-            threadId: 'thread',
-            turnId: 'turn',
+        const firstTask = makeAgentTask({ id: 'first-import-task' })
+        const secondTask = makeAgentTask({ id: 'second-import-task' })
+        vi.spyOn(agentStore, 'startTask')
+            .mockImplementationOnce(() => seedImportStart(agentStore, firstTask))
+            .mockImplementationOnce(() => seedImportStart(agentStore, secondTask))
+        const cancelTask = vi.spyOn(agentStore, 'cancelTask').mockResolvedValue(null)
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await submitJobPostUrl(root, 'https://example.com/jobs/second-role')
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledTimes(2))
+
+        for (const task of [firstTask, secondTask]) {
+            findTestButton(root, 'back-from-job-post-import').click()
+            const card = await vi.waitFor(() => findTestButton(root, `job-post-import-${task.id}`))
+            card.click()
+            const cancel = await vi.waitFor(() => findTestButton(root, 'cancel-job-post-import'))
+            cancel.click()
+
+            await vi.waitFor(() => expect(cancelTask).toHaveBeenLastCalledWith(task.id))
+        }
+    })
+
+    it('keeps the open import in view when another import finishes', async () => {
+        let postRequestCount = 0
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const { method, url } = requestParts(input, init)
+
+            if (method === 'POST' && url.endsWith('/job-posts')) {
+                postRequestCount += 1
+                return Promise.resolve(jsonResponse(savedImportedPost))
+            }
+
+            return defaultReviewResponse(input, init)
         })
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const finishedTask = makeAgentTask({ id: 'finished-import-task' })
+        const openTask = makeAgentTask({ id: 'open-import-task' })
+        vi.spyOn(agentStore, 'startTask')
+            .mockImplementationOnce(() => seedImportStart(agentStore, finishedTask))
+            .mockImplementationOnce(() => seedImportStart(agentStore, openTask))
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await submitJobPostUrl(root, 'https://example.com/jobs/second-role')
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledTimes(2))
+        updateImportAgentTask(agentStore, {
+            ...finishedTask,
+            status: 'completed',
+            output: { result: importOutput },
+            error: null,
+        })
+
+        await vi.waitFor(() => {
+            expect(postRequestCount).toBe(1)
+            expect(agentStore.getSession(finishedTask.id)).toBeNull()
+        })
+        await nextTick()
+        expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
+    })
+
+    it('keeps Added by you in view when an import finishes after you leave its panel', async () => {
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const { method, url } = requestParts(input, init)
+
+            if (method === 'POST' && url.endsWith('/job-posts')) {
+                return Promise.resolve(jsonResponse(savedImportedPost))
+            }
+
+            return defaultReviewResponse(input, init)
+        })
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const task = makeAgentTask({ id: 'left-import-task' })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, task),
+        )
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
+        findTestButton(root, 'back-from-job-post-import').click()
+        await nextTick()
+        updateImportAgentTask(agentStore, {
+            ...task,
+            status: 'completed',
+            output: { result: importOutput },
+            error: null,
+        })
+
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(`[data-testid="job-post-card-${savedImportedPost.post.id}"]`),
+            ).not.toBeNull(),
+        )
+        expect(root.querySelector('[data-testid="job-post-viewer"]')).toBeNull()
+    })
+
+    it('keeps a failed import that you are not watching reachable from its card', async () => {
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const failedTask = makeAgentTask({ id: 'failed-import-task' })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, failedTask),
+        )
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
+        findTestButton(root, 'back-from-job-post-import').click()
+        updateImportAgentTask(agentStore, {
+            ...failedTask,
+            status: 'failed',
+            output: null,
+            error: 'Could not read the job post',
+        })
+        await nextTick()
+        findTestButton(root, `job-post-import-${failedTask.id}`).click()
+
+        await vi.waitFor(() => {
+            expect(root.querySelector('[role="alert"]')).not.toBeNull()
+            expect(root.querySelector('[data-testid="retry-job-post-import"]')).not.toBeNull()
+        })
+    })
+
+    it('leaves the panel of a discarded import for the page that Back opens', async () => {
+        const { pinia, root, router } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const failedTask = makeAgentTask({ id: 'discarded-import-task' })
+        router.beforeEach(createPersistedAgentSessionGuard(() => agentStore))
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, failedTask),
+        )
+
+        reportButton(root, secondReport.id).click()
+        await vi.waitFor(() =>
+            expect(router.options.history.state).toMatchObject({ reviewReportId: secondReport.id }),
+        )
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
+        updateImportAgentTask(agentStore, {
+            ...failedTask,
+            status: 'failed',
+            output: null,
+            error: 'Could not read the job post',
+        })
+        // The agent store marks a failed task this way, so the next navigation discards it.
+        agentStore.forgetOnRefresh(failedTask.id)
+        router.back()
+
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector('[data-testid="review-sources-panel"]')
+                    ?.getAttribute('data-active'),
+            ).toBe('true'),
+        )
+    })
+
+    it('flags an import card while its import waits for a browser permission', async () => {
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const runningTask = makeAgentTask({ id: 'permission-import-task' })
+        const otherTask = makeAgentTask({ id: 'other-import-task' })
         vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
             seedImportStart(agentStore, runningTask),
         )
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
-
+        seedImportAgent(agentStore, otherTask, 'https://example.com/jobs/second-role')
         findTestButton(root, 'back-from-job-post-import').click()
+        agentStore.taskStates = {
+            ...agentStore.taskStates,
+            [runningTask.id]: makeAgentTaskState(runningTask, {
+                pendingPermission: {
+                    id: 'browser-permission',
+                    kind: 'browser-origin',
+                    message: 'Allow Chrome to access https://example.com?',
+                    origin: 'https://example.com',
+                },
+            }),
+        }
 
-        await vi.waitFor(() => {
+        await vi.waitFor(() =>
             expect(
-                root.querySelector('[aria-label="Job posts"]')?.getAttribute('data-active'),
-            ).toBe('true')
-            expect(root.querySelector('[data-testid="job-post-import-progress"]')).not.toBeNull()
-        })
-        findTestButton(root, 'job-post-import-progress').click()
+                root.querySelector(
+                    `[data-testid="job-post-import-${runningTask.id}-permission-needed"]`,
+                ),
+            ).not.toBeNull(),
+        )
+        expect(
+            root.querySelector(`[data-testid="job-post-import-${otherTask.id}-permission-needed"]`),
+        ).toBeNull()
+    })
 
-        await vi.waitFor(() => {
-            expect(
-                root
-                    .querySelector('[aria-label="Add job post"][data-active]')
-                    ?.getAttribute('data-active'),
-            ).toBe('true')
-            expect(root.querySelector('[data-testid="cancel-job-post-import"]')).not.toBeNull()
+    it('refuses a new import while four Agent tasks of any kind run', async () => {
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const outreachTask = makeAgentTask({ id: 'running-outreach-task' })
+        const startTask = vi.spyOn(agentStore, 'startTask')
+
+        for (const index of [1, 2, 3]) {
+            seedImportAgent(agentStore, makeAgentTask({ id: `running-import-${index}` }))
+        }
+        agentStore.sessions = [
+            ...agentStore.sessions,
+            { kind: 'outreach-contact', taskId: outreachTask.id, postId: firstPost.id },
+        ]
+        agentStore.taskStates = {
+            ...agentStore.taskStates,
+            [outreachTask.id]: makeAgentTaskState(outreachTask),
+        }
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+
+        await vi.waitFor(() =>
+            expect(root.querySelector('[data-testid="job-post-url-error"]')).not.toBeNull(),
+        )
+        expect(startTask).not.toHaveBeenCalled()
+    })
+
+    it('keeps a failed import when its retry meets the Agent task limit', async () => {
+        const { pinia, root } = await mountReview()
+        const agentStore = useAgentStore(pinia)
+        const failedTask = makeAgentTask({ id: 'limited-import-task' })
+        vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
+            seedImportStart(agentStore, failedTask),
+        )
+
+        await submitJobPostUrl(root, importOutput.post.postUrl)
+        await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
+        updateImportAgentTask(agentStore, {
+            ...failedTask,
+            status: 'failed',
+            output: null,
+            error: 'Could not read the job post',
         })
+        for (const index of [1, 2, 3, 4]) {
+            seedImportAgent(agentStore, makeAgentTask({ id: `running-import-${index}` }))
+        }
+        const retry = await vi.waitFor(() => findTestButton(root, 'retry-job-post-import'))
+        retry.click()
+
+        expect(agentStore.getSession(failedTask.id)).not.toBeNull()
     })
 
     it('keeps a running import intact when cancellation fails', async () => {
+        vi.mocked(fetch).mockImplementation((input, init) => {
+            const { method, url } = requestParts(input, init)
+
+            if (method === 'POST' && url.endsWith('/tasks/cancel-import-task/cancel')) {
+                return Promise.resolve(jsonResponse({ error: 'Could not cancel import' }, 500))
+            }
+
+            return defaultReviewResponse(input, init)
+        })
         const { pinia, root } = await mountReview()
         const agentStore = useAgentStore(pinia)
         const runningTask = makeAgentTask({
@@ -842,9 +1063,7 @@ describe('review route selection', () => {
         vi.spyOn(agentStore, 'startTask').mockImplementation(() =>
             seedImportStart(agentStore, runningTask),
         )
-        const cancelTask = vi
-            .spyOn(agentStore, 'cancelTask')
-            .mockRejectedValueOnce(new Error('Could not cancel import'))
+        const cancelTask = vi.spyOn(agentStore, 'cancelTask')
 
         await submitJobPostUrl(root, importOutput.post.postUrl)
         await vi.waitFor(() => expect(agentStore.startTask).toHaveBeenCalledOnce())
