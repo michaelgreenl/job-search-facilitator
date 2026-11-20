@@ -214,7 +214,9 @@ function allowBrowserActionsForTask() {
                                 aria-hidden="true"
                             ></span>
                             <ToolIcon v-else class="activity-icon" />
-                            <span class="activity-copy">{{ item.startup }}</span>
+                            <span :key="item.startup" class="activity-copy">
+                                {{ item.startup }}
+                            </span>
                         </div>
                         <div
                             v-if="item.activity"
@@ -232,7 +234,11 @@ function allowBrowserActionsForTask() {
                                 aria-hidden="true"
                             ></span>
                             <component v-else :is="streamIcons[item.icon]" class="activity-icon" />
-                            <span data-testid="agent-stream-copy" class="activity-copy">
+                            <span
+                                :key="item.activity"
+                                data-testid="agent-stream-copy"
+                                class="activity-copy"
+                            >
                                 {{ item.activity }}
                             </span>
                         </div>
@@ -254,7 +260,11 @@ function allowBrowserActionsForTask() {
                                         : undefined
                                 "
                             >
-                                <span data-testid="agent-reasoning-latest" class="activity-copy">
+                                <span
+                                    :key="item.statements[1]"
+                                    data-testid="agent-reasoning-latest"
+                                    class="activity-copy"
+                                >
                                     {{ item.statements[0] }}
                                 </span>
                                 <ChevronDownIcon
@@ -468,6 +478,69 @@ function allowBrowserActionsForTask() {
     &::after {
         content: '⠋';
         animation: activity-spin 0.8s step-end infinite;
+    }
+}
+
+// New text fades in where it lands. A :key on a label span replays the fade when its text
+// changes in place. The latest statement is keyed by the statement before it, so text that
+// streams into it does not replay the fade. The trace list fades as one block, so a statement
+// that moves into it does not blink.
+@media (prefers-reduced-motion: no-preference) {
+    .agent-error,
+    .agent-reconnect,
+    .task-status,
+    .activity-item > .activity-copy,
+    .reasoning-summary > .activity-copy,
+    .reasoning-details[open] > .reasoning-traces {
+        animation: stream-enter 160ms ease-out;
+    }
+
+    // A glyph settles in when the spinner and a step icon change places. The scale property
+    // leaves the chevron's rotate transform alone.
+    .activity-icon,
+    .activity-progress {
+        animation: glyph-settle 160ms ease-out;
+    }
+}
+
+// A soft light sweeps across the running step's label while its spinner shows. steps(50)
+// limits the repaint to 25 times a second.
+@media screen and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    @supports (background-clip: text) {
+        .activity-progress + .activity-copy {
+            justify-self: start;
+            color: transparent;
+            background: linear-gradient(
+                    90deg,
+                    $color-ink-muted 40%,
+                    $color-signal-light 50%,
+                    $color-ink-muted 60%
+                )
+                100% 0 / 250% 100%;
+            background-clip: text;
+            animation:
+                stream-enter 160ms ease-out,
+                activity-shimmer 2s steps(50) infinite;
+        }
+    }
+}
+
+@keyframes stream-enter {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes glyph-settle {
+    from {
+        opacity: 0;
+        scale: 0.9;
+    }
+}
+
+@keyframes activity-shimmer {
+    to {
+        background-position: 0 0;
     }
 }
 

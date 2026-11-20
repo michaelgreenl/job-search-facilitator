@@ -46,85 +46,88 @@ function cancelAlwaysAllowConfirmation() {
 </script>
 
 <template>
-    <section
-        v-if="confirmingAlwaysAllow"
-        class="permission-required"
-        data-testid="agent-permission-confirmation"
-        role="alertdialog"
-        aria-labelledby="always-allow-title"
-        aria-describedby="always-allow-message"
-        @keydown.esc.stop="cancelAlwaysAllowConfirmation"
-    >
-        <span class="eyebrow">Confirm access</span>
-        <h3 id="always-allow-title" class="permission-title">Always allow for this task?</h3>
-        <p id="always-allow-message" class="permission-message">
-            Chrome will be allowed to access every website this task visits without asking again.
-        </p>
+    <div class="permission-card">
+        <section
+            v-if="confirmingAlwaysAllow"
+            class="permission-required"
+            data-testid="agent-permission-confirmation"
+            role="alertdialog"
+            aria-labelledby="always-allow-title"
+            aria-describedby="always-allow-message"
+            @keydown.esc.stop="cancelAlwaysAllowConfirmation"
+        >
+            <span class="eyebrow">Confirm access</span>
+            <h3 id="always-allow-title" class="permission-title">Always allow for this task?</h3>
+            <p id="always-allow-message" class="permission-message">
+                Chrome will be allowed to access every website this task visits without asking
+                again.
+            </p>
 
-        <div class="permission-buttons confirmation-buttons">
-            <BaseButton
-                ref="alwaysAllowNo"
-                data-testid="agent-permission-always-allow-cancel"
-                preset="secondary"
-                :disabled="submitting"
-                @click="cancelAlwaysAllowConfirmation"
-            >
-                No
-            </BaseButton>
-            <BaseButton
-                data-testid="agent-permission-always-allow-confirm"
-                preset="signal"
-                :disabled="submitting"
-                @click="emit('alwaysAllow')"
-            >
-                Yes
-            </BaseButton>
-        </div>
-    </section>
-
-    <section
-        v-else
-        ref="permissionRequired"
-        class="permission-required"
-        data-testid="agent-permission-prompt"
-        aria-labelledby="permission-title"
-        tabindex="-1"
-    >
-        <span class="eyebrow">Permission required</span>
-        <h3 id="permission-title" class="permission-title">Website access</h3>
-        <p class="permission-message">{{ permission.message }}</p>
-
-        <div class="permission-controls">
-            <BaseButton
-                ref="alwaysAllowPermission"
-                data-testid="agent-permission-always-allow"
-                preset="secondary"
-                :disabled="submitting"
-                @click="requestAlwaysAllowConfirmation"
-            >
-                Always allow for this task
-            </BaseButton>
-
-            <div class="permission-buttons">
+            <div class="permission-buttons confirmation-buttons">
                 <BaseButton
-                    data-testid="agent-permission-decline"
+                    ref="alwaysAllowNo"
+                    data-testid="agent-permission-always-allow-cancel"
                     preset="secondary"
                     :disabled="submitting"
-                    @click="emit('resolve', 'decline')"
+                    @click="cancelAlwaysAllowConfirmation"
                 >
-                    Decline
+                    No
                 </BaseButton>
                 <BaseButton
-                    data-testid="agent-permission-approve"
+                    data-testid="agent-permission-always-allow-confirm"
                     preset="signal"
                     :disabled="submitting"
-                    @click="emit('resolve', 'approve')"
+                    @click="emit('alwaysAllow')"
                 >
-                    Allow
+                    Yes
                 </BaseButton>
             </div>
-        </div>
-    </section>
+        </section>
+
+        <section
+            v-else
+            ref="permissionRequired"
+            class="permission-required"
+            data-testid="agent-permission-prompt"
+            aria-labelledby="permission-title"
+            tabindex="-1"
+        >
+            <span class="eyebrow">Permission required</span>
+            <h3 id="permission-title" class="permission-title">Website access</h3>
+            <p class="permission-message">{{ permission.message }}</p>
+
+            <div class="permission-controls">
+                <BaseButton
+                    ref="alwaysAllowPermission"
+                    data-testid="agent-permission-always-allow"
+                    preset="secondary"
+                    :disabled="submitting"
+                    @click="requestAlwaysAllowConfirmation"
+                >
+                    Always allow for this task
+                </BaseButton>
+
+                <div class="permission-buttons">
+                    <BaseButton
+                        data-testid="agent-permission-decline"
+                        preset="secondary"
+                        :disabled="submitting"
+                        @click="emit('resolve', 'decline')"
+                    >
+                        Decline
+                    </BaseButton>
+                    <BaseButton
+                        data-testid="agent-permission-approve"
+                        preset="signal"
+                        :disabled="submitting"
+                        @click="emit('resolve', 'approve')"
+                    >
+                        Allow
+                    </BaseButton>
+                </div>
+            </div>
+        </section>
+    </div>
 </template>
 
 <style scoped lang="scss">
@@ -140,6 +143,20 @@ function cancelAlwaysAllowConfirmation() {
     background: $color-signal-alpha-10;
     border: 1px solid $color-signal-alpha-32;
     border-radius: $radius-md;
+}
+
+// The card enters once. The swap to the confirmation and back stays instant.
+@media (prefers-reduced-motion: no-preference) {
+    .permission-card {
+        animation: permission-enter 160ms ease-out;
+    }
+}
+
+@keyframes permission-enter {
+    from {
+        opacity: 0;
+        transform: translateY($space-1) scale(0.98);
+    }
 }
 
 .eyebrow {
