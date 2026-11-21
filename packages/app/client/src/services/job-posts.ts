@@ -2,11 +2,13 @@ import {
     parseApplyQueueItems,
     parseJobPost,
     parseJobPosts,
+    parseRecordedJobUpdates,
     parseTrackedJobPosts,
     parseUpdateJobPostResult,
     parseUserAddedJobPost,
     parseUserAddedJobPosts,
     type CreateUserAddedJobPostInput,
+    type RecordedJobUpdateChange,
     type UpdateJobPostInput,
 } from '@job-search-facilitator/core'
 import { apiUrl, parseApiResponse, readResponseError } from '@/api'
@@ -30,6 +32,27 @@ export async function fetchTrackedPosts() {
     const response = await fetch(`${apiUrl}${path}`, undefined)
 
     return parseApiResponse(response, parseTrackedJobPosts, path)
+}
+
+export async function fetchRecordedJobUpdates() {
+    const path = '/job-update-check/updates'
+    const response = await fetch(`${apiUrl}${path}`, undefined)
+
+    return parseApiResponse(response, parseRecordedJobUpdates, path)
+}
+
+export async function changeRecordedJobUpdates(change: RecordedJobUpdateChange) {
+    const response = await fetch(`${apiUrl}/job-update-check/updates`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(change),
+    })
+
+    if (!response.ok) {
+        throw new Error(
+            (await readResponseError(response)) ?? `API request failed (${response.status})`,
+        )
+    }
 }
 
 export async function fetchUserAddedJobPosts() {

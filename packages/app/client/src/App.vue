@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { computed, onErrorCaptured, shallowRef } from 'vue'
 import { RouterView } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import NotificationBanners from '@/components/notifications/NotificationBanners.vue'
 import { navigationFailed } from '@/router'
+import { useNotificationStore } from '@/stores/notifications'
 
+const { screenVisit } = storeToRefs(useNotificationStore())
 const descendantFailed = shallowRef(false)
 const applicationFailed = computed(() => descendantFailed.value || navigationFailed.value)
 
@@ -39,8 +43,10 @@ function reloadDocument() {
             <AppHeader />
 
             <RouterView v-slot="{ Component }">
-                <component :is="Component" />
+                <component :is="Component" :key="screenVisit" />
             </RouterView>
+
+            <NotificationBanners />
         </template>
     </div>
 </template>

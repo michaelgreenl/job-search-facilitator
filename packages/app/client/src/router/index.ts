@@ -35,6 +35,12 @@ export const router = createRouter({
             component: () => import('@/views/SettingsView.vue'),
             meta: { title: 'Settings' },
         },
+        {
+            path: '/notifications',
+            name: 'notifications',
+            component: () => import('@/views/NotificationsView.vue'),
+            meta: { title: 'Notifications' },
+        },
         ...Object.entries(navigationRoutes).map(([name, route]) => ({
             path: route.path,
             name,

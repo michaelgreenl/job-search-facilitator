@@ -11,6 +11,7 @@ import JobPostNotesPanel from '@/components/job-posts/JobPostNotesPanel.vue'
 import OutreachPanel from '@/components/outreach/OutreachPanel.vue'
 import JobDescriptionPanel from '@/components/track/JobDescriptionPanel.vue'
 import TrackedJobPostPanel from '@/components/track/TrackedJobPostPanel.vue'
+import { router } from '@/router'
 import { fetchTrackedPosts } from '@/services/job-posts'
 import { updateOutreachContact } from '@/services/outreach'
 import { readSessionStorage, writeSessionStorage } from '@/services/session-storage'
@@ -249,6 +250,22 @@ function selectPost(postId: string) {
     activePanel.value = 'detail'
 }
 
+/** Opens the post that a notification links to, in the filter that lists it. */
+async function openLinkedPost(postId: string) {
+    void router.replace({ name: 'track' })
+
+    if (!(await loadTrackedPosts(entries.value.length === 0))) {
+        return
+    }
+
+    const entry = entries.value.find(({ post }) => post.id === postId)
+
+    if (entry !== undefined) {
+        postFilter.value = isClosedApplication(entry.post) ? 'closed' : 'open'
+        selectPost(postId)
+    }
+}
+
 function selectPostFilter(filter: Exclude<PostFilter, 'open'>) {
     postFilter.value = postFilter.value === filter ? 'open' : filter
 }
@@ -429,8 +446,18 @@ onMounted(() => {
         void outreachStore.restoreTaskContext()
     }
 
-    void loadTrackedPosts()
+    const linkedPostId = router.currentRoute.value.query.post
+    void (typeof linkedPostId === 'string' ? openLinkedPost(linkedPostId) : loadTrackedPosts())
 })
+
+watch(
+    () => router.currentRoute.value.query.post,
+    (postId) => {
+        if (typeof postId === 'string') {
+            void openLinkedPost(postId)
+        }
+    },
+)
 </script>
 
 <template>

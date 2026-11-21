@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute } from 'vue-router'
 import { navigationRoutes } from '@/router'
+import { useNotificationStore } from '@/stores/notifications'
 
 const route = useRoute()
+const { unreadCount } = storeToRefs(useNotificationStore())
 const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => ({
     label: meta.title,
     path,
@@ -12,7 +15,7 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
 <template>
     <header
         class="app-header glass-frame"
-        :class="{ 'is-settings': route.path === '/settings' }"
+        :class="{ 'is-narrow': route.path === '/settings' || route.path === '/notifications' }"
         data-testid="app-header"
     >
         <nav class="nav-links" aria-label="Primary">
@@ -28,7 +31,38 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
         </nav>
 
         <RouterLink
-            class="settings-link link"
+            class="notifications-link link"
+            to="/notifications"
+            :aria-label="unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'"
+            title="Notifications"
+            data-testid="nav-link-notifications"
+        >
+            <svg
+                viewBox="0 -1 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+            >
+                <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z" />
+                <path d="M10 20a2.2 2.2 0 0 0 4 0" />
+            </svg>
+            <span
+                v-if="unreadCount > 0"
+                class="count-badge"
+                data-testid="notification-count"
+                aria-hidden="true"
+            >
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+            </span>
+        </RouterLink>
+
+        <RouterLink
+            class="link"
             to="/settings"
             aria-label="Settings"
             title="Settings"
@@ -63,7 +97,7 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     padding-inline: $space-5;
     border-radius: $radius-lg;
 
-    &.is-settings {
+    &.is-narrow {
         max-width: 60rem;
     }
 
@@ -78,8 +112,27 @@ const navigationItems = Object.values(navigationRoutes).map(({ meta, path }) => 
     align-items: center;
 }
 
-.settings-link {
+.notifications-link {
+    position: relative;
+    margin-right: 1.25rem;
     margin-left: auto;
+}
+
+// The badge sits on the top right corner of the bell and grows to the right.
+.count-badge {
+    position: absolute;
+    top: 0.3125rem;
+    left: 0.75rem;
+    min-width: 1.125rem;
+    padding: 0 0.3125rem;
+    color: $color-night-deep;
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.125rem;
+    text-align: center;
+    background: $color-signal;
+    border-radius: $radius-full;
 }
 
 .link {

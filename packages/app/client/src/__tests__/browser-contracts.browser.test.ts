@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -153,11 +154,17 @@ describe('browser interaction contracts', () => {
                     { path: '/apply', component: TallRoute },
                     { path: '/track', component: TallRoute },
                     { path: '/settings', component: SettingsView },
+                    { path: '/notifications', component: TallRoute },
                 ],
             })
             await router.push('/')
             await router.isReady()
-            mountVue(App, { install: (app) => app.use(router) })
+            mountVue(App, {
+                install: (app) => {
+                    app.use(createPinia())
+                    app.use(router)
+                },
+            })
             const header = page.getByTestId('app-header')
             const bounds = header.element().getBoundingClientRect()
             const contentBounds = page
@@ -197,6 +204,8 @@ describe('browser interaction contracts', () => {
                 await vi.waitFor(() => expect(window.scrollY).toBe(0))
                 await page.getByTestId('nav-link-track').click()
                 await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/track'))
+                await userEvent.keyboard('{Tab}')
+                await expect.element(page.getByTestId('nav-link-notifications')).toHaveFocus()
                 await userEvent.keyboard('{Tab}')
                 await expect.element(page.getByTestId('nav-link-settings')).toHaveFocus()
                 await userEvent.keyboard('{Enter}')

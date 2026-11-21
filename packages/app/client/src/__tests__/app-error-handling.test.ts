@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { navigationFailed, router as applicationRouter } from '../router'
 import App from '../App.vue'
+import { jsonResponse } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
 
 const removeApplicationRoutes: Array<() => void> = []
@@ -22,9 +23,14 @@ const mountApp = async (component: ReturnType<typeof defineComponent>) => {
     await router.push('/')
     await router.isReady()
 
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse([])),
+    )
     const { root } = mountVue(App, {
         install: (app) => {
             app.config.errorHandler = vi.fn()
+            app.use(createPinia())
             app.use(router)
         },
     })

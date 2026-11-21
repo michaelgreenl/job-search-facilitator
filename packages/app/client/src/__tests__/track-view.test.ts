@@ -10,6 +10,7 @@ import { AgentBridgeHarness } from '@/test/support/agent-bridge-harness'
 import { FakeEventSource } from '@/test/support/fake-event-source'
 import { jsonResponse, requestParts } from '@/test/support/http'
 import { mountVue } from '@/test/support/mount'
+import { router } from '@/router'
 import { useAgentStore } from '@/stores/agent'
 
 describe('track view', () => {
@@ -193,6 +194,33 @@ describe('track view', () => {
         )
         expect(card(active.post.id)).not.toBeNull()
         expect(card(closed.post.id)).toBeNull()
+    })
+
+    it('opens the closed job post that a notification links to', async () => {
+        const closed = makeTrackedJobPost({
+            post: makeJobPost({
+                id: '10000000-0000-4000-8000-000000000002',
+                applicationStatus: 'rejected',
+                appliedAt: '2026-07-20T12:00:00.000Z',
+            }),
+            contacts: [],
+        })
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse([makeTrackedJobPost(), closed])),
+        )
+        await router.push({ name: 'track', query: { post: closed.post.id } })
+        const { root } = mountVue(TrackView, {
+            install: (app) => app.use(createPinia()),
+        })
+
+        await vi.waitFor(() =>
+            expect(
+                root
+                    .querySelector(`[data-testid="job-post-card-${closed.post.id}"]`)
+                    ?.getAttribute('aria-pressed'),
+            ).toBe('true'),
+        )
     })
 
     it('opens saved outreach drafts beside the tracked application', async () => {

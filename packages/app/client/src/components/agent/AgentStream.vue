@@ -7,6 +7,7 @@ import ChevronDownIcon from '@/components/svgs/ChevronDownIcon.vue'
 import GlobeIcon from '@/components/svgs/GlobeIcon.vue'
 import ToolIcon from '@/components/svgs/ToolIcon.vue'
 import { useAgentStore } from '@/stores/agent'
+import { useNotificationStore } from '@/stores/notifications'
 import AgentPermissionPrompt from './AgentPermissionPrompt.vue'
 
 const props = defineProps<{
@@ -16,6 +17,7 @@ const props = defineProps<{
     statusTestId?: string
 }>()
 const agentStore = useAgentStore()
+const notificationStore = useNotificationStore()
 const noEvents: AgentTaskEvent[] = []
 const state = computed(() => (props.taskId === null ? null : agentStore.getTaskState(props.taskId)))
 const events = computed(() => state.value?.events ?? noEvents)
@@ -124,6 +126,17 @@ const issueMessage = useTemplateRef<HTMLElement>('issueMessage')
 const { followingLatest, handleScroll, resetFollowing } = useStickyBottomScroll(
     progress,
     scrollRevision,
+)
+
+// The prompt is in view here, so its notification is complete.
+watch(
+    () => visiblePendingPermission.value?.id,
+    (permissionId) => {
+        if (permissionId !== undefined) {
+            notificationStore.clear([permissionId])
+        }
+    },
+    { immediate: true },
 )
 
 watch(
