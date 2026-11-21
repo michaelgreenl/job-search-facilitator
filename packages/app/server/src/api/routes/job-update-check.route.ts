@@ -7,6 +7,7 @@ export const createJobUpdateCheckRouter = (repository: JobUpdateCheckRepository)
     const controller = createJobUpdateCheckController(repository)
 
     router.get('/context', controller.context)
+    router.get('/updates', controller.updates)
     router.post('/', controller.save)
 
     return router

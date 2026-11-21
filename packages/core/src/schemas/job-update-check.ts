@@ -3,6 +3,7 @@ import {
     JOB_UPDATE_SOURCES,
     type JobUpdateCheckContext,
     type JobUpdateCheckResult,
+    type RecordedJobUpdate,
     type SavedJobUpdates,
 } from '../types/job-update-check.ts'
 import { createParser, httpUrlSchema, isoDateTimeSchema, nonBlankStringSchema } from './shared.ts'
@@ -91,6 +92,14 @@ const jobUpdateCheckResultSchema: z.ZodType<JobUpdateCheckResult> = z
 const savedJobUpdatesSchema: z.ZodType<SavedJobUpdates> = z.looseObject({
     createdActivities: z.number().int().nonnegative(),
 })
+const recordedJobUpdateSchema: z.ZodType<RecordedJobUpdate> = z.looseObject({
+    id: z.uuid(),
+    jobPostId: z.uuid(),
+    company: nonBlankStringSchema,
+    roleTitle: nonBlankStringSchema,
+    summary: nonBlankStringSchema,
+    occurredAt: isoDateTimeSchema,
+})
 export const parseJobUpdateCheckContext = createParser(
     'Job update check context',
     jobUpdateCheckContextSchema,
@@ -100,3 +109,7 @@ export const parseJobUpdateCheckResult = createParser(
     jobUpdateCheckResultSchema,
 )
 export const parseSavedJobUpdates = createParser('Saved job updates', savedJobUpdatesSchema)
+export const parseRecordedJobUpdates = createParser(
+    'Recorded job updates',
+    z.array(recordedJobUpdateSchema),
+)

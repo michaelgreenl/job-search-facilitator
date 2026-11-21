@@ -62,3 +62,13 @@ export interface JobUpdateCheckResult {
 export interface SavedJobUpdates {
     createdActivities: number
 }
+
+/** One update that the update check saved, with the job post that it belongs to. */
+export interface RecordedJobUpdate {
+    id: string
+    jobPostId: string
+    company: string
+    roleTitle: string
+    summary: string
+    occurredAt: IsoDateTime
+}

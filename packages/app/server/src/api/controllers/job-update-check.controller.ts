@@ -20,4 +20,8 @@ export const createJobUpdateCheckController = (repository: JobUpdateCheckReposit
         const saved = await repository.save(result)
         response.json(saved)
     },
+
+    updates: async (_request: Request, response: Response): Promise<void> => {
+        response.json(await repository.listUpdates())
+    },
 })

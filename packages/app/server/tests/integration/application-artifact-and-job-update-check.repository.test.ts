@@ -293,4 +293,30 @@ describe('application artifact and job update repositories', () => {
             responded: true,
         })
     })
+
+    it('lists the updates that the update check saved without manual activity', async () => {
+        const post = await createJobPost()
+        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
+        await jobUpdateCheckRepository.save({
+            warnings: [],
+            updates: [
+                {
+                    kind: 'application-status',
+                    jobPostId: post.id,
+                    status: 'interviewing',
+                    source: 'gmail',
+                    externalId: 'gmail:interview',
+                    summary: 'Interview requested',
+                    sourceUrl: null,
+                    occurredAt: new Date(Date.now() + 1_000).toISOString(),
+                },
+            ],
+        })
+
+        const updates = await jobUpdateCheckRepository.listUpdates()
+
+        expect(updates.map(({ jobPostId, company }) => ({ jobPostId, company }))).toEqual([
+            { jobPostId: post.id, company: post.company },
+        ])
+    })
 })

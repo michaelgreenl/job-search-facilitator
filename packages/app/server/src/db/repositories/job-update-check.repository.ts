@@ -3,6 +3,7 @@ import type {
     JobUpdateCheckContext,
     JobUpdateCheckResult,
     ObservedApplicationStatus,
+    RecordedJobUpdate,
     SavedJobUpdates,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
@@ -48,6 +49,7 @@ const activityData = (update: JobUpdate): Prisma.JobPostActivityCreateManyInput 
 export interface JobUpdateCheckRepository {
     getContext(): Promise<JobUpdateCheckContext>
     save(result: JobUpdateCheckResult): Promise<SavedJobUpdates>
+    listUpdates(): Promise<RecordedJobUpdate[]>
 }
 
 export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
@@ -297,5 +299,26 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
 
             return { createdActivities: inserted.length }
         })
+    },
+
+    async listUpdates() {
+        const activities = await prisma.jobPostActivity.findMany({
+            where: { source: { in: Object.values(activitySourceToPrisma) } },
+            select: {
+                id: true,
+                jobPostId: true,
+                summary: true,
+                occurredAt: true,
+                jobPost: { select: { company: true, roleTitle: true } },
+            },
+            orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }],
+            take: 100,
+        })
+
+        return activities.map(({ jobPost, occurredAt, ...activity }) => ({
+            ...activity,
+            ...jobPost,
+            occurredAt: occurredAt.toISOString(),
+        }))
     },
 }

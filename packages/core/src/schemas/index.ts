@@ -47,6 +47,7 @@ export type {
 export {
     parseJobUpdateCheckContext,
     parseJobUpdateCheckResult,
+    parseRecordedJobUpdates,
     parseSavedJobUpdates,
 } from './job-update-check.ts'
 export { parseTrackedJobPosts } from './tracked-job-post.ts'
