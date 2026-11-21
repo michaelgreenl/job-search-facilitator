@@ -52,6 +52,11 @@ A host-side bridge connects the client to Codex or Claude, and to Chrome. It run
 - **Activity timeline:** Combine application changes and outreach events for each role.
 - **Responsive panels:** Adapt list, detail, description, and outreach panels across screen sizes.
 
+#### Notifications
+
+- **Banners:** Show each new application update and Agent permission prompt in the top right corner for 7 seconds.
+- **Bell:** Count the unread notifications and open a page that lists and clears them. A notification opens the screen that it is about.
+
 ### Server Side
 
 #### API and Data Model
