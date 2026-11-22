@@ -71,4 +71,11 @@ export interface RecordedJobUpdate {
     roleTitle: string
     summary: string
     occurredAt: IsoDateTime
+    read: boolean
+}
+
+/** Marks saved updates as read, or clears them from the list. */
+export interface RecordedJobUpdateChange {
+    ids: string[]
+    state: 'read' | 'cleared'
 }

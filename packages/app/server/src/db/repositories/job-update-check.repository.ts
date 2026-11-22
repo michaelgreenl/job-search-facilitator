@@ -4,6 +4,7 @@ import type {
     JobUpdateCheckResult,
     ObservedApplicationStatus,
     RecordedJobUpdate,
+    RecordedJobUpdateChange,
     SavedJobUpdates,
 } from '@job-search-facilitator/core'
 import { Prisma } from '@job-search-facilitator/core/prisma'
@@ -50,6 +51,7 @@ export interface JobUpdateCheckRepository {
     getContext(): Promise<JobUpdateCheckContext>
     save(result: JobUpdateCheckResult): Promise<SavedJobUpdates>
     listUpdates(): Promise<RecordedJobUpdate[]>
+    changeUpdates(change: RecordedJobUpdateChange): Promise<void>
 }
 
 export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
@@ -303,22 +305,60 @@ export const jobUpdateCheckRepository: JobUpdateCheckRepository = {
 
     async listUpdates() {
         const activities = await prisma.jobPostActivity.findMany({
-            where: { source: { in: Object.values(activitySourceToPrisma) } },
+            where: {
+                source: { in: Object.values(activitySourceToPrisma) },
+                notificationClearedAt: null,
+            },
             select: {
                 id: true,
                 jobPostId: true,
                 summary: true,
                 occurredAt: true,
-                jobPost: { select: { company: true, roleTitle: true } },
+                notificationReadAt: true,
+                jobPost: {
+                    select: {
+                        company: true,
+                        roleTitle: true,
+                        userLabel: true,
+                        applicationStatus: true,
+                        applicationStatusUpdatedAt: true,
+                    },
+                },
             },
             orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }],
             take: 100,
         })
 
-        return activities.map(({ jobPost, occurredAt, ...activity }) => ({
-            ...activity,
-            ...jobPost,
-            occurredAt: occurredAt.toISOString(),
-        }))
+        return activities.flatMap(({ jobPost, occurredAt, notificationReadAt, ...activity }) => {
+            const { userLabel, applicationStatus, applicationStatusUpdatedAt, ...post } = jobPost
+            // The update that closes an application stays. Its earlier updates are not news.
+            const closedLater =
+                (applicationStatus === 'REJECTED' || applicationStatus === 'HIRED') &&
+                applicationStatusUpdatedAt !== null &&
+                occurredAt < applicationStatusUpdatedAt
+
+            return userLabel === 'FORGO' || closedLater
+                ? []
+                : [
+                      {
+                          ...activity,
+                          ...post,
+                          occurredAt: occurredAt.toISOString(),
+                          read: notificationReadAt !== null,
+                      },
+                  ]
+        })
+    },
+
+    async changeUpdates({ ids, state }) {
+        const changedAt = new Date()
+
+        await prisma.jobPostActivity.updateMany({
+            where: { id: { in: ids } },
+            data:
+                state === 'read'
+                    ? { notificationReadAt: changedAt }
+                    : { notificationClearedAt: changedAt },
+        })
     },
 }

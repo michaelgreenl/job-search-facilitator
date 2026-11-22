@@ -1,4 +1,8 @@
-import { BAD_REQUEST, parseJobUpdateCheckResult } from '@job-search-facilitator/core'
+import {
+    BAD_REQUEST,
+    parseJobUpdateCheckResult,
+    parseRecordedJobUpdateChange,
+} from '@job-search-facilitator/core'
 import type { Request, Response } from 'express'
 import type { JobUpdateCheckRepository } from '../../db/repositories/job-update-check.repository.ts'
 
@@ -23,5 +27,19 @@ export const createJobUpdateCheckController = (repository: JobUpdateCheckReposit
 
     updates: async (_request: Request, response: Response): Promise<void> => {
         response.json(await repository.listUpdates())
+    },
+
+    changeUpdates: async (request: Request, response: Response): Promise<void> => {
+        let change
+
+        try {
+            change = parseRecordedJobUpdateChange(request.body)
+        } catch {
+            response.status(BAD_REQUEST).json({ error: 'Invalid request' })
+            return
+        }
+
+        await repository.changeUpdates(change)
+        response.status(204).end()
     },
 })

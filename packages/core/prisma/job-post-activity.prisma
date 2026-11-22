@@ -26,6 +26,8 @@ model JobPostActivity {
   summary           String
   sourceUrl         String?
   occurredAt        DateTime              @db.Timestamptz(3)
+  notificationReadAt    DateTime?         @db.Timestamptz(3)
+  notificationClearedAt DateTime?         @db.Timestamptz(3)
   jobPost           JobPost               @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   outreachContact   OutreachContact?      @relation(fields: [outreachContactId], references: [id], onDelete: SetNull)
 

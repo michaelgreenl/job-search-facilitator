@@ -319,4 +319,57 @@ describe('application artifact and job update repositories', () => {
             { jobPostId: post.id, company: post.company },
         ])
     })
+
+    it('keeps the read state of an update and removes a cleared update', async () => {
+        const post = await createJobPost()
+        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
+        await jobUpdateCheckRepository.save({
+            warnings: [],
+            updates: ['gmail:acknowledged', 'gmail:received'].map((externalId) => ({
+                kind: 'application-status',
+                jobPostId: post.id,
+                status: 'awaiting-response',
+                source: 'gmail',
+                externalId,
+                summary: 'Application received',
+                sourceUrl: null,
+                occurredAt: new Date(Date.now() + 1_000).toISOString(),
+            })),
+        })
+        const [readUpdate, clearedUpdate] = await jobUpdateCheckRepository.listUpdates()
+
+        await jobUpdateCheckRepository.changeUpdates({ ids: [readUpdate!.id], state: 'read' })
+        await jobUpdateCheckRepository.changeUpdates({ ids: [clearedUpdate!.id], state: 'cleared' })
+
+        expect(await jobUpdateCheckRepository.listUpdates()).toEqual([
+            { ...readUpdate, read: true },
+        ])
+    })
+
+    it('removes the earlier updates of a closed application and the updates of a forgone post', async () => {
+        const post = await createJobPost()
+        await jobPostRepository.update(post.id, { applicationStatus: 'awaiting-response' })
+        await jobUpdateCheckRepository.save({
+            warnings: [],
+            updates: (['interviewing', 'rejected'] as const).map((status, index) => ({
+                kind: 'application-status',
+                jobPostId: post.id,
+                status,
+                source: 'gmail',
+                externalId: `gmail:${status}`,
+                summary: status,
+                sourceUrl: null,
+                occurredAt: new Date(Date.now() + 1_000 * (index + 1)).toISOString(),
+            })),
+        })
+
+        const afterClose = await jobUpdateCheckRepository.listUpdates()
+        await jobPostRepository.update(post.id, { userLabel: 'forgo' })
+        const afterForgo = await jobUpdateCheckRepository.listUpdates()
+
+        expect({ afterClose: afterClose.map(({ summary }) => summary), afterForgo }).toEqual({
+            afterClose: ['rejected'],
+            afterForgo: [],
+        })
+    })
 })
