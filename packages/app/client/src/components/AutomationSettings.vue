@@ -23,6 +23,7 @@ import { effortName } from '@/components/agent/AgentModelSelect.vue'
 import AutomationModelDialog from '@/components/AutomationModelDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePopUp from '@/components/base/BasePopUp.vue'
+import CalendarIcon from '@/components/svgs/CalendarIcon.vue'
 import ClaudeIcon from '@/components/svgs/ClaudeIcon.vue'
 import OpenAiIcon from '@/components/svgs/OpenAiIcon.vue'
 import PauseIcon from '@/components/svgs/PauseIcon.vue'
@@ -116,6 +117,12 @@ function scheduleLabel(automation: Automation) {
     })
     return `${dayLabel} at ${clocks.join(' · ')}`
 }
+
+/** Why the schedule controls of a row are off. Empty when Settings can change the schedule. */
+const desktopNote = (automation: Automation) =>
+    automation.scheduleEditable
+        ? undefined
+        : `Schedule managed in the ${providers[automation.provider].name} desktop app`
 
 const providerModels = (automation: Automation) =>
     agent.value?.providers.find(({ id }) => id === automation.provider)?.models ?? []
@@ -368,20 +375,6 @@ onMounted(load)
                                 >{{ automation.status === 'ACTIVE' ? 'Active' : 'Paused' }}</span
                             >
                         </div>
-                        <p class="schedule-summary" :data-testid="`schedule-${automation.id}`">
-                            {{
-                                automation.scheduleEditable
-                                    ? scheduleLabel(automation)
-                                    : `Schedule managed in the ${providers[automation.provider].name} desktop app`
-                            }}
-                        </p>
-                        <p
-                            v-if="automation.scheduleEditable && automation.status === 'ACTIVE'"
-                            class="muted"
-                            :data-testid="`next-${automation.id}`"
-                        >
-                            {{ nextLabel(automation) }}
-                        </p>
                         <BaseButton
                             preset="text"
                             class="model-button"
@@ -391,21 +384,38 @@ onMounted(load)
                             @click="chooseModel(automation)"
                             >{{ modelLabel(automation) }}</BaseButton
                         >
-                        <div
-                            v-if="automation.run"
-                            class="run"
-                            :class="`run-${automation.run.status}`"
-                            :data-testid="`run-${automation.id}`"
-                            :data-status="automation.run.status"
+                    </div>
+                    <div class="schedule">
+                        <p class="schedule-summary" :data-testid="`schedule-${automation.id}`">
+                            <CalendarIcon class="action-icon schedule-icon" />
+                            {{
+                                automation.scheduleEditable
+                                    ? scheduleLabel(automation)
+                                    : `In the ${providers[automation.provider].name} desktop app`
+                            }}
+                        </p>
+                        <p
+                            v-if="automation.scheduleEditable && automation.status === 'ACTIVE'"
+                            class="muted"
+                            :data-testid="`next-${automation.id}`"
                         >
-                            <p class="run-state">
-                                <span class="run-dot" aria-hidden="true"></span>
-                                {{ runLabel(automation.run) }}
-                            </p>
-                            <p v-if="automation.run.message" class="run-message muted">
-                                {{ automation.run.message }}
-                            </p>
-                        </div>
+                            {{ nextLabel(automation) }}
+                        </p>
+                    </div>
+                    <div
+                        v-if="automation.run"
+                        class="run"
+                        :class="`run-${automation.run.status}`"
+                        :data-testid="`run-${automation.id}`"
+                        :data-status="automation.run.status"
+                    >
+                        <p class="run-state">
+                            <span class="run-dot" aria-hidden="true"></span>
+                            {{ runLabel(automation.run) }}
+                        </p>
+                        <p v-if="automation.run.message" class="run-message muted">
+                            {{ automation.run.message }}
+                        </p>
                     </div>
                     <div class="automation-actions">
                         <BaseButton
@@ -423,12 +433,14 @@ onMounted(load)
                             {{ automation.run?.status === 'running' ? 'Stop' : 'Run now' }}
                         </BaseButton>
                         <BaseButton
-                            v-if="automation.scheduleEditable"
                             preset="secondary"
                             :disabled="saving !== null"
+                            :aria-disabled="!automation.scheduleEditable || undefined"
+                            :tooltip="desktopNote(automation)"
                             :aria-label="`${automation.status === 'ACTIVE' ? 'Pause' : 'Resume'} ${automation.name}`"
                             :data-testid="`toggle-${automation.id}`"
                             @click="
+                                automation.scheduleEditable &&
                                 save(automation, {
                                     status: automation.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
                                 })
@@ -445,10 +457,14 @@ onMounted(load)
                             }}
                         </BaseButton>
                         <BaseButton
-                            v-if="automation.scheduleEditable"
                             preset="primary"
                             class="edit-schedule"
-                            :disabled="saving !== null || !automation.schedule"
+                            :disabled="
+                                saving !== null ||
+                                (automation.scheduleEditable && !automation.schedule)
+                            "
+                            :aria-disabled="!automation.scheduleEditable || undefined"
+                            :tooltip="desktopNote(automation)"
                             :aria-label="`Edit schedule for ${automation.name}`"
                             :data-testid="`edit-${automation.id}`"
                             @click="edit(automation)"
@@ -687,7 +703,9 @@ onMounted(load)
         transition: none;
     }
 
-    .automation-actions .base-button:is(:hover, :focus-visible):not(:disabled) & {
+    .automation-actions
+        .base-button:is(:hover, :focus-visible):not(:disabled, [aria-disabled='true'])
+        & {
         fill-opacity: 1;
     }
 }
@@ -721,10 +739,15 @@ h2 {
 
 .automation-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: $space-4;
     padding: $space-5 $space-2;
-    align-items: center;
+    align-items: start;
+}
+
+.run,
+.automation-actions {
+    grid-column: 1 / -1;
 }
 
 .automation-row + .automation-row {
@@ -770,8 +793,8 @@ h2 {
 .run {
     display: grid;
     gap: $space-1;
-    padding-top: $space-1;
     font-size: 0.875rem;
+    overflow-wrap: anywhere;
 }
 
 .run-state {
@@ -845,9 +868,25 @@ h2 {
     font-size: 0.875rem;
 }
 
+.schedule {
+    display: grid;
+    gap: $space-2;
+    justify-items: end;
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
 .schedule-summary {
-    color: $color-ink-secondary;
+    display: flex;
+    gap: $space-2;
     font-size: 0.875rem;
+}
+
+.schedule-icon {
+    // Centers the icon on the first line of the text.
+    margin-top: calc((0.92lh - 1rem) / 2);
+    color: $color-ink-soft;
 }
 
 .section-message,
@@ -1118,6 +1157,22 @@ fieldset:disabled {
     border-top: 1px solid $color-ink-alpha-12;
 }
 
+@media (width <= 36rem) {
+    .automation-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .schedule {
+        justify-items: start;
+        text-align: left;
+    }
+
+    // The buttons fill each row, so no button stands alone at one side.
+    .automation-actions > * {
+        flex: 1 1 auto;
+    }
+}
+
 @media (width <= 24rem) {
     .schedule-dialog {
         padding: $space-4;
@@ -1137,7 +1192,6 @@ fieldset:disabled {
 }
 
 @media (pointer: coarse) {
-    .automation-actions .base-button,
     .form-actions .base-button {
         min-height: 2.75rem;
     }
@@ -1145,6 +1199,19 @@ fieldset:disabled {
 </style>
 
 <style lang="scss">
+// A button with a tooltip sits inside a wrapper, where scoped styles do not reach.
+@media (width <= 36rem) {
+    .automation-list .automation-actions .button-tooltip > .base-button {
+        flex: 1 1 auto;
+    }
+}
+
+@media (pointer: coarse) {
+    .automation-list .automation-actions .base-button {
+        min-height: 2.75rem;
+    }
+}
+
 .schedule-dialog .pop-up-header {
     margin-bottom: $space-5;
 }

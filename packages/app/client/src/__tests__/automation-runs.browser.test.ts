@@ -118,11 +118,11 @@ it('saves the model that the user chooses for an automation', async () => {
         })
 })
 
-it('offers no schedule controls when the desktop app owns the schedule', async () => {
-    stubBridge([claude])
+it('keeps the schedule controls off when the desktop app owns the schedule', async () => {
+    const { requests } = stubBridge([claude])
     mountVue(AutomationSettings)
 
-    await expect.element(page.getByTestId('run-toggle-claude:search')).toBeVisible()
-    await expect.element(page.getByTestId('edit-claude:search')).not.toBeInTheDocument()
-    await expect.element(page.getByTestId('toggle-claude:search')).not.toBeInTheDocument()
+    await page.getByTestId('toggle-claude:search').click({ force: true })
+
+    expect(requests).toEqual([])
 })

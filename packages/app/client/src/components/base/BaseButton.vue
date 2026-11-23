@@ -354,12 +354,14 @@ defineExpose({ focus })
         pointer-events: none;
     }
 
-    &:disabled {
+    // An aria-disabled button stays in the tab order, so its tooltip can say why it is off.
+    &:disabled,
+    &[aria-disabled='true'] {
         cursor: not-allowed;
         opacity: 0.55;
     }
 
-    &:active:not(:disabled) {
+    &:active:not(:disabled, [aria-disabled='true']) {
         transform: scale(0.98);
     }
 }
@@ -521,7 +523,7 @@ defineExpose({ focus })
     inset: auto;
     margin: 0;
     z-index: 50;
-    max-width: min(14rem, calc(100vw - #{$space-6}));
+    max-width: calc(100vw - #{$space-6});
     white-space: normal;
     pointer-events: none;
     visibility: hidden;
