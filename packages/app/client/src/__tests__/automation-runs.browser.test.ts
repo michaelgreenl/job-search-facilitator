@@ -13,6 +13,7 @@ const codex: Automation = {
     status: 'PAUSED',
     scheduleEditable: true,
     schedule: { days: ['MO'], times: ['08:00'] },
+    manualOnly: false,
     timeZone: 'America/Detroit',
     nextScheduledAt: null,
     model: { model: 'codex-fast', reasoningEffort: 'low' },
@@ -26,6 +27,7 @@ const claude: Automation = {
     status: 'ACTIVE',
     scheduleEditable: false,
     schedule: null,
+    manualOnly: true,
     model: null,
 }
 const running = {

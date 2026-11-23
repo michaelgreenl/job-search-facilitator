@@ -98,6 +98,7 @@ const errorMessage = (error: unknown) =>
     error instanceof Error ? error.message : 'The request failed. Try again.'
 
 function scheduleLabel(automation: Automation) {
+    if (automation.manualOnly) return 'Manual only'
     if (!automation.schedule) return 'Custom schedule · edit in the desktop app'
     const { days, times } = automation.schedule
     const dayLabel =
@@ -388,14 +389,10 @@ onMounted(load)
                     <div class="schedule">
                         <p class="schedule-summary" :data-testid="`schedule-${automation.id}`">
                             <CalendarIcon class="action-icon schedule-icon" />
-                            {{
-                                automation.scheduleEditable
-                                    ? scheduleLabel(automation)
-                                    : `In the ${providers[automation.provider].name} desktop app`
-                            }}
+                            {{ scheduleLabel(automation) }}
                         </p>
                         <p
-                            v-if="automation.scheduleEditable && automation.status === 'ACTIVE'"
+                            v-if="automation.status === 'ACTIVE' && !automation.manualOnly"
                             class="muted"
                             :data-testid="`next-${automation.id}`"
                         >

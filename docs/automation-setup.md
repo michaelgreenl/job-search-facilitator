@@ -123,7 +123,8 @@ Use **Refresh** after changing a schedule elsewhere. Conflicting edits require a
 These controls update the existing local schedule files in the desktop user's Codex home. They preserve the prompt and other configuration.
 They do not create schedules or manage cloud schedules. Keep the computer awake and the desktop app open for scheduled runs.
 
-The Claude desktop app owns the schedule of a Claude task. Change that schedule in the Claude desktop app.
+The Claude desktop app owns the schedule of a Claude task. Settings shows that schedule and its next scheduled time.
+A Claude task with no schedule shows **Manual only**. Change the schedule in the Claude desktop app.
 
 ### Set the model of an automation
 

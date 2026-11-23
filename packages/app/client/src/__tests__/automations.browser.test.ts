@@ -16,6 +16,7 @@ const initial: Automation = {
     status: 'PAUSED',
     scheduleEditable: true,
     schedule: { days: ['MO', 'TU', 'WE', 'TH', 'FR'], times: ['08:00'] },
+    manualOnly: false,
     timeZone: 'America/Detroit',
     nextScheduledAt: null,
     model: null,

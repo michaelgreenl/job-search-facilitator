@@ -107,6 +107,37 @@ it('lists the Claude desktop tasks of this project beside the Codex automations'
     ])
 })
 
+it.each([
+    {
+        cronExpression: '30 8,17 * * 1-5',
+        schedule: { days: ['MO', 'TU', 'WE', 'TH', 'FR'], times: ['08:30', '17:30'] },
+        manualOnly: false,
+    },
+    {
+        cronExpression: '0 */12 * * 0,6',
+        schedule: { days: ['SA', 'SU'], times: ['00:00', '12:00'] },
+        manualOnly: false,
+    },
+    { cronExpression: '0 9 1 * *', schedule: null, manualOnly: false },
+    { fireAt: 1_800_000_000_000, schedule: null, manualOnly: false },
+    { schedule: null, manualOnly: true },
+])(
+    'reads the schedule that the Claude desktop app keeps for a task: $cronExpression',
+    async ({ schedule, manualOnly, ...stored }) => {
+        writeFileSync(
+            join(
+                directory,
+                'claude/claude-code-sessions/account/organization/scheduled-tasks.json',
+            ),
+            JSON.stringify({
+                scheduledTasks: [{ ...writeClaudeTask('search', projectRoot), ...stored }],
+            }),
+        )
+
+        expect(await find(app(), 'claude:search')).toMatchObject({ schedule, manualOnly })
+    },
+)
+
 it('saves a Codex model in the automation file without changing its prompt', async () => {
     const server = app()
 

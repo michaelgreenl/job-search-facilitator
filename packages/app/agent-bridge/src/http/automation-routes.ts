@@ -116,6 +116,45 @@ function readSchedule(rule: string): AutomationSchedule | null {
     return parsed.success ? parsed.data : null
 }
 
+/** Expands one cron field of numbers, ranges, and steps. Null for any other form. */
+function cronValues(field: string | undefined, min: number, max: number) {
+    const values = new Set<number>()
+    for (const part of (field ?? '').split(',')) {
+        const match = /^(?:\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(part)
+        if (!match) return null
+        const [, first, last, step] = match
+        const start = first === undefined ? min : Number(first)
+        // "5/15" runs from 5 to the end of the range.
+        const end = last !== undefined ? Number(last) : first === undefined || step ? max : start
+        if (start < min || end > max || start > end || step === '0') return null
+        for (let value = start; value <= end; value += Number(step ?? 1)) values.add(value)
+    }
+    return [...values]
+}
+
+/**
+ * Reads the cron expression of a Claude desktop task. Null when the runs are
+ * not at the same times on chosen days of the week.
+ */
+// shortcut: day names such as MON-FRI are not read, add them if the desktop app writes them.
+function readCron(expression: string): AutomationSchedule | null {
+    const fields = expression.trim().split(/\s+/)
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = fields
+    if (fields.length !== 5 || dayOfMonth !== '*' || month !== '*') return null
+    const minutes = cronValues(minute, 0, 59)
+    const hours = cronValues(hour, 0, 23)
+    // Cron counts Sunday as both 0 and 7.
+    const weekDays = cronValues(dayOfWeek, 0, 7)
+    if (!minutes || !hours || !weekDays) return null
+    const parsed = automationScheduleSchema.safeParse({
+        days: AUTOMATION_DAYS.filter(
+            (_, index) => weekDays.includes(index + 1) || (index === 6 && weekDays.includes(0)),
+        ),
+        times: hours.flatMap((hour) => minutes.map((minute) => clockTime(hour, minute))),
+    })
+    return parsed.success ? parsed.data : null
+}
+
 function writeSchedule({ days, times }: AutomationSchedule) {
     const hours = [...new Set(times.map((time) => Number(time.slice(0, 2))))].sort((a, b) => a - b)
     const minutes = [...new Set(times.map((time) => Number(time.slice(3))))].sort((a, b) => a - b)
@@ -202,6 +241,7 @@ export function createAutomationRouter(
             status: config.status,
             scheduleEditable: true,
             schedule,
+            manualOnly: false,
             timeZone: timeZone(),
             nextScheduledAt: nextScheduledAt(schedule, config.status),
             model:
@@ -219,16 +259,19 @@ export function createAutomationRouter(
         return readClaudeTasks(claude.appData, projectRoot).map((task) => {
             const id = `${claudePrefix}${task.id}`
             const model = claude.settings.claudeTaskModel(task.id)
+            const status = task.enabled ? 'ACTIVE' : 'PAUSED'
+            const schedule = task.cronExpression ? readCron(task.cronExpression) : null
             const automation: Automation = {
                 id,
                 name: task.name,
                 provider: 'claude',
-                status: task.enabled ? 'ACTIVE' : 'PAUSED',
+                status,
                 // The Claude desktop app owns the schedule and does not read outside changes.
                 scheduleEditable: false,
-                schedule: null,
+                schedule,
+                manualOnly: task.cronExpression === undefined && task.fireAt === undefined,
                 timeZone: timeZone(),
-                nextScheduledAt: null,
+                nextScheduledAt: nextScheduledAt(schedule, status),
                 model,
                 run: runs?.get(id) ?? null,
                 revision: revision(JSON.stringify([task, model])),

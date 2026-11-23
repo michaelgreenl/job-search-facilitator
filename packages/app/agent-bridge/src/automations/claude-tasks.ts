@@ -7,6 +7,10 @@ export interface ClaudeTask {
     name: string
     enabled: boolean
     prompt: string
+    /** A 5-field cron expression in local time. Present on a task that repeats. */
+    cronExpression?: string
+    /** The time of the single run, in milliseconds. Present on a task that runs one time. */
+    fireAt?: number
 }
 
 const storeSchema = z.object({
@@ -17,6 +21,8 @@ const storeSchema = z.object({
             enabled: z.boolean().optional(),
             filePath: z.string().min(1),
             cwd: z.string().optional(),
+            cronExpression: z.string().optional(),
+            fireAt: z.number().optional(),
         }),
     ),
 })
@@ -53,6 +59,8 @@ export function readClaudeTasks(appData: string, projectRoot: string): ClaudeTas
                               name: task.displayName ?? task.id,
                               enabled: task.enabled !== false,
                               prompt,
+                              cronExpression: task.cronExpression,
+                              fireAt: task.fireAt,
                           },
                       ]
                     : []

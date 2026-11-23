@@ -35,6 +35,8 @@ const automationSchema = z.object({
     /** False when only the provider's desktop app can change the status and schedule. */
     scheduleEditable: z.boolean(),
     schedule: automationScheduleSchema.nullable(),
+    /** True when the automation has no schedule and starts only on request. */
+    manualOnly: z.boolean(),
     timeZone: z.string().min(1),
     nextScheduledAt: isoDateTimeSchema.nullable(),
     /** Null when the automation uses the provider's default. */
